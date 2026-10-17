@@ -4,8 +4,11 @@
 # Runs three determinism / lockstep experiments with sync_probe.lua:
 #   1. two independent solo processes, same seed  -> fingerprints must match
 #   2. host + client over loopback TCP             -> must stay IN SYNC
-#   3. host + client, client renders every 5 ticks -> must report DESYNC
-# Exits 0 only if all three behave as expected.
+#   3. host + client, client renders every 5 ticks -> must stay IN SYNC
+#      (rendering uses math.cosmetic_random, never the gameplay stream)
+#   4. host + client, client uses a different seed -> must report DESYNC
+#      (proves the probe still detects divergence)
+# Exits 0 only if all four behave as expected.
 #
 # Needs luasocket for the same Lua version as the binary. Point
 # LUASOCKET_TREE at a LuaRocks tree containing it (lib/lua/5.x/socket/core.so).
@@ -65,6 +68,9 @@ sleep 0.5; run_probe client_ok MP_MODE=client MP_PORT=$port & wait
 port=$((port + 1))
 run_probe host_draw MP_MODE=host MP_PORT=$port &
 sleep 0.5; run_probe client_draw MP_MODE=client MP_PORT=$port MP_DRAW_EVERY=5 & wait
+port=$((port + 1))
+run_probe host_seed MP_MODE=host MP_PORT=$port &
+sleep 0.5; run_probe client_seed MP_MODE=client MP_PORT=$port MP_SEED=999 & wait
 
 python3 - "$out" <<'PY'
 import pathlib, sys
@@ -82,10 +88,12 @@ def result(name):
         if 'RESULT:' in line:
             return line.split('RESULT:', 1)[1].strip()
     return 'no result'
-ok = result('host_ok'); bad = result('host_draw')
+ok = result('host_ok'); draw = result('host_draw'); seed = result('host_seed')
 print(f'2. Networked lockstep:     {ok}')
 fail |= not ok.startswith('IN SYNC')
-print(f'3. Client renders frames:  {bad}')
-fail |= not bad.startswith('DESYNC')
+print(f'3. Client renders frames:  {draw}')
+fail |= not draw.startswith('IN SYNC')
+print(f'4. Client different seed:  {seed}')
+fail |= not seed.startswith('DESYNC')
 sys.exit(1 if fail else 0)
 PY

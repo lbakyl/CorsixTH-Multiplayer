@@ -230,7 +230,7 @@ function Announcer:_setRandomAnnouncementTarget()
   -- Every tick is 18ms, so ~3333 ticks is 1 minute at normal speed
   local tick_chunk = 3333
   -- Set a target of 4 - 6 minutes (chunks)
-  self.random_announcement_ticks_target = math.random(tick_chunk * 4, tick_chunk * 6)
+  self.random_announcement_ticks_target = math.cosmetic_random(tick_chunk * 4, tick_chunk * 6)
 end
 
 --! Private function. Plays the actual sound of an announcement.

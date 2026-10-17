@@ -211,6 +211,12 @@ function App:init()
   -- App initialisation 2nd goal: Load remaining systems and data in an appropriate order
 
   math.randomseed(os.time() + SDL.getTicks())
+
+  -- Separate stream for cosmetic choices (screen shake, sound variants,
+  -- tips...), so that rendering and audio never consume gameplay randomness.
+  -- See cosmetic_random.lua.
+  strict_declare_global "math.cosmetic_random"
+  math.cosmetic_random = corsixth.require("cosmetic_random")(os.time() + SDL.getTicks())
   -- The following psuedo-random number generators are based on different
   -- disritubtion algorithms. For explanations and how to use them see the Wiki
 
