@@ -7,8 +7,13 @@
 --   MP_SEED           integer seed for math.random   (default 12345)
 --   MP_CALLBACKS      App:onTick calls to run        (default 3000)
 --   MP_DRAW_EVERY     call drawFrame every N ticks; 0 = never (default 0)
+--   MP_SCENARIO       light (desk + receptionist) | busy (adds rooms, staff
+--                     and corridor objects)         (default light)
 --   MP_OUT            file to write one fingerprint line per game hour
 --   MP_HOST, MP_PORT  TCP endpoint for host/client  (default 127.0.0.1:47800)
+--   MP_DUMP_HOUR      write MP_OUT..".entities" (entities, actions, rooms,
+--                     queues) at this game hour, for desync debugging
+--   MP_DEBUG_END      log speed, open windows and staff at the end
 --   MP_LUA_CPATH      extra package.cpath entries (for luasocket)
 --   MP_LUA_PATH       extra package.path entries
 local args = {...}
@@ -19,6 +24,8 @@ local seed = tonumber(os.getenv("MP_SEED") or "12345")
 local callbacks = tonumber(os.getenv("MP_CALLBACKS") or "3000")
 local draw_every = tonumber(os.getenv("MP_DRAW_EVERY") or "0")
 local out_path = os.getenv("MP_OUT")
+local scenario = os.getenv("MP_SCENARIO") or "light"
+local builder = assert(loadfile(source_dir .. "/scripts/multiplayer/probe_builder.lua"))()
 
 local function log(msg)
   io.stdout:write("[" .. mode .. "] " .. msg .. "\n")
@@ -33,16 +40,18 @@ local function fingerprint(world)
     tostring(hospital.balance),
     tostring(hospital.num_visitors or 0),
     tostring(#world.entities),
+    tostring(hospital.num_cured or 0),
+    tostring(#hospital.staff),
   }
   for _, e in ipairs(world.entities) do
     parts[#parts + 1] = (e.humanoid_class or (e.object_type and e.object_type.id) or "?")
         .. "@" .. tostring(e.tile_x) .. "," .. tostring(e.tile_y)
   end
   local TH = require("TH")
-  local entities_crc = TH.CRC32File(table.concat(parts, ";", 5))
+  local entities_crc = TH.CRC32File(table.concat(parts, ";", 7))
   local rng_crc = TH.CRC32File(math.randomdump())
-  return string.format("%s bal=%s visitors=%s entities=%s ecrc=%08x rng=%08x",
-      parts[1], parts[2], parts[3], parts[4], entities_crc, rng_crc)
+  return string.format("%s bal=%s visitors=%s entities=%s cured=%s staff=%s ecrc=%08x rng=%08x",
+      parts[1], parts[2], parts[3], parts[4], parts[5], parts[6], entities_crc, rng_crc)
 end
 
 
@@ -95,6 +104,56 @@ local function setup_hospital(world)
   return desk_x, desk_y
 end
 
+-- Busier hospital: diagnosis/treatment rooms, more staff, corridor objects.
+-- Built through the game's own room editor (see probe_builder.lua).
+local function setup_busy(world, desk_x, desk_y)
+  local rooms = {
+    {"gp", 5, 5}, {"pharmacy", 4, 4}, {"general_diag", 5, 5},
+    {"staff_room", 5, 5}, {"toilets", 4, 4},
+  }
+  for _, spec in ipairs(rooms) do
+    local id, w, h = spec[1], spec[2], spec[3]
+    local x, y = builder.find_free_rect(world, desk_x, desk_y, w, h, 40)
+    assert(x, "No space for " .. id)
+    local room, err, door = builder.build_room(world, id, x, y, w, h)
+    if room then
+      log(string.format("built %s at %d,%d %dx%d, door %d,%d %s",
+          id, x, y, w, h, door.x, door.y, door.wall))
+    else
+      log("skipped " .. id .. ": " .. tostring(err))
+    end
+  end
+  local staff = {"Doctor", "Doctor", "Doctor", "Nurse", "Nurse", "Handyman", "Handyman"}
+  for i, class in ipairs(staff) do
+    builder.hire(world, class, desk_x + i, desk_y + 3)
+  end
+  local objects = {
+    {"bench", "north"}, {"bench", "north"}, {"bench", "north"}, {"bench", "north"},
+    {"plant", "north"}, {"plant", "north"}, {"drinks_machine", "north"},
+  }
+  for _, spec in ipairs(objects) do
+    local x, y = builder.find_free_rect(world, desk_x, desk_y, 1, 1, 40)
+    assert(x, "No space for " .. spec[1])
+    builder.place_object(world, spec[1], x, y, spec[2])
+  end
+  log(string.format("busy setup: %d staff, balance %d",
+      #world.hospitals[1].staff, world.hospitals[1].balance))
+end
+
+-- Close windows that pause the game (currently: the annual report) at the
+-- same game moment on every peer, standing in for a future shared rule.
+local function close_pausing_windows(ui)
+  local closed = 0
+  for i = #ui.windows, 1, -1 do
+    local w = ui.windows[i]
+    if class.is(w, UIAnnualReport) then
+      w:close()
+      closed = closed + 1
+    end
+  end
+  return closed
+end
+
 local conn
 local function connect()
   local extra_cpath = os.getenv("MP_LUA_CPATH")
@@ -129,6 +188,10 @@ local function exchange(hour, fp)
   assert(conn:send(string.format("H %d %s\n", hour, fp)))
   local line, err = conn:receive("*l")
   assert(line, "Peer closed or timed out: " .. tostring(err))
+  local ended_at = line:match("^E (%d+)$")
+  if ended_at then
+    return "PEER LEVEL ENDED after hour " .. ended_at, true
+  end
   local peer_hour, peer_fp = line:match("^H (%d+) (.*)$")
   assert(tonumber(peer_hour) == hour, "Hour mismatch: " .. line)
   return peer_fp
@@ -146,13 +209,32 @@ local function run()
   local world = TheApp.world
   local desk_x, desk_y = setup_hospital(world)
   log("reception desk at " .. desk_x .. "," .. desk_y)
+  if scenario == "busy" then setup_busy(world, desk_x, desk_y) end
   world:setSpeed("And then some more")
 
   local out = out_path and assert(io.open(out_path, "w"))
   local last_date = world.game_date:tostring()
-  local hour, first_mismatch, compared = 0, nil, 0
+  local hour, first_mismatch, compared, reports_closed = 0, nil, 0, 0
+  local level_ended, peer_ended
   for i = 1, callbacks do
     TheApp:onTick()
+    if TheApp.world ~= world then
+      -- The level was won or lost and the game returned to the main menu.
+      local msg = {}
+      for _, w in ipairs(TheApp.ui.windows) do
+        if class.is(w, UIInformation) and w.text then
+          for _, t in ipairs(w.text) do msg[#msg + 1] = tostring(t) end
+        end
+      end
+      level_ended = "after game hour " .. hour .. ": " .. table.concat(msg, " / ")
+      log("LEVEL ENDED " .. level_ended)
+      if conn then
+        -- Tell the peer, so it can check it ended at the same hour.
+        assert(conn:send(string.format("E %d\n", hour)))
+      end
+      break
+    end
+    reports_closed = reports_closed + close_pausing_windows(TheApp.ui)
     if draw_every > 0 and i % draw_every == 0 then TheApp:drawFrame() end
     local date = world.game_date:tostring()
     if date ~= last_date then
@@ -160,8 +242,27 @@ local function run()
       hour = hour + 1
       local fp = fingerprint(world)
       if out then out:write(hour, " ", fp, "\n") end
-      if conn then
-        local peer_fp = exchange(hour, fp)
+      if tonumber(os.getenv("MP_DUMP_HOUR") or "-1") == hour then
+        local d = assert(io.open(out_path .. ".entities", "w"))
+        for idx, e in ipairs(world.entities) do
+          local action = e.action_queue and e.action_queue[1] and e.action_queue[1].name
+          local room = e.tile_x and world:getRoom(e.tile_x, e.tile_y)
+          d:write(idx, " ", tostring(e.humanoid_class or (e.object_type and e.object_type.id)),
+              " ", tostring(e.tile_x), ",", tostring(e.tile_y),
+              action and (" action=" .. action) or "",
+              room and (" room=" .. room.room_info.id) or "", "\n")
+        end
+        for _, room in ipairs(world.rooms) do
+          if room.door and room.door.queue then
+            d:write("room ", room.room_info.id, " active=", tostring(room.is_active),
+                " queue=", tostring(room.door.queue:patientSize()), " staff=", tostring(room:getStaffMember() ~= nil), "\n")
+          end
+        end
+        d:close()
+      end
+      if conn and not peer_ended then
+        local peer_fp
+        peer_fp, peer_ended = exchange(hour, fp)
         compared = compared + 1
         if peer_fp ~= fp and not first_mismatch then
           first_mismatch = hour
@@ -173,8 +274,25 @@ local function run()
     end
   end
   if out then out:close() end
+  if os.getenv("MP_DEBUG_END") then
+    local names = {}
+    for _, w in ipairs(TheApp.ui.windows) do names[#names + 1] = class.type(w) or "?" end
+    log("debug: speed=" .. tostring(world:getCurrentSpeed()) .. " windows=" .. table.concat(names, ","))
+    log("debug: staff=" .. #world.hospitals[1].staff .. " cured=" .. tostring(world.hospitals[1].num_cured))
+  end
   log("final " .. fingerprint(world))
-  log(string.format("hours=%d compared=%d", hour, compared))
+  log(string.format("hours=%d compared=%d annual_reports_closed=%d", hour, compared, reports_closed))
+  if conn and level_ended and not peer_ended then
+    -- Both peers should have ended the level after the same game hour.
+    local line = conn:receive("*l")
+    local peer_hour = line and tonumber(line:match("^E (%d+)$"))
+    if peer_hour == hour then
+      log("peer level also ended after hour " .. hour)
+    elseif not first_mismatch then
+      first_mismatch = hour
+      log("DESYNC: local level ended after hour " .. hour .. ", peer sent: " .. tostring(line))
+    end
+  end
   if conn then
     conn:close()
     log(first_mismatch and ("RESULT: DESYNC first at hour " .. first_mismatch)

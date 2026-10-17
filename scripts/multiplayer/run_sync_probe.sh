@@ -54,6 +54,7 @@ play_announcements = false
 movies = false
 play_intro = false
 play_demo = false
+grant_wage_increase = true
 EOF
   env XDG_CONFIG_HOME="$dir/config" MP_OUT="$dir/fp.txt" "$@" timeout 600 "$binary" \
     "--interpreter=$source_dir/scripts/multiplayer/sync_probe.lua" \
