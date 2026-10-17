@@ -51,7 +51,7 @@ function UIFax:UIFax(ui, icon)
       -- NB: both nil and true result in enabled; also handle old "disabled" choice
       local enabled = (choices[i].enabled ~= false) and (choice ~= "disabled")
       local --[[persistable:fax_choice_button]] function callback()
-        self:choice(i)
+        self:buttonChoice(i)
       end
       self.choice_buttons[i] = self:addPanel(17, 492, y, nil, nil, true, DrawFlags.Nearest)
         :makeButton(0, 0, 43, 43, 18, callback)
@@ -128,6 +128,17 @@ function UIFax:draw(canvas, x, y)
       end
     end
   end
+end
+
+--! The player clicked a choice. In multiplayer every peer applies it at the
+--! same step (fax_choice command); the fax closes here meanwhile.
+function UIFax:buttonChoice(choice_number)
+  if MultiplayerSession.actionsAreCommands() and self.icon.mp_id then
+    TheApp.mp_session:issue({kind = "fax_choice", msg = self.icon.mp_id, choice = choice_number})
+    self:close()
+    return
+  end
+  self:choice(choice_number)
 end
 
 --A choice was made for the fax.

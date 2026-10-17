@@ -491,6 +491,23 @@ function handlers.build_room_giveup(world, cmd)
   return false, "not a player command"
 end
 
+--! A player's answer to a fax (emergency, VIP, epidemic...): {msg, choice}.
+--! The message exists on every peer (shown or still queued).
+function handlers.fax_choice(world, cmd)
+  local panel = world.ui and world.ui.bottom_panel
+  local icon = panel and panel:findMessageIcon(cmd.msg)
+  if not icon then return false, "message no longer there" end
+  local choices = icon.message and icon.message.choices
+  if not choices or not choices[cmd.choice] then return false, "no such choice" end
+  if choices[cmd.choice].enabled == false or choices[cmd.choice].choice == "disabled" then
+    return false, "choice not available"
+  end
+  local queued = icon.parent == nil
+  icon:removeMessage(cmd.choice)
+  if queued then panel:forgetQueuedIcon(icon) end
+  return true
+end
+
 --! Language-independent identity of a staff profile in the hiring pool.
 --! (Names are translated strings and may differ between peers.)
 function MultiplayerSession.staffProfileKey(profile)

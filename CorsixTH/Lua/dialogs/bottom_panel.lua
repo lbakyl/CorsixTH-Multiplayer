@@ -442,6 +442,9 @@ function UIBottomPanel:queueMessage(type, message, owner, timeout, default_choic
     self.ui.hospital.message_popup = true
   end
 
+  -- Messages are numbered in the order the game creates them (the same on
+  -- every multiplayer peer), so a fax choice can name the message.
+  self.world.next_message_id = (self.world.next_message_id or 0) + 1
   local message_info = {
     type = type,
     message = message,
@@ -449,6 +452,7 @@ function UIBottomPanel:queueMessage(type, message, owner, timeout, default_choic
     timeout = timeout,
     default_choice = default_choice,
     callback = callback,
+    mp_id = self.world.next_message_id,
   }
 
   if self:canQueueFax(message_info) then
@@ -494,6 +498,52 @@ function UIBottomPanel:_initMessageWithDrawerIcon(message_info)
     onClose, message_info.type, message_info.message, message_info.owner,
     message_info.timeout, message_info.default_choice, message_info.callback)
   message_info["drawer_icon"] = drawer_icon
+  drawer_icon.mp_id = message_info.mp_id
+end
+
+--! All message icons, shown or still queued, in creation order.
+function UIBottomPanel:allMessageIcons()
+  local icons = {}
+  for _, icon in ipairs(self.message_windows) do icons[#icons + 1] = icon end
+  for _, info in ipairs(self.message_queue) do
+    if info.drawer_icon then icons[#icons + 1] = info.drawer_icon end
+  end
+  table.sort(icons, function(a, b) return (a.mp_id or 0) < (b.mp_id or 0) end)
+  return icons
+end
+
+--! Find a message icon (shown or queued) by its number.
+function UIBottomPanel:findMessageIcon(mp_id)
+  for _, icon in ipairs(self:allMessageIcons()) do
+    if icon.mp_id == mp_id then return icon end
+  end
+end
+
+--! A message icon that was still queued has been removed (choice made or
+--! timed out); take it out of the queue as well.
+function UIBottomPanel:forgetQueuedIcon(icon)
+  for i, info in ipairs(self.message_queue) do
+    if info.drawer_icon == icon then
+      table.remove(self.message_queue, i)
+      return
+    end
+  end
+end
+
+function UIBottomPanel:onWorldTick()
+  Window.onWorldTick(self)
+  -- Multiplayer: the queue is shown on screen ticks, which differ between
+  -- peers, so message timeouts run here in game hours for every message,
+  -- shown or not, in creation order.
+  if TheApp.mp_session then
+    for _, icon in ipairs(self:allMessageIcons()) do
+      if icon.timer then
+        local queued = icon.parent == nil
+        icon:tickTimer()
+        if queued and not icon.timer then self:forgetQueuedIcon(icon) end
+      end
+    end
+  end
 end
 
 --[[ A fax can be queued if the event the fax causes does not affect

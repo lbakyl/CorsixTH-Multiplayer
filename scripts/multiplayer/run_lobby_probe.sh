@@ -16,7 +16,10 @@
 #      later room elsewhere, a window -> IN SYNC, same rooms on both
 #   6. rooms drawn where people stand (busy hospital): they are asked to
 #      walk out and the build is retried -> IN SYNC, same rooms on both
-# Exits 0 only if all six behave as expected.
+#   7. faxes: a VIP fax refused by clicking in the fax window, a second one
+#      left to time out (accepted), shown at different moments on the two
+#      screens -> IN SYNC, same decisions on both
+# Exits 0 only if all seven behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
 set -euo pipefail
@@ -98,6 +101,9 @@ run_probe hugo MP_ROLE=join MP_ROOM=build MP_STEPS=900   MP_UI_SCRIPT="100:room:
 run_probe ivan MP_ROLE=host MP_ROOM=crowd MP_STEPS=1200 MP_SCENARIO=busy & pids+=($!)
 sleep 1
 run_probe judy MP_ROLE=join MP_ROOM=crowd MP_STEPS=1200 MP_SCENARIO=busy   MP_UI_SCRIPT="300:crowdroom:gp:4:4;500:crowdroom:toilets:4:4" & pids+=($!)
+run_probe kate MP_ROLE=host MP_ROOM=fax MP_STEPS=1300 MP_UI_SCRIPT="100:vip;400:vip" & pids+=($!)
+sleep 1
+run_probe liam MP_ROLE=join MP_ROOM=fax MP_STEPS=1300 MP_DRAW_EVERY=2   MP_UI_SCRIPT="160:answerfax:personality:2" & pids+=($!)
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 python3 - "$out" <<'PY'
@@ -162,5 +168,14 @@ print(f"6. Rooms over people:       {result('ivan')}; same rooms on both: {ri ==
 for l in sorted(set(re.findall(r'step \d+: peer 2 #\d+ build_room -> .*', j))):
     print("   " + l)
 fail |= not ok6
+
+k, l = log('kate'), log('liam')
+choices = [x for x in applied('kate') if 'fax_choice' in x]
+clicked = 'UI: clicked choice 2 of personality fax' in l
+ok7 = (result('kate').startswith('IN SYNC') and result('liam').startswith('IN SYNC')
+       and applied('kate') == applied('liam') and clicked and len(choices) == 1
+       and choices[0].endswith('-> ok'))
+print(f"7. Fax decisions:           {result('kate')}; refusal clicked: {clicked}; applied on both: {applied('kate') == applied('liam')} {choices}")
+fail |= not ok7
 sys.exit(1 if fail else 0)
 PY

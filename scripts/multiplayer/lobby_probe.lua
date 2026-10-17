@@ -18,6 +18,10 @@
 --                       buy:<object>, hire:<class>      as in ingame_probe.lua
 --                       room:<id>:<w>:<h>[:window]      draw a room in the room editor
 --                       crowdroom:<id>:<w>:<h>          draw it where somebody stands
+--                       vip                             make a VIP visit fax appear for
+--                                                       everybody (test-only command)
+--                       answerfax:<type>:<n>            open the first fax of <type> and
+--                                                       click choice <n> in the fax window
 --                       pause[:<ticks>]                 press P (shared through the server),
 --                                                       optionally <ticks> later; works
 --                                                       while the game is paused
@@ -153,6 +157,12 @@ local function run()
   log(string.format("START: peer %s of %s, seed %s, delay %s, max speed %s, speed %s",
       p.peer, p.peers, p.seed, p.delay, p.max_speed, p.speed))
 
+  -- Test-only command, registered on every peer: a VIP asks to visit.
+  MultiplayerSession.default_handlers.probe_vip = function(w)
+    w.hospitals[1]:createVip()
+    return true
+  end
+
   -- Same setup on every peer before the first step, so it stays in sync.
   -- It changes the shared world directly, like a command handler does.
   session.applying = true
@@ -210,6 +220,23 @@ local function run()
         done[i] = true
         local a = entry.action
         if a == "buy" then builder.ui_buy(world, desk_x, desk_y, entry.arg, log)
+        elseif a == "vip" then
+          session:issue({kind = "probe_vip"})
+          log("UI: asked for a VIP fax at step " .. session.step)
+        elseif a == "answerfax" then
+          local ftype, n = entry.arg:match("^(%a+):(%d+)$")
+          local icon
+          for _, i in ipairs(world.ui.bottom_panel:allMessageIcons()) do
+            if i.type == ftype then icon = i break end
+          end
+          if icon then
+            if not icon.fax then icon:openMessage() end
+            log(string.format("UI: clicked choice %s of %s fax #%s at step %d", n, ftype,
+                tostring(icon.mp_id), session.step))
+            icon.fax:buttonChoice(tonumber(n))
+          else
+            log("UI: no " .. ftype .. " fax to answer")
+          end
         elseif a == "crowdroom" then
           local id, rw, rh = entry.arg:match("^([%w_]+):(%d+):(%d+)$")
           rw, rh = tonumber(rw), tonumber(rh)

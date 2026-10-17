@@ -161,6 +161,11 @@ end
 -- Tries to dismiss the message. This is only possible if there is only one choice.
 function UIMessage:dismissMessage()
   if self.can_dismiss then
+    if MultiplayerSession.actionsAreCommands() then
+      TheApp.mp_session:issue({kind = "fax_choice", msg = self.mp_id, choice = 1})
+      self:adjustToggle()
+      return
+    end
     self:removeMessage(1)
   else
     self.ui:playSound("wrong2.wav")
@@ -193,7 +198,8 @@ function UIMessage:onTick()
   end
 end
 
-function UIMessage:onWorldTick()
+--! Count down one game hour; when the time is up, take the default choice.
+function UIMessage:tickTimer()
   if self.timer then
     self.timer = self.timer - 1
     if self.timer <= 0 then
@@ -201,6 +207,11 @@ function UIMessage:onWorldTick()
       self:removeMessage(self.default_choice)
     end
   end
+end
+
+function UIMessage:onWorldTick()
+  -- In multiplayer the bottom panel runs the timers (UIBottomPanel:onWorldTick).
+  if not TheApp.mp_session then self:tickTimer() end
   if self.active then
     self.rotator[self.active].visible = false
     if self.active == 60 then
