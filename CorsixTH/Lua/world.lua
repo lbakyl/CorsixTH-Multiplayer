@@ -38,6 +38,7 @@ corsixth.require("hospitals.ai_hospital")
 corsixth.require("cheats")
 corsixth.require("epidemic")
 corsixth.require("calls_dispatcher")
+corsixth.require("mp_session")
 corsixth.require("research_department")
 corsixth.require("entity_map")
 corsixth.require("date")
@@ -922,67 +923,20 @@ function World:onTick()
     end
     self.tick_timer = self.tick_rate
 
-    -- If the game is not paused then an earthquake may be taking place
-    if not self:isCurrentSpeed("Pause") then
-      self.earthquake:tick()
-    end
-
-    local new_game_date = self.game_date:plusHours(self.hours_per_tick)
-    -- End of day/month/year
-    if self.game_date:dayOfMonth() ~= new_game_date:dayOfMonth() then
-      for _, hospital in ipairs(self.hospitals) do
-        hospital:onEndDay()
+    -- The session lives on the App, not the World, so it is never saved.
+    local session = self.app.mp_session
+    if session and self.hours_per_tick > 0 then
+      -- Multiplayer lockstep: advance in one-hour steps, each allowed only
+      -- once every peer's input for it is known. If a peer is behind, the
+      -- remaining steps wait for a later tick (the UI keeps running).
+      for _ = 1, self.hours_per_tick do
+        if not session:canStep() then break end
+        session:beforeStep()
+        if self:_advanceHours(1, true) then return end
+        session:afterStep()
       end
-      self:onEndDay()
-      if self.game_date:isLastDayOfMonth() then
-        for _, hospital in ipairs(self.hospitals) do
-          hospital:onEndMonth()
-        end
-        -- Let the hospitals do what they need to do at end of month first.
-        if self:onEndMonth() then
-          -- Bail out as the game has already been ended.
-          return
-        end
-
-        if self.game_date:isLastDayOfYear() then
-          -- It is crucial that the annual report gets to initialize before onEndYear is called.
-          -- Yearly statistics are reset there.
-          self.ui:addWindow(UIAnnualReport(self.ui, self))
-          self:onEndYear()
-        end
-      end
-    end
-    self.game_date = new_game_date
-
-    for i = 1, self.hours_per_tick do
-      self.anims:tick()
-      for _, hospital in ipairs(self.hospitals) do
-        hospital:tick()
-      end
-      -- A patient might arrive to the player hospital.
-      -- TODO: Multiplayer support.
-      local spawn_count = self.spawn_hours[self.game_date:hourOfDay() + i - 1]
-      if spawn_count and self.hospitals[1].opened then
-        -- TODO: Should check target hospital, not hospital 1
-        for _ = 1, spawn_count do
-          self:spawnPatient()
-        end
-      end
-      for _, entity in ipairs(self.entities) do
-        if entity.ticks and not entity.to_destroy then
-          self.current_tick_entity = entity
-          entity:tick()
-        end
-      end
-      self.current_tick_entity = nil
-      self:_flushDestroyedEntities()
-      self.map:onTick()
-      self.map.th:updateTemperatures(outside_temperatures[self.game_date:monthOfYear()],
-          0.25 + self.hospitals[1].heating.radiator_heat * 0.3)
-      if self.ui then
-        self.ui:onWorldTick()
-      end
-      self.dispatcher:onTick()
+    elseif self:_advanceHours(self.hours_per_tick, not self:isCurrentSpeed("Pause")) then
+      return
     end
   end
   if self.hours_per_tick > 0 and self.floating_dollars then
@@ -995,6 +949,84 @@ function World:onTick()
     end
   end
   self.tick_timer = self.tick_timer - 1
+end
+
+--! Advance game time by a number of hours: end of day/month/year handling,
+--! hospital, entity, map and dispatcher ticks. Used by World:onTick(), either
+--! for all hours of a tick at once (single player) or one hour per lockstep
+--! step (multiplayer).
+--!param hours (int) Number of game hours to advance.
+--!param tick_earthquake (bool) Whether an ongoing earthquake should progress.
+--!return (bool) true if the game ended and the caller must stop.
+function World:_advanceHours(hours, tick_earthquake)
+  -- If the game is not paused then an earthquake may be taking place
+  if tick_earthquake then
+    self.earthquake:tick()
+  end
+
+  local new_game_date = self.game_date:plusHours(hours)
+  -- End of day/month/year
+  if self.game_date:dayOfMonth() ~= new_game_date:dayOfMonth() then
+    for _, hospital in ipairs(self.hospitals) do
+      hospital:onEndDay()
+    end
+    self:onEndDay()
+    if self.game_date:isLastDayOfMonth() then
+      for _, hospital in ipairs(self.hospitals) do
+        hospital:onEndMonth()
+      end
+      -- Let the hospitals do what they need to do at end of month first.
+      if self:onEndMonth() then
+        -- Bail out as the game has already been ended.
+        return true
+      end
+
+      if self.game_date:isLastDayOfYear() then
+        -- It is crucial that the annual report gets to initialize before onEndYear is called.
+        -- Yearly statistics are reset there.
+        self.ui:addWindow(UIAnnualReport(self.ui, self))
+        self:onEndYear()
+      end
+    end
+  end
+  self.game_date = new_game_date
+
+  -- The end of day/month/year handling above can pause the game (e.g. the
+  -- annual report window). The original single-player code then runs no
+  -- hourly ticks for this tick, because the loop below used the speed read
+  -- after that handling. Keep that behaviour exactly; in multiplayer the step
+  -- is one hour, also skipped if the game just got paused.
+  local loop_hours = math.min(hours, self.hours_per_tick)
+  for i = 1, loop_hours do
+    self.anims:tick()
+    for _, hospital in ipairs(self.hospitals) do
+      hospital:tick()
+    end
+    -- A patient might arrive to the player hospital.
+    -- TODO: Multiplayer support.
+    local spawn_count = self.spawn_hours[self.game_date:hourOfDay() + i - 1]
+    if spawn_count and self.hospitals[1].opened then
+      -- TODO: Should check target hospital, not hospital 1
+      for _ = 1, spawn_count do
+        self:spawnPatient()
+      end
+    end
+    for _, entity in ipairs(self.entities) do
+      if entity.ticks and not entity.to_destroy then
+        self.current_tick_entity = entity
+        entity:tick()
+      end
+    end
+    self.current_tick_entity = nil
+    self:_flushDestroyedEntities()
+    self.map:onTick()
+    self.map.th:updateTemperatures(outside_temperatures[self.game_date:monthOfYear()],
+        0.25 + self.hospitals[1].heating.radiator_heat * 0.3)
+    if self.ui then
+      self.ui:onWorldTick()
+    end
+    self.dispatcher:onTick()
+  end
 end
 
 --! Creates a save file in the "Autosaves" folder, using the "Autosave-mm-dd.sav" name template for filename.

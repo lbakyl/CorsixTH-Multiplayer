@@ -323,6 +323,7 @@ function UIStaff:pickupStaff()
 end
 
 function UIStaff:fireStaff()
+  if MultiplayerSession.blockUnsupported(self.ui) then return end -- firing staff
   self.ui:addWindow(UIConfirmDialog(self.ui, false, _S.confirmation.sack_staff, --[[persistable:staff_dialog_confirm_sack]] function()
     self.staff:fire()
   end))

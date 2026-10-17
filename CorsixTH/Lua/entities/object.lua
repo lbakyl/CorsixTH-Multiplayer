@@ -762,6 +762,7 @@ function Object:onClick(ui, button, data)
   -- Flag 'in_pickup_mode' can be used if for example some things
   -- should only happen as long as the object is not picked up.
   if button == "right" or (button == "left" and window and window.in_pickup_mode) then
+    if MultiplayerSession.blockUnsupported(ui) then return end -- moving objects
     local room = self:getRoom()
     window = window and window.visible and window
 

@@ -660,6 +660,7 @@ end
 
 function Room:enterEditMode()
   local ui = self.world.ui
+  if MultiplayerSession.blockUnsupported(ui) then return end -- editing rooms
 
   -- If we have the window for this room machine open, close it
   local window = ui:getWindow(UIMachine)

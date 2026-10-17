@@ -663,6 +663,7 @@ function UIStaffManagement:increaseSalary()
 end
 
 function UIStaffManagement:fire()
+  if MultiplayerSession.blockUnsupported(self.ui) then return end -- firing staff
   if self.selected_staff then
     self.ui:playSound(self.default_button_sound)
     self.ui:addWindow(UIConfirmDialog(self.ui, false, _S.confirmation.sack_staff, --[[persistable:staff_management_confirm_sack]] function()

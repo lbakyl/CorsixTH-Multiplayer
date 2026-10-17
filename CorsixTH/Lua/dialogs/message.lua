@@ -111,6 +111,12 @@ function UIMessage:openMessage()
     return
   end
   if self.type == "strike" then -- strikes are special cases, as they are not faxes
+    -- In multiplayer, pay-rise requests resolve by the hospital policy on
+    -- every peer, until answering them is sent as a command.
+    if MultiplayerSession.blockUnsupported(self.ui) then
+      self:adjustToggle()
+      return
+    end
     self.ui:addWindow(UIStaffRise(self.ui, self.owner, self.message))
     self:removeMessage()
   else
