@@ -93,6 +93,11 @@ end
 --!  notify     (function) optional message to show the player (waiting for
 --!             the other player, desync). Cosmetic, local only.
 --!  clock      (function) optional milliseconds clock for the waiting notice
+--!  control    (function) optional; receives every line that is neither a
+--!             command nor a step report (messages from the relay server)
+--!  request_speed (function) optional; when set, speed and pause changes
+--!             made by the player are sent through it instead of being
+--!             applied locally (the server shares them with everybody)
 function MultiplayerSession:MultiplayerSession(params)
   self.world = params.world
   self.peer_id = params.peer_id
@@ -108,6 +113,8 @@ function MultiplayerSession:MultiplayerSession(params)
   self.clock = params.clock or (sdl and sdl.getTicks) or function() return 0 end
   self.wait_started = nil -- clock time when the current stall began
   self.wait_notified = false
+  self.control = params.control
+  self.request_speed = params.request_speed
 
   self.step = 0          -- last completed step
   self.seq = 0           -- last sequence number used by this peer
@@ -160,9 +167,37 @@ function MultiplayerSession:poll()
           self.peer_fps[step] = self.peer_fps[step] or {}
           self.peer_fps[step][peer] = fp
         end
+      elseif self.control then
+        self.control(line)
       end
     end
   end
+end
+
+--! Stop waiting for a peer that left the game. Its commands already received
+--! are still applied: they are for steps nobody has run yet.
+function MultiplayerSession:removePeer(peer)
+  self.peer_step[peer] = nil
+  for _, fps in pairs(self.peer_fps) do fps[peer] = nil end
+  local remaining = {}
+  for _, p in ipairs(self.peers) do
+    if p ~= peer then remaining[#remaining + 1] = p end
+  end
+  self.peers = remaining
+  self.log(string.format("peer %d left after step %d", peer, self.step))
+end
+
+--! The relay server found differing fingerprints at `step`.
+function MultiplayerSession:serverDesync(step)
+  self:_reportDesync(step, "fingerprints differ (server)")
+end
+
+--! A speed or pause change by the player. Returns true if it was sent to the
+--! server instead of being applied here (it comes back for everybody).
+function MultiplayerSession:requestSpeed(speed)
+  if not self.request_speed then return false end
+  self.request_speed(speed)
+  return true
 end
 
 --! Is every other peer far enough along for us to run the next step?

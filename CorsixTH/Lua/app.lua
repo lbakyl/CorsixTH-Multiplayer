@@ -706,6 +706,8 @@ end
 
 function App:worldExited()
   self.audio:clearCallbacks()
+  -- A multiplayer game ends with its world (level lost, back to the menu).
+  if self.mp_lobby then self.mp_lobby:worldExited() end
 end
 
 --! Initialise CorsixTH's main menu screen including relevant windows

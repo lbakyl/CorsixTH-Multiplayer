@@ -47,6 +47,7 @@ function UIMainMenu:UIMainMenu(ui)
     {_S.main_menu.new_game,        self.buttonNewGame,        _S.tooltip.main_menu.new_game},
     {_S.main_menu.custom_campaign, self.buttonCustomCampaign, _S.tooltip.main_menu.custom_campaign},
     {_S.main_menu.custom_level,    self.buttonCustomGame,     _S.tooltip.main_menu.custom_level},
+    {_S.main_menu.multiplayer,     self.buttonMultiplayer,    _S.tooltip.main_menu.multiplayer},
     {_S.main_menu.continue,        self.buttonContinueGame,   _S.tooltip.main_menu.continue},
     {_S.main_menu.load_game,       self.buttonLoadGame,       _S.tooltip.main_menu.load_game},
     {_S.main_menu.options,         self.buttonOptions,        _S.tooltip.main_menu.options},
@@ -162,6 +163,10 @@ function UIMainMenu:buttonCustomGame()
     local window = UICustomGame(self.ui)
     self.ui:addWindow(window)
   end
+end
+
+function UIMainMenu:buttonMultiplayer()
+  self.ui:addWindow(UIMultiplayer(self.ui))
 end
 
 function UIMainMenu:buttonContinueGame()

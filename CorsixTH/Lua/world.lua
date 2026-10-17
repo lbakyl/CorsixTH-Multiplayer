@@ -731,6 +731,9 @@ local tick_rates = {
 }
 
 function World:speedUp()
+  -- Not shared through the multiplayer server: everybody would have to hold
+  -- the key at once.
+  if self.app.mp_session and self.app.mp_session.request_speed then return end
   self:setSpeed("Speed Up")
 end
 
@@ -755,10 +758,20 @@ function World:getCurrentSpeed()
   end
 end
 
+--! Apply a speed change that the multiplayer server shared with everybody.
+--!param new_speed (string) Speed name or "Pause".
+function World:applySharedSpeed(new_speed)
+  self:setUserPaused(new_speed == "Pause")
+  self:setSpeed(new_speed)
+end
+
 --! Set game speed from a user-facing control.
 --!param new_speed (string) New speed to set.
 function World:setUserSpeed(new_speed)
   if self:isMustPauseActive() then return end
+  -- In multiplayer the server shares the change with every player.
+  local session = self.app.mp_session
+  if session and session:requestSpeed(new_speed) then return end
   -- If player paused, remember it
   self:setUserPaused(new_speed == "Pause")
   return self:setSpeed(new_speed)
@@ -870,6 +883,11 @@ end
 --! Dedicated function to allow unpausing by pressing 'p' again
 function World:pauseOrUnpause()
   if self:isMustPauseActive() then return end -- "Must Pause" takes precedence
+  local session = self.app.mp_session
+  if session and session:requestSpeed(self:isCurrentSpeed("Pause") and
+      (self.prev_speed or "Normal") or "Pause") then
+    return
+  end
   if not self:isCurrentSpeed("Pause") then
     self:setUserPaused(true)
     self:setSpeed("Pause")

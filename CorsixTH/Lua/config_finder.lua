@@ -184,6 +184,7 @@ local function new_config_defaults()
     direct_zoom = nil,
     new_machine_extra_info = true,
     player_name = [[]],
+    multiplayer_server = [[]],
   }
 end
 
@@ -798,7 +799,12 @@ param(config_values, 'new_machine_extra_info') .. [=[
 -- the New Game menu or between the brace brackets below like [[NAME]].
 -- Note: space is limited in the game, so don't enter a name that is too long!
 --]=] .. '\n' ..
-param(config_values, 'player_name') .. '\n'
+param(config_values, 'player_name') .. '\n' .. [=[
+
+-------------------------------------------------------------------------------
+-- Address of the last multiplayer server you connected to, like [[host:port]].
+--]=] .. '\n' ..
+param(config_values, 'multiplayer_server') .. '\n'
 
   return table.concat(parts)
 end

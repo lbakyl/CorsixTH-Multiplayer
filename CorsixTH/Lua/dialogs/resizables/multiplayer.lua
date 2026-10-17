@@ -1,0 +1,318 @@
+--[[ Copyright (c) 2026 CorsixTH-Multiplayer contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. --]]
+
+corsixth.require("mp_lobby")
+
+--! Multiplayer lobby window, opened from the main menu. Shows one of three
+--! views depending on the lobby state: connect to a server, pick or create a
+--! room, or wait in a room until the host starts the game.
+class "UIMultiplayer" (UIResizable)
+
+---@type UIMultiplayer
+local UIMultiplayer = _G["UIMultiplayer"]
+
+local col = {
+  bg             = Colours.PanelDefault,
+  button         = Colours.PanelDefault,
+  setting        = Colours.Setting,
+  setting_active = Colours.SettingActive,
+  title          = Colours.Title,
+  caption        = Colours.Caption,
+  textbox        = Colours.Textbox,
+}
+
+local WIDTH = 420
+local ROOM_ROWS = 6
+
+local function view_of(lobby)
+  if not lobby or lobby.state == "closed" or lobby.state == "connecting" then return "connect" end
+  if lobby.state == "in_room" then return "room" end
+  return "rooms"
+end
+
+local heights = {connect = 190, rooms = 400, room = 300}
+
+function UIMultiplayer:UIMultiplayer(ui, status)
+  local lobby = TheApp.mp_lobby
+  self.view = view_of(lobby)
+  self:UIResizable(ui, WIDTH, heights[self.view], col.bg)
+  self.esc_closes = true
+  self.resizable = false
+  self.modal_class = "main menu"
+  self.on_top = true
+  self:setDefaultPosition(0.5, 0.25)
+  self.default_button_sound = "selectx.wav"
+  self.lobby = lobby
+  self.seen_version = lobby and lobby.version or 0
+  self.status_text = status or ""
+
+  local S = _S.multiplayer_window
+  local title
+  if self.view == "connect" then
+    title = S.caption
+  elseif self.view == "rooms" then
+    title = S.rooms_caption:format(lobby.address)
+  else
+    title = S.room_caption:format(lobby.room.room)
+  end
+  self:addBevelPanel(20, 10, WIDTH - 40, 20, col.title):setLabel(title).lowered = true
+
+  if self.view == "connect" then
+    self:_buildConnect()
+  elseif self.view == "rooms" then
+    self:_buildRooms()
+  else
+    self:_buildRoom()
+  end
+  self.status_panel = self:addBevelPanel(20, heights[self.view] - 75, WIDTH - 40, 20, col.bg)
+  self.status_panel:setLabel(self.status_text)
+  self.status_panel.lowered = true
+end
+
+--! Replace this window by a fresh one for the current lobby state.
+function UIMultiplayer:rebuild(status)
+  local ui = self.ui
+  self:close()
+  ui:addWindow(UIMultiplayer(ui, status))
+end
+
+function UIMultiplayer:setStatus(text)
+  self.status_text = text or ""
+  self.status_panel:setLabel(self.status_text)
+end
+
+local function textbox(window, x, y, w, text, limit, input, tooltip)
+  local box
+  box = window:addBevelPanel(x, y, w, 25, col.textbox, col.bg, col.bg)
+    :setAutoClip(true)
+    :makeTextbox(function() end, function() end)
+    :allowedInput(input):characterLimit(limit):setText(text)
+  if tooltip then box.panel:setTooltip(tooltip) end
+  return box
+end
+
+local function label(window, x, y, w, text)
+  local panel = window:addBevelPanel(x, y, w, 25, col.caption, col.bg, col.bg)
+  panel:setLabel(text)
+  panel.lowered = true
+  return panel
+end
+
+local function button(window, x, y, w, text, callback, tooltip)
+  local b = window:addBevelPanel(x, y, w, 30, col.button):setLabel(text)
+      :makeButton(0, 0, w, 30, nil, callback)
+  if tooltip then b:setTooltip(tooltip) end
+  return b
+end
+
+-- Connect view ----------------------------------------------------------------
+
+function UIMultiplayer:_buildConnect()
+  local S, T = _S.multiplayer_window, _S.tooltip.multiplayer_window
+  local config = TheApp.config
+  local address = (config.multiplayer_server ~= "" and config.multiplayer_server) or "127.0.0.1:47800"
+  local name = (config.player_name ~= "" and config.player_name) or os.getenv("USER")
+      or os.getenv("USERNAME") or "Player"
+  label(self, 20, 45, 130, S.server)
+  self.address_box = textbox(self, 155, 45, WIDTH - 175, address, 60, {"all"}, T.server)
+  label(self, 20, 75, 130, S.name)
+  self.name_box = textbox(self, 155, 75, WIDTH - 175, name, 15, {"alpha", "numbers", "misc"}, T.name)
+  button(self, 20, 150, 180, S.connect, self.buttonConnect, T.connect)
+  button(self, WIDTH - 200, 150, 180, S.back, self.close)
+end
+
+function UIMultiplayer:buttonConnect()
+  local S = _S.multiplayer_window
+  local address, name = self.address_box.text, self.name_box.text
+  self:setStatus(S.connecting:format(address))
+  local lobby, err = MultiplayerLobby.connect(address, name, 5)
+  if not lobby then
+    self:setStatus(err)
+    return
+  end
+  TheApp.mp_lobby = lobby
+  self.lobby = lobby
+  TheApp.config.multiplayer_server = address
+  if name:find("%S") then TheApp.config.player_name = name end
+  TheApp:saveConfig()
+end
+
+-- Room list view ----------------------------------------------------------------
+
+function UIMultiplayer:_buildRooms()
+  local S, T = _S.multiplayer_window, _S.tooltip.multiplayer_window
+  local lobby = self.lobby
+  self.selected_room = nil
+  if #lobby.rooms == 0 then
+    label(self, 20, 40, WIDTH - 40, S.no_rooms)
+  end
+  for i = 1, math.min(ROOM_ROWS, #lobby.rooms) do
+    local r = lobby.rooms[i]
+    local text = S.room_line:format(r.room, tonumber(r.players) or 0, tonumber(r.max) or 0,
+        r.mode == "coop" and S.mode_coop or S.mode_shared, r.level or "?",
+        (r.locked == "1" and S.locked or "") .. (r.build_ok == "0" and S.other_build or ""))
+    self:addBevelPanel(20, 40 + (i - 1) * 27, WIDTH - 40, 25, col.setting, nil, nil, nil,
+        col.setting_active):setLabel(text)
+        :makeToggleButton(0, 0, WIDTH - 40, 25, nil, function(window, state, btn)
+          window:selectRoom(i, state, btn)
+        end)
+  end
+  local y = 40 + ROOM_ROWS * 27 + 5
+  label(self, 20, y, 110, S.password)
+  self.password_box = textbox(self, 135, y, 135, "", 20, {"alpha", "numbers", "misc"}, T.password)
+  button(self, 280, y - 2, 60, S.join, self.buttonJoin)
+  button(self, 345, y - 2, WIDTH - 365, S.refresh, self.buttonRefresh)
+
+  y = y + 35
+  label(self, 20, y, 110, S.new_room)
+  self.room_name_box = textbox(self, 135, y, WIDTH - 155, (lobby.name or "My") .. "'s room", 20,
+      {"alpha", "numbers", "misc"})
+  y = y + 30
+  self.new_mode = "shared"
+  self.new_level = 1
+  self.new_max = 2
+  self.mode_button = button(self, 20, y, 160, S.mode_shared, self.buttonMode, T.mode)
+  self.level_button = button(self, 185, y, 90, S.level:format(self.new_level), self.buttonLevel, T.level)
+  self.max_button = button(self, 280, y, WIDTH - 300, S.players:format(self.new_max), self.buttonMax, T.players)
+  y = heights.rooms - 50
+  button(self, 20, y, 180, S.create, self.buttonCreate)
+  button(self, WIDTH - 200, y, 180, S.disconnect, self.buttonDisconnect)
+end
+
+function UIMultiplayer:selectRoom(index, state, btn)
+  for _, b in ipairs(self.buttons) do
+    if b ~= btn and b.is_toggle then b:setToggleState(false) end
+  end
+  self.selected_room = state and self.lobby.rooms[index].room or nil
+end
+
+function UIMultiplayer:buttonJoin()
+  if not self.selected_room then
+    self:setStatus(_S.multiplayer_window.select_room)
+    return
+  end
+  self.lobby:joinRoom(self.selected_room, self.password_box.text)
+end
+
+function UIMultiplayer:buttonRefresh() self.lobby:refreshRooms() end
+
+function UIMultiplayer:buttonMode()
+  local S = _S.multiplayer_window
+  self.new_mode = self.new_mode == "shared" and "coop" or "shared"
+  self.mode_button.panel_for_sprite:setLabel(self.new_mode == "coop" and S.mode_coop or S.mode_shared)
+end
+
+function UIMultiplayer:buttonLevel()
+  self.new_level = self.new_level % 12 + 1
+  self.level_button.panel_for_sprite:setLabel(_S.multiplayer_window.level:format(self.new_level))
+end
+
+function UIMultiplayer:buttonMax()
+  self.new_max = self.new_max % 4 + 1
+  if self.new_max < 2 then self.new_max = 2 end
+  self.max_button.panel_for_sprite:setLabel(_S.multiplayer_window.players:format(self.new_max))
+end
+
+function UIMultiplayer:buttonCreate()
+  self.lobby:createRoom({room = self.room_name_box.text, password = self.password_box.text,
+      max = self.new_max, mode = self.new_mode, level = self.new_level, difficulty = "full"})
+end
+
+function UIMultiplayer:buttonDisconnect()
+  self.lobby:disconnect()
+  self:rebuild()
+end
+
+-- Room view -------------------------------------------------------------------
+
+function UIMultiplayer:_buildRoom()
+  local S, T = _S.multiplayer_window, _S.tooltip.multiplayer_window
+  self.player_panels = {}
+  for i = 1, 4 do
+    self.player_panels[i] = label(self, 20, 40 + (i - 1) * 27, WIDTH - 40, "")
+  end
+  self.summary_panel = label(self, 20, 40 + 4 * 27 + 5, WIDTH - 40, "")
+  self.mode_panel = label(self, 20, 40 + 5 * 27 + 5, WIDTH - 40, "")
+  local y = heights.room - 50
+  self:addBevelPanel(20, y, 120, 30, col.setting, nil, nil, nil, col.setting_active)
+      :setLabel(S.ready):makeToggleButton(0, 0, 120, 30, nil, self.buttonReady):setTooltip(T.ready)
+  self.start_button = button(self, 150, y, 120, S.start, self.buttonStart, T.start)
+  button(self, WIDTH - 140, y, 120, S.leave, self.buttonLeave)
+  self:_updateRoom()
+end
+
+function UIMultiplayer:_updateRoom()
+  local S = _S.multiplayer_window
+  local lobby = self.lobby
+  local max = tonumber(lobby.room.max) or 2
+  for i = 1, 4 do
+    local p = lobby.players[i]
+    local text = ""
+    if p then
+      text = S.player_line:format(p.name, p.owner == "1" and S.owner_mark or "", p.rtt or "?",
+          p.ready == "1" and S.is_ready or S.not_ready)
+    elseif i <= max then
+      text = S.waiting_player
+    end
+    self.player_panels[i]:setLabel(text)
+  end
+  local s = lobby.summary
+  self.summary_panel:setLabel(s and S.recommendation:format(s.speed, s.latency or "?") or S.measuring)
+  self.mode_panel:setLabel((lobby.room.mode == "coop" and S.mode_coop or S.mode_shared) ..
+      ", " .. S.level:format(tonumber(lobby.room.level) or 1))
+  self.start_button:enable(lobby:isOwner())
+end
+
+function UIMultiplayer:buttonReady(state)
+  self.lobby:setReady(state)
+end
+
+function UIMultiplayer:buttonStart()
+  if self.lobby:isOwner() then self.lobby:startGame() end
+end
+
+function UIMultiplayer:buttonLeave()
+  self.lobby:leaveRoom()
+end
+
+-- Updates ---------------------------------------------------------------------
+
+function UIMultiplayer:onTick()
+  local lobby = self.lobby
+  if lobby then
+    lobby:poll()
+    if lobby.state == "in_game" then return end -- the game UI replaced this one
+    if lobby.version ~= self.seen_version then
+      self.seen_version = lobby.version
+      local status = lobby.error and lobby.error.text or nil
+      if view_of(lobby) ~= self.view or self.view == "rooms" then
+        self:rebuild(status)
+        return
+      end
+      if self.view == "room" then self:_updateRoom() end
+      if status then self:setStatus(status) end
+    end
+  end
+  UIResizable.onTick(self)
+end
+
+function UIMultiplayer:close()
+  UIResizable.close(self)
+end

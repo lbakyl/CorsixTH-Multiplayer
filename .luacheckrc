@@ -38,7 +38,7 @@ globals = { -- Globals
 
             -- Game classes
             "AIHospital", "AnimationManager", "AnimationEffect", "App", "Audio",
-            "CallsDispatcher", "Cheats", "MultiplayerSession", "MultiplayerTransport", "ChildClass", "Command", "Door",
+            "CallsDispatcher", "Cheats", "MultiplayerLobby", "MultiplayerSession", "MultiplayerTransport", "ChildClass", "Command", "Door",
             "DummyRootNode", "Earthquake", "EndConditions", "Entity", "EntityMap",
             "Epidemic", "FileSystem", "FileTreeNode", "FilteredFileTreeNode", "GameUI",
             "Graphics", "GrimReaper", "Hospital", "Humanoid", "HumanoidRawWalk",
@@ -60,7 +60,7 @@ globals = { -- Globals
             "UIGraphs", "UIHireStaff", "UIHotkeyAssign",
             "UIHotkeyAssignKeyPane", "UIInformation", "UIJukebox", "UILoadGame",
             "UILoadMap", "UILuaConsole", "UIMachine", "UIMakeDebugPatient",
-            "UIMainMenu", "UIMapEditor", "UIMenuBar", "UIMenuList",
+            "UIMainMenu", "UIMapEditor", "UIMenuBar", "UIMenuList", "UIMultiplayer",
             "UIMessage", "UINewGame", "UIOptions", "UIPatient", "UIMachineMenu",
             "UIPlaceObjects", "UIPlaceStaff", "UIPolicy", "UIProgressReport",
             "UIQueue", "UIQueuePopup", "UIResizable", "UIResearch",
