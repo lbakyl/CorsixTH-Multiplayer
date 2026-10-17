@@ -141,7 +141,11 @@ function UIHireStaff:hire()
     return
   end
   self.ui:playSound("YesX.wav")
-  table.remove(self.world.available_staff[self.category], self.current_index)
+  -- In multiplayer the profile leaves the shared pool when the hire command
+  -- runs on every peer, not here.
+  if not TheApp.mp_session then
+    table.remove(self.world.available_staff[self.category], self.current_index)
+  end
   self.ui:addWindow(UIPlaceStaff(self.ui, profile, self.mouse_up_x, self.mouse_up_y))
 end
 

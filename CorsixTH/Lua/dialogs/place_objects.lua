@@ -182,7 +182,8 @@ function UIPlaceObjects:addObjects(object_list, pay_for)
     for _, object in ipairs(self.objects) do
       if new_object.qty > 0 and new_object.object.thob == object.object.thob then
         object.qty = object.qty + new_object.qty
-        if pay_for then
+        -- In multiplayer, payment happens when the place_object command runs.
+        if pay_for and not TheApp.mp_session then
           local build_cost = self.ui.hospital:getObjectBuildCost(new_object.object.id)
           local msg = _S.transactions.buy_object .. ": " .. object.object.name
           self.ui.hospital:spendMoney(new_object.qty * build_cost, msg, new_object.qty * build_cost)
@@ -218,7 +219,7 @@ function UIPlaceObjects:addObjects(object_list, pay_for)
     end
     self.objects[#self.objects + 1] = object
 
-    if pay_for then
+    if pay_for and not TheApp.mp_session then
       local build_cost = self.ui.hospital:getObjectBuildCost(object.object.id)
       local msg = _S.transactions.buy_object .. ": " .. object.object.name
       self.ui.hospital:spendMoney(object.qty * build_cost, msg, object.qty * build_cost)
@@ -249,7 +250,8 @@ function UIPlaceObjects:removeObject(object, dont_close_if_empty, placed, move_c
   local purchase_cancellation = not placed and not existing_object
   local sale_previously_placed = not placed and existing_object and not move_canceled
 
-  if purchase_cancellation or sale_previously_placed then
+  -- In multiplayer nothing was paid for a not-yet-placed purchase.
+  if sale_previously_placed or (purchase_cancellation and not TheApp.mp_session) then
     -- Object sell.
     -- The player should be reimbursed for the cost of the item, i.e.
     -- whether they were previously purchased. So do refund.
@@ -544,6 +546,19 @@ function UIPlaceObjects:placeObject(dont_close_if_empty, dont_remove)
     table.remove(object.existing_objects, 1)
   end
   local room = self.room or self.world:getRoom(self.object_cell_x, self.object_cell_y)
+  local session = TheApp.mp_session
+  if session and not real_obj then
+    -- Multiplayer: do not place locally. Send a command; every peer (this
+    -- one included) buys and places the object when it runs.
+    session:issue({kind = "place_object", object = object.object.id,
+        x = self.object_cell_x, y = self.object_cell_y, orientation = self.object_orientation})
+    self.ui:playSound("place_r.wav")
+    if not dont_remove then
+      self:removeObject(object, dont_close_if_empty, true, false)
+    end
+    object.orientation_before = nil
+    return nil
+  end
   if real_obj then
     -- If there is such an object then we don't want to make a new one, but move this one instead.
     if real_obj.picked_up and not real_obj.th:isVisible() then

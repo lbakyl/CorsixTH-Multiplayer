@@ -71,9 +71,12 @@ function UIPlaceStaff:close()
   elseif self.profile then -- Cancel hiring newcomer
     self.ui:tutorialStep(2, {6, 7}, 1)
     self.ui:tutorialStep(4, {4, 5}, 1)
-    -- Return the profile to the available staff list
-    local staff_pool = self.world.available_staff[self.profile.humanoid_class]
-    staff_pool[#staff_pool + 1] = self.profile
+    -- Return the profile to the available staff list (in multiplayer it was
+    -- never taken out)
+    if not TheApp.mp_session then
+      local staff_pool = self.world.available_staff[self.profile.humanoid_class]
+      staff_pool[#staff_pool + 1] = self.profile
+    end
     play_placement_sound = false
   end
   if play_placement_sound then
@@ -151,6 +154,12 @@ function UIPlaceStaff:onMouseUp(button, x, y)
       if self:_isValidStaffPlacement() then
         if self.staff then
           self.staff:setTile(self.tile_x, self.tile_y)
+        elseif TheApp.mp_session then
+          -- Multiplayer: every peer hires and places this person when the
+          -- command runs.
+          TheApp.mp_session:issue({kind = "hire", category = self.profile.humanoid_class,
+              name = self.profile:getFullName(), x = self.tile_x, y = self.tile_y})
+          self.profile = nil
         else
           local entity = self.world:newEntity(self.profile.humanoid_class, 2, 2)
           entity:setProfile(self.profile)

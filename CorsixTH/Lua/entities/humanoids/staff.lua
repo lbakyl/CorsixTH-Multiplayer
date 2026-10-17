@@ -446,6 +446,7 @@ end
 
 -- Function to set pickup action on staff. Pickup action can be deferred.
 function Staff:setPickup(ui, window_to_close)
+  if MultiplayerSession.blockUnsupported(ui) then return end -- moving staff
   if not self.pickup then -- check if we already added pickup Action in actions queue
     self.pickup = true
     local pickup_action = PickupAction(ui)
