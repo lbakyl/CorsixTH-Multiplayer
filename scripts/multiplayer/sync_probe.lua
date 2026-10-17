@@ -11,6 +11,14 @@
 --                     and corridor objects)         (default light)
 --   MP_OUT            file to write one fingerprint line per game hour
 --   MP_HOST, MP_PORT  TCP endpoint for host/client  (default 127.0.0.1:47800)
+--   MP_PEER           player number used to order commands (default:
+--                     host=1, client=2, solo=1)
+--   MP_SCRIPT         this peer's planned actions, issued as lockstep
+--                     commands. ";"-separated "hour:kind[:args]" entries:
+--                       50:object:bench   120:room:gp:5:5   200:hire:Doctor
+--                     Positions are chosen at issue time from local state.
+--   MP_DROP_COMMANDS  if 1, apply own commands locally but never send them
+--                     (negative test: must desync)
 --   MP_DUMP_HOUR      write MP_OUT..".entities" (entities, actions, rooms,
 --                     queues) at this game hour, for desync debugging
 --   MP_DEBUG_END      log speed, open windows and staff at the end
@@ -26,6 +34,18 @@ local draw_every = tonumber(os.getenv("MP_DRAW_EVERY") or "0")
 local out_path = os.getenv("MP_OUT")
 local scenario = os.getenv("MP_SCENARIO") or "light"
 local builder = assert(loadfile(source_dir .. "/scripts/multiplayer/probe_builder.lua"))()
+local commands = assert(loadfile(source_dir .. "/scripts/multiplayer/commands.lua"))()
+local peer_id = tonumber(os.getenv("MP_PEER") or (mode == "client" and "2" or "1"))
+local drop_commands = os.getenv("MP_DROP_COMMANDS") == "1"
+
+-- Parse MP_SCRIPT into {hour = n, kind = ..., args = {...}} entries.
+local script = {}
+for entry in (os.getenv("MP_SCRIPT") or ""):gmatch("[^;]+") do
+  local fields = {}
+  for f in entry:gmatch("[^:]+") do fields[#fields + 1] = f end
+  script[#script + 1] = {hour = tonumber(fields[1]), kind = fields[2],
+      args = {select(3, (table.unpack or unpack)(fields))}}
+end
 
 local function log(msg)
   io.stdout:write("[" .. mode .. "] " .. msg .. "\n")
@@ -184,17 +204,47 @@ end
 
 -- Lockstep barrier: both peers send their fingerprint for hour N and wait
 -- for the other side's before simulating further.
-local function exchange(hour, fp)
-  assert(conn:send(string.format("H %d %s\n", hour, fp)))
-  local line, err = conn:receive("*l")
-  assert(line, "Peer closed or timed out: " .. tostring(err))
-  local ended_at = line:match("^E (%d+)$")
-  if ended_at then
-    return "PEER LEVEL ENDED after hour " .. ended_at, true
+-- Send this hour's new commands and fingerprint; receive the peer's.
+local function exchange(hour, fp, outgoing, incoming)
+  local lines = {}
+  for _, cmd in ipairs(outgoing) do lines[#lines + 1] = commands.encode(cmd) end
+  lines[#lines + 1] = string.format("H %d %s", hour, fp)
+  assert(conn:send(table.concat(lines, "\n") .. "\n"))
+  while true do
+    local line, err = conn:receive("*l")
+    assert(line, "Peer closed or timed out: " .. tostring(err))
+    local ended_at = line:match("^E (%d+)$")
+    if ended_at then
+      return "PEER LEVEL ENDED after hour " .. ended_at, true
+    end
+    local cmd = commands.decode(line)
+    if cmd then
+      incoming[#incoming + 1] = cmd
+    else
+      local peer_hour, peer_fp = line:match("^H (%d+) (.*)$")
+      assert(tonumber(peer_hour) == hour, "Hour mismatch: " .. line)
+      return peer_fp
+    end
   end
-  local peer_hour, peer_fp = line:match("^H (%d+) (.*)$")
-  assert(tonumber(peer_hour) == hour, "Hour mismatch: " .. line)
-  return peer_fp
+end
+
+-- Turn a script entry into a concrete command, choosing positions now from
+-- the local (and, if in sync, shared) game state.
+local function make_command(world, entry, desk_x, desk_y)
+  local a = entry.args
+  if entry.kind == "object" then
+    local x, y = builder.find_free_rect(world, desk_x, desk_y, 1, 1, 40)
+    if not x then return nil end
+    return {kind = "place_object", object = a[1], x = x, y = y, orientation = a[2] or "north"}
+  elseif entry.kind == "room" then
+    local w, h = tonumber(a[2]), tonumber(a[3])
+    local x, y = builder.find_free_rect(world, desk_x, desk_y, w, h, 40)
+    if not x then return nil end
+    return {kind = "build_room", room = a[1], x = x, y = y, w = w, h = h}
+  elseif entry.kind == "hire" then
+    return {kind = "hire", class = a[1], x = desk_x + 1, y = desk_y + 3}
+  end
+  error("unknown script action " .. tostring(entry.kind))
 end
 
 local function run()
@@ -216,6 +266,7 @@ local function run()
   local last_date = world.game_date:tostring()
   local hour, first_mismatch, compared, reports_closed = 0, nil, 0, 0
   local level_ended, peer_ended
+  local pending, seq, issued, applied, rejected = {}, 0, 0, 0, 0
   for i = 1, callbacks do
     TheApp:onTick()
     if TheApp.world ~= world then
@@ -240,6 +291,35 @@ local function run()
     if date ~= last_date then
       last_date = date
       hour = hour + 1
+      -- 1. Apply every command scheduled for this hour, in the shared order.
+      local due = {}
+      for i = #pending, 1, -1 do
+        if pending[i].hour == hour then
+          due[#due + 1] = table.remove(pending, i)
+        end
+      end
+      for _, cmd in ipairs(commands.sort(due)) do
+        local ok, why = commands.apply(world, builder, cmd)
+        applied = applied + (ok and 1 or 0)
+        rejected = rejected + (ok and 0 or 1)
+        log(string.format("hour %d: applied peer %d #%d %s -> %s", hour, cmd.peer, cmd.seq,
+            cmd.kind .. " " .. tostring(cmd.object or cmd.room or cmd.class),
+            ok and "ok" or ("rejected: " .. tostring(why))))
+      end
+      -- 2. Issue this peer's scripted actions for this hour.
+      local outgoing = {}
+      for _, entry in ipairs(script) do
+        if entry.hour == hour then
+          local cmd = make_command(world, entry, desk_x, desk_y)
+          if cmd then
+            seq = seq + 1
+            cmd.hour, cmd.peer, cmd.seq = hour + commands.DELAY, peer_id, seq
+            pending[#pending + 1] = cmd
+            if not drop_commands then outgoing[#outgoing + 1] = cmd end
+            issued = issued + 1
+          end
+        end
+      end
       local fp = fingerprint(world)
       if out then out:write(hour, " ", fp, "\n") end
       if tonumber(os.getenv("MP_DUMP_HOUR") or "-1") == hour then
@@ -262,7 +342,12 @@ local function run()
       end
       if conn and not peer_ended then
         local peer_fp
-        peer_fp, peer_ended = exchange(hour, fp)
+        local incoming = {}
+        peer_fp, peer_ended = exchange(hour, fp, outgoing, incoming)
+        for _, cmd in ipairs(incoming) do
+          assert(cmd.hour > hour, "command arrived too late for hour " .. tostring(cmd.hour))
+          pending[#pending + 1] = cmd
+        end
         compared = compared + 1
         if peer_fp ~= fp and not first_mismatch then
           first_mismatch = hour
@@ -282,6 +367,7 @@ local function run()
   end
   log("final " .. fingerprint(world))
   log(string.format("hours=%d compared=%d annual_reports_closed=%d", hour, compared, reports_closed))
+  log(string.format("commands: issued=%d applied=%d rejected=%d", issued, applied, rejected))
   if conn and level_ended and not peer_ended then
     -- Both peers should have ended the level after the same game hour.
     local line = conn:receive("*l")
