@@ -402,6 +402,15 @@ class Server:
         room.speed = speed
         room.broadcast(encode("SPEED", peer=player.peer, speed=speed, name=player.name))
 
+    def _on_show(self, player: Player, f: dict[str, str]) -> None:
+        """Cosmetic information for the other players (e.g. a room outline
+        being drawn). Not part of the lockstep; relayed as it is."""
+        room = player.room
+        if room is None or room.state != "running":
+            return
+        fields = {k: v for k, v in f.items() if k != "peer"}
+        room.broadcast(encode("SHOW", peer=player.peer, **fields), exclude=player)
+
     def _game_line(self, player: Player, line: str) -> None:
         room = player.room
         if room is None or room.state != "running":

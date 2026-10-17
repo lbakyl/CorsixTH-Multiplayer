@@ -31,6 +31,7 @@ The server compares the fingerprints of all players for each step and sends
 | `LEAVE` | in a room | — |
 | `CHAT` | in a room | `text` |
 | `SPEED` | in game | `speed`: `Pause` or a speed name up to the room's `max_speed` |
+| `SHOW` | in game | cosmetic, outside the lockstep: `kind=blueprint room x y w h` (a room outline being drawn; `w=0` clears it) |
 | `PONG` | reply to `PING` | `id` |
 | `PING` | optional | `id` (server answers `PONG id=`) |
 | `QUIT` | any time | — |
@@ -48,6 +49,7 @@ The server compares the fingerprints of all players for each step and sends
 | `OWNER` | you are now the room owner |
 | `START peer peers seed level difficulty mode delay max_speed speed speed_control grant_wage_increase free_build_mode` | the game starts: everybody seeds the gameplay random generator with `seed`, loads `level` and plays as `peer` among `peers` (comma-separated) |
 | `SPEED peer name speed` | a player changed the speed (or paused); every client applies it, the sender included |
+| `SHOW peer kind ...` | another player's cosmetic information, relayed unchanged with the sender's `peer` |
 | `LEFT peer step name` | a player left the game after reporting `step`; stop waiting for them |
 | `DESYNC step` | fingerprints differed at `step` |
 | `CHAT peer name text` | chat (`peer=0`: a server notice) |

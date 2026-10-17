@@ -267,4 +267,46 @@ function builder.ui_hire(world, desk_x, desk_y, class, log)
   if ui:getWindow(UIHireStaff) then ui:getWindow(UIHireStaff):close() end
 end
 
+--! Draw a room in the room editor like a player: outline next to (cx, cy),
+--! the first valid door clockwise from the top-left, optionally one window
+--! in the middle of the top wall, then confirm. In multiplayer the confirm
+--! sends the build_room command; nothing is built locally yet.
+function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log)
+  local ui = world.ui
+  local room_type = assert(TheApp.rooms[room_id], "unknown room " .. room_id)
+  local x, y = builder.find_free_rect(world, cx, cy, w, h, 40)
+  assert(x, "no space for " .. room_id)
+  local dlg = UIEditRoom(ui, room_type)
+  ui:addWindow(dlg)
+  dlg:setBlueprintRect(x, y, w, h)
+  dlg:confirm()
+  if dlg.phase ~= "door" then
+    log("UI: room outline refused at " .. x .. "," .. y)
+    dlg:close()
+    return
+  end
+  local candidates = {}
+  for tx = x + 1, x + w - 2 do candidates[#candidates + 1] = {x = tx, y = y + h - 1, wall = "south"} end
+  for ty = y + 1, y + h - 2 do candidates[#candidates + 1] = {x = x + w - 1, y = ty, wall = "east"} end
+  for _, c in ipairs(candidates) do
+    dlg:setDoorBlueprint(c.x, c.y, c.wall)
+    if dlg.blueprint_door.valid then
+      dlg:placeDoorBlueprint()
+      break
+    end
+  end
+  if dlg.phase ~= "windows" then
+    log("UI: no door position for " .. room_id)
+    dlg:close()
+    return
+  end
+  if with_window then
+    dlg:setWindowBlueprint(x + math.floor(w / 2), y, "north")
+    dlg:placeWindowBlueprint()
+  end
+  dlg:confirm()
+  log(string.format("UI: drew %s at %d,%d size %dx%d%s (editor %s)", room_id, x, y, w, h,
+      with_window and " with a window" or "", dlg.phase))
+end
+
 return builder

@@ -186,7 +186,6 @@ function UIBuildRoom:buildRoom(index)
     if fullscreen then
       fullscreen:close()
     end
-    if MultiplayerSession.blockUnsupported(self.ui) then return end -- building rooms
     local edit_dlg = UIEditRoom(self.ui, self.list[index])
     self.ui:addWindow(edit_dlg)
   else

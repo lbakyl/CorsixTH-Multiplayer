@@ -11,7 +11,10 @@
 #   3. one player changes money locally only -> DESYNC (found by the game
 #      and by the server)
 #   4. one player leaves mid-game -> the other is told and carries on alone
-# Exits 0 only if all four behave as expected.
+#   5. rooms: both draw a room on the same spot in the same hour (one wins
+#      on both machines), the other player sees the reserved outline, a
+#      later room elsewhere, a window -> IN SYNC, same rooms on both
+# Exits 0 only if all five behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
 set -euo pipefail
@@ -78,7 +81,7 @@ run_probe alice MP_ROLE=host MP_ROOM=ward MP_STEPS=1500 \
   MP_UI_SCRIPT="30:buy:bench;60:hire:Doctor;200:pause;700:speed:Slower" & pids+=($!)
 sleep 1
 run_probe bob MP_ROLE=join MP_ROOM=ward MP_STEPS=1500 MP_DRAW_EVERY=3 \
-  MP_UI_SCRIPT="40:buy:plant;90:hire:Nurse;200:unpause:150" & pids+=($!)
+  MP_UI_SCRIPT="40:buy:plant;90:hire:Nurse;190:unpause:150" & pids+=($!)
 sleep 1
 run_probe mallory MP_ROLE=join MP_ROOM=ward MP_JOIN_PASSWORD=guess & pids+=($!)
 run_probe carol MP_ROLE=host MP_ROOM=cheat MP_STEPS=400 & pids+=($!)
@@ -87,6 +90,9 @@ run_probe dave MP_ROLE=join MP_ROOM=cheat MP_STEPS=400 MP_UI_SCRIPT="50:cheat" &
 run_probe erin MP_ROLE=host MP_ROOM=leave MP_STEPS=800 MP_UI_SCRIPT="100:buy:bench" & pids+=($!)
 sleep 1
 run_probe frank MP_ROLE=join MP_ROOM=leave MP_STEPS=800 MP_UI_SCRIPT="300:quit" & pids+=($!)
+run_probe gina MP_ROLE=host MP_ROOM=build MP_STEPS=900 MP_DRAW_EVERY=4   MP_UI_SCRIPT="100:room:gp:5:5:window;400:buy:bench" & pids+=($!)
+sleep 1
+run_probe hugo MP_ROLE=join MP_ROOM=build MP_STEPS=900   MP_UI_SCRIPT="100:room:pharmacy:4:4;300:room:toilets:4:4" & pids+=($!)
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 python3 - "$out" <<'PY'
@@ -129,5 +135,15 @@ alone = re.search(r'steps=800 .* peers=1', e) is not None
 ok4 = told and alone and result('erin').startswith('IN SYNC through step 800')
 print(f"4. Player leaves:           told: {told}; carried on alone to step 800: {alone}")
 fail |= not ok4
+
+g, h = log('gina'), log('hugo')
+rooms_g = re.search(r'rooms built: (.*)', g); rooms_h = re.search(r'rooms built: (.*)', h)
+rooms_g = rooms_g.group(1).split() if rooms_g else []; rooms_h = rooms_h.group(1).split() if rooms_h else []
+saw = 'showing reserved area of player 1: gp' in h and 'showing reserved area of player 2: toilets' in g
+built = sorted(r.split('@')[0] for r in rooms_g)
+ok5 = (result('gina').startswith('IN SYNC') and result('hugo').startswith('IN SYNC')
+       and rooms_g == rooms_h and built == ['gp', 'toilets'] and saw)
+print(f"5. Rooms:                   {result('gina')}; built on both: {rooms_g == rooms_h} {rooms_g}; reserved outlines seen: {saw}")
+fail |= not ok5
 sys.exit(1 if fail else 0)
 PY

@@ -366,6 +366,15 @@ function MultiplayerLobby:_onLEFT(f)
   end
 end
 
+function MultiplayerLobby:_onSHOW(f)
+  local session = TheApp and TheApp.mp_session
+  if not (session and session.lobby == self) then return end
+  if f.kind == "blueprint" then
+    session:showRemoteBlueprint(tonumber(f.peer), {room = f.room, x = tonumber(f.x) or 0,
+        y = tonumber(f.y) or 0, w = tonumber(f.w) or 0, h = tonumber(f.h) or 0})
+  end
+end
+
 function MultiplayerLobby:_onDESYNC(f)
   local session = TheApp and TheApp.mp_session
   if session and session.lobby == self then
@@ -410,6 +419,7 @@ function MultiplayerLobby:_beginGame(f)
       end
     end,
     control = function(line) lobby:handleLine(line) end,
+    send_cosmetic = function(fields) lobby:send("SHOW", fields) end,
     request_speed = function(speed)
       lobby:send("SPEED", {speed = MultiplayerLobby.clampSpeed(speed, f.max_speed)})
     end,

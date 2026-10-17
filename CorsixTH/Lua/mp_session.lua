@@ -98,6 +98,9 @@ end
 --!  request_speed (function) optional; when set, speed and pause changes
 --!             made by the player are sent through it instead of being
 --!             applied locally (the server shares them with everybody)
+--!  send_cosmetic (function) optional; sends a table of plain values to the
+--!             other players outside the lockstep (e.g. the outline of a room
+--!             someone is drawing). Never changes game state.
 function MultiplayerSession:MultiplayerSession(params)
   self.world = params.world
   self.peer_id = params.peer_id
@@ -115,6 +118,9 @@ function MultiplayerSession:MultiplayerSession(params)
   self.wait_notified = false
   self.control = params.control
   self.request_speed = params.request_speed
+  self.send_cosmetic = params.send_cosmetic
+  self.applying = false     -- true while command handlers run
+  self.remote_blueprints = {} -- peer -> rectangle drawn on the map
 
   self.step = 0          -- last completed step
   self.seq = 0           -- last sequence number used by this peer
@@ -224,6 +230,18 @@ function MultiplayerSession:canStep()
   return true
 end
 
+--! Is a player action now to be sent as a command (rather than done here)?
+--! False outside multiplayer, and while command handlers run (they use the
+--! same game code to actually do it).
+function MultiplayerSession.actionsAreCommands()
+  local session = TheApp and TheApp.mp_session
+  return session ~= nil and not session.applying
+end
+
+--! Steps between attempts when a handler asks to retry (see build_room).
+MultiplayerSession.RETRY_STEPS = 4
+MultiplayerSession.MAX_RETRIES = 12
+
 --! Apply every command scheduled for the step about to run, in the shared order.
 function MultiplayerSession:beforeStep()
   local n = self.step + 1
@@ -237,9 +255,30 @@ function MultiplayerSession:beforeStep()
     local handler = self.handlers[cmd.kind]
     local ok, why
     if handler then
-      ok, why = handler(self.world, cmd)
+      self.applying = true
+      local called, res, reason = pcall(handler, self.world, cmd)
+      self.applying = false
+      if called then
+        ok, why = res, reason
+      else
+        -- Same state, same code: the error happens on every peer alike.
+        ok, why = false, "error: " .. tostring(res)
+      end
     else
       ok, why = false, "unknown command " .. tostring(cmd.kind)
+    end
+    if not ok and why == "retry" then
+      -- Try again a few steps later, at the same step on every peer.
+      cmd.retries = (cmd.retries or 0) + 1
+      if cmd.retries <= MultiplayerSession.MAX_RETRIES then
+        cmd.step = n + MultiplayerSession.RETRY_STEPS
+        self.pending[#self.pending + 1] = cmd
+        why = "retry " .. cmd.retries .. " at step " .. cmd.step
+      else
+        why = "gave up"
+        local giveup = self.handlers[cmd.kind .. "_giveup"]
+        if giveup then giveup(self.world, cmd) end
+      end
     end
     if ok then
       self.stats.applied = self.stats.applied + 1
@@ -285,6 +324,53 @@ function MultiplayerSession:_reportDesync(step, why, peer, own, other)
   self.notify(string.format("Multiplayer games are out of sync (step %d). Please restart the game.", step))
   if own then self.log("  local: " .. own) end
   if other then self.log("  peer:  " .. tostring(other)) end
+end
+
+--! Tell the other players about the room outline this player is drawing
+--! (nil: no outline any more). Cosmetic: only shown, never part of the game.
+function MultiplayerSession:showBlueprint(rect)
+  if not self.send_cosmetic then return end
+  local key = rect and string.format("%s:%d,%d,%d,%d", rect.room or "", rect.x, rect.y, rect.w, rect.h) or ""
+  if key == self.last_blueprint then return end
+  self.last_blueprint = key
+  if rect then
+    self.send_cosmetic({kind = "blueprint", room = rect.room, x = rect.x, y = rect.y, w = rect.w, h = rect.h})
+  else
+    self.send_cosmetic({kind = "blueprint", x = 0, y = 0, w = 0, h = 0})
+  end
+end
+
+-- Map layer 4 is the UI overlay layer the room editor draws its blue floor
+-- on; gameplay never reads it.
+local OVERLAY_LAYER, BLUE_FLOOR = 4, 24
+
+local function paint_rect(world, rect, value)
+  local th = world.map and world.map.th
+  if not th then return end
+  local mw, mh = th:size()
+  for x = math.max(1, rect.x), math.min(mw, rect.x + rect.w - 1) do
+    for y = math.max(1, rect.y), math.min(mh, rect.y + rect.h - 1) do
+      th:setCell(x, y, OVERLAY_LAYER, value)
+    end
+  end
+end
+
+--! Show (or with w = 0, remove) another player's room outline as a blue
+--! floor on this player's map.
+function MultiplayerSession:showRemoteBlueprint(peer, rect)
+  local old = self.remote_blueprints[peer]
+  if old then paint_rect(self.world, old, 0) end
+  self.remote_blueprints[peer] = nil
+  if rect and (rect.w or 0) > 0 and (rect.h or 0) > 0 then
+    self.remote_blueprints[peer] = {x = rect.x, y = rect.y, w = rect.w, h = rect.h, room = rect.room}
+    paint_rect(self.world, rect, BLUE_FLOOR)
+    if peer ~= self.peer_id then
+      self.log(string.format("showing reserved area of player %d: %s at %d,%d size %dx%d",
+          peer, tostring(rect.room), rect.x, rect.y, rect.w, rect.h))
+    end
+  end
+  -- Overlapping outlines were partly cleared; paint the others again.
+  for _, other in pairs(self.remote_blueprints) do paint_rect(self.world, other, BLUE_FLOOR) end
 end
 
 --! Default fingerprint: an ordered projection of gameplay state (not a save).
@@ -374,6 +460,35 @@ function handlers.open_hospital(world, cmd)
     end
   end
   return true
+end
+
+--! Build a finished room the player drew: {room, x, y, w, h, door_x, door_y,
+--! door_wall, windows}. If people stand in the area they are asked to walk
+--! out and the command is retried a few steps later (on every peer alike).
+function handlers.build_room(world, cmd)
+  local builder = corsixth.require("mp_room_builder")
+  local hospital = world.hospitals[cmd.hospital or 1]
+  if not hospital then return false, "no such hospital" end
+  local room, why = builder.build(world, hospital, cmd)
+  if why == "people in the area" then
+    builder.clearArea(world, cmd.x, cmd.y, cmd.w, cmd.h)
+    return false, "retry" -- the reserved outline stays visible meanwhile
+  end
+  local session = TheApp.mp_session
+  if session then session:showRemoteBlueprint(cmd.peer, nil) end
+  if room then return true end
+  builder.releaseArea(world, cmd.x, cmd.y, cmd.w, cmd.h)
+  if cmd.peer == (session and session.peer_id) and world.ui and world.ui.adviser then
+    world.ui.adviser:say({text = "The room could not be built: " .. tostring(why) .. ".", priority = 10})
+  end
+  return false, why
+end
+
+function handlers.build_room_giveup(world, cmd)
+  corsixth.require("mp_room_builder").releaseArea(world, cmd.x, cmd.y, cmd.w, cmd.h)
+  local session = TheApp.mp_session
+  if session then session:showRemoteBlueprint(cmd.peer, nil) end
+  return false, "not a player command"
 end
 
 --! Language-independent identity of a staff profile in the hiring pool.

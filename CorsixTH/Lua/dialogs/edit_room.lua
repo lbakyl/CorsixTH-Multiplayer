@@ -96,6 +96,9 @@ function UIEditRoom:registerKeyHandlers()
 end
 
 function UIEditRoom:close(...)
+  if MultiplayerSession.actionsAreCommands() and not self.mp_issued and not self.room then
+    TheApp.mp_session:showBlueprint(nil) -- no longer drawing: free the area again
+  end
   if self.phase == "objects" and self.confirm_button.enabled then
     if not self.closed_cleanly then
       self:confirm(true)
@@ -219,6 +222,10 @@ function UIEditRoom:confirm(force)
   elseif self.phase == "door" then
     self:_enterWindowsPhase()
   elseif self.phase == "windows" then
+    if MultiplayerSession.actionsAreCommands() then
+      self:_issueBuildRoom()
+      return
+    end
     self:_enterWaitingClearAreaPhase()
   elseif self.phase == "clear_area" then
     self:_enterObjectsPhase()
@@ -246,6 +253,27 @@ function UIEditRoom:confirm(force)
     end
     self:close()
   end
+end
+
+--! Multiplayer: send the drawn room (outline, door, windows) as a command.
+--! Every peer, this one included, builds it at the same step; until then the
+--! outline stays visible to everybody as a reserved area.
+function UIEditRoom:_issueBuildRoom()
+  local builder = corsixth.require("mp_room_builder")
+  local session = TheApp.mp_session
+  local rect, door = self.blueprint_rect, self.blueprint_door
+  local hospital_index = 1
+  for i, h in ipairs(self.world.hospitals) do
+    if h == self.ui.hospital then hospital_index = i end
+  end
+  session:issue({kind = "build_room", room = self.room_type.id, hospital = hospital_index,
+      x = rect.x, y = rect.y, w = rect.w, h = rect.h,
+      door_x = door.floor_x, door_y = door.floor_y, door_wall = door.orig_wall,
+      windows = builder.encodeWindows(builder.windowsOf(self))})
+  session:showRemoteBlueprint(session.peer_id, rect)
+  self.mp_issued = true
+  self.ui:playSound("buildclk.wav")
+  self:close()
 end
 
 --! A function requests that the humanoids leave the room’s perimeter and
@@ -920,7 +948,13 @@ function UIEditRoom:_enterDoorPhase()
   local map = self.ui.app.map.th
 
   if self:_checkCanBuildRoomHere() then
-    self:_clearAreaOfHumanoids()
+    -- In multiplayer nothing is built here while the player draws; the
+    -- build_room command clears the area on every peer.
+    if not MultiplayerSession.actionsAreCommands() then
+      self:_clearAreaOfHumanoids()
+    else
+      self.humanoids_to_watch = {}
+    end
 
     self.desc_text = _S.place_objects_window.place_door
     self.confirm_button:enable(false) -- Confirmation is via placing door
@@ -1218,6 +1252,11 @@ function UIEditRoom:setBlueprintRect(x, y, w, h)
   rect.y = y
   rect.w = w
   rect.h = h
+  -- In multiplayer the other players see the outline as a reserved area.
+  if MultiplayerSession.actionsAreCommands() and self.phase ~= "closed" and not self.room then
+    TheApp.mp_session:showBlueprint(w > 0 and h > 0 and
+        {room = self.room_type.id, x = x, y = y, w = w, h = h} or nil)
+  end
 end
 
 --! Check walls for having room for the door
@@ -1342,6 +1381,7 @@ function UIEditRoom:setDoorBlueprint(orig_x, orig_y, orig_wall)
   self.blueprint_door.wall = wall
   self.blueprint_door.floor_x = orig_x
   self.blueprint_door.floor_y = orig_y
+  self.blueprint_door.orig_wall = orig_wall -- replayed by the multiplayer build_room command
   self.blueprint_door.valid = false
   if not wall then
     return

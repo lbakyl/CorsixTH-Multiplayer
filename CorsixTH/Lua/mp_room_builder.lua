@@ -1,0 +1,225 @@
+--[[ Copyright (c) 2026 CorsixTH-Multiplayer contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. --]]
+
+--! Builds a complete room for the multiplayer "build_room" command, the same
+--! way on every peer.
+--!
+--! In multiplayer the player designing a room only draws it (outline, door,
+--! windows); nothing is built on their machine yet, so the other players'
+--! games stay identical. The command then builds the room everywhere at the
+--! same step, through a hidden room editor window that is never shown and
+--! never added to the UI (so it does not close the windows the local player
+--! has open). Required objects are placed automatically, in a fixed order.
+
+local builder = {}
+
+-- Local settings that would change what gets built; fixed while building.
+local fixed_config = {
+  enable_avg_contents = false, -- would add optional objects chosen with pairs()
+  blocking_off_areas = 2,      -- default rule for rooms that block corridors
+}
+
+--! Encode a window list {{x, y, wall}, ...} as "x,y,wall;..." for a command.
+function builder.encodeWindows(windows)
+  local parts = {}
+  for _, w in ipairs(windows) do
+    parts[#parts + 1] = string.format("%d,%d,%s", w[1], w[2], w[3])
+  end
+  return table.concat(parts, ";")
+end
+
+function builder.decodeWindows(text)
+  local windows = {}
+  for x, y, wall in tostring(text or ""):gmatch("(%-?%d+),(%-?%d+),(%a+)") do
+    windows[#windows + 1] = {tonumber(x), tonumber(y), wall}
+  end
+  return windows
+end
+
+--! The windows the player put into a room blueprint, in a fixed order.
+--!param dlg (UIEditRoom) editor in the windows phase
+function builder.windowsOf(dlg)
+  local windows = {}
+  for x, column in pairs(dlg.blueprint_wall_anims) do
+    if type(column) == "table" and not column.setTile then
+      for y, anim in pairs(column) do
+        if anim.getTag and anim:getTag() == "window" then
+          -- Animation flag bit 1: west-facing wall, otherwise north-facing.
+          local wall = (anim:getFlag() % 2 == 1) and "west" or "north"
+          windows[#windows + 1] = {x, y, wall}
+        end
+      end
+    end
+  end
+  table.sort(windows, function(a, b)
+    if a[1] ~= b[1] then return a[1] < b[1] end
+    if a[2] ~= b[2] then return a[2] < b[2] end
+    return a[3] < b[3]
+  end)
+  return windows
+end
+
+--! Humanoids standing in a rectangle (plus nothing else), in entity order.
+local function humanoids_in(world, x, y, w, h)
+  local found = {}
+  for _, e in ipairs(world.entities) do
+    if class.is(e, Humanoid) and e.tile_x and e.tile_x >= x and e.tile_x < x + w and
+        e.tile_y >= y and e.tile_y < y + h then
+      found[#found + 1] = e
+    end
+  end
+  return found
+end
+
+--! Ask everybody in the area to walk out, and keep others away meanwhile.
+function builder.clearArea(world, x, y, w, h)
+  local th = world.map.th
+  for tx = x, x + w - 1 do
+    for ty = y, y + h - 1 do
+      th:setCellFlags(tx, ty, {avoidTile = true})
+    end
+  end
+  for _, humanoid in ipairs(humanoids_in(world, x, y, w, h)) do
+    humanoid:leaveArea()
+  end
+end
+
+function builder.releaseArea(world, x, y, w, h)
+  local th = world.map.th
+  for tx = x, x + w - 1 do
+    for ty = y, y + h - 1 do
+      th:setCellFlags(tx, ty, {avoidTile = false})
+    end
+  end
+end
+
+local function try_build(world, hospital, cmd)
+  local ui = world.ui
+  local room_type = TheApp.rooms[cmd.room]
+  if not room_type then return nil, "unknown room type" end
+  local progress = hospital.research.research_progress[room_type]
+  local discovery = hospital.room_discoveries[room_type.id]
+  if not progress or not (discovery and discovery.is_discovered) then
+    return nil, "room not available"
+  end
+  if not world.free_build_mode and hospital.balance < progress.build_cost then
+    return nil, "not enough money"
+  end
+  local x, y, w, h = cmd.x, cmd.y, cmd.w, cmd.h
+  if #humanoids_in(world, x, y, w, h) > 0 then
+    return nil, "people in the area"
+  end
+
+  local dlg = UIEditRoom(ui, room_type)
+  local function fail(why)
+    dlg:close()
+    return nil, why
+  end
+
+  -- 1. Outline
+  dlg:setBlueprintRect(x, y, w, h)
+  if not dlg.confirm_button.enabled then return fail("invalid room outline") end
+  dlg:confirm(true)
+  if dlg.phase ~= "door" then return fail("room would block part of the hospital") end
+  -- 2. Door
+  dlg:setDoorBlueprint(cmd.door_x, cmd.door_y, cmd.door_wall)
+  if not dlg.blueprint_door.valid then return fail("invalid door position") end
+  dlg:placeDoorBlueprint()
+  if dlg.phase ~= "windows" then return fail("door not accepted") end
+  -- 3. Windows (an invalid one is skipped, like a click on a bad wall)
+  for _, win in ipairs(builder.decodeWindows(cmd.windows)) do
+    dlg:setWindowBlueprint(win[1], win[2], win[3])
+    dlg:placeWindowBlueprint()
+  end
+  -- 4. Area is empty (checked above), so this goes straight to objects.
+  dlg:confirm(true)
+  if dlg.phase == "clear_area" then return fail("people in the area") end
+  if dlg.phase ~= "objects" and dlg.phase ~= "closed" then
+    return fail("unexpected phase " .. tostring(dlg.phase))
+  end
+  local room = dlg.room
+
+  -- 5. Required objects, in name order, first fitting tile and orientation.
+  local orientations = {"north", "east", "south", "west"}
+  local guard = 0
+  while dlg.phase == "objects" and #dlg.objects > 0 and guard < 40 do
+    guard = guard + 1
+    local first = 1
+    for i, o in ipairs(dlg.objects) do
+      if o.object.id < dlg.objects[first].object.id then first = i end
+    end
+    dlg:setActiveIndex(first)
+    local placed = false
+    for ty = y, y + h - 1 do
+      for tx = x, x + w - 1 do
+        for _, o in ipairs(orientations) do
+          if not placed and dlg.objects[dlg.active_index].object.orientations[o] then
+            dlg:setOrientation(o)
+            dlg:setBlueprintCell(tx, ty)
+            if dlg.object_blueprint_good then
+              dlg:placeObject()
+              placed = true
+            end
+          end
+        end
+      end
+    end
+    if not placed then
+      dlg:abortRoom()
+      return nil, "required objects do not fit"
+    end
+  end
+  -- 6. Pay and open the room.
+  if dlg.phase == "objects" then dlg:confirm(true) end
+  if dlg.phase ~= "closed" then dlg:close() end
+  if not room or not room.built then return nil, "room was not finished" end
+  return room
+end
+
+--! Build the room described by a build_room command on `hospital`.
+--!return room, or nil and a reason
+function builder.build(world, hospital, cmd)
+  local ui = world.ui
+  local app = TheApp
+  -- The editor uses ui.hospital for money and research; build for the
+  -- command's hospital. Restore all local UI state afterwards.
+  local saved = {
+    hospital = ui.hospital,
+    edit_room = ui.edit_room,
+    hit_test = ui.do_world_hit_test,
+    cursor = ui.cursor,
+    config = {},
+  }
+  for k, v in pairs(fixed_config) do
+    saved.config[k] = app.config[k]
+    app.config[k] = v
+  end
+  ui.hospital = hospital
+  local ok, room, why = pcall(try_build, world, hospital, cmd)
+  ui.hospital = saved.hospital
+  ui.edit_room = saved.edit_room
+  ui.do_world_hit_test = saved.hit_test
+  if saved.cursor then ui:setCursor(saved.cursor) end
+  for k, v in pairs(saved.config) do app.config[k] = v end
+  if not ok then error(room, 0) end
+  return room, why
+end
+
+return builder

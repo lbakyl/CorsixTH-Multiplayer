@@ -16,6 +16,7 @@
 --   MP_FAST           1: run at the fastest local speed (test only, default 1)
 --   MP_UI_SCRIPT      ";"-separated "hour:action[:arg]":
 --                       buy:<object>, hire:<class>      as in ingame_probe.lua
+--                       room:<id>:<w>:<h>[:window]      draw a room in the room editor
 --                       pause[:<ticks>]                 press P (shared through the server),
 --                                                       optionally <ticks> later; works
 --                                                       while the game is paused
@@ -160,6 +161,7 @@ local function run()
   local last_progress = socket.gettime()
   local quit = false
   local speed_seen = {}
+  local seen_blueprints = {}
   local presses = {} -- {wait = ticks, paused = only count while paused}
   local last_speed = world:getCurrentSpeed()
   while session.step < target and not session.desync and not quit do
@@ -167,6 +169,14 @@ local function run()
     tick()
     ticks = ticks + 1
     if TheApp.world ~= world then log("LEVEL ENDED at step " .. session.step) break end
+    for peer, r in pairs(session.remote_blueprints) do
+      local key = string.format("%d:%s:%d,%d", peer, tostring(r.room), r.x, r.y)
+      if peer ~= session.peer_id and not seen_blueprints[key] then
+        seen_blueprints[key] = true
+        log(string.format("saw reserved area of player %d: %s at %d,%d size %dx%d (step %d)",
+            peer, tostring(r.room), r.x, r.y, r.w, r.h, session.step))
+      end
+    end
     local now_speed = world:getCurrentSpeed()
     if now_speed ~= last_speed then
       speed_seen[#speed_seen + 1] = now_speed
@@ -196,6 +206,9 @@ local function run()
         done[i] = true
         local a = entry.action
         if a == "buy" then builder.ui_buy(world, desk_x, desk_y, entry.arg, log)
+        elseif a == "room" then
+          local id, rw, rh, opt = entry.arg:match("^([%w_]+):(%d+):(%d+):?(%a*)$")
+          builder.ui_room(world, desk_x, desk_y, id, tonumber(rw), tonumber(rh), opt == "window", log)
         elseif a == "hire" then builder.ui_hire(world, desk_x, desk_y, entry.arg, log)
         elseif a == "pause" or a == "unpause" then
           presses[#presses + 1] = {wait = tonumber(entry.arg) or 0, paused = a == "unpause"}
@@ -240,6 +253,12 @@ local function run()
       session.step, ticks, session.stats.issued, session.stats.applied,
       session.stats.rejected, #session.peers))
   log("speeds seen: " .. table.concat(speed_seen, ","))
+  local rooms = {}
+  for _, r in pairs(world.rooms) do
+    if r.built then rooms[#rooms + 1] = string.format("%s@%d,%d", r.room_info.id, r.x, r.y) end
+  end
+  table.sort(rooms)
+  log("rooms built: " .. table.concat(rooms, " "))
   log(session.desync and ("RESULT: DESYNC at step " .. session.desync.step)
       or ("RESULT: IN SYNC through step " .. session.step))
   lobby:disconnect()

@@ -230,3 +230,14 @@ def test_owner_handover_in_lobby(run):
         await asyncio.sleep(0.1)
         assert "r1" not in server.rooms
     run(body)
+
+
+def test_cosmetic_show_is_relayed_with_sender(run):
+    async def body(server, port):
+        a, b = await two_players_in_room(port)
+        await start(a, b)
+        a.send(encode("SHOW", kind="blueprint", room="gp", x=10, y=12, w=4, h=5, peer=9))
+        show = await b.expect("SHOW")
+        assert show == {"kind": "blueprint", "room": "gp", "x": "10", "y": "12", "w": "4",
+                        "h": "5", "peer": "1"}
+    run(body)
