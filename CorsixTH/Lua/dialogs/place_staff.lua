@@ -158,7 +158,9 @@ function UIPlaceStaff:onMouseUp(button, x, y)
           -- Multiplayer: every peer hires and places this person when the
           -- command runs.
           TheApp.mp_session:issue({kind = "hire", category = self.profile.humanoid_class,
-              name = self.profile:getFullName(), x = self.tile_x, y = self.tile_y})
+              index = self.mp_pool_index or 0,
+              key = MultiplayerSession.staffProfileKey(self.profile),
+              x = self.tile_x, y = self.tile_y})
           self.profile = nil
         else
           local entity = self.world:newEntity(self.profile.humanoid_class, 2, 2)

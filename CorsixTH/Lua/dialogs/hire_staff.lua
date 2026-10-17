@@ -146,7 +146,9 @@ function UIHireStaff:hire()
   if not TheApp.mp_session then
     table.remove(self.world.available_staff[self.category], self.current_index)
   end
-  self.ui:addWindow(UIPlaceStaff(self.ui, profile, self.mouse_up_x, self.mouse_up_y))
+  local place_window = UIPlaceStaff(self.ui, profile, self.mouse_up_x, self.mouse_up_y)
+  place_window.mp_pool_index = self.current_index -- used in multiplayer
+  self.ui:addWindow(place_window)
 end
 
 function UIHireStaff:cannotAfford()

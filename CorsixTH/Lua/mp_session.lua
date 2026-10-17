@@ -257,7 +257,7 @@ function MultiplayerSession.blockUnsupported(ui)
   if ui then
     ui:playSound("wrong2.wav")
     if ui.adviser then
-      ui.adviser:say("This action is not available in multiplayer yet.")
+      ui.adviser:say({text = "This action is not available in multiplayer yet.", priority = 10})
     end
   end
   return true
@@ -290,6 +290,9 @@ function handlers.place_object(world, cmd)
       return false, "tile not free"
     end
   end
+  if world:anyHumanoidObscuringArea(cmd.x, cmd.y) then
+    return false, "someone is in the way"
+  end
   local cost = hospital:getObjectBuildCost(cmd.object)
   local msg = _S.transactions.buy_object .. ": " .. object_type.name
   hospital:spendMoney(cost, msg, cost)
@@ -301,13 +304,26 @@ function handlers.place_object(world, cmd)
   return true
 end
 
---! Hire a member of staff from the shared pool: {category, name, x, y}.
+--! Language-independent identity of a staff profile in the hiring pool.
+--! (Names are translated strings and may differ between peers.)
+function MultiplayerSession.staffProfileKey(profile)
+  return string.format("%d/%.6f", profile.wage, profile.skill)
+end
+
+--! Hire a member of staff from the shared pool: {category, index, key, x, y}.
+--! `index` is the position the issuing player saw; if the pool changed since
+--! (someone else hired), the first profile with the same key is used.
 function handlers.hire(world, cmd)
   local hospital = world.hospitals[cmd.hospital or 1]
-  local pool = world.available_staff[cmd.category]
+  local pool = world.available_staff[cmd.category] or {}
+  local key = MultiplayerSession.staffProfileKey
   local index
-  for i, profile in ipairs(pool or {}) do
-    if profile:getFullName() == cmd.name then index = i break end
+  if pool[cmd.index] and key(pool[cmd.index]) == cmd.key then
+    index = cmd.index
+  else
+    for i, profile in ipairs(pool) do
+      if key(profile) == cmd.key then index = i break end
+    end
   end
   if not index then return false, "no longer available" end
   if not hospital:isInHospital(cmd.x, cmd.y) or not world.map.th:getCellFlags(cmd.x, cmd.y).passable then

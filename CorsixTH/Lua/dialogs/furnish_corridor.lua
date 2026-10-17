@@ -183,7 +183,11 @@ function UIFurnishCorridor:confirm()
     if o.qty - o.start_qty > 0 then
       local diff_qty = o.qty - o.start_qty
       to_purchase[#to_purchase + 1] = { object = o.object, qty = diff_qty }
-      self.ui.hospital:spendMoney(build_cost * diff_qty, _S.transactions.buy_object .. ": " .. o.object.name, build_cost * diff_qty)
+      -- In multiplayer, corridor objects are paid for when their
+      -- place_object command runs on every peer.
+      if self.edit_dialog or not TheApp.mp_session then
+        self.ui.hospital:spendMoney(build_cost * diff_qty, _S.transactions.buy_object .. ": " .. o.object.name, build_cost * diff_qty)
+      end
     elseif o.qty - o.start_qty < 0 then
       local diff_qty = o.start_qty - o.qty
       to_sell[#to_sell + 1] = { object = o.object, qty = diff_qty }
