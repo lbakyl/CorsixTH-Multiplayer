@@ -14,7 +14,9 @@
 #   5. rooms: both draw a room on the same spot in the same hour (one wins
 #      on both machines), the other player sees the reserved outline, a
 #      later room elsewhere, a window -> IN SYNC, same rooms on both
-# Exits 0 only if all five behave as expected.
+#   6. rooms drawn where people stand (busy hospital): they are asked to
+#      walk out and the build is retried -> IN SYNC, same rooms on both
+# Exits 0 only if all six behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
 set -euo pipefail
@@ -93,6 +95,9 @@ run_probe frank MP_ROLE=join MP_ROOM=leave MP_STEPS=800 MP_UI_SCRIPT="300:quit" 
 run_probe gina MP_ROLE=host MP_ROOM=build MP_STEPS=900 MP_DRAW_EVERY=4   MP_UI_SCRIPT="100:room:gp:5:5:window;400:buy:bench" & pids+=($!)
 sleep 1
 run_probe hugo MP_ROLE=join MP_ROOM=build MP_STEPS=900   MP_UI_SCRIPT="100:room:pharmacy:4:4;300:room:toilets:4:4" & pids+=($!)
+run_probe ivan MP_ROLE=host MP_ROOM=crowd MP_STEPS=1200 MP_SCENARIO=busy & pids+=($!)
+sleep 1
+run_probe judy MP_ROLE=join MP_ROOM=crowd MP_STEPS=1200 MP_SCENARIO=busy   MP_UI_SCRIPT="300:crowdroom:gp:4:4;500:crowdroom:toilets:4:4" & pids+=($!)
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 python3 - "$out" <<'PY'
@@ -145,5 +150,17 @@ ok5 = (result('gina').startswith('IN SYNC') and result('hugo').startswith('IN SY
        and rooms_g == rooms_h and built == ['gp', 'toilets'] and saw)
 print(f"5. Rooms:                   {result('gina')}; built on both: {rooms_g == rooms_h} {rooms_g}; reserved outlines seen: {saw}")
 fail |= not ok5
+
+i, j = log('ivan'), log('judy')
+ri = re.search(r'rooms built: (.*)', i); rj = re.search(r'rooms built: (.*)', j)
+ri = ri.group(1) if ri else None; rj = rj.group(1) if rj else None
+retries = len(re.findall(r'build_room -> rejected: retry', j))
+drawn = len(re.findall(r'UI: drew ', j))
+ok6 = (result('ivan').startswith('IN SYNC') and result('judy').startswith('IN SYNC') and ri == rj
+       and drawn >= 1 and retries > 0)
+print(f"6. Rooms over people:       {result('ivan')}; same rooms on both: {ri == rj}; drawn over people: {drawn}; retries while people left: {retries}")
+for l in sorted(set(re.findall(r'step \d+: peer 2 #\d+ build_room -> .*', j))):
+    print("   " + l)
+fail |= not ok6
 sys.exit(1 if fail else 0)
 PY

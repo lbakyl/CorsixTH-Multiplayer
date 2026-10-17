@@ -271,10 +271,12 @@ end
 --! the first valid door clockwise from the top-left, optionally one window
 --! in the middle of the top wall, then confirm. In multiplayer the confirm
 --! sends the build_room command; nothing is built locally yet.
-function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log)
+--!param at (table) optional {x, y}: exact top-left corner instead of a search
+function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at)
   local ui = world.ui
   local room_type = assert(TheApp.rooms[room_id], "unknown room " .. room_id)
-  local x, y = builder.find_free_rect(world, cx, cy, w, h, 40)
+  local x, y
+  if at then x, y = at[1], at[2] else x, y = builder.find_free_rect(world, cx, cy, w, h, 40) end
   assert(x, "no space for " .. room_id)
   local dlg = UIEditRoom(ui, room_type)
   ui:addWindow(dlg)
@@ -307,6 +309,36 @@ function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log)
   dlg:confirm()
   log(string.format("UI: drew %s at %d,%d size %dx%d%s (editor %s)", room_id, x, y, w, h,
       with_window and " with a window" or "", dlg.phase))
+end
+
+--! A free w x h rectangle that has a person standing in it right now
+--! (to test that building waits for people to walk out). Nil if none.
+function builder.rect_with_person(world, w, h)
+  local hospital = hospital_of(world)
+  local th = world.map.th
+  -- Like rect_is_free, but without the one-tile margin.
+  local function free(x, y)
+    for tx = x, x + w - 1 do
+      for ty = y, y + h - 1 do
+        if not hospital:isInHospital(tx, ty) or world:getRoom(tx, ty) or world:getObject(tx, ty) then
+          return false
+        end
+        local flags = th:getCellFlags(tx, ty)
+        if not (flags.buildable and flags.passable) then return false end
+      end
+    end
+    return true
+  end
+  for _, e in ipairs(world.entities) do
+    if class.is(e, Humanoid) and e.tile_x and not class.is(e, Receptionist) then
+      for dx = 0, w - 1 do
+        for dy = 0, h - 1 do
+          local x, y = e.tile_x - dx, e.tile_y - dy
+          if free(x, y) then return x, y end
+        end
+      end
+    end
+  end
 end
 
 return builder

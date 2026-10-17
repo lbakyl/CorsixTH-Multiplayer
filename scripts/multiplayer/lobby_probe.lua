@@ -17,6 +17,7 @@
 --   MP_UI_SCRIPT      ";"-separated "hour:action[:arg]":
 --                       buy:<object>, hire:<class>      as in ingame_probe.lua
 --                       room:<id>:<w>:<h>[:window]      draw a room in the room editor
+--                       crowdroom:<id>:<w>:<h>          draw it where somebody stands
 --                       pause[:<ticks>]                 press P (shared through the server),
 --                                                       optionally <ticks> later; works
 --                                                       while the game is paused
@@ -153,7 +154,10 @@ local function run()
       p.peer, p.peers, p.seed, p.delay, p.max_speed, p.speed))
 
   -- Same setup on every peer before the first step, so it stays in sync.
+  -- It changes the shared world directly, like a command handler does.
+  session.applying = true
   local desk_x, desk_y = builder.setup_scenario(world, scenario)
+  session.applying = false
   if fast then world:setSpeed("And then some more") end
 
   local done = {}
@@ -206,6 +210,15 @@ local function run()
         done[i] = true
         local a = entry.action
         if a == "buy" then builder.ui_buy(world, desk_x, desk_y, entry.arg, log)
+        elseif a == "crowdroom" then
+          local id, rw, rh = entry.arg:match("^([%w_]+):(%d+):(%d+)$")
+          rw, rh = tonumber(rw), tonumber(rh)
+          local rx, ry = builder.rect_with_person(world, rw, rh)
+          if rx then
+            builder.ui_room(world, desk_x, desk_y, id, rw, rh, false, log, {rx, ry})
+          else
+            log("UI: nobody standing in a free spot for " .. id)
+          end
         elseif a == "room" then
           local id, rw, rh, opt = entry.arg:match("^([%w_]+):(%d+):(%d+):?(%a*)$")
           builder.ui_room(world, desk_x, desk_y, id, tonumber(rw), tonumber(rh), opt == "window", log)
