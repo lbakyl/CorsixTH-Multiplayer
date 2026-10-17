@@ -40,6 +40,28 @@ The year-long run stopped advancing at 1 January of year 2, presumably because
 the annual report window pauses the game. Both peers paused at the same point.
 In real multiplayer, modal windows that pause the game need a shared rule.
 
+## Update: cosmetic random stream (PR 3)
+
+Cosmetic code now draws from `math.cosmetic_random` (see
+`CorsixTH/Lua/cosmetic_random.lua`), never from the gameplay `math.random`:
+screen shake, sound/music variant choice, announcer timing and choice, adviser
+wording when hiring fails, newspaper headline and lose-movie choice, tip of the
+day, debug fax icon. The annual report (its rolls change money) and the VIP fax
+choice stay on the gameplay stream.
+
+| Experiment (after the change) | Result |
+|---|---|
+| Client renders every 5 ticks, 6,000 hours over TCP | IN SYNC |
+| Host renders every 3 ticks, client every tick, one game year over TCP | IN SYNC, 18,250/18,250 hours |
+| Same year with no rendering at all | Fingerprints identical to both rendering peers for every hour |
+| Client uses a different seed | DESYNC at hour 1 (detection still works) |
+| Smoke diagnostic | Rendering no longer changes `math.randomdump()` |
+
+Side effect: the same seed now produces a slightly different game than before
+the change (one game year: 30 visitors instead of 29), because announcements no
+longer advance the gameplay stream. Nothing new is saved, so the save format is
+unchanged.
+
 ## What this does and does not show
 
 Shows:
@@ -47,8 +69,8 @@ Shows:
   independent processes on the same build and machine, for at least one game
   year of light activity.
 - A per-hour fingerprint exchanged over TCP detects divergence immediately.
-- Rendering (`GameUI:draw` screen-shake `math.random` calls) breaks determinism
-  and changes gameplay outcomes, not just RNG state.
+- Before PR 3, rendering (`GameUI:draw` screen-shake `math.random` calls) broke
+  determinism and changed gameplay outcomes. After PR 3 it has no effect.
 
 Does not show:
 - Determinism with real player activity (rooms, many staff, treatments,
@@ -60,9 +82,7 @@ Does not show:
 
 ## Next steps
 
-1. Give cosmetic code (screen shake, audio choices) its own random stream so
-   rendering never touches the gameplay RNG. Re-run with rendering enabled on
-   one peer; expect IN SYNC.
+1. Done in PR 3: cosmetic code has its own random stream.
 2. Make the scenario heavier (GP office, more staff, longer runs) and look for
    ordering-dependent drift (`pairs` loops that mutate state or consume RNG).
 3. Introduce the first real command (e.g. place object) sent between peers
@@ -82,8 +102,9 @@ bash scripts/multiplayer/run_sync_probe.sh \
   build/linux-runtime/CorsixTH/corsix-th /path/to/ThemeHospital [CALLBACKS]
 ```
 
-The runner runs all three checks above (solo pair, networked, networked with
-the client rendering) and exits 0 only if they behave as expected. About 30 s
+The runner runs four checks (solo pair, networked, networked with the client
+rendering, networked with a different client seed) and exits 0 only if they
+behave as expected. About 30 s
 for the default 6,000 callbacks. Output goes to a new temp directory; game data
 stays local.
 

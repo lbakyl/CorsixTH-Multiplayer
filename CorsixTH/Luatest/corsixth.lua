@@ -23,3 +23,7 @@ SOFTWARE. --]]
 
 _G['corsixth'] = {}
 corsixth.require = require;
+
+-- App:init() normally installs the cosmetic random stream; tests that load
+-- modules directly get a fixed-seed one so results stay repeatable.
+math.cosmetic_random = math.cosmetic_random or require("cosmetic_random")(1)
