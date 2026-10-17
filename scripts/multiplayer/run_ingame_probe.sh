@@ -10,7 +10,9 @@
 #   3. both peers act in the same hour (same tile), client renders frames
 #      -> IN SYNC, same accept/reject decisions on both peers
 #   4. client changes money locally only -> DESYNC on both peers
-# Exits 0 only if all four behave as expected.
+#   5. host pauses for a while, client uses "Speed Up" -> IN SYNC, peers
+#      never more than one step apart, client told it is waiting
+# Exits 0 only if all five behave as expected.
 #
 # Needs LuaSocket: set LUASOCKET_TREE to a LuaRocks tree containing it.
 set -euo pipefail
@@ -74,6 +76,10 @@ sleep 0.5; run_probe client_both MP_MODE=client MP_PORT=$port MP_DRAW_EVERY=3 \
 port=$((port + 1))
 run_probe host_cheat MP_MODE=host MP_PORT=$port &
 sleep 0.5; run_probe client_cheat MP_MODE=client MP_PORT=$port MP_UI_SCRIPT="50:cheat" &
+port=$((port + 1))
+run_probe host_pause MP_MODE=host MP_PORT=$port MP_UI_SCRIPT="100:pause:3000;300:buy:bench" &
+sleep 0.5; run_probe client_pause MP_MODE=client MP_PORT=$port \
+  MP_UI_SCRIPT="500:speedup:200;600:hire:Doctor" &
 wait
 
 python3 - "$out" <<'PY'
@@ -106,5 +112,11 @@ fail |= not ok3
 ok4 = result('host_cheat').startswith('DESYNC') and result('client_cheat').startswith('DESYNC')
 print(f'4. Local-only change:       host {result("host_cheat")}; client {result("client_cheat")}')
 fail |= not ok4
+gap = max(int(m) for m in re.findall(r'max step gap to peer=(\d+)', log('host_pause') + log('client_pause')))
+told = 'NOTICE to player: Waiting' in log('client_pause')
+ok5 = (result('host_pause').startswith('IN SYNC') and result('client_pause').startswith('IN SYNC')
+       and gap <= 1 and told)
+print(f'5. Pause and speed up:      {result("host_pause")}; max step gap {gap}; waiting notice shown: {told}')
+fail |= not ok5
 sys.exit(1 if fail else 0)
 PY

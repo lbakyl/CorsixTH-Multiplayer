@@ -90,6 +90,9 @@ end
 --!  handlers   (table)  optional kind -> function(world, cmd) -> ok, reason
 --!  fingerprint (function) optional world -> string
 --!  log        (function) optional message logger
+--!  notify     (function) optional message to show the player (waiting for
+--!             the other player, desync). Cosmetic, local only.
+--!  clock      (function) optional milliseconds clock for the waiting notice
 function MultiplayerSession:MultiplayerSession(params)
   self.world = params.world
   self.peer_id = params.peer_id
@@ -100,6 +103,11 @@ function MultiplayerSession:MultiplayerSession(params)
   self.handlers = params.handlers or MultiplayerSession.default_handlers
   self.fingerprint = params.fingerprint or MultiplayerSession.defaultFingerprint
   self.log = params.log or function() end
+  self.notify = params.notify or function() end
+  local sdl = rawget(_G, "SDL")
+  self.clock = params.clock or (sdl and sdl.getTicks) or function() return 0 end
+  self.wait_started = nil -- clock time when the current stall began
+  self.wait_notified = false
 
   self.step = 0          -- last completed step
   self.seq = 0           -- last sequence number used by this peer
@@ -164,9 +172,20 @@ function MultiplayerSession:canStep()
   for _, step in pairs(self.peer_step) do
     if step < needed then
       self.stats.stalls = self.stats.stalls + 1
+      -- Tell the player once per longer stall (the other player may have
+      -- paused, or their computer is slower). Cosmetic only.
+      local now = self.clock()
+      if not self.wait_started then
+        self.wait_started = now
+      elseif not self.wait_notified and now - self.wait_started > 1500 then
+        self.wait_notified = true
+        self.notify("Waiting for the other player...")
+      end
       return false
     end
   end
+  self.wait_started = nil
+  self.wait_notified = false
   return true
 end
 
@@ -228,6 +247,7 @@ function MultiplayerSession:_reportDesync(step, why, peer, own, other)
   if self.desync then return end
   self.desync = {step = step, reason = why, peer = peer, own = own, other = other}
   self.log(string.format("DESYNC at step %d with peer %s: %s", step, tostring(peer), why))
+  self.notify(string.format("Multiplayer games are out of sync (step %d). Please restart the game.", step))
   if own then self.log("  local: " .. own) end
   if other then self.log("  peer:  " .. tostring(other)) end
 end

@@ -17,6 +17,8 @@
 --                       hire:<class>   hire window -> Hire -> click map
 --                       pickup         right-click an object (refused in MP)
 --                       cheat          change money locally only (must desync)
+--                       pause:<ticks>  pause this peer's game for <ticks> ticks
+--                       speedup:<ticks> use "Speed Up" (8 hours per tick) for <ticks>
 --   MP_DRAW_EVERY     draw a frame every N ticks (0 = never)
 --   MP_LUA_CPATH, MP_LUA_PATH  where to find LuaSocket
 local args = {...}
@@ -142,6 +144,7 @@ local function run()
     log("connected")
   end
 
+  local socket = require("socket")
   math.randomseed(seed)
   TheApp:_loadLevel(1, "full", nil, "LEVEL.L1")
   local world = TheApp.world
@@ -155,19 +158,33 @@ local function run()
         peer_step = {}, poll = function() end}
   else
     session = MultiplayerSession({world = world, peer_id = peer_id, peers = {1, 2},
-        transport = transport, log = log})
+        transport = transport, log = log,
+        clock = function() return socket.gettime() * 1000 end,
+        notify = function(msg)
+          log("NOTICE to player: " .. msg)
+          world.ui.adviser:say({text = msg, priority = 10})
+        end})
     TheApp.mp_session = session
   end
   log("session started, " .. #world.hospitals[1].staff .. " staff")
 
-  local socket = require("socket")
   local done = {}
   local ticks = 0
   local last_progress = socket.gettime()
   local last_date = world.game_date:tostring()
+  local resume_at, max_peer_gap, paused_ticks = nil, 0, 0
   while session.step < target and not session.desync do
     local before = session.step
     TheApp:onTick()
+    if resume_at and ticks >= resume_at then
+      world:setSpeed("And then some more")
+      resume_at = nil
+      log("UI: resumed at step " .. session.step)
+    end
+    if world:isCurrentSpeed("Pause") then paused_ticks = paused_ticks + 1 end
+    for _, s in pairs(session.peer_step or {}) do
+      max_peer_gap = math.max(max_peer_gap, math.abs(session.step - s))
+    end
     if solo and world.game_date:tostring() ~= last_date then
       last_date = world.game_date:tostring()
       session.step = session.step + 1
@@ -184,6 +201,10 @@ local function run()
         if entry.action == "buy" then ui_buy(world, desk_x, desk_y, entry.arg)
         elseif entry.action == "hire" then ui_hire(world, desk_x, desk_y, entry.arg)
         elseif entry.action == "pickup" then ui_pickup(world)
+        elseif entry.action == "pause" or entry.action == "speedup" then
+          world:setSpeed(entry.action == "pause" and "Pause" or "Speed Up")
+          resume_at = ticks + tonumber(entry.arg)
+          log(string.format("UI: %s for %s ticks at step %d", entry.action, entry.arg, session.step))
         elseif entry.action == "cheat" then
           world.hospitals[1].balance = world.hospitals[1].balance + 1
           log("UI: changed money locally only (cheat)")
@@ -214,6 +235,7 @@ local function run()
   log(string.format("steps=%d ticks=%d issued=%d applied=%d rejected=%d stalls=%d",
       session.step, ticks, session.stats.issued, session.stats.applied,
       session.stats.rejected, session.stats.stalls))
+  log(string.format("max step gap to peer=%d, ticks spent paused=%d", max_peer_gap, paused_ticks))
   if solo then
     log("RESULT: SOLO through step " .. session.step)
   else

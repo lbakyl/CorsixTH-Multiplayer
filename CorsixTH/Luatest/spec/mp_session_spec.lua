@@ -177,3 +177,43 @@ describe("MultiplayerSession", function()
     assert.is_not_nil(b.desync)
   end)
 end)
+
+describe("MultiplayerSession notices", function()
+  local function pair_with_clock(now)
+    local a_to_b, b_to_a = {}, {}
+    local ta = {send = function(_, l) a_to_b[#a_to_b + 1] = l end,
+                receive = function(_) return table.remove(b_to_a, 1) end}
+    local notes = {}
+    local a = MultiplayerSession({world = {log = {}}, peer_id = 1, peers = {1, 2}, transport = ta,
+        handlers = {}, fingerprint = function() return "x" end,
+        clock = function() return now[1] end,
+        notify = function(msg) notes[#notes + 1] = msg end})
+    return a, notes, b_to_a
+  end
+
+  it("tells the player once when waiting for the other peer for a while", function()
+    local now = {0}
+    local a, notes = pair_with_clock(now)
+    a:beforeStep() a:afterStep() -- step 1 allowed without the peer
+    assert.is_false(a:canStep())
+    now[1] = 1000
+    assert.is_false(a:canStep())
+    assert.equal(0, #notes)
+    now[1] = 2000
+    assert.is_false(a:canStep())
+    now[1] = 5000
+    assert.is_false(a:canStep())
+    assert.equal(1, #notes)
+    assert.truthy(notes[1]:find("Waiting"))
+  end)
+
+  it("tells the player about a desync", function()
+    local now = {0}
+    local a, notes, inbox = pair_with_clock(now)
+    a:beforeStep() a:afterStep()
+    inbox[#inbox + 1] = "S 2 1 different"
+    a:poll()
+    assert.is_not_nil(a.desync)
+    assert.truthy(notes[#notes]:find("out of sync"))
+  end)
+end)
