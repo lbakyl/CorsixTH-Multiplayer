@@ -8,7 +8,12 @@
 #      (rendering uses math.cosmetic_random, never the gameplay stream)
 #   4. host + client, client uses a different seed -> must report DESYNC
 #      (proves the probe still detects divergence)
-# Exits 0 only if all four behave as expected.
+#   5. busy hospital, client sends lockstep commands -> host IN SYNC and
+#      identical to a solo run applying the same commands locally
+#   6. both peers place a bench on the same tile in the same hour -> IN SYNC,
+#      one command rejected on both
+#   7. client applies its commands but does not send them -> must DESYNC
+# Exits 0 only if all seven behave as expected.
 #
 # Needs luasocket for the same Lua version as the binary. Point
 # LUASOCKET_TREE at a LuaRocks tree containing it (lib/lua/5.x/socket/core.so).
@@ -73,6 +78,19 @@ port=$((port + 1))
 run_probe host_seed MP_MODE=host MP_PORT=$port &
 sleep 0.5; run_probe client_seed MP_MODE=client MP_PORT=$port MP_SEED=999 & wait
 
+script="30:object:bench;60:object:plant;100:hire:Doctor;150:room:pharmacy:4:4;400:object:drinks_machine"
+busy="MP_SCENARIO=busy MP_CALLBACKS=3000"
+port=$((port + 1))
+run_probe host_cmd MP_MODE=host MP_PORT=$port $busy &
+sleep 0.5; run_probe client_cmd MP_MODE=client MP_PORT=$port $busy MP_SCRIPT="$script" &
+run_probe solo_cmd MP_PEER=2 $busy MP_SCRIPT="$script" & wait
+port=$((port + 1))
+run_probe host_conflict MP_MODE=host MP_PORT=$port $busy MP_SCRIPT="30:object:bench" &
+sleep 0.5; run_probe client_conflict MP_MODE=client MP_PORT=$port $busy MP_SCRIPT="30:object:bench" & wait
+port=$((port + 1))
+run_probe host_drop MP_MODE=host MP_PORT=$port $busy &
+sleep 0.5; run_probe client_drop MP_MODE=client MP_PORT=$port $busy MP_SCRIPT="30:object:bench" MP_DROP_COMMANDS=1 & wait
+
 python3 - "$out" <<'PY'
 import pathlib, sys
 out = pathlib.Path(sys.argv[1])
@@ -96,5 +114,18 @@ print(f'3. Client renders frames:  {draw}')
 fail |= not draw.startswith('IN SYNC')
 print(f'4. Client different seed:  {seed}')
 fail |= not seed.startswith('DESYNC')
+def log(name): return (out / name / 'log.txt').read_text()
+cmd = result('host_cmd')
+same = (out / 'host_cmd/fp.txt').read_text() == (out / 'solo_cmd/fp.txt').read_text()
+applied = log('host_cmd').count('-> ok')
+print(f'5. Client commands:        {cmd}; host applied {applied}/5; matches local-only run: {same}')
+fail |= not (cmd.startswith('IN SYNC') and same and applied == 5)
+conflict = result('host_conflict')
+rej = log('host_conflict').count('rejected: tile not free') + log('client_conflict').count('rejected: tile not free')
+print(f'6. Same-tile conflict:     {conflict}; rejected on both peers: {rej == 2}')
+fail |= not (conflict.startswith('IN SYNC') and rej == 2)
+drop = result('host_drop')
+print(f'7. Commands not sent:      {drop}')
+fail |= not drop.startswith('DESYNC')
 sys.exit(1 if fail else 0)
 PY

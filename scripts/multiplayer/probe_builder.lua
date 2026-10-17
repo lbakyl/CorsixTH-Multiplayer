@@ -44,8 +44,11 @@ end
 --! would: outline, door, (no windows), clear area, required objects, confirm.
 --!param door (table) optional {x=, y=, wall=} door position; otherwise the
 --!  first valid position around the edge (fixed search order) is used.
+--!param no_wait (bool) if true, fail instead of ticking the game while
+--!  people walk out of the area (used when applying lockstep commands, which
+--!  must not advance game time).
 --!return room on success, or nil and an error message.
-function builder.build_room(world, room_id, x, y, w, h, door)
+function builder.build_room(world, room_id, x, y, w, h, door, no_wait)
   local ui = world.ui
   local room_type = TheApp.rooms[room_id]
   if not room_type then return nil, "unknown room type " .. room_id end
@@ -96,6 +99,10 @@ function builder.build_room(world, room_id, x, y, w, h, door)
 
   -- 3. Windows: none. 4. Clear area: may need ticks for people to walk out.
   dlg:confirm(true)
+  if no_wait and dlg.phase == "clear_area" then
+    dlg:abortRoom()
+    return nil, "people are standing in the area"
+  end
   local guard = 0
   while dlg.phase == "clear_area" and guard < 2000 do
     TheApp:onTick()
