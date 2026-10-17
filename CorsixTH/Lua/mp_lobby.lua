@@ -35,6 +35,23 @@ local MultiplayerLobby = _G["MultiplayerLobby"]
 MultiplayerLobby.PROTOCOL = 1
 MultiplayerLobby.DEFAULT_PORT = 47800
 
+-- Game speeds from slowest to fastest (World tick_rates); the server allows
+-- speeds up to the room's max_speed.
+MultiplayerLobby.SPEEDS = {"Slowest", "Slower", "Normal", "Max speed", "And then some more"}
+
+--! The speed to ask the server for: "Pause", or `speed` capped at `max_speed`.
+function MultiplayerLobby.clampSpeed(speed, max_speed)
+  if speed == "Pause" then return speed end
+  local rank, max_rank = nil, nil
+  for i, s in ipairs(MultiplayerLobby.SPEEDS) do
+    if s == speed then rank = i end
+    if s == max_speed then max_rank = i end
+  end
+  if not rank then return max_speed or "Normal" end
+  if max_rank and rank > max_rank then return max_speed end
+  return speed
+end
+
 local function encode_value(v)
   if v == true then v = 1 elseif v == false then v = 0 end
   return (tostring(v):gsub("[%%%s=]", function(c) return string.format("%%%02X", c:byte()) end))
@@ -393,7 +410,9 @@ function MultiplayerLobby:_beginGame(f)
       end
     end,
     control = function(line) lobby:handleLine(line) end,
-    request_speed = function(speed) lobby:send("SPEED", {speed = speed}) end,
+    request_speed = function(speed)
+      lobby:send("SPEED", {speed = MultiplayerLobby.clampSpeed(speed, f.max_speed)})
+    end,
   })
   session.lobby = self
   session.max_speed = f.max_speed

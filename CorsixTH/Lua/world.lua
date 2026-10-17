@@ -949,12 +949,19 @@ function World:onTick()
       -- remaining steps wait for a later tick (the UI keeps running).
       for _ = 1, self.hours_per_tick do
         if not session:canStep() then break end
+        -- canStep() reads the network; a shared pause may just have arrived.
+        -- Running the step now would advance the date with no hourly ticks.
+        if self.hours_per_tick == 0 then break end
         session:beforeStep()
         if self:_advanceHours(1, true) then return end
         session:afterStep()
       end
     elseif self:_advanceHours(self.hours_per_tick, not self:isCurrentSpeed("Pause")) then
       return
+    elseif session then
+      -- Paused: keep reading the network so the unpause (or a chat, or a
+      -- player leaving) still arrives.
+      session:poll()
     end
   end
   if self.hours_per_tick > 0 and self.floating_dollars then

@@ -86,7 +86,7 @@ function UIWatch:UIWatch(ui, count_type)
 
   elseif count_type ~= "emergency" then
     self.end_button = self:addPanel(end_sprite, 4, 0)
-      :makeButton(4, 0, 27, 28, end_sprite + 1, self.onCountdownEnd)
+      :makeButton(4, 0, 27, 28, end_sprite + 1, self.buttonEndCountdown)
       :setTooltip(tooltips[count_type])
   end
 
@@ -109,6 +109,22 @@ function UIWatch:UIWatch(ui, count_type)
     end
   end
   self:addPanel(1, 2, 47)
+end
+
+--! The player clicked the button to end the countdown early.
+function UIWatch:buttonEndCountdown()
+  -- In multiplayer, opening the hospital is shared state: every peer opens
+  -- it at the same step.
+  local session = TheApp.mp_session
+  if session and self.count_type == "initial_opening" then
+    local index = 1
+    for i, h in ipairs(self.ui.app.world.hospitals) do
+      if h == self.hospital then index = i end
+    end
+    session:issue({kind = "open_hospital", hospital = index})
+    return
+  end
+  self:onCountdownEnd()
 end
 
 function UIWatch:onCountdownEnd()

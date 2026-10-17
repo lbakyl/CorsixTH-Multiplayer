@@ -52,6 +52,13 @@ describe("MultiplayerLobby", function()
     assert.equal("LIST", (MultiplayerLobby.decode("LIST")))
   end)
 
+  it("caps speed requests at the room's maximum", function()
+    assert.equal("Pause", MultiplayerLobby.clampSpeed("Pause", "Normal"))
+    assert.equal("Slower", MultiplayerLobby.clampSpeed("Slower", "Normal"))
+    assert.equal("Normal", MultiplayerLobby.clampSpeed("And then some more", "Normal"))
+    assert.equal("Max speed", MultiplayerLobby.clampSpeed("Speed Up", "Max speed"))
+  end)
+
   it("parses server addresses", function()
     assert.same({"example.org", 47800}, {MultiplayerLobby.parseAddress("example.org")})
     assert.same({"10.0.0.2", 5000}, {MultiplayerLobby.parseAddress(" 10.0.0.2:5000 ")})

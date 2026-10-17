@@ -359,6 +359,23 @@ function handlers.place_object(world, cmd)
   return true
 end
 
+--! Open the hospital before the opening countdown ends: {hospital}.
+function handlers.open_hospital(world, cmd)
+  local hospital = world.hospitals[cmd.hospital or 1]
+  if not hospital or hospital.opened then return false, "already open" end
+  hospital:open()
+  if world.ui then
+    for _, window in ipairs(world.ui.windows or {}) do
+      if class.is(window, UIWatch) and window.count_type == "initial_opening"
+          and window.hospital == hospital then
+        window:close()
+        break
+      end
+    end
+  end
+  return true
+end
+
 --! Language-independent identity of a staff profile in the hiring pool.
 --! (Names are translated strings and may differ between peers.)
 function MultiplayerSession.staffProfileKey(profile)

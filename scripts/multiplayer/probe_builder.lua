@@ -194,4 +194,77 @@ function builder.hire(world, class, x, y, skill)
   return staff
 end
 
+-- Player actions through the real game windows (used by ingame_probe.lua and
+-- lobby_probe.lua).
+
+-- Shared setup, identical on both peers, done before the session starts.
+function builder.setup_scenario(world, scenario)
+  local hospital = world.hospitals[1]
+  local cx, cy = world.map.th:getCameraTile(1)
+  local desk_x, desk_y = builder.find_free_rect(world, cx, cy, 1, 3, 25)
+  builder.place_object(world, "reception_desk", desk_x, desk_y, "north")
+  builder.hire(world, "Receptionist", desk_x + 2, desk_y + 2)
+  if scenario == "busy" then
+    for _, spec in ipairs({{"gp", 5, 5}, {"pharmacy", 4, 4}, {"general_diag", 5, 5},
+        {"staff_room", 5, 5}, {"toilets", 4, 4}}) do
+      local x, y = builder.find_free_rect(world, desk_x, desk_y, spec[2], spec[3], 40)
+      assert(builder.build_room(world, spec[1], x, y, spec[2], spec[3]), "building " .. spec[1])
+    end
+    for i, class in ipairs({"Doctor", "Doctor", "Doctor", "Nurse", "Nurse", "Handyman", "Handyman"}) do
+      builder.hire(world, class, desk_x + i, desk_y + 3)
+    end
+  end
+  hospital:open()
+  return desk_x, desk_y
+end
+
+-- Simulated mouse click at a map tile, in window-relative coordinates.
+function builder.click_tile(ui, window, button, tx, ty)
+  local sx, sy = ui:WorldToScreen(tx + 0.5, ty + 0.5)
+  return window:onMouseUp(button, sx - window.x, sy - window.y)
+end
+
+function builder.ui_buy(world, desk_x, desk_y, object_id, log)
+  local ui = world.ui
+  local shop = UIFurnishCorridor(ui)
+  ui:addWindow(shop)
+  local found
+  for _, o in ipairs(shop.objects) do
+    if o.object.id == object_id then o.qty = o.qty + 1 found = true end
+  end
+  assert(found, "shop does not sell " .. object_id)
+  local balance_before = world.hospitals[1].balance
+  shop:confirm() -- opens UIPlaceObjects
+  local place = ui:getWindow(UIPlaceObjects)
+  assert(place, "no placement window")
+  -- Same search order on both peers, but only this peer clicks.
+  local x, y = builder.find_free_rect(world, desk_x, desk_y, 1, 1, 40)
+  place:setBlueprintCell(x, y)
+  place.object_cell_x, place.object_cell_y = x, y
+  place:onMouseUp("left", 100000, 100000) -- a click outside the window
+  log(string.format("UI: bought %s, clicked %d,%d (balance unchanged locally: %s)",
+      object_id, x, y, tostring(world.hospitals[1].balance == balance_before)))
+  if ui:getWindow(UIPlaceObjects) then ui:getWindow(UIPlaceObjects):close() end
+end
+
+function builder.ui_hire(world, desk_x, desk_y, class, log)
+  local ui = world.ui
+  local dlg = UIHireStaff(ui)
+  ui:addWindow(dlg)
+  dlg:setCategory(class)
+  local pool = world.available_staff[class]
+  assert(pool and #pool > 0, "nobody to hire in " .. class)
+  local name = tostring(pool[dlg.current_index]:getFullName()):gsub("^.*:", "")
+  dlg.mouse_up_x, dlg.mouse_up_y = 0, 0 -- where the click happened
+  dlg:hire() -- opens UIPlaceStaff
+  local place = ui:getWindow(UIPlaceStaff)
+  assert(place, "no staff placement window")
+  place.tile_x, place.tile_y = desk_x + 1, desk_y + 4
+  place.onMouseMove = function() end -- keep the tile we set (no real cursor)
+  place:onMouseUp("left", 0, 0)
+  log(string.format("UI: hired %s %s at %d,%d (pool size still %d)", class, name,
+      desk_x + 1, desk_y + 4, #pool))
+  if ui:getWindow(UIHireStaff) then ui:getWindow(UIHireStaff):close() end
+end
+
 return builder
