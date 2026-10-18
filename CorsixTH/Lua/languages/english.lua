@@ -438,6 +438,8 @@ multiplayer_window = {
   money_received = "Money from %s",
   money_received_note = "%s sent you $%d.",
   staff_received_note = "%s sent you a member of staff: %s",
+  goals_reached = "Your hospital has reached this level's goals! Well done. The game goes on.",
+  goals_failed = "Your hospital has failed this level's goals. You can keep playing.",
   menu_caption = "  MULTIPLAYER  ",
   menu_trade = "  TRADE WITH OTHER PLAYERS  ",
 }

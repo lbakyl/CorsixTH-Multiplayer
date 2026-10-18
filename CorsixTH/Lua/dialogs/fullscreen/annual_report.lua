@@ -478,7 +478,9 @@ function UIAnnualReport:close()
   end
   self:updateAwards()
   Window.close(self)
-  self.ui.app.world:checkIfGameWon()
+  -- In multiplayer the monthly check (in the simulation) decides; closing
+  -- happens at a different moment on every machine.
+  if not TheApp.mp_session then self.ui.app.world:checkIfGameWon() end
 end
 
 --! Changes the page of the annual report

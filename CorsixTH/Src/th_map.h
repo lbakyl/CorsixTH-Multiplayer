@@ -284,8 +284,18 @@ class level_map {
   inline temperature_theme get_temperature_display() const {
     return current_temperature_theme;
   }
-  void update_temperatures(uint16_t iAirTemperature,
-                           uint16_t iRadiatorTemperature);
+  //! Update the temperature of every tile.
+  /*!
+      \param iAirTemperature Outside air temperature.
+      \param iRadiatorTemperature Temperature of radiators.
+      \param pOwnerRadiatorTemperatures Optional radiator temperature per
+          plot owner (index = player number), for multiplayer co-op where
+          every player's hospital has its own heating. Radiators on plots
+          of an owner not in the list use iRadiatorTemperature.
+  */
+  void update_temperatures(
+      uint16_t iAirTemperature, uint16_t iRadiatorTemperature,
+      const std::vector<uint16_t>* pOwnerRadiatorTemperatures = nullptr);
 
   //! Get the map width (in tiles)
   inline int get_width() const { return width; }

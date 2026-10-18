@@ -130,7 +130,7 @@ end
 --!return (integer, integer, string or nil) The target tile, and its hole wall
 --!  ("north"/"west"/"east"/"south").
 function Rat:_chooseTarget()
-  local hospital = self.world:getLocalPlayerHospital()
+  local hospital = self.hospital or self.world:getLocalPlayerHospital()
   local holes = hospital and hospital.ratholes
   if holes and #holes > 0 then
     local candidates = {}
@@ -267,7 +267,7 @@ function Rat:shoot()
   self.world:destroyEntity(self)
   -- Like the original, a rat shot outside the hospital (on the street) leaves
   -- no splat; only mark the floor indoors.
-  local hospital = self.world:getLocalPlayerHospital()
+  local hospital = self.hospital or self.world:getLocalPlayerHospital()
   if hospital and hospital:isInHospital(tile_x, tile_y) then
     local splat = self.world:newObject("litter", tile_x, tile_y)
     splat:setLitterType("dead_rat")

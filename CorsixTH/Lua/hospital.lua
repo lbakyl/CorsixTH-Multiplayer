@@ -717,6 +717,7 @@ function Hospital:spawnRat(hole)
   hole = hole or (#self.ratholes > 0 and self.ratholes[math.random(1, #self.ratholes)])
   if not hole then return nil end
   local rat = self.world:newEntity("Rat", 1928)
+  rat.hospital = self
   rat:setTile(hole.x, hole.y)
   rat:setTilePositionSpeed(hole.x, hole.y, 0, 0, 0, 0)
   rat:init(hole.wall)
@@ -878,7 +879,10 @@ end
 local function countActiveRats(self)
   local count = 0
   for _, entity in ipairs(self.world.entities) do
-    if class.is(entity, Rat) then count = count + 1 end
+    -- Multiplayer co-op: only this hospital's rats.
+    if class.is(entity, Rat) and (not self.world.mp_coop or entity.hospital == self) then
+      count = count + 1
+    end
   end
   return count
 end

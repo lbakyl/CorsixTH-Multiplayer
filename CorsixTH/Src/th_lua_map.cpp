@@ -214,7 +214,20 @@ int l_map_updatetemperature(lua_State* L) {
   level_map* pMap = luaT_testuserdata<level_map>(L);
   uint16_t iAir = l_check_temp(L, 2);
   uint16_t iRadiator = l_check_temp(L, 3);
-  pMap->update_temperatures(iAir, iRadiator);
+  if (lua_istable(L, 4)) {
+    // Optional: radiator temperature per plot owner (multiplayer co-op).
+    std::vector<uint16_t> owner_radiators;
+    lua_Integer iCount = static_cast<lua_Integer>(lua_objlen(L, 4));
+    owner_radiators.resize(static_cast<size_t>(iCount) + 1, iRadiator);
+    for (lua_Integer i = 1; i <= iCount; ++i) {
+      lua_rawgeti(L, 4, static_cast<int>(i));
+      owner_radiators[static_cast<size_t>(i)] = l_check_temp(L, -1);
+      lua_pop(L, 1);
+    }
+    pMap->update_temperatures(iAir, iRadiator, &owner_radiators);
+  } else {
+    pMap->update_temperatures(iAir, iRadiator);
+  }
   lua_settop(L, 1);
   return 1;
 }

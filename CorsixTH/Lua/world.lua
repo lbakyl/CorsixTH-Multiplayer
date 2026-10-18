@@ -472,7 +472,15 @@ end
 --!param hospital (Hospital) Hospital that the new patient should visit.
 --!return (Patient entity) The spawned patient, or 'nil' if no patient spawned.
 function World:spawnPatient(hospital)
-  local disease = self:getNewPatientDisease()
+  local disease
+  if self.mp_coop then
+    -- Multiplayer co-op: the patient's hospital decides which diseases are
+    -- possible (its discoveries, its number of visitors).
+    hospital = hospital or self:chooseHospitalForPatient(nil)
+    disease = self:getNewPatientDisease(hospital)
+  else
+    disease = self:getNewPatientDisease()
+  end
 
   if not hospital then
     hospital = self:chooseHospitalForPatient(disease)
@@ -1092,8 +1100,17 @@ function World:_advanceHours(hours, tick_earthquake)
     self:_flushDestroyedEntities()
     if self.mp_coop then self:_tickCoopOpenings() end
     self.map:onTick()
+    -- Multiplayer co-op: every player's radiators run at their own setting.
+    local owner_heat
+    if self.mp_coop then
+      owner_heat = {}
+      for p = 1, self.mp_coop.players do
+        local h = self.hospitals[p]
+        owner_heat[h:getPlayerIndex()] = 0.25 + h.heating.radiator_heat * 0.3
+      end
+    end
     self.map.th:updateTemperatures(outside_temperatures[self.game_date:monthOfYear()],
-        0.25 + self.hospitals[1].heating.radiator_heat * 0.3)
+        0.25 + self.hospitals[1].heating.radiator_heat * 0.3, owner_heat)
     if self.ui then
       self.ui:onWorldTick()
     end
@@ -1342,9 +1359,19 @@ function World:onEndDay()
 end
 
 function World:checkIfGameWon()
-  -- Multiplayer co-op has no level end yet (the original only ends it for
-  -- player 1, which would end the game for everybody).
-  if self.mp_coop then return end
+  -- Multiplayer co-op: each player hears when their own hospital reaches the
+  -- level's goals; the game goes on (the original only ends it for player 1,
+  -- which would end the game for everybody).
+  if self.mp_coop then
+    for i = 1, self.mp_coop.players do
+      local hosp = self.hospitals[i]
+      if not hosp.mp_goals_reached and self.endconditions:checkEndGame(hosp) == "win" then
+        hosp.mp_goals_reached = true
+        MultiplayerSession.tellPlayer(self, hosp, _S.multiplayer_window.goals_reached)
+      end
+    end
+    return
+  end
   for i, hosp in ipairs(self.hospitals) do
     if self.endconditions:checkEndGame(hosp) == "win" then
       self:winGame(i)
@@ -1389,6 +1416,9 @@ function World:_prepareSpawnDates(first_game_month)
 
   -- Decide on number of visitors
   local number_of_spawns = math.ceil(self.spawn_rate)
+  -- Multiplayer co-op: the patients are shared out between the players'
+  -- hospitals, so there are as many as each would get alone.
+  if self.mp_coop then number_of_spawns = number_of_spawns * self.mp_coop.players end
   -- If Roujin's Challenge is on, add a fixed bonus to the spawn pool for this player.
   if local_hospital.hosp_cheats:isCheatActive("spawn_rate_cheat") then
     local roujin_bonus = 40
@@ -1672,6 +1702,17 @@ function World:onEndYear()
 
   -- This is done here instead of in onEndMonth so that the player gets
   -- the chance to receive money or reputation from trophies and awards first.
+  if self.mp_coop then
+    -- Each player hears when their own hospital fails the level's goals.
+    for i = 1, self.mp_coop.players do
+      local hosp = self.hospitals[i]
+      local _, limit = self.endconditions:checkEndGame(hosp)
+      if limit and not hosp.mp_goals_failed then
+        hosp.mp_goals_failed = true
+        MultiplayerSession.tellPlayer(self, hosp, _S.multiplayer_window.goals_failed)
+      end
+    end
+  end
   for i, hosp in ipairs(self.mp_coop and {} or self.hospitals) do -- see checkIfGameWon
     local reason, limit = self.endconditions:checkEndGame(hosp)
     if limit then
@@ -3321,9 +3362,11 @@ end
 
 --! Find a valid disease that a patient can use
 --!return disease (table)
-function World:getNewPatientDisease()
+--!param hospital (Hospital) optional; the hospital the patient goes to
+--!  (default: the player's)
+function World:getNewPatientDisease(hospital)
   -- Construct disease, take a random guess first, as a quick clear-sky attempt.
-  local hospital = self:getLocalPlayerHospital()
+  hospital = hospital or self:getLocalPlayerHospital()
   local disease = self.available_diseases[math.random(1, #self.available_diseases)]
   if not isDiseaseUsableForNewPatient(self, disease, hospital) then
     -- Lucky shot failed, do a proper calculation.

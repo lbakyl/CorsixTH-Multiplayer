@@ -1351,8 +1351,9 @@ void merge_temperatures(map_tile& node, size_t temp_idx, uint32_t other_temp,
 
 }  // namespace
 
-void level_map::update_temperatures(uint16_t iAirTemperature,
-                                    uint16_t iRadiatorTemperature) {
+void level_map::update_temperatures(
+    uint16_t iAirTemperature, uint16_t iRadiatorTemperature,
+    const std::vector<uint16_t>* pOwnerRadiatorTemperatures) {
   if (iRadiatorTemperature < iAirTemperature) {
     iRadiatorTemperature = iAirTemperature;
   }
@@ -1387,6 +1388,14 @@ void level_map::update_temperatures(uint16_t iAirTemperature,
       }
       if (hasRadiator) {
         iMergeTemp = iRadiatorTemperature;
+        if (pOwnerRadiatorTemperatures != nullptr) {
+          int iOwner = get_parcel_owner(pNode->iParcelId);
+          if (iOwner > 0 && static_cast<size_t>(iOwner) <
+                                pOwnerRadiatorTemperatures->size()) {
+            iMergeTemp = std::max((*pOwnerRadiatorTemperatures)[iOwner],
+                                  iAirTemperature);
+          }
+        }
         mergeRatio = 2;  // Merge 50% against radiator temperature.
       } else {
         iMergeTemp = 0;

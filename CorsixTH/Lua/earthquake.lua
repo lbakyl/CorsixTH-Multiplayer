@@ -149,12 +149,19 @@ function Earthquake:tick(hours)
   self.remaining_damage = self.remaining_damage - 1
   self.damage_timer = self.damage_timer + damage_time
 
-  -- A patient might fall over during an earthquake.
-  local hospital = self.world:getLocalPlayerHospital()
-  -- loop through the patients and allow the possibility for them to fall over
-  for _, patient in ipairs(hospital.patients) do
-    if not patient.in_room and patient.falling_anim and math.random(1,2) == 2 then
-      patient:falling(false)
+  -- A patient might fall over during an earthquake (multiplayer co-op: in
+  -- every player's hospital, in hospital order).
+  local hospitals = {self.world:getLocalPlayerHospital()}
+  if self.world.mp_coop then
+    hospitals = {}
+    for i = 1, self.world.mp_coop.players do hospitals[i] = self.world.hospitals[i] end
+  end
+  for _, hospital in ipairs(hospitals) do
+    -- loop through the patients and allow the possibility for them to fall over
+    for _, patient in ipairs(hospital.patients) do
+      if not patient.in_room and patient.falling_anim and math.random(1,2) == 2 then
+        patient:falling(false)
+      end
     end
   end
 end
