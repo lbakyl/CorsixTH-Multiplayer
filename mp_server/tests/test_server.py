@@ -273,3 +273,86 @@ def test_connections_per_address_are_limited():
         finally:
             await server.close()
     asyncio.run(main())
+
+
+def run_with_referee(body):
+    """Like `run`, with a referee configured whose start only records the token."""
+    started = []
+
+    async def fake_start(config, port, room, token):
+        started.append((port, room, token))
+        return None
+
+    async def main():
+        orig = srv.start_referee
+        srv.start_referee = fake_start
+        server = srv.Server(referee=srv.RefereeConfig(binary="x", source="", data=""))
+        port = await server.start("127.0.0.1", 0)
+        try:
+            await body(server, port, started)
+        finally:
+            srv.start_referee = orig
+            await server.close()
+    asyncio.run(main())
+
+
+async def connect_referee(port, room, token, build="b1"):
+    r, w = await asyncio.open_connection("127.0.0.1", port)
+    c = Client(r, w)
+    c.send(encode("HELLO", proto=1, name="x", build=build, role="referee", room=room, token=token))
+    return c
+
+
+def test_referee_follows_and_checks_the_players():
+    async def body(server, port, started):
+        a, b = await two_players_in_room(port)
+        sa, _ = await start(a, b)
+        for _ in range(50):
+            if started:
+                break
+            await asyncio.sleep(0.01)
+        assert started and started[0][:2] == (port, "r1")
+        token = started[0][2]
+        # What happened before the referee came is replayed to it.
+        a.send("C kind=early peer=1 seq=1 step=2")
+        assert await b.expect("C") == "C kind=early peer=1 seq=1 step=2"
+        # A wrong token is refused.
+        bad = await connect_referee(port, "r1", "nope")
+        assert (await bad.expect("ERROR"))["code"] == "not_referee"
+        ref = await connect_referee(port, "r1", token)
+        await ref.expect("WELCOME")
+        st = await ref.expect("START")
+        assert st["peer"] == "0" and st["seed"] == sa["seed"] and st["peers"] == "1,2"
+        assert await ref.expect("C") == "C kind=early peer=1 seq=1 step=2"
+        # Player commands reach the referee; the referee's lines reach nobody.
+        a.send("C kind=hire peer=1 seq=1 step=3")
+        assert await ref.expect("C") == "C kind=hire peer=1 seq=1 step=3"
+        ref.send("C kind=hire peer=0 seq=1 step=3")
+        ref.send("S 0 1 fp-one")
+        a.send("S 1 1 fp-one")
+        b.send("S 2 1 fp-one")
+        assert await a.expect("S") == "S 2 1 fp-one"
+        # The players agree with each other but not with the referee.
+        a.send("S 1 2 fp-two")
+        b.send("S 2 2 fp-two")
+        ref.send("S 0 2 fp-other")
+        d = await a.expect("DESYNC")
+        assert d["step"] == "2" and d["referee"] == "1"
+        assert (await b.expect("DESYNC"))["step"] == "2"
+        assert not any(x.startswith("C ") and "peer=0" in x for x in a.inbox + b.inbox)
+        assert server.rooms["r1"].verified_step == 1
+    run_with_referee(body)
+
+
+def test_referee_with_another_build_is_refused():
+    async def body(server, port, started):
+        a, b = await two_players_in_room(port)
+        await start(a, b)
+        for _ in range(50):
+            if started:
+                break
+            await asyncio.sleep(0.01)
+        ref = await connect_referee(port, "r1", started[0][2], build="other")
+        assert (await ref.expect("ERROR"))["code"] == "build_mismatch"
+        assert server.rooms["r1"].referee is None
+    run_with_referee(body)

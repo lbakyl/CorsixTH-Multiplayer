@@ -98,6 +98,9 @@ end
 --!  request_speed (function) optional; when set, speed and pause changes
 --!             made by the player are sent through it instead of being
 --!             applied locally (the server shares them with everybody)
+--!  observer   (bool) optional; this peer only follows the game (the server's
+--!             headless referee): it issues no commands and is not in anybody's
+--!             peers list
 --!  send_cosmetic (function) optional; sends a table of plain values to the
 --!             other players outside the lockstep (e.g. the outline of a room
 --!             someone is drawing). Never changes game state.
@@ -119,6 +122,7 @@ function MultiplayerSession:MultiplayerSession(params)
   self.control = params.control
   self.request_speed = params.request_speed
   self.send_cosmetic = params.send_cosmetic
+  self.observer = params.observer
   self.applying = false     -- true while command handlers run
   self.remote_blueprints = {} -- peer -> rectangle drawn on the map
 
@@ -139,6 +143,7 @@ end
 --! everywhere (including here) at step self.step + self.delay.
 --!param cmd (table) plain values; must contain `kind`
 function MultiplayerSession:issue(cmd)
+  if self.observer then return cmd end -- the referee never acts
   self.seq = self.seq + 1
   -- The hospital the action is for: this player's (multiplayer co-op).
   if cmd.hospital == nil then cmd.hospital = self.hospital_index or 1 end

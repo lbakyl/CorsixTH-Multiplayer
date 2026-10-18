@@ -26,7 +26,10 @@
 #   9. co-op events: an emergency and a VIP visit for player 2's hospital,
 #      accepted by player 2; the emergency countdown runs in the simulation
 #      -> IN SYNC
-# Exits 0 only if all nine behave as expected.
+# With MP_REFEREE=1 the local server also runs its headless referee for every
+# room, and a 10th check needs the referee to agree with the players in every
+# room except 'cheat' (that one desyncs before the referee is there).
+# Exits 0 only if all checks behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
 set -euo pipefail
@@ -58,6 +61,12 @@ if [[ -n "${MP_EXTERNAL_SERVER:-}" ]]; then
   echo "Using server $MP_SERVER"
 else
   port=$((47000 + RANDOM % 900))
+  if [[ "${MP_REFEREE:-0}" == 1 ]]; then
+    export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
+    export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/referee"
+    export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
+    export MP_REFEREE_PROBE_SCENARIO="crowd=busy" # the probes' own start, see below
+  fi
   PYTHONPATH="$source_dir/mp_server" python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
     --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
   server_pid=$!
@@ -132,9 +141,10 @@ for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 if [[ -n "${MP_SERVER_LOG_CMD:-}" ]]; then eval "$MP_SERVER_LOG_CMD" > "$out/server.log" 2>&1 || true; fi
 
-python3 - "$out" <<'PY'
+python3 - "$out" "${MP_REFEREE:-0}" <<'PY'
 import pathlib, re, sys
 out = pathlib.Path(sys.argv[1])
+with_referee = sys.argv[2] == '1' 
 def log(n): return (out / n / 'log.txt').read_text()
 def result(n):
     m = re.search(r'RESULT: (.*)', log(n)); return m.group(1) if m else 'no result'
@@ -230,5 +240,16 @@ ok9 = (result('olga').startswith('IN SYNC') and result('paul').startswith('IN SY
 print(f"9. Co-op events, player 2:  {result('olga')}; emergency and VIP for hospital 2 accepted: {ok9}; commands {len(okc)}/{len(co)} ok")
 for x in co: print("   " + x)
 fail |= not ok9
+
+if with_referee:
+    rooms = ['ward', 'leave', 'build', 'crowd', 'fax', 'coop', 'events']
+    connected = [r for r in rooms if f"room '{r}': referee connected" in server]
+    differ = re.findall(r"room '(\w+)': the players differ from the referee", server)
+    confirmed = dict(re.findall(r"room '(\w+)': referee confirmed steps through (\d+)", server))
+    ok10 = connected == rooms and not differ and all(int(confirmed.get(r, 0)) > 300 for r in rooms)
+    print(f"10. Headless referee:       connected in {len(connected)}/{len(rooms)} rooms; "
+          f"differs in {differ or 'none'}; confirmed through " +
+          ", ".join(f"{r} {confirmed.get(r, 0)}" for r in rooms))
+    fail |= not ok10
 sys.exit(1 if fail else 0)
 PY

@@ -164,13 +164,17 @@ function MultiplayerLobby:MultiplayerLobby(params)
   self.chat = {}
   self.version = 0          -- incremented whenever something visible changes
   self.listeners = {}
-  self.transport:send(MultiplayerLobby.encode("HELLO",
-      {proto = MultiplayerLobby.PROTOCOL, build = self.build, name = self.name}))
+  local hello = {proto = MultiplayerLobby.PROTOCOL, build = self.build, name = self.name}
+  -- Extra fields, e.g. role/room/token for the server's headless referee.
+  for k, v in pairs(params.hello or {}) do hello[k] = v end
+  self.is_referee = hello.role == "referee"
+  self.transport:send(MultiplayerLobby.encode("HELLO", hello))
 end
 
 --! Connect to a server. Blocks for at most `timeout` seconds.
 --!return lobby, or nil and an error message
-function MultiplayerLobby.connect(address, name, timeout)
+--!param hello (table) optional extra HELLO fields (the referee's role and token)
+function MultiplayerLobby.connect(address, name, timeout, hello)
   corsixth.require("mp_transport")
   if not MultiplayerTransport.available() then
     return nil, "LuaSocket is not available in this build"
@@ -179,7 +183,7 @@ function MultiplayerLobby.connect(address, name, timeout)
   if not host then return nil, "No server address" end
   local transport, err = MultiplayerTransport.join(host, port, timeout or 5)
   if not transport then return nil, tostring(err) end
-  return MultiplayerLobby({transport = transport, name = name,
+  return MultiplayerLobby({transport = transport, name = name, hello = hello,
       address = host .. ":" .. port, log = print})
 end
 
@@ -351,6 +355,7 @@ function MultiplayerLobby:_onSTART(f)
 end
 
 function MultiplayerLobby:_onSPEED(f)
+  if self.is_referee then return end -- the referee always runs at full speed
   local world = TheApp and TheApp.world
   if world and TheApp.mp_session and TheApp.mp_session.lobby == self then
     world:applySharedSpeed(f.speed)
@@ -443,10 +448,14 @@ function MultiplayerLobby:_beginGame(f)
   local my_index = 1
   if coop then
     -- One hospital per player, in peer order; this machine runs its own.
+    -- Names from START (in peer order), so a peer that never saw the room
+    -- (the server's referee) names the hospitals the same way.
+    local start_names = {}
+    for n in (f.names or ""):gmatch("[^,]+") do start_names[#start_names + 1] = n end
     local names = {}
     for i, p in ipairs(peers) do
       local player = self.players[p]
-      names[i] = (player and player.name or ("Player " .. p)):upper()
+      names[i] = (start_names[i] or (player and player.name) or ("Player " .. p)):upper()
       if p == tonumber(f.peer) then my_index = i end
     end
     app.mp_coop = {players = #peers, local_index = my_index, names = names}
@@ -477,6 +486,9 @@ function MultiplayerLobby:_beginGame(f)
       end
     end,
     control = function(line) lobby:handleLine(line) end,
+    -- The referee (peer 0) only watches: it never issues commands, and the
+    -- players never wait for it.
+    observer = self.is_referee,
     send_cosmetic = function(fields) lobby:send("SHOW", fields) end,
     request_speed = function(speed)
       lobby:send("SPEED", {speed = MultiplayerLobby.clampSpeed(speed, f.max_speed)})

@@ -400,4 +400,40 @@ function builder.rect_with_person(world, w, h)
   end
 end
 
+--! Test setup at the start of a multiplayer game, the same on every peer
+--! before the first step: test-only commands and the scenario's hospital
+--! (each player's, in co-op). Returns this player's desk tile.
+function builder.start_game(world, session, scenario, log)
+  -- Test-only command, registered on every peer: a VIP asks to visit.
+  MultiplayerSession.default_handlers.probe_vip = function(w, cmd)
+    w.hospitals[cmd.target or 1]:createVip()
+    return true
+  end
+  -- Test-only command: an emergency for hospital `target`.
+  MultiplayerSession.default_handlers.probe_emergency = function(w, cmd)
+    local err = w.hospitals[cmd.target or 1]:createEmergency()
+    return err == nil, err
+  end
+
+  -- Same setup on every peer before the first step, so it stays in sync.
+  -- It changes the shared world directly, like a command handler does.
+  session.applying = true
+  local desk_x, desk_y
+  if world.mp_coop then
+    -- Each player's hospital gets the same start, in hospital order.
+    for i = 1, world.mp_coop.players do
+      builder.hospital = world.hospitals[i]
+      local x, y = builder.setup_scenario(world, scenario, true)
+      if world.hospitals[i] == world.ui.hospital then desk_x, desk_y = x, y end
+    end
+    builder.hospital = world.ui.hospital -- the UI actions below are this player's
+    log(string.format("co-op: %d hospitals, playing %s (hospital %d)", world.mp_coop.players,
+        world.ui.hospital.name, world:getHospitalIndex(world.ui.hospital)))
+  else
+    desk_x, desk_y = builder.setup_scenario(world, scenario)
+  end
+  session.applying = false
+  return desk_x, desk_y
+end
+
 return builder

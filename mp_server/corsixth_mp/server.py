@@ -31,6 +31,7 @@ import time
 from dataclasses import dataclass, field
 
 from . import pacing
+from .referee import RefereeConfig, start_referee
 from .protocol import (MAX_LINE_BYTES, PROTOCOL_VERSION, ProtocolError, command_peer,
                        decode, encode, is_game_line, parse_step_report)
 
@@ -49,6 +50,9 @@ HELLO_TIMEOUT = 15.0
 # connections. Defaults; see the CORSIXTH_MP_MAX_* environment variables.
 MAX_CONNECTIONS = 256
 MAX_PER_ADDRESS = 8
+# Commands kept per room for a referee that joins late (bytes; later the
+# referee's saves let the server forget older ones).
+MAX_COMMAND_LOG = 16 * 1024 * 1024
 # Gameplay settings every peer must use (lesson 4 in the handover README).
 DEFAULT_SETTINGS = {"grant_wage_increase": 1, "free_build_mode": 0}
 
@@ -71,6 +75,7 @@ class Player:
     next_ping_id: int = 1
     last_step: int = 0
     closed: bool = False
+    is_referee: bool = False
 
     @property
     def rtt(self) -> float:
@@ -105,16 +110,34 @@ class Room:
     fingerprints: dict[int, dict[int, str]] = field(default_factory=dict)
     desync_step: int | None = None
     left: dict[int, int] = field(default_factory=dict)  # peer -> last step
+    start_fields: dict[str, object] = field(default_factory=dict)  # START for everybody
+    # Headless referee (peer 0): connection, process, its token, and the
+    # fingerprints waiting to be checked against it (step -> fingerprint).
+    referee: Player | None = None
+    referee_proc: object = None
+    referee_token: str = ""
+    agreed: dict[int, str] = field(default_factory=dict)      # players agreed, referee not yet
+    referee_fps: dict[int, str] = field(default_factory=dict)  # referee reported, players not yet
+    verified_step: int = 0  # last step the referee confirmed
+    # Everything a peer joining late needs (the referee): every command and
+    # LEFT so far, and each player's latest step report.
+    command_log: list[str] = field(default_factory=list)
+    command_log_bytes: int = 0
+    left_log: list[str] = field(default_factory=list)
+    last_report: dict[int, str] = field(default_factory=dict)
 
     def check_password(self, password: str) -> bool:
         if self.password_hash is None:
             return True
         return hmac.compare_digest(self.password_hash, _hash_password(password, self.salt))
 
-    def broadcast(self, line: str, exclude: Player | None = None) -> None:
+    def broadcast(self, line: str, exclude: Player | None = None,
+                  referee: bool = False) -> None:
         for p in self.players.values():
             if p is not exclude:
                 p.send(line)
+        if referee and self.referee is not None and self.referee is not exclude:
+            self.referee.send(line)
 
     def free_peer(self) -> int | None:
         for n in range(1, self.max_players + 1):
@@ -128,7 +151,10 @@ class Room:
 
 class Server:
     def __init__(self, motd: str = "", max_connections: int = MAX_CONNECTIONS,
-                 max_per_address: int = MAX_PER_ADDRESS) -> None:
+                 max_per_address: int = MAX_PER_ADDRESS,
+                 referee: RefereeConfig | None = None) -> None:
+        self.referee_config = referee
+        self.port = 0
         self.max_connections = max_connections
         self.max_per_address = max_per_address
         self.connections_by_address: dict[str, int] = {}
@@ -145,6 +171,7 @@ class Server:
         self._server = await asyncio.start_server(self._handle, host, port, limit=MAX_LINE_BYTES)
         sock = self._server.sockets[0]
         bound = sock.getsockname()[1]
+        self.port = bound
         log.info("listening on %s:%d", host, bound)
         return bound
 
@@ -268,12 +295,43 @@ class Server:
         if f.get("proto") != str(PROTOCOL_VERSION):
             self._error(player, "protocol", f"Server speaks protocol {PROTOCOL_VERSION}")
             return False
+        if f.get("role") == "referee":
+            return self._referee_hello(player, f)
         name = f.get("name", "").strip()[:MAX_NAME] or f"Player {player.pid}"
         player.name = name
         player.build = f.get("build", "")
         player.send(encode("WELCOME", proto=PROTOCOL_VERSION, id=player.pid,
                            server=SERVER_VERSION, motd=self.motd or None))
         log.info("player %d is %r, build %s", player.pid, name, player.build)
+        return True
+
+    def _referee_hello(self, player: Player, f: dict[str, str]) -> bool:
+        """The room's headless referee connects (started by this server)."""
+        room = self.rooms.get(f.get("room", ""))
+        if (room is None or room.state != "running" or not room.referee_token or
+                not hmac.compare_digest(room.referee_token, f.get("token", ""))):
+            self._error(player, "not_referee", "Unknown room or token")
+            return False
+        player.name, player.build, player.is_referee = "referee", f.get("build", ""), True
+        if player.build != room.build:
+            log.warning("room %r: referee build %s differs from the room's %s; no referee",
+                        room.name, player.build, room.build)
+            self._error(player, "build_mismatch", "The referee runs another build")
+            return False
+        player.room, player.peer = room, 0
+        room.referee = player
+        player.send(encode("WELCOME", proto=PROTOCOL_VERSION, id=player.pid, server=SERVER_VERSION))
+        player.send(encode("START", peer=0, **room.start_fields))
+        # Catch up: the game started before the referee was there.
+        for line in room.command_log:
+            player.send(line)
+        for peer in sorted(room.players):
+            if peer in room.last_report:
+                player.send(room.last_report[peer])
+        for line in room.left_log:
+            player.send(line)
+        log.info("room %r: referee connected (%d commands to catch up)", room.name,
+                 len(room.command_log))
         return True
 
     def _dispatch(self, player: Player, line: str) -> None:
@@ -423,13 +481,26 @@ class Server:
         peers = ",".join(str(n) for n in sorted(room.players))
         log.info("room %r starts: seed %d, delay %d, max speed %s, peers %s", room.name,
                  room.seed, room.pace.delay, room.pace.max_speed, peers)
+        room.start_fields = dict(peers=peers, seed=room.seed, level=room.level,
+                                 difficulty=room.difficulty, mode=room.mode,
+                                 delay=room.pace.delay, max_speed=room.pace.max_speed,
+                                 speed=room.speed, speed_control=room.speed_control,
+                                 names=",".join(room.players[n].name.replace(",", " ")
+                                                for n in sorted(room.players)),
+                                 **DEFAULT_SETTINGS)
         for peer, pl in room.players.items():
             pl.last_step = 0
-            pl.send(encode("START", peer=peer, peers=peers, seed=room.seed, level=room.level,
-                           difficulty=room.difficulty, mode=room.mode,
-                           delay=room.pace.delay, max_speed=room.pace.max_speed,
-                           speed=room.speed, speed_control=room.speed_control,
-                           **DEFAULT_SETTINGS))
+            pl.send(encode("START", peer=peer, **room.start_fields))
+        if self.referee_config is not None:
+            room.referee_token = secrets.token_hex(16)
+            asyncio.get_running_loop().create_task(self._spawn_referee(room))
+
+    async def _spawn_referee(self, room: Room) -> None:
+        try:
+            room.referee_proc = await start_referee(self.referee_config, self.port,
+                                                    room.name, room.referee_token)
+        except OSError as exc:
+            log.warning("room %r: cannot start the referee: %s", room.name, exc)
 
     def _on_speed(self, player: Player, f: dict[str, str]) -> None:
         room = player.room
@@ -461,6 +532,12 @@ class Server:
         room = player.room
         if room is None or room.state != "running":
             return
+        if player.is_referee:
+            # The referee only reports; its lines never reach the players.
+            report = parse_step_report(line) if line.startswith("S ") else None
+            if report is not None and report[0] == 0:
+                self._referee_fingerprint(room, report[1], report[2])
+            return
         if line.startswith("S "):
             report = parse_step_report(line)
             if report is None or report[0] != player.peer:
@@ -468,11 +545,20 @@ class Server:
                 return
             _, step, fp = report
             player.last_step = step
+            room.last_report[player.peer] = line
             self._record_fingerprint(room, player.peer, step, fp)
         elif command_peer(line) != player.peer:
             self._error(player, "bad_command", "Command for another peer")
             return
-        room.broadcast(line, exclude=player)
+        elif room.referee_token:
+            room.command_log_bytes += len(line)
+            if room.command_log_bytes > MAX_COMMAND_LOG:
+                log.warning("room %r: command log full; no more referee", room.name)
+                room.referee_token = ""
+                room.command_log.clear()
+            else:
+                room.command_log.append(line)
+        room.broadcast(line, exclude=player, referee=True)
 
     def _record_fingerprint(self, room: Room, peer: int, step: int, fp: str) -> None:
         if room.desync_step is not None:
@@ -488,6 +574,41 @@ class Server:
                 log.warning("room %r: desync at step %d: %s", room.name, step,
                             {p: fps[p] for p in sorted(active)})
                 room.broadcast(encode("DESYNC", step=step))
+            elif room.referee_token:
+                # All players agree; the referee checks them too.
+                self._check_with_referee(room, step, values.pop(), None)
+
+    def _referee_fingerprint(self, room: Room, step: int, fp: str) -> None:
+        if room.desync_step is not None:
+            return
+        self._check_with_referee(room, step, None, fp)
+
+    def _check_with_referee(self, room: Room, step: int, players_fp: str | None,
+                            referee_fp: str | None) -> None:
+        """Compare the players' agreed fingerprint for `step` with the
+        referee's, whichever arrives second."""
+        if players_fp is not None:
+            referee_fp = room.referee_fps.pop(step, None)
+            if referee_fp is None:
+                room.agreed[step] = players_fp
+                # A referee that never comes must not make this grow forever.
+                while len(room.agreed) > 20000:
+                    room.agreed.pop(min(room.agreed))
+                return
+        else:
+            players_fp = room.agreed.pop(step, None)
+            if players_fp is None:
+                room.referee_fps[step] = referee_fp
+                while len(room.referee_fps) > 20000:
+                    room.referee_fps.pop(min(room.referee_fps))
+                return
+        if players_fp == referee_fp:
+            room.verified_step = max(room.verified_step, step)
+            return
+        room.desync_step = step
+        log.warning("room %r: the players differ from the referee at step %d: players %s, "
+                    "referee %s", room.name, step, players_fp, referee_fp)
+        room.broadcast(encode("DESYNC", step=step, referee=1))
 
     # ------------------------------------------------------------ departures
 
@@ -497,10 +618,17 @@ class Server:
             return
         room.players.pop(player.peer, None)
         player.room = None
+        if player.is_referee:
+            if room.referee is player:
+                room.referee = None
+                log.warning("room %r: the referee disconnected", room.name)
+            return
         if room.state == "running":
             room.left[player.peer] = player.last_step
-            room.broadcast(encode("LEFT", peer=player.peer, step=player.last_step,
-                                  name=player.name))
+            left = encode("LEFT", peer=player.peer, step=player.last_step, name=player.name)
+            room.last_report.pop(player.peer, None)
+            room.left_log.append(left)
+            room.broadcast(left, referee=True)
             # Reports still missing only from the leaver are complete now.
             for step in sorted(room.fingerprints):
                 fps = room.fingerprints[step]
@@ -516,12 +644,29 @@ class Server:
             room.broadcast(encode("CHAT", peer=0, name="server", text=f"{player.name} left"))
         if not room.players:
             del self.rooms[room.name]
+            self._stop_referee(room)
+            if room.referee_token:
+                log.info("room %r: referee confirmed steps through %d", room.name,
+                         room.verified_step)
             log.info("room %r closed", room.name)
             return
         if room.owner is player:
             room.owner = room.players[min(room.players)]
             room.owner.send(encode("OWNER"))
         self._send_lobby(room)
+
+    @staticmethod
+    def _stop_referee(room: Room) -> None:
+        proc = room.referee_proc
+        if proc is not None and proc.returncode is None:
+            try:
+                proc.terminate()
+            except ProcessLookupError:
+                pass
+        if room.referee is not None:
+            ref, room.referee = room.referee, None
+            ref.closed = True
+            ref.writer.close()
 
     def _disconnect(self, player: Player) -> None:
         self._leave_room(player)
@@ -547,8 +692,11 @@ def main(argv: list[str] | None = None) -> None:
                         format="%(asctime)s %(levelname)s %(message)s")
 
     async def run() -> None:
+        referee = RefereeConfig.from_env()
+        if referee:
+            log.info("headless referee enabled: %s", referee.binary)
         server = Server(motd=args.motd, max_connections=args.max_connections,
-                        max_per_address=args.max_per_address)
+                        max_per_address=args.max_per_address, referee=referee)
         await server.start(args.host, args.port)
         # Stop cleanly on SIGTERM (docker stop) as well as Ctrl+C.
         stop = asyncio.Event()
