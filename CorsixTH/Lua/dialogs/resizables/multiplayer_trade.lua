@@ -84,8 +84,9 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target)
     -- Names are localised strings; concatenating keeps them displayable.
     local profession = _S.staff_class[staff.humanoid_class:lower()] or staff.humanoid_class
     local text = staff.profile:getFullName() .. "  (" .. profession .. ", $" .. staff.profile.wage .. ")"
-    self:addBevelPanel(20, 80 + (row - 1) * 25, WIDTH - 40, 23, col.setting, nil, nil, nil,
-        col.setting_active):setLabel(text)
+    self.staff_list[row].label = text
+    self.staff_list[row].button = self:addBevelPanel(20, 80 + (row - 1) * 25, WIDTH - 40, 23,
+        col.setting, nil, nil, nil, col.setting_active):setLabel(text)
         :makeToggleButton(0, 0, WIDTH - 40, 23, nil, function(window, state, btn)
           window:selectStaff(row, state, btn)
         end)
@@ -143,6 +144,13 @@ function UIMultiplayerTrade:sendStaff()
   session:issue({kind = "send_staff", to = self.world:getHospitalIndex(self.target),
       index = self.selected.index, key = MultiplayerSession.staffKey(staff)})
   self:setStatus(_S.multiplayer_window.trade_sent)
+  -- They are on their way: they cannot be sent again from this window.
+  local entry = self.selected
+  if entry.button then
+    entry.button:setToggleState(false)
+    entry.button:enable(false)
+    entry.button:setLabel(entry.label .. "  " .. _S.multiplayer_window.trade_on_the_way)
+  end
   self.selected = nil
 end
 

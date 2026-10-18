@@ -433,6 +433,7 @@ multiplayer_window = {
   trade_no_staff = "You have no staff to send.",
   trade_select_staff = "Click a member of staff first.",
   trade_sent = "Sent. It arrives in a moment.",
+  trade_on_the_way = "- sent",
   trade_alone = "There is no other player.",
   money_sent = "Money sent to %s",
   money_received = "Money from %s",
