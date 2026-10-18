@@ -171,7 +171,8 @@ local function keeps_room_usable(room, rect, placed, object_type, tx, ty, o)
   local candidate = {footprint = {}}
   local own = {}
   for _, t in ipairs(orientation.footprint) do
-    if not t.only_passable then
+    -- (A wall object, such as a radiator, leaves its tile walkable.)
+    if not t.only_passable and not t.only_side then
       candidate.footprint[#candidate.footprint + 1] = {tx + t[1], ty + t[2]}
       own[key(tx + t[1], ty + t[2])] = true
     end
@@ -233,7 +234,7 @@ function builder.roomItems(room)
     if orientation and not door then
       local item = {footprint = {}}
       for _, t in ipairs(orientation.footprint) do
-        if not t.only_passable then
+        if not t.only_passable and not t.only_side then
           item.footprint[#item.footprint + 1] = {obj.tile_x + t[1], obj.tile_y + t[2]}
         end
       end

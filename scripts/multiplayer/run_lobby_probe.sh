@@ -166,7 +166,7 @@ run_probe yara MP_ROLE=join MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
 # Room editing: ed builds a GP's office, then edits it while patients are
 # about (pick up, place, buy, move, confirm) and later removes it; flo watches.
 run_probe ed MP_ROLE=host MP_ROOM=edit MP_STEPS=1400 MP_SCENARIO=busy \
-  MP_UI_SCRIPT="100:furnishroom:gp:5:5;500:editroom:gp:pickup:cabinet+place+buy:first+place+move:1:0+place+done;950:overlay;1000:editroom:gp:delete;1300:overlay;1310:uistate" & pids+=($!)
+  MP_UI_SCRIPT="100:furnishroom:gp:5:5;500:editroom:gp:pickup:cabinet+place+buy:first+place+buy:radiator+place+move:1:0+place+done;950:overlay;1000:editroom:gp:delete;1300:overlay;1310:uistate" & pids+=($!)
 sleep 1
 run_probe flo MP_ROLE=join MP_ROOM=edit MP_STEPS=1400 MP_SCENARIO=busy MP_UI_SCRIPT="1350:overlay" & pids+=($!)
 # Save and continue: a co-op game saves at step 300 (File > Save) and ends;
@@ -364,17 +364,21 @@ steps12 = re.findall(r'UI: edit (\S+) (ok|FAILED[^\n]*)', ed)
 failed12 = [f"{s} {r}" for s, r in steps12 if r != 'ok']
 want12 = ['room_buy', 'room_delete', 'room_edit', 'room_finish', 'room_object', 'room_pickup',
           'room_rebuild', 'room_unbuild']
+# A radiator leaves its tile walkable: the first free spot takes it.
+# (Placed twice: after buying it and after the room moved.)
+radiator_puts12 = len(re.findall(r'UI: furnishing: put radiator at', ed))
+radiator12 = radiator_puts12 - len(re.findall(r'UI: furnishing: radiator is in the room', ed))
 moved12 = re.search(r'UI: edit: room now at (\d+),(\d+) \(was (\d+),(\d+)\)', ed)
 marks12 = re.findall(r'UI: overlay at step \d+: (\d+) marks', ed + fl)
 rooms12 = re.search(r'rooms built: (.*)', ed)
 clicks12 = 'world hit test on, edit_room false' in ''.join(l for l in ed.splitlines() if 'UI: state at step' in l)
 ok12 = (result('ed').startswith('IN SYNC through step 1400') and result('flo').startswith('IN SYNC through step 1400')
         and ce == applied('flo') and all(k in kinds12 for k in want12) and not bad12
-        and len(steps12) == 8 and not failed12 and moved12 is not None and moved12.group(1, 2) != moved12.group(3, 4)
+        and len(steps12) == 10 and radiator_puts12 >= 1 and radiator12 == 0 and not failed12 and moved12 is not None and moved12.group(1, 2) != moved12.group(3, 4)
         and marks12 == ['0', '0', '0'] and clicks12
         and rooms12 is not None and rooms12.group(1) == re.search(r'rooms built: (.*)', fl).group(1)
         and f"gp@{moved12.group(1)},{moved12.group(2)}" not in rooms12.group(1).split())  # the edited room, removed
-print(f"12. Room editing:           {result('ed')} / {result('flo')}; steps ok {len(steps12) - len(failed12)}/8 {' '.join(failed12)}; "
+print(f"12. Room editing:           {result('ed')} / {result('flo')}; steps ok {len(steps12) - len(failed12)}/10; radiator refused {radiator12} of {radiator_puts12} {' '.join(failed12)}; "
       f"moved {moved12.group(3, 4) if moved12 else '-'} -> {moved12.group(1, 2) if moved12 else '-'}; commands {' '.join(kinds12)}; "
       f"refused {len(bad12)}; markers {'/'.join(marks12)}; clicks {clicks12}; rooms at the end {rooms12.group(1) if rooms12 else '-'}")
 fail |= not ok12
