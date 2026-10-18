@@ -212,6 +212,21 @@ function Map:load(level, difficulty, level_name, map_file, level_intro, map_edit
       end
       self.level_config = result
     end
+  elseif type(level) == "string" and level:match("^net%d%d$") then
+    -- One of Theme Hospital's original multiplayer levels ("net20" ... "net44":
+    -- LEVEL.L20 with NET20.SAM etc.), used by multiplayer co-op.
+    local errors, result, _
+    local digits = level:sub(4)
+    self.level_number = level
+    self.difficulty = "full"
+    local data
+    data, errors = self:getRawData("LEVEL.L" .. digits)
+    if not data then return nil, errors end
+    _, objects = self.th:load(data)
+    errors, result = self:_loadNetLevelConfig(digits, base_config)
+    if errors then return nil, errors end
+    self.level_config = result
+    self.level_name = level_name or self:_netLevelName(digits) or level:upper()
   elseif map_editor then
     local _
     -- We're being fed data by the map editor.
@@ -301,6 +316,30 @@ function Map:_loadOriginalCampaignLevel(difficulty, level_number, config)
      end
    end
   return nil, config
+end
+
+--! Level configuration of an original multiplayer level: NET00.SAM, then
+--! NET<digits>.SAM on top.
+--!param digits (string) "20" ... "44" (first digit: number of players)
+--!return error (string) or nil, config (table)
+function Map:_loadNetLevelConfig(digits, config)
+  local errors
+  for _, filename in ipairs({"NET00.SAM", "NET" .. digits .. ".SAM"}) do
+    errors, config = self:loadMapConfig(filename, config)
+    if errors then
+      return _S.errors.missing_th_data_file:format(filename)
+    end
+  end
+  return nil, config
+end
+
+--! English name of an original multiplayer level, from NET<players>.DAT.
+function Map:_netLevelName(digits)
+  local index = self.app.fs:readContents("Levels", "NET" .. digits:sub(1, 1) .. ".DAT")
+  if not index then return nil end
+  local block = index:match("#" .. digits .. "[^#]*")
+  local name = block and block:match("&0[ \t]*([^\r\n]+)")
+  return name and name:gsub("%s+$", "") or nil
 end
 
 --! Get the difficulty of the level. Custom levels and campaign always have medium difficulty.

@@ -424,6 +424,22 @@ multiplayer_window = {
   leave = "Leave room",
   no_socket = "This build has no network support (LuaSocket missing).",
   select_room = "Select a room first.",
+  -- Co-op trades
+  trade_caption = "Trade with %s",
+  trade_send_money = "Send $%d",
+  trade_send_staff = "Send selected staff",
+  trade_next_player = "Next player",
+  trade_close = "Close",
+  trade_no_staff = "You have no staff to send.",
+  trade_select_staff = "Click a member of staff first.",
+  trade_sent = "Sent. It arrives in a moment.",
+  trade_alone = "There is no other player.",
+  money_sent = "Money sent to %s",
+  money_received = "Money from %s",
+  money_received_note = "%s sent you $%d.",
+  staff_received_note = "%s sent you a member of staff: %s",
+  menu_caption = "  MULTIPLAYER  ",
+  menu_trade = "  TRADE WITH OTHER PLAYERS  ",
 }
 
 tooltip.multiplayer_window = {

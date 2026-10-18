@@ -154,6 +154,8 @@ function UIFax:choice(choice_number)
     additionalInfo = nil
   end
 
+  -- The hospital the fax is for (multiplayer co-op: maybe not this player's).
+  local hospital = self.icon.hospital or self.ui.hospital
   local owner = self.owner
   if owner and owner.humanoid_class then
     local humanoid = owner
@@ -195,33 +197,33 @@ function UIFax:choice(choice_number)
   local vip_ignores_refusal = math.random(1, 2)
   if choice == "accept_emergency" then
     self.ui.app.world:newObject("helicopter", "north")
-    self.ui:addWindow(UIWatch(self.ui, "emergency"))
+    self.ui:addWindow(UIWatch(self.ui, "emergency", hospital))
   elseif choice == "refuse_emergency" then
     self.ui.app.world:nextEmergency()
   -- VIP may choose to visit anyway if he is refused too often
-  elseif (self.ui.hospital.vip_declined > 2 and vip_ignores_refusal == 2) and choice == "refuse_vip" then
-    self.ui.hospital.num_vips = self.ui.hospital.num_vips + 1
-    self.ui.app.world:spawnVIP(additionalInfo.name)
-    self.ui.hospital.vip_declined = 0
+  elseif (hospital.vip_declined > 2 and vip_ignores_refusal == 2) and choice == "refuse_vip" then
+    hospital.num_vips = hospital.num_vips + 1
+    self.ui.app.world:spawnVIP(additionalInfo.name, hospital)
+    hospital.vip_declined = 0
   elseif choice == "refuse_vip" then
     self.ui.app.world:nextVip() -- don't start an inspection
-    self.ui.hospital.vip_declined = self.ui.hospital.vip_declined + 1
+    hospital.vip_declined = hospital.vip_declined + 1
   elseif choice == "accept_vip" then
-    self.ui.hospital.num_vips = self.ui.hospital.num_vips + 1
-    self.ui.app.world:spawnVIP(additionalInfo.name)
+    hospital.num_vips = hospital.num_vips + 1
+    self.ui.app.world:spawnVIP(additionalInfo.name, hospital)
   elseif choice == "declare_epidemic" then
-    local epidemic = self.ui.hospital.epidemic
+    local epidemic = hospital.epidemic
     if epidemic then
       epidemic:resolveDeclaration()
     end
   elseif choice == "cover_up_epidemic" then
-    local epidemic = self.ui.hospital.epidemic
+    local epidemic = hospital.epidemic
     if epidemic then
       epidemic:startCoverUp()
     end
   elseif choice == "accept_new_level" then
     -- Set the new salary.
-    self.ui.hospital.player_salary = self.ui.hospital.salary_offer
+    hospital.player_salary = hospital.salary_offer
     if tonumber(self.ui.app.world.map.level_number) then
       local next_level = self.ui.app.world.map.level_number + 1
       if self.ui.app:loadLevel(next_level, self.ui.app.map.difficulty, nil, nil,
@@ -250,7 +252,7 @@ function UIFax:choice(choice_number)
     self.ui.app.moviePlayer:playWinMovie()
     self.ui.app:loadMainMenu()
   elseif choice == "stay_on_level" then
-    self.ui.hospital.win_declined = true
+    hospital.win_declined = true
   end
   self.icon:removeMessage()
   self:close()

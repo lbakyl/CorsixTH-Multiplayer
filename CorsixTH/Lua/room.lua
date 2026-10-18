@@ -882,7 +882,8 @@ function Room:crashRoom()
     -- Make sure any emergency list is not messed up.
     -- Note that these humanoids might just have been kicked. (No hospital set)
     if humanoid.is_emergency then
-      table.remove(self.world:getLocalPlayerHospital().emergency_patients, humanoid.is_emergency)
+      table.remove((self.hospital or self.world:getLocalPlayerHospital()).emergency_patients,
+          humanoid.is_emergency)
     end
     humanoid:die()
     humanoid:despawn()

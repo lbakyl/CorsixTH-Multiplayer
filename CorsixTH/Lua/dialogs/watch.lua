@@ -30,7 +30,9 @@ local TICK_DAYS_EMERGENCY = 52
 local TIMER_SEGMENTS = 13
 
 --!param count_type (string) One of: "open_countdown" or "emergency" or "epidemic"
-function UIWatch:UIWatch(ui, count_type)
+--!param hospital (Hospital) optional; whose countdown it is (default ui.hospital;
+--!  in multiplayer co-op it can be another player's)
+function UIWatch:UIWatch(ui, count_type, hospital)
   self:Window()
 
   local app = ui.app
@@ -46,7 +48,7 @@ function UIWatch:UIWatch(ui, count_type)
   end
   self.open_timer = 12
   self.ui = ui
-  self.hospital = ui.hospital
+  self.hospital = hospital or ui.hospital
   self.width = 39
   self.height = 79
   self:setDefaultPosition(20, -100)
@@ -130,14 +132,16 @@ end
 function UIWatch:onCountdownEnd()
   self:close()
   if self.count_type == "emergency" then
-    self.ui.hospital:resolveEmergency()
+    self.hospital:resolveEmergency()
   elseif self.count_type == "epidemic" then
     local epidemic = self.hospital.epidemic
     if epidemic then
       epidemic:coverUpTimeIsUp()
     end
   elseif self.count_type == "initial_opening" then
-    self.hospital:open()
+    -- In multiplayer co-op the simulation opens the hospital in the same
+    -- game hour (World:_tickCoopOpenings); this window only shows it.
+    if not self.hospital.opened then self.hospital:open() end
     self.ui:playSound("fanfare.wav")
   end
 end
@@ -181,7 +185,7 @@ end
     ! During an epidemic - Cycles to the first patient who is infected but not vaccinated]]
 function UIWatch:cycleTimerEventPatient()
   self.ui:playSound("camclick.wav")
-  local hospital = self.ui.hospital
+  local hospital = self.hospital
 
   if self.count_type == "emergency" then
     local patients = hospital.emergency_patients

@@ -394,7 +394,7 @@ end
 --[[ When the player chooses to begin the cover up over declaring from the
  initial fax (@see sendInitialFax) ]]
 function Epidemic:startCoverUp()
-  self.timer = UIWatch(self.world.ui, "epidemic")
+  self.timer = UIWatch(self.world.ui, "epidemic", self.hospital)
   self.countdown_intervals = self.timer.open_timer
   self.world.ui:addWindow(self.timer)
   -- last chance clean up as entities might have ticked and changed state

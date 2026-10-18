@@ -467,7 +467,7 @@ end
 
 --! Overridden close function. The game should be unpaused again when closing the dialog.
 function UIAnnualReport:close()
-  if TheApp.world:getLocalPlayerHospital().game_won then
+  if TheApp.world:getUIHospital().game_won then
     TheApp.video:setBlueFilterActive(false)
   end
   self:updateAwards()
@@ -538,7 +538,7 @@ function UIAnnualReport:draw(canvas, x, y)
     local dy = 0
     --for i = 1, 10 do
       font:draw(canvas, i .. ".", x + 220 * s, y + 160 * s + dy)
-      font:draw(canvas, world:getLocalPlayerHospital().name:upper(), x + 260 * s, y + 160 * s + dy)
+      font:draw(canvas, world:getUIHospital().name:upper(), x + 260 * s, y + 160 * s + dy)
       font:draw(canvas, "NA", x + 360 * s, y + 160 * s + dy)
       -- dy = dy + 25
     --end

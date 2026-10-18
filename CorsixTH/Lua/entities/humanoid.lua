@@ -800,7 +800,7 @@ function Humanoid:_handleEmptyActionQueue()
         elseif class.is(self, Patient) then
           -- Set these variables to increase the likelihood of the humanoid managing to get out of the hospital.
           self.going_home = false
-          self.hospital = self.world:getLocalPlayerHospital()
+          self.hospital = self.hospital or self.world:getLocalPlayerHospital()
           self:goHome("kicked")
         end
       end,

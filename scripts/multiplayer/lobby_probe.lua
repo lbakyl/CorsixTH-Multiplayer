@@ -11,6 +11,7 @@
 --   MP_ROOM, MP_PASSWORD  room to create or join         (default probe / secret)
 --   MP_JOIN_PASSWORD  password the joiner types (default MP_PASSWORD)
 --   MP_PLAYERS        players the host waits for         (default 2)
+--   MP_COOP           1: the host creates a co-op room (a hospital each)
 --   MP_SCENARIO       light | busy                       (default light)
 --   MP_STEPS          game hours to play                 (default 1500)
 --   MP_FAST           1: run at the fastest local speed (test only, default 1)
@@ -22,6 +23,10 @@
 --                                                       everybody (test-only command)
 --                       answerfax:<type>:<n>            open the first fax of <type> and
 --                                                       click choice <n> in the fax window
+--                       openhospital                    click the opening watch's button
+--                       givemoney:<amount>              co-op trade window: send money
+--                       sendstaff:<class>               co-op trade window: send the first
+--                                                       member of staff of that class
 --                       pause[:<ticks>]                 press P (shared through the server),
 --                                                       optionally <ticks> later; works
 --                                                       while the game is paused
@@ -46,6 +51,7 @@ local scenario = os.getenv("MP_SCENARIO") or "light"
 local target = tonumber(os.getenv("MP_STEPS") or "1500")
 local fast = (os.getenv("MP_FAST") or "1") == "1"
 local draw_every = tonumber(os.getenv("MP_DRAW_EVERY") or "0")
+local coop = os.getenv("MP_COOP") == "1"
 
 local function log(msg)
   io.stdout:write("[" .. name .. "] " .. msg .. "\n")
@@ -98,6 +104,7 @@ local function run_lobby()
     w = lobby_window()
     w.room_name_box:setText(room)
     w.password_box:setText(password)
+    if coop then w:buttonMode() end -- "A hospital each"
     w:buttonCreate()
     wait_for("own room", function() return lobby.state == "in_room" end)
     log("created room " .. room)
@@ -166,7 +173,20 @@ local function run()
   -- Same setup on every peer before the first step, so it stays in sync.
   -- It changes the shared world directly, like a command handler does.
   session.applying = true
-  local desk_x, desk_y = builder.setup_scenario(world, scenario)
+  local desk_x, desk_y
+  if world.mp_coop then
+    -- Each player's hospital gets the same start, in hospital order.
+    for i = 1, world.mp_coop.players do
+      builder.hospital = world.hospitals[i]
+      local x, y = builder.setup_scenario(world, scenario, true)
+      if world.hospitals[i] == world.ui.hospital then desk_x, desk_y = x, y end
+    end
+    builder.hospital = world.ui.hospital -- the UI actions below are this player's
+    log(string.format("co-op: %d hospitals, playing %s (hospital %d)", world.mp_coop.players,
+        world.ui.hospital.name, world:getHospitalIndex(world.ui.hospital)))
+  else
+    desk_x, desk_y = builder.setup_scenario(world, scenario)
+  end
   session.applying = false
   if fast then world:setSpeed("And then some more") end
 
@@ -220,6 +240,39 @@ local function run()
         done[i] = true
         local a = entry.action
         if a == "buy" then builder.ui_buy(world, desk_x, desk_y, entry.arg, log)
+        elseif a == "openhospital" then
+          local watch
+          for _, win in ipairs(world.ui.windows) do
+            if class.is(win, UIWatch) and win.count_type == "initial_opening" then watch = win end
+          end
+          if watch then
+            log("UI: clicked the opening watch at step " .. session.step)
+            watch:buttonEndCountdown()
+          else
+            log("UI: no opening watch")
+          end
+        elseif a == "givemoney" then
+          local trade = UIMultiplayerTrade(world.ui)
+          world.ui:addWindow(trade)
+          log(string.format("UI: sent $%s to %s at step %d", entry.arg, trade.target.name, session.step))
+          trade:sendMoney(tonumber(entry.arg))
+          trade:close()
+        elseif a == "sendstaff" then
+          local trade = UIMultiplayerTrade(world.ui)
+          world.ui:addWindow(trade)
+          local row
+          for i, e in ipairs(trade.staff_list) do
+            if not row and e.staff.humanoid_class == entry.arg then row = i end
+          end
+          if row then
+            trade:selectStaff(row, true)
+            log(string.format("UI: sent %s %s to %s at step %d", entry.arg,
+                tostring(trade.staff_list[row].staff.profile:getFullName()), trade.target.name, session.step))
+            trade:sendStaff()
+          else
+            log("UI: no " .. entry.arg .. " to send")
+          end
+          trade:close()
         elseif a == "vip" then
           session:issue({kind = "probe_vip"})
           log("UI: asked for a VIP fax at step " .. session.step)
@@ -299,6 +352,13 @@ local function run()
   end
   table.sort(rooms)
   log("rooms built: " .. table.concat(rooms, " "))
+  for i, h in ipairs(world.hospitals) do
+    local classes = {}
+    for _, s in ipairs(h.staff) do classes[#classes + 1] = s.humanoid_class end
+    table.sort(classes)
+    log(string.format("hospital %d %s: balance %s, open %s, staff %s", i, h.name, tostring(h.balance),
+        tostring(h.opened), table.concat(classes, ",")))
+  end
   log(session.desync and ("RESULT: DESYNC at step " .. session.desync.step)
       or ("RESULT: IN SYNC through step " .. session.step))
   lobby:disconnect()

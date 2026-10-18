@@ -9,7 +9,9 @@
 
 local builder = {}
 
-local function hospital_of(world) return world.hospitals[1] end
+-- The hospital the helpers act for (multiplayer co-op probes set it).
+builder.hospital = nil
+local function hospital_of(world) return builder.hospital or world.hospitals[1] end
 
 --! Is every tile of the rectangle (plus a one-tile margin) free hospital floor?
 local function rect_is_free(world, x, y, w, h)
@@ -198,9 +200,10 @@ end
 -- lobby_probe.lua).
 
 -- Shared setup, identical on both peers, done before the session starts.
-function builder.setup_scenario(world, scenario)
-  local hospital = world.hospitals[1]
-  local cx, cy = world.map.th:getCameraTile(1)
+--!param keep_closed (bool) leave the hospital closed (the test opens it)
+function builder.setup_scenario(world, scenario, keep_closed)
+  local hospital = hospital_of(world)
+  local cx, cy = world.map.th:getCameraTile(hospital:getPlayerIndex())
   local desk_x, desk_y = builder.find_free_rect(world, cx, cy, 1, 3, 25)
   builder.place_object(world, "reception_desk", desk_x, desk_y, "north")
   builder.hire(world, "Receptionist", desk_x + 2, desk_y + 2)
@@ -214,7 +217,7 @@ function builder.setup_scenario(world, scenario)
       builder.hire(world, class, desk_x + i, desk_y + 3)
     end
   end
-  hospital:open()
+  if not keep_closed then hospital:open() end
   return desk_x, desk_y
 end
 
@@ -259,11 +262,27 @@ function builder.ui_hire(world, desk_x, desk_y, class, log)
   dlg:hire() -- opens UIPlaceStaff
   local place = ui:getWindow(UIPlaceStaff)
   assert(place, "no staff placement window")
-  place.tile_x, place.tile_y = desk_x + 1, desk_y + 4
+  -- Below the desk, or the nearest valid tile around it (fixed search order).
+  local tx, ty = desk_x + 1, desk_y + 4
+  place.tile_x, place.tile_y = tx, ty
+  local r = 0
+  while not place:_isValidStaffPlacement() and r < 12 do
+    r = r + 1
+    local found = false
+    for dy = -r, r do
+      for dx = -r, r do
+        if not found and math.max(math.abs(dx), math.abs(dy)) == r then
+          place.tile_x, place.tile_y = desk_x + 1 + dx, desk_y + 4 + dy
+          found = place:_isValidStaffPlacement()
+        end
+      end
+    end
+  end
+  tx, ty = place.tile_x, place.tile_y
   place.onMouseMove = function() end -- keep the tile we set (no real cursor)
   place:onMouseUp("left", 0, 0)
   log(string.format("UI: hired %s %s at %d,%d (pool size still %d)", class, name,
-      desk_x + 1, desk_y + 4, #pool))
+      tx, ty, #pool))
   if ui:getWindow(UIHireStaff) then ui:getWindow(UIHireStaff):close() end
 end
 

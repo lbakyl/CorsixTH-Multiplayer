@@ -956,7 +956,7 @@ function App:_loadLevel(level, difficulty, level_name, level_file, level_intro, 
   self.audio:playSoundEffects(self.config.play_sounds)
 
   -- Load UI
-  self.ui = GameUI(self, self.world:getLocalPlayerHospital(), map_editor)
+  self.ui = GameUI(self, self.world:getUIHospital(), map_editor)
   self.world:setUI(self.ui) -- Function call allows world to set up its keyHandlers
 
   -- Now restore progress from previous levels.

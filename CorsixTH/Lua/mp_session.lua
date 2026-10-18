@@ -140,6 +140,8 @@ end
 --!param cmd (table) plain values; must contain `kind`
 function MultiplayerSession:issue(cmd)
   self.seq = self.seq + 1
+  -- The hospital the action is for: this player's (multiplayer co-op).
+  if cmd.hospital == nil then cmd.hospital = self.hospital_index or 1 end
   cmd.step = self.step + self.delay
   cmd.peer = self.peer_id
   cmd.seq = self.seq
@@ -382,10 +384,17 @@ function MultiplayerSession.defaultFingerprint(world)
     parts[#parts + 1] = (e.humanoid_class or (e.object_type and e.object_type.id) or "?")
         .. "@" .. tostring(e.tile_x) .. "," .. tostring(e.tile_y)
   end
-  return string.format("%s bal=%s visitors=%s entities=%d cured=%s staff=%d ecrc=%08x rng=%08x",
+  -- Other hospitals (multiplayer co-op) in short form.
+  local others = {}
+  for i = 2, #world.hospitals do
+    local h = world.hospitals[i]
+    others[#others + 1] = string.format(" h%d=%s/%s/%s/%d", i, tostring(h.balance),
+        tostring(h.num_visitors or 0), tostring(h.num_cured or 0), #(h.staff or {}))
+  end
+  return string.format("%s bal=%s visitors=%s entities=%d cured=%s staff=%d ecrc=%08x rng=%08x%s",
       world.game_date:tostring(), tostring(hospital.balance), tostring(hospital.num_visitors or 0),
       #world.entities, tostring(hospital.num_cured or 0), #hospital.staff,
-      TH.CRC32File(table.concat(parts, ";")), TH.CRC32File(math.randomdump()))
+      TH.CRC32File(table.concat(parts, ";")), TH.CRC32File(math.randomdump()), table.concat(others))
 end
 
 --! In a multiplayer game, refuse a player action that is not yet sent to the
@@ -449,6 +458,7 @@ end
 function handlers.open_hospital(world, cmd)
   local hospital = world.hospitals[cmd.hospital or 1]
   if not hospital or hospital.opened then return false, "already open" end
+  hospital.mp_opening = nil
   hospital:open()
   if world.ui then
     for _, window in ipairs(world.ui.windows or {}) do
@@ -506,6 +516,107 @@ function handlers.fax_choice(world, cmd)
   icon:removeMessage(cmd.choice)
   if queued then panel:forgetQueuedIcon(icon) end
   return true
+end
+
+--------------------------------------------------------------------------------
+-- Multiplayer co-op trades between the players' hospitals.
+--------------------------------------------------------------------------------
+
+--! Send money to another player's hospital: {hospital (sender), to, amount}.
+function handlers.give_money(world, cmd)
+  local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
+  local amount = math.floor(tonumber(cmd.amount) or 0)
+  if not from or not to or from == to then return false, "no such hospital" end
+  if amount <= 0 then return false, "nothing to send" end
+  if from.balance < amount then return false, "not enough money" end
+  from:spendMoney(amount, _S.multiplayer_window.money_sent:format(to.name))
+  to:receiveMoney(amount, _S.multiplayer_window.money_received:format(from.name))
+  MultiplayerSession.tellPlayer(world, to,
+      _S.multiplayer_window.money_received_note:format(from.name, amount))
+  return true
+end
+
+--! Staff member `index` of a hospital, if their profile still has `key`.
+local function find_staff(hospital, index, key)
+  local staff = hospital.staff[index]
+  if staff and not staff.fired and MultiplayerSession.staffKey(staff) == key then return staff end
+  for _, s in ipairs(hospital.staff) do
+    if not s.fired and MultiplayerSession.staffKey(s) == key then return s end
+  end
+end
+
+--! Identity of an employed staff member that does not depend on language.
+function MultiplayerSession.staffKey(staff)
+  return staff.humanoid_class .. "/" .. MultiplayerSession.staffProfileKey(staff.profile)
+end
+
+--! A free corridor tile of `hospital` near its camera start position.
+local function arrival_tile(world, hospital)
+  local th = world.map.th
+  local cx, cy = th:getCameraTile(hospital:getPlayerIndex())
+  for r = 0, 25 do
+    for dy = -r, r do
+      for dx = -r, r do
+        if math.max(math.abs(dx), math.abs(dy)) == r then
+          local x, y = cx + dx, cy + dy
+          if hospital:isInHospital(x, y) and not world:getRoom(x, y) and
+              th:getCellFlags(x, y).passable then
+            return x, y
+          end
+        end
+      end
+    end
+  end
+end
+
+--! Send a staff member to another player's hospital: {hospital (sender), to,
+--! index, key}. They walk out of the old hospital and an identical member of
+--! staff (same profile, wage and skills) starts at the new one. No hiring fee
+--! and no severance pay.
+function handlers.send_staff(world, cmd)
+  local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
+  if not from or not to or from == to then return false, "no such hospital" end
+  local staff = find_staff(from, cmd.index, cmd.key)
+  if not staff then return false, "no such staff member" end
+  local x, y = arrival_tile(world, to)
+  if not x then return false, "no room at the other hospital" end
+
+  -- Leave the old hospital, like Staff:fire() without the penalties.
+  local old_profile = staff.profile
+  local staff_window = world.ui and world.ui:getWindow(UIStaff)
+  if staff_window and staff_window.staff == staff then staff_window:close() end
+  staff:removeQueuedStaffMessage()
+  staff:setMood("exit", "activate")
+  staff.fired = true
+  staff.going_home = true
+  staff:despawn()
+  staff.hover_cursor = nil
+  staff:unregisterCallbacks()
+
+  -- Start at the new one with a copy of the profile.
+  local profile = setmetatable({}, getmetatable(old_profile))
+  for k, v in pairs(old_profile) do profile[k] = v end
+  local entity = world:newEntity(profile.humanoid_class, 2, 2)
+  entity:setProfile(profile)
+  entity:setTile(x, y)
+  to.staff[#to.staff + 1] = entity
+  entity:setHospital(to)
+  to:notifyOfStaffChange(entity)
+  entity:onPlaceInCorridor()
+
+  local window = world.ui and world.ui:getWindow(UIStaffManagement)
+  if window then window:updateStaffList() end
+  MultiplayerSession.tellPlayer(world, to,
+      _S.multiplayer_window.staff_received_note:format(from.name, "") .. profile:getFullName())
+  return true
+end
+
+--! Show a short adviser message, only to the player running `hospital`.
+function MultiplayerSession.tellPlayer(world, hospital, text)
+  local ui = world.ui
+  if ui and ui.adviser and ui.hospital == hospital then
+    ui.adviser:say({text = text, priority = 10})
+  end
 end
 
 --! Language-independent identity of a staff profile in the hiring pool.

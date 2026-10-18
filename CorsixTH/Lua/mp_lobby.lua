@@ -387,6 +387,13 @@ end
 
 -- Starting and ending the game ------------------------------------------------
 
+--! The original multiplayer level for a co-op room: LEVEL.L<players><n>
+--! with NET<players><n>.SAM, n = room level 1..5 -> 0..4.
+function MultiplayerLobby.coopLevelId(players, level)
+  players = math.max(2, math.min(4, players))
+  return string.format("net%d%d", players, ((tonumber(level) or 1) - 1) % 5)
+end
+
 --! Load the agreed level and attach a lockstep session to it.
 function MultiplayerLobby:_beginGame(f)
   local app = TheApp
@@ -401,11 +408,27 @@ function MultiplayerLobby:_beginGame(f)
   app.config.grant_wage_increase = f.grant_wage_increase == "1"
   app.config.free_build_mode = f.free_build_mode == "1"
 
+  local coop = f.mode == "coop"
+  local my_index = 1
+  if coop then
+    -- One hospital per player, in peer order; this machine runs its own.
+    local names = {}
+    for i, p in ipairs(peers) do
+      local player = self.players[p]
+      names[i] = (player and player.name or ("Player " .. p)):upper()
+      if p == tonumber(f.peer) then my_index = i end
+    end
+    app.mp_coop = {players = #peers, local_index = my_index, names = names}
+  end
+
   math.randomseed(tonumber(f.seed))
   local level = tonumber(f.level) or 1
-  if not app:loadLevel(level, f.difficulty or "full", nil, nil, nil, nil,
-      _S.errors.load_level_prefix, nil) or not app.world then
-    error("level " .. level .. " could not be loaded")
+  local level_id = coop and MultiplayerLobby.coopLevelId(#peers, level) or level
+  local loaded = app:loadLevel(level_id, f.difficulty or "full", nil, nil, nil, nil,
+      _S.errors.load_level_prefix, nil)
+  app.mp_coop = nil
+  if not loaded or not app.world then
+    error("level " .. tostring(level_id) .. " could not be loaded")
   end
   local world = app.world
   local lobby = self
@@ -429,7 +452,15 @@ function MultiplayerLobby:_beginGame(f)
   })
   session.lobby = self
   session.max_speed = f.max_speed
+  session.hospital_index = my_index
   app.mp_session = session
+  if coop and world.ui and world.ui.menu_bar then
+    local ui = world.ui
+    world.ui.menu_bar:addMenu(_S.multiplayer_window.menu_caption, UIMenu()
+      :appendItem(_S.multiplayer_window.menu_trade, function()
+        ui:addWindow(UIMultiplayerTrade(ui))
+      end))
+  end
   world:applySharedSpeed(f.speed or "Normal")
   self.log(string.format("multiplayer: playing as %s of %s, seed %s, delay %s, max speed %s",
       f.peer, f.peers, f.seed, f.delay, tostring(f.max_speed)))

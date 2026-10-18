@@ -435,7 +435,10 @@ end
 --     ...
 --   }
 -- }
-function UIBottomPanel:queueMessage(type, message, owner, timeout, default_choice, callback)
+--!param hospital (Hospital) optional; whose message it is (default: the owner's
+--!  hospital, else hospital 1). In multiplayer co-op only that player sees it,
+--!  but it exists (and times out) on every peer.
+function UIBottomPanel:queueMessage(type, message, owner, timeout, default_choice, callback, hospital)
   -- Show a helpful message if there has been no messages before - only in campaign though
   if not self.ui.hospital.message_popup and tonumber(self.world.map.level_number) then
     self.world.ui.adviser:say(_A.information.fax_received)
@@ -453,6 +456,7 @@ function UIBottomPanel:queueMessage(type, message, owner, timeout, default_choic
     default_choice = default_choice,
     callback = callback,
     mp_id = self.world.next_message_id,
+    hospital = hospital or (owner and owner.hospital) or self.world.hospitals[1],
   }
 
   if self:canQueueFax(message_info) then
@@ -499,6 +503,7 @@ function UIBottomPanel:_initMessageWithDrawerIcon(message_info)
     message_info.timeout, message_info.default_choice, message_info.callback)
   message_info["drawer_icon"] = drawer_icon
   drawer_icon.mp_id = message_info.mp_id
+  drawer_icon.hospital = message_info.hospital
 end
 
 --! All message icons, shown or still queued, in creation order.
@@ -620,7 +625,9 @@ function UIBottomPanel:_findMessageToShow()
   end
 
   for i, fax_msg in ipairs(self.message_queue) do
-    if not shown_types[fax_msg.type] then
+    -- Multiplayer co-op: another player's messages stay hidden here.
+    local mine = not self.world.mp_coop or fax_msg.hospital == self.ui.hospital
+    if mine and not shown_types[fax_msg.type] then
       return i
     end
   end

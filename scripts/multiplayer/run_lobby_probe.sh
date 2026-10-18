@@ -19,7 +19,10 @@
 #   7. faxes: a VIP fax refused by clicking in the fax window, a second one
 #      left to time out (accepted), shown at different moments on the two
 #      screens -> IN SYNC, same decisions on both
-# Exits 0 only if all seven behave as expected.
+#   8. co-op on an original two-player map: a hospital each, both opened
+#      early, purchases and hires in each player's own hospital, money and a
+#      nurse sent between them -> IN SYNC, every command accepted
+# Exits 0 only if all eight behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
 set -euo pipefail
@@ -104,6 +107,11 @@ run_probe judy MP_ROLE=join MP_ROOM=crowd MP_STEPS=1200 MP_SCENARIO=busy   MP_UI
 run_probe kate MP_ROLE=host MP_ROOM=fax MP_STEPS=1300 MP_UI_SCRIPT="100:vip;400:vip" & pids+=($!)
 sleep 1
 run_probe liam MP_ROLE=join MP_ROOM=fax MP_STEPS=1300 MP_DRAW_EVERY=2   MP_UI_SCRIPT="160:answerfax:personality:2" & pids+=($!)
+run_probe mira MP_ROLE=host MP_ROOM=coop MP_COOP=1 MP_STEPS=1200 \
+  MP_UI_SCRIPT="20:openhospital;60:buy:bench;80:hire:Doctor;200:givemoney:5000" & pids+=($!)
+sleep 1
+run_probe nico MP_ROLE=join MP_ROOM=coop MP_STEPS=1200 MP_DRAW_EVERY=3 \
+  MP_UI_SCRIPT="30:openhospital;60:buy:plant;90:hire:Nurse;300:sendstaff:Nurse" & pids+=($!)
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 python3 - "$out" <<'PY'
@@ -177,5 +185,18 @@ ok7 = (result('kate').startswith('IN SYNC') and result('liam').startswith('IN SY
        and choices[0].endswith('-> ok'))
 print(f"7. Fax decisions:           {result('kate')}; refusal clicked: {clicked}; applied on both: {applied('kate') == applied('liam')} {choices}")
 fail |= not ok7
+
+m, n = log('mira'), log('nico')
+cm = applied('mira')
+kinds = [re.search(r'#\d+ (\w+) ->', x).group(1) for x in cm]
+ok_all = all(x.endswith('-> ok') for x in cm)
+ok8 = (result('mira').startswith('IN SYNC') and result('nico').startswith('IN SYNC') and cm == applied('nico')
+       and ok_all and sorted(kinds) == sorted(['open_hospital', 'open_hospital', 'place_object', 'place_object',
+                                               'hire', 'hire', 'give_money', 'send_staff'])
+       and 'co-op: 2 hospitals' in m)
+print(f"8. Co-op, a hospital each:  {result('mira')}; commands {len(cm)} all ok: {ok_all}; identical: {cm == applied('nico')}")
+for line in re.findall(r'hospital \d .*', m)[-2:]:
+    print("   " + line)
+fail |= not ok8
 sys.exit(1 if fail else 0)
 PY

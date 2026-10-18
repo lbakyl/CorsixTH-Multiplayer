@@ -616,8 +616,8 @@ function Hospital:purchasePlot(plot_number)
 end
 
 function Hospital:getPlayerIndex()
-  -- TODO: In multiplayer, return 2 or 3 or 4
-  return 1
+  -- Multiplayer co-op: each player's hospital owns the plots of its index.
+  return self.player_index or 1
 end
 
 --! Returns the heliport x and y coordinates or nil if none exist.
@@ -1041,7 +1041,10 @@ end
 
 --! Returns whether this hospital is controlled by a real person or not.
 function Hospital:isPlayerHospital()
-  return self == self.world:getLocalPlayerHospital()
+  -- A hospital run by a person (in multiplayer co-op there are several),
+  -- not a computer opponent. The same answer on every multiplayer peer.
+  return self == self.world:getLocalPlayerHospital() or
+      (self.world.mp_coop ~= nil and class.is(self, PlayerHospital))
 end
 
 --! Does the hospital have a reception desk

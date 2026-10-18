@@ -109,12 +109,30 @@ function World:World(app, free_build_mode)
   self:initLevel(app, avail_rooms)
 
   -- Construct hospitals.
-  self.hospitals[1] = PlayerHospital(self, avail_rooms, app.config.player_name)
+  -- Multiplayer co-op (set up by MultiplayerLobby before loading): one
+  -- player hospital per player, hospital i owning the plots of player i.
+  local coop = app.mp_coop
+  if coop then
+    self.mp_coop = {players = coop.players}
+    self.mp_local_index = coop.local_index
+    for i = 1, coop.players do
+      local hospital = PlayerHospital(self, avail_rooms, coop.names[i] or ("PLAYER " .. i), i)
+      -- Every hospital's opening countdown runs in the simulation, the same
+      -- way as the watch window (dialogs/watch.lua), which only one peer has.
+      local rate = math.floor((100 * Date.hoursPerDay()) / 13)
+      hospital.mp_opening = {tick_rate = rate, tick_timer = rate, open_timer = 12}
+      -- Epidemic countdown windows are per peer; not supported in co-op yet.
+      hospital.epidemics_disabled = true
+      self.hospitals[i] = hospital
+    end
+  else
+    self.hospitals[1] = PlayerHospital(self, avail_rooms, app.config.player_name)
+  end
 
   -- Add computer players
   -- TODO: Right now they're only names
   local level_config = self.map.level_config
-  for key, value in pairs(level_config.computer) do
+  for key, value in pairs(coop and {} or level_config.computer) do
     if value.Playing == 1 then
       self.hospitals[#self.hospitals + 1] = AIHospital(tonumber(key) + 1,
           self, avail_rooms, value.Name)
@@ -128,8 +146,9 @@ function World:World(app, free_build_mode)
 
   self:updateInitialsCache()
   -- TODO: Add (working) AI and/or multiplayer hospitals
-  -- TODO: Needs to be changed for multiplayer support
-  self.hospitals[1]:initStaff()
+  for i = 1, coop and coop.players or 1 do
+    self.hospitals[i]:initStaff()
+  end
 
   self:initWallTypes()
 
@@ -325,8 +344,31 @@ end
 --!return (Hospital) The hospital controlled by the (single) player.
 function World:getLocalPlayerHospital()
   -- NB: UI code can get the hospital to use via ui.hospital
-  -- TODO: Make this work in multiplayer?
+  -- In multiplayer co-op this stays hospital 1: simulation code calls it and
+  -- must give the same answer on every peer. See getUIHospital().
   return self.hospitals[1]
+end
+
+--! The hospital this machine's player runs: the one the game UI shows. In
+--! multiplayer co-op each peer has its own; otherwise getLocalPlayerHospital().
+function World:getUIHospital()
+  return self.mp_local_index and self.hospitals[self.mp_local_index] or
+      self:getLocalPlayerHospital()
+end
+
+--! Index of a hospital in world.hospitals (1 if not found).
+function World:getHospitalIndex(hospital)
+  for i, h in ipairs(self.hospitals) do
+    if h == hospital then return i end
+  end
+  return 1
+end
+
+--! The hospital owning the tile, or hospital 1 (e.g. outside, or a non-tile
+--! position like "north"). The same on every multiplayer peer.
+function World:getTileHospital(x, y)
+  if type(x) ~= "number" or type(y) ~= "number" then return self.hospitals[1] end
+  return self:getHospital(x, y) or self.hospitals[1]
 end
 
 --! Identify the tiles on the map suitable for spawning `Humanoid`s from.
@@ -474,8 +516,9 @@ end
 
 --A VIP is invited (or he invited himself) to the player hospital.
 --!param name Name of the VIP
-function World:spawnVIP(name)
-  local hospital = self:getLocalPlayerHospital()
+--!param hospital (Hospital) optional; the hospital visited (default: the player's)
+function World:spawnVIP(name, hospital)
+  hospital = hospital or self:getLocalPlayerHospital()
 
   local vip = self:newEntity("Vip", 2, 2)
   vip:setType("VIP")
@@ -1030,7 +1073,7 @@ function World:_advanceHours(hours, tick_earthquake)
     -- A patient might arrive to the player hospital.
     -- TODO: Multiplayer support.
     local spawn_count = self.spawn_hours[self.game_date:hourOfDay() + i - 1]
-    if spawn_count and self.hospitals[1].opened then
+    if spawn_count and self:_patientsCanArrive() then
       -- TODO: Should check target hospital, not hospital 1
       for _ = 1, spawn_count do
         self:spawnPatient()
@@ -1044,6 +1087,7 @@ function World:_advanceHours(hours, tick_earthquake)
     end
     self.current_tick_entity = nil
     self:_flushDestroyedEntities()
+    if self.mp_coop then self:_tickCoopOpenings() end
     self.map:onTick()
     self.map.th:updateTemperatures(outside_temperatures[self.game_date:monthOfYear()],
         0.25 + self.hospitals[1].heating.radiator_heat * 0.3)
@@ -1051,6 +1095,37 @@ function World:_advanceHours(hours, tick_earthquake)
       self.ui:onWorldTick()
     end
     self.dispatcher:onTick()
+  end
+end
+
+--! Patients come to town once a player hospital is open (multiplayer co-op:
+--! any player's).
+function World:_patientsCanArrive()
+  if not self.mp_coop then return self.hospitals[1].opened end
+  for _, hospital in ipairs(self.hospitals) do
+    if hospital.opened then return true end
+  end
+  return false
+end
+
+--! Multiplayer co-op: one game hour of every hospital's opening countdown,
+--! counted exactly like UIWatch:onWorldTick.
+function World:_tickCoopOpenings()
+  for _, hospital in ipairs(self.hospitals) do
+    local c = hospital.mp_opening
+    if c and hospital.opened then
+      hospital.mp_opening = nil
+    elseif c then
+      if c.tick_timer == 0 and c.open_timer >= 0 then
+        c.tick_timer = c.tick_rate
+        c.open_timer = c.open_timer - 1
+      elseif c.open_timer == -1 then
+        hospital.mp_opening = nil
+        hospital:open()
+      else
+        c.tick_timer = c.tick_timer - 1
+      end
+    end
   end
 end
 
@@ -1136,8 +1211,15 @@ function World:onEndDay()
   -- Maybe it's time for an emergency?
   if self.game_date:monthOfGame() == self.next_emergency_month and
       self.game_date:dayOfMonth() == self.next_emergency_day then
-    -- Postpone it if anything clock related is already underway.
-    if self.ui:getWindow(UIWatch) then
+    -- Postpone it if anything clock related is already underway. (In
+    -- multiplayer co-op the windows differ between peers; ask the hospital.)
+    local busy
+    if self.mp_coop then
+      busy = local_hospital.mp_opening or local_hospital.emergency or local_hospital.epidemic
+    else
+      busy = self.ui:getWindow(UIWatch)
+    end
+    if busy then
       self.next_emergency_month = self.next_emergency_month + 1
       local month_of_year = 1 + ((self.next_emergency_month - 1) % 12)
       self.next_emergency_day = math.random(1, Date(1, month_of_year):lastDayOfMonth())
@@ -1196,6 +1278,9 @@ function World:onEndDay()
 end
 
 function World:checkIfGameWon()
+  -- Multiplayer co-op has no level end yet (the original only ends it for
+  -- player 1, which would end the game for everybody).
+  if self.mp_coop then return end
   for i, hosp in ipairs(self.hospitals) do
     if self.endconditions:checkEndGame(hosp) == "win" then
       self:winGame(i)
@@ -1523,7 +1608,7 @@ function World:onEndYear()
 
   -- This is done here instead of in onEndMonth so that the player gets
   -- the chance to receive money or reputation from trophies and awards first.
-  for i, hosp in ipairs(self.hospitals) do
+  for i, hosp in ipairs(self.mp_coop and {} or self.hospitals) do -- see checkIfGameWon
     local reason, limit = self.endconditions:checkEndGame(hosp)
     if limit then
       self:loseGame(i, reason, limit)
@@ -1845,7 +1930,8 @@ end
 --!param patient Patient to float above.
 --!param amount Amount of money to display.
 function World:newFloatingDollarSign(patient, amount)
-  if self.free_build_mode or patient.hospital ~= self:getLocalPlayerHospital() then
+  -- Cosmetic: only above patients of the hospital this player runs.
+  if self.free_build_mode or patient.hospital ~= self:getUIHospital() then
     return
   end
   if not self.floating_dollars then
@@ -1945,7 +2031,8 @@ end
 --!return The created object.
 function World:newObject(id, x, y, flags, name)
   local object_type = self.object_types[id]
-  local hospital = self:getLocalPlayerHospital()
+  -- The owner of the tile (multiplayer co-op: the player whose plot it is).
+  local hospital = self:getTileHospital(x, y)
 
   local entity
   if object_type.class then
@@ -2442,7 +2529,7 @@ end
 --!param x (int) X position of the object
 --!param y (int) Y position of the object
 function World:prepareFootprintTilesForBuild(object_footprint, x, y)
-  local hospital = self:getLocalPlayerHospital()
+  local hospital = self:getTileHospital(x, y)
 
   for _, tile in ipairs(object_footprint) do
     if tile.complete_cell or not (tile.passable or tile.only_passable) then
@@ -2458,7 +2545,7 @@ end
 --!param w (int) Number of tiles in x direction.
 --!param h (int) Number of tiles in y direction.
 function World:prepareRectangleTilesForBuild(x, y, w, h)
-  local hospital = self:getLocalPlayerHospital()
+  local hospital = self:getTileHospital(x, y)
 
   x = x - 1
   y = y - 1

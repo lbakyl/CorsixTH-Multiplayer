@@ -735,9 +735,16 @@ function UIMenuBar:makeGameMenu(app)
   local menu = UIMenu()
   local hotkeys = app.hotkeys
 
-  menu:appendItem(_S.menu_file.load:format(hotkey_value_label("ingame_loadMenu", hotkeys)), function() self.ui:addWindow(UILoadGame(self.ui, "game")) end)
+  -- Loading or restarting would leave the other multiplayer players behind.
+  menu:appendItem(_S.menu_file.load:format(hotkey_value_label("ingame_loadMenu", hotkeys)), function()
+      if MultiplayerSession.blockUnsupported(self.ui) then return end
+      self.ui:addWindow(UILoadGame(self.ui, "game"))
+    end)
     :appendItem(_S.menu_file.save:format(hotkey_value_label("ingame_saveMenu", hotkeys)), function() self.ui:addWindow(UISaveGame(self.ui)) end)
-    :appendItem(_S.menu_file.restart:format(hotkey_value_label("ingame_restartLevel", hotkeys)), function() app:restart() end)
+    :appendItem(_S.menu_file.restart:format(hotkey_value_label("ingame_restartLevel", hotkeys)), function()
+      if MultiplayerSession.blockUnsupported(self.ui) then return end
+      app:restart()
+    end)
     :appendItem(_S.menu_file.quit:format(hotkey_value_label("ingame_quitLevel", hotkeys)), function() self.ui:quit() end)
   self:addMenu(_S.menu.file, menu)
 
@@ -765,12 +772,16 @@ function UIMenuBar:makeGameMenu(app)
 
   local function wageIncreaseRequests(grant)
     return grant, function()
-      app.world:getLocalPlayerHospital().policies.grant_wage_increase = grant
+      -- Shared game state; in multiplayer the server decides this setting.
+      if MultiplayerSession.blockUnsupported(app.ui) then return end
+      app.world:getUIHospital().policies.grant_wage_increase = grant
     end, "", function ()
-      if app.world:getLocalPlayerHospital().policies.grant_wage_increase == nil then
-        app.world:getLocalPlayerHospital().policies.grant_wage_increase = app.config.grant_wage_increase
+      local policies = app.world:getUIHospital().policies
+      if policies.grant_wage_increase == nil then
+        if TheApp.mp_session then return app.config.grant_wage_increase == grant end
+        policies.grant_wage_increase = app.config.grant_wage_increase
       end
-      return app.world:getLocalPlayerHospital().policies.grant_wage_increase == grant
+      return policies.grant_wage_increase == grant
     end
   end
 
