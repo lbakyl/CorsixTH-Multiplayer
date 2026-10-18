@@ -262,6 +262,18 @@ function builder.setup_scenario(world, scenario, keep_closed)
   return desk_x, desk_y
 end
 
+--! A real mouse click on a map tile, as a person makes it: the mouse moves
+--! there (the game finds what is under it), then the button goes down and up.
+--! It goes through the whole game UI (GameUI, then the windows).
+function builder.mouse_click(ui, tx, ty, button)
+  local sx, sy = ui:WorldToScreen(tx + 0.5, ty + 0.5)
+  local code = button == "right" and 3 or 1
+  sx, sy = math.floor(sx), math.floor(sy)
+  ui:onMouseMove(sx, sy, 0, 0)
+  ui:onMouseDown(code, sx, sy)
+  ui:onMouseUp(code, sx, sy)
+end
+
 -- Simulated mouse click at a map tile, in window-relative coordinates.
 function builder.click_tile(ui, window, button, tx, ty)
   local sx, sy = ui:WorldToScreen(tx + 0.5, ty + 0.5)
@@ -508,7 +520,17 @@ function builder.furnish_tick(world, state, log)
             local delay = TheApp.mp_session and TheApp.mp_session.delay or 2
             state.pending = {id = o.object.id, count = count, by_step = step + delay + 2}
             log(string.format("UI: furnishing: put %s at %d,%d facing %s", o.object.id, tx, ty, dir))
-            dlg:placeObject()
+            if state.clicks then
+              if not state.rotated then
+                -- A right click turns the object (it must not close the editor).
+                state.rotated = true
+                builder.mouse_click(ui, tx, ty, "right")
+                dlg:setOrientation(dir)
+              end
+              builder.mouse_click(ui, tx, ty) -- (the blueprint follows the mouse there)
+            else
+              dlg:placeObject()
+            end
             return false
           end
         end
@@ -585,7 +607,7 @@ function builder.edit_tick(world, state, log)
       if not obj then finish_step(false, "no " .. a1) return false end
       state.before = count()
       dlg:pickupItems()
-      obj:onClick(ui, "left")
+      builder.mouse_click(ui, obj.tile_x, obj.tile_y)
     elseif name == "buy" then
       dlg:purchaseItems()
       local shop = ui:getWindow(UIFurnishCorridor)
@@ -600,7 +622,7 @@ function builder.edit_tick(world, state, log)
       shop:purchaseItem(index, 1)
       shop:confirm()
     elseif name == "place" then
-      state.placing = {no_confirm = true}
+      state.placing = {no_confirm = true, clicks = true}
     elseif name == "move" then
       state.old = {x = dlg.room.x, y = dlg.room.y, w = dlg.room.width, h = dlg.room.height}
       dlg:cancel()

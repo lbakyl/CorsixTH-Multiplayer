@@ -513,7 +513,7 @@ local function run()
             if not drawn then rw, rh = rw - 1, rh - 1 end
           end
           if drawn then
-            furnishing = {cancel = a == "cancelroom", pace = furnish_pace,
+            furnishing = {cancel = a == "cancelroom", pace = furnish_pace, clicks = true,
                 not_before = furnish_pace and session.step + furnish_pace}
           end
         elseif a == "editroom" then

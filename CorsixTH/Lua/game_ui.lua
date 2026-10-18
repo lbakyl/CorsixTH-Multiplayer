@@ -720,7 +720,9 @@ function GameUI:onMouseUp(code, x, y)
         -- Still waiting for people to leave the room, abort editing it.
         self:setEditRoom(false)
       end
-    else -- No room chosen yet, but about to edit one.
+    elseif self.edit_room == true then -- No room chosen yet, but about to edit one.
+      -- (Multiplayer: while a room editor is shown, edit_room is that editor;
+      -- clicks then go to it, not to choosing a room.)
       if button == "left" then -- Take the clicked one.
         local room = self.app.world:getRoom(self:ScreenToWorld(x, y))
         if room then

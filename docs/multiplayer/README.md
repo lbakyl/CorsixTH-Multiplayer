@@ -288,6 +288,15 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
     reachability rule for placements had to change for edited rooms: a
     placement may not cut off a use tile that is reachable now, and a wall
     object is used from its own tile (an extinguisher failed every spot).
+35. **Test with the player's own clicks.** The probes called the editor's
+    functions (placeObject, onClick), so they never went through
+    GameUI:onMouseUp. There, while a multiplayer room editor was shown
+    (ui.edit_room is then the editor), every click on the map counted as
+    choosing a room to edit: a left click closed the editor (finished or
+    removed the room), a right click (turning an object) removed it. In
+    builds before room editing the same click ran the single player edit
+    code on one peer only, a likely cause of the step-1772 desync. The
+    probe now moves the mouse and clicks (builder.mouse_click).
 
 ## 8. Next steps
 
