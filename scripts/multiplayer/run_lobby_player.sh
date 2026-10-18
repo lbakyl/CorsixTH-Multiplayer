@@ -15,7 +15,7 @@ if [[ $# -lt 3 ]]; then
 fi
 source_dir=$(cd "$(dirname "$0")/../.." && pwd)
 binary=$1; game_data=$2; log_file=$3; shift 3
-work=$(mktemp -d "${TMPDIR:-/tmp}/corsixth-player.XXXXXXXX")
+work=${MP_WORK_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/corsixth-player.XXXXXXXX")}  # MP_WORK_DIR: reuse one (its saves)
 case "$(uname -s)" in
   MINGW*|MSYS*|CYGWIN*)
     source_dir=$(cygpath -m "$source_dir"); game_data=$(cygpath -m "$game_data")

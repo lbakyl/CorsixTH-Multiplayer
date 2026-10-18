@@ -321,6 +321,12 @@ local function run()
       world:setUserSpeed("Max speed")
     end
     if furnishing and builder.furnish_tick(world, furnishing, log) then furnishing = nil end
+    -- In a person's game: once everybody else has left, leave too, so the
+    -- room closes instead of running on with nobody watching.
+    if scenario == "none" and not quit and #session.peers <= 1 then
+      log("UI: the other players left; leaving too at step " .. session.step)
+      quit = true
+    end
     if draw_every > 0 and ticks % draw_every == 0 then TheApp:drawFrame() end
     local report = TheApp.ui:getWindow(UIAnnualReport)
     if report then report:close() end
@@ -533,6 +539,47 @@ local function run()
           else
             log("UI: no " .. entry.arg .. " to pick up")
           end
+        elseif a == "uistate" then
+          -- What decides whether clicks on the map reach people and objects.
+          local ui = world.ui
+          local names = {}
+          for _, win in ipairs(ui.windows or {}) do
+            names[#names + 1] = (class.type and class.type(win)) or tostring(win.modal_class or "window")
+          end
+          local hit = ui.do_world_hit_test
+          log(string.format("UI: state at step %d: world hit test %s, edit_room %s, %d windows (%s), "
+              .. "user actions %s, staff %d", session.step,
+              hit == true and "on" or (hit and ("room #" .. tostring(hit.id)) or "off"),
+              tostring(ui.edit_room), #(ui.windows or {}), table.concat(names, ","),
+              tostring(world.user_actions_allowed), #ui.hospital.staff))
+          for _, st in ipairs(ui.hospital.staff) do
+            local ok, entity = pcall(function()
+              local sx, sy = TheApp.map:WorldToScreen(st.tile_x, st.tile_y)
+              return TheApp.map.th:hitTestObjects(math.floor(sx), math.floor(sy) - 10)
+            end)
+            log(string.format("UI:   %s at %s,%s fired=%s transit=%s hit=%s", st.humanoid_class,
+                tostring(st.tile_x), tostring(st.tile_y), tostring(st.fired),
+                tostring(st.mp_in_transit ~= nil), ok and tostring(entity and entity.humanoid_class) or "error"))
+          end
+        elseif a == "clickstaff" then
+          -- Left-click every member of staff of this hospital and everybody
+          -- walking over from it, like the player would (errors are logged).
+          local list = {}
+          for _, st in ipairs(world.ui.hospital.staff) do list[#list + 1] = st end
+          for _, st in ipairs(world.mp_transfers or {}) do list[#list + 1] = st end
+          for _, st in ipairs(list) do
+            local ok, err = pcall(st.onClick, st, world.ui, "left")
+            log(string.format("UI: clicked %s (transit %s): %s", st.humanoid_class,
+                tostring(st.mp_in_transit ~= nil), ok and "ok" or ("ERROR " .. tostring(err))))
+            local win = world.ui:getWindow(UIStaff)
+            if win then win:close() end
+          end
+        elseif a == "staleui" then
+          -- Leave the UI pointing at a room editor that is not open (as a
+          -- player's game once did before saving): clicks limited to one room.
+          log("UI: left a stale room editor in the UI at step " .. session.step)
+          world.ui.edit_room = {stale = true}
+          world.ui:setWorldHitTest({id = -1})
         elseif a == "mpsave" then
           -- File > Save: every player's game saves at the same hour.
           log("UI: File > Save at step " .. session.step)

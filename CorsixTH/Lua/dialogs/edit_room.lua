@@ -1720,6 +1720,16 @@ end
 function UIEditRoom:placeObject()
   if self.mp_room_id and MultiplayerSession.actionsAreCommands() then
     -- Multiplayer: every peer puts it into the room when the command runs.
+    -- Until then this player may not send more of an object than are left
+    -- (a quick second click would only be refused). Local count only.
+    local object = self.objects[self.active_index]
+    self.mp_pending = self.mp_pending or {}
+    local pending = self.mp_pending[object.object.id] or 0
+    if pending >= object.qty then
+      self.ui:playSound("wrong2.wav")
+      return
+    end
+    self.mp_pending[object.object.id] = pending + 1
     TheApp.mp_session:issue({kind = "room_object", room = self.mp_room_id,
         object = self.objects[self.active_index].object.id,
         x = self.object_cell_x, y = self.object_cell_y, orientation = self.object_orientation})

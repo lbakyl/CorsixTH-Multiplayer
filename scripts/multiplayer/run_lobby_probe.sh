@@ -163,12 +163,12 @@ run_probe yara MP_ROLE=join MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
     MP_UI_SCRIPT="20:openhospital;60:buy:bench;80:hire:Doctor;300:mpsave" & a=$!
   sleep 1
   run_probe tom MP_ROLE=join MP_ROOM=savegame MP_STEPS=400 \
-    MP_UI_SCRIPT="30:openhospital;90:hire:Nurse" & b=$!
+    MP_UI_SCRIPT="30:openhospital;90:hire:Nurse;290:staleui" & b=$!
   wait $a $b
   mkdir -p "$out/tom-2/saves"
   cp -r "$out/tom/saves/." "$out/tom-2/saves/"
   run_probe tom-2 MP_NAME=tom MP_ROLE=host MP_ROOM=savegame2 MP_STEPS=700 MP_CONTINUE=latest \
-    MP_UI_SCRIPT="450:buy:plant" & a=$!
+    MP_UI_SCRIPT="420:uistate;450:buy:plant" & a=$!
   sleep 1
   run_probe sara-2 MP_NAME=sara MP_ROLE=join MP_ROOM=savegame2 MP_STEPS=700 \
     MP_UI_SCRIPT="500:hire:Nurse" & b=$!
@@ -341,11 +341,14 @@ same_load = bool(saved_t and at_load(t2) and at_load(t2) == at_load(s2) == saved
 seats = bool(loaded_t and loaded_s and loaded_t.group(2) == 'TOM' and loaded_s.group(2) == 'SARA')
 after = [x for x in applied('tom-2') if x.endswith('-> ok')]
 kinds11 = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in after)
-ok11 = (same_save and same_load and seats and result('tom-2').startswith('IN SYNC through step 700')
+# Tom saved with a stale room editor in his UI; after continuing he can
+# click on the whole map again.
+clicks_ok = 'world hit test on, edit_room false' in t2
+ok11 = (same_save and same_load and seats and clicks_ok and result('tom-2').startswith('IN SYNC through step 700')
         and result('sara-2').startswith('IN SYNC through step 700') and applied('tom-2') == applied('sara-2')
         and kinds11 == ['hire', 'place_object'])
 print(f"11. Save and continue:      saved at step {saved_t.group(2) if saved_t else '-'} on both: {same_save}; "
-      f"continued from it: {same_load}; own hospitals: {seats}; {result('tom-2')} / {result('sara-2')}; "
+      f"continued from it: {same_load}; own hospitals: {seats}; clicks after load: {clicks_ok}; {result('tom-2')} / {result('sara-2')}; "
       f"commands after it: {' '.join(kinds11)}")
 fail |= not ok11
 

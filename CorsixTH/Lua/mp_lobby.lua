@@ -641,8 +641,11 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
     self:_addTradeMenu(app.ui) -- a rejoining player's first game UI
   end
   session:restartAt(world, step, peers)
-  -- Rooms this player was furnishing by hand: their editors again.
+  -- The saved UI may still point at a room editor that is not open here
+  -- (clicks would then be limited to that room).
   local room_builder = corsixth.require("mp_room_builder")
+  room_builder.sanitizeUI(app.ui)
+  -- Rooms this player was furnishing by hand: their editors again.
   for _, entry in pairs(world.mp_furnishing or {}) do
     if entry.peer == session.peer_id and not self.is_referee then room_builder.show(world, entry) end
   end

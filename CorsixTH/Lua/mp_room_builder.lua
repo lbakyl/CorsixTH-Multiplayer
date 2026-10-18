@@ -333,18 +333,45 @@ end
 --! Take the editor away from its player's screen (not on the other peers,
 --! where it never was). The room itself is unchanged.
 function builder.hide(world, entry)
-  local ui, dlg = world.ui, entry.dlg
+  local dlg = entry.dlg
   if dlg.parent then dlg.parent:removeWindow(dlg) end
-  if ui and ui.edit_room == dlg then
-    ui.edit_room = false
+  builder.releaseUI(world.ui, dlg)
+end
+
+--! If the UI still points at this room editor (clicks limited to its room,
+--! ui.edit_room set) while the editor is not shown, give the whole map back.
+--! A save made in that state would otherwise keep a player from clicking
+--! anybody outside that room.
+function builder.releaseUI(ui, dlg)
+  if not ui or (dlg and dlg.parent) then return end
+  local room = dlg and dlg.room
+  if dlg and ui.edit_room == dlg then ui.edit_room = false end
+  if ui.do_world_hit_test ~= true and (not dlg or ui.do_world_hit_test == room) then
     ui:setWorldHitTest(true)
   end
+end
+
+--! After loading a shared save: an editor the UI points at must be one
+--! that is actually open on this machine.
+function builder.sanitizeUI(ui)
+  if not ui then return end
+  local open = false
+  for _, window in ipairs(ui.windows or {}) do
+    if class.is(window, UIPlaceObjects) then open = true end
+  end
+  if open then return end
+  if ui.edit_room and not class.is(ui.edit_room, Room) then ui.edit_room = false end
+  if ui.do_world_hit_test ~= true then ui:setWorldHitTest(true) end
 end
 
 --! Put down one object in a room being furnished: {object, x, y, orientation}.
 --!return true, or false and a reason
 function builder.placeObject(world, entry, cmd)
   local dlg = entry.dlg
+  -- (The furnishing player's count of objects sent but not yet placed.)
+  if dlg.mp_pending and dlg.mp_pending[cmd.object] then
+    dlg.mp_pending[cmd.object] = math.max(0, dlg.mp_pending[cmd.object] - 1)
+  end
   return with_editor(world, world.hospitals[entry.hospital], function()
     if dlg.phase ~= "objects" then return false, "room is not being furnished" end
     local index

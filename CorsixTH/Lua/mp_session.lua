@@ -765,6 +765,7 @@ function handlers.room_finish(world, cmd)
   local room, why = builder.finish(world, entry, tonumber(cmd.auto) == 1)
   if not room then return false, why end
   builder.hide(world, entry)
+  builder.releaseUI(world.ui, entry.dlg)
   world.mp_furnishing[tonumber(cmd.room)] = nil
   return true
 end
@@ -776,6 +777,7 @@ function handlers.room_abort(world, cmd)
   local builder = corsixth.require("mp_room_builder")
   builder.hide(world, entry)
   local ok, why = builder.abort(world, entry)
+  builder.releaseUI(world.ui, entry.dlg)
   world.mp_furnishing[tonumber(cmd.room)] = nil
   return ok, why
 end
