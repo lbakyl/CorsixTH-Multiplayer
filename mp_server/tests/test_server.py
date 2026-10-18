@@ -480,3 +480,33 @@ def test_diagnostics_after_a_desync_go_to_the_log(run, caplog):
         await b.expect("PONG")
         assert not any(x.startswith("DIAG") for x in b.inbox)
     run(body)
+
+
+def test_continue_a_saved_game(run):
+    async def body(server, port):
+        tom = await Client.connect(port, "Tom")
+        sara = await Client.connect(port, "Sara")
+        tom.send(encode("CREATE", room="again", password="", max=2, mode="coop", level=3,
+                        step=300, date="1-02-10T05", seats="SARA,TOM", **{"continue": 1}))
+        joined = await tom.expect("JOINED")
+        assert joined["continue"] == "1" and joined["date"] == "1-02-10T05"
+        sara.send(encode("LIST"))
+        room = await sara.expect("ROOM")
+        assert room["continue"] == "1"
+        sara.send(encode("JOIN", room="again", password=""))
+        await sara.expect("JOINED")
+        sara.send(encode("READY", ready=1))
+        tom.send(encode("START"))
+        st_t, st_s = await tom.expect("START"), await sara.expect("START")
+        # Each gets the hospital with their name back (Tom hosts this time).
+        assert st_t["resume"] == "1" and st_t["seats"] == "1:2,2:1" and st_s["seats"] == "1:2,2:1"
+        # The host sends the save; everybody loads it.
+        sara.send(encode("SAVEDATA", d="bm9wZQ=="))  # not the host: ignored
+        tom.send(encode("SAVEDATA", d="eHl6"))
+        tom.send(encode("SAVED", step=300, parts=1))
+        for c in (tom, sara):
+            assert (await c.expect("LOAD")) == {"step": "300", "parts": "1", "peers": "1,2"}
+            assert (await c.expect("SAVEDATA"))["d"] == "eHl6"
+            await c.expect("LOADEND")
+            assert (await c.expect("RESUME"))["step"] == "300"
+    run(body)

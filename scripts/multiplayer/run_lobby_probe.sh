@@ -32,10 +32,13 @@
 #      player, a bench picked up and put down elsewhere, another sold, a GP's
 #      office furnished by hand (one command per object, then confirmed),
 #      toilets drawn and cancelled while furnishing -> IN SYNC
+#  11. save and continue: a co-op game saved with File > Save, continued from
+#      the lobby by the same players (other host, own hospitals by name),
+#      loaded state identical to the saved one -> IN SYNC, commands after it
 # With MP_REFEREE=1 the local server also runs its headless referee for every
-# room, and four more checks: 11. the referee agrees with the players in every
-# room except 'cheat' (that one desyncs before the referee is there); 12, 13.
-# desync repair in a shared and a co-op game; 14. rejoin after a quit.
+# room, and four more checks: 12. the referee agrees with the players in every
+# room except 'cheat' (that one desyncs before the referee is there); 13, 14.
+# desync repair in a shared and a co-op game; 15. rejoin after a quit.
 # Exits 0 only if all checks behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
@@ -152,6 +155,25 @@ run_probe wade MP_ROLE=host MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
 sleep 1
 run_probe yara MP_ROLE=join MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
   MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront;500:furnishroom:gp:5:5;750:cancelroom:toilets:4:4" & pids+=($!)
+# Save and continue: a co-op game saves at step 300 (File > Save) and ends;
+# then the same two players continue it from the lobby, the other one
+# hosting this time (each gets their own hospital back by name).
+(
+  run_probe sara MP_ROLE=host MP_ROOM=savegame MP_COOP=1 MP_STEPS=400 \
+    MP_UI_SCRIPT="20:openhospital;60:buy:bench;80:hire:Doctor;300:mpsave" & a=$!
+  sleep 1
+  run_probe tom MP_ROLE=join MP_ROOM=savegame MP_STEPS=400 \
+    MP_UI_SCRIPT="30:openhospital;90:hire:Nurse" & b=$!
+  wait $a $b
+  mkdir -p "$out/tom-2/saves"
+  cp -r "$out/tom/saves/." "$out/tom-2/saves/"
+  run_probe tom-2 MP_NAME=tom MP_ROLE=host MP_ROOM=savegame2 MP_STEPS=700 MP_CONTINUE=latest \
+    MP_UI_SCRIPT="450:buy:plant" & a=$!
+  sleep 1
+  run_probe sara-2 MP_NAME=sara MP_ROLE=join MP_ROOM=savegame2 MP_STEPS=700 \
+    MP_UI_SCRIPT="500:hire:Nurse" & b=$!
+  wait $a $b
+) & pids+=($!)
 if [[ "${MP_REFEREE:-0}" == 1 ]]; then
   # Desync repair: one player changes money locally, the server holds both
   # games, both load the referee's save and play on (shared and co-op).
@@ -305,6 +327,28 @@ ok10 = (result('wade').startswith('IN SYNC through step 1000') and result('yara'
 print(f"10. Staff and queues:       {result('wade')}; commands {len(okw)}/{len(cw)} ok, identical: {cw == applied('yara')}; {' '.join(kinds10)}; rooms {rooms10 or 'none'}")
 fail |= not ok10
 
+sa, to, t2, s2 = log('sara'), log('tom'), log('tom-2'), log('sara-2')
+saved_s = re.search(r"SAVED savegame (\S+) at step (\d+): (.*)", sa)
+saved_t = re.search(r"SAVED savegame (\S+) at step (\d+): (.*)", to)
+loaded_t = re.search(r"LOADED: loaded the shared save at step (\d+); playing (\S+) \(hospital (\d)\): (.*)", t2)
+loaded_s = re.search(r"LOADED: loaded the shared save at step (\d+); playing (\S+) \(hospital (\d)\): (.*)", s2)
+same_save = bool(saved_s and saved_t and saved_s.group(2, 3) == saved_t.group(2, 3))
+# The state right after loading (money reads 39654.0 once loaded: same value).
+def at_load(text):
+    m = re.search(r"multiplayer: loaded the shared save at step (\d+) \(\d+ bytes\): (.*)", text)
+    return m and (m.group(1), re.sub(r"(\d)\.0(?!\d)", r"\1", m.group(2)))
+same_load = bool(saved_t and at_load(t2) and at_load(t2) == at_load(s2) == saved_t.group(2, 3))
+seats = bool(loaded_t and loaded_s and loaded_t.group(2) == 'TOM' and loaded_s.group(2) == 'SARA')
+after = [x for x in applied('tom-2') if x.endswith('-> ok')]
+kinds11 = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in after)
+ok11 = (same_save and same_load and seats and result('tom-2').startswith('IN SYNC through step 700')
+        and result('sara-2').startswith('IN SYNC through step 700') and applied('tom-2') == applied('sara-2')
+        and kinds11 == ['hire', 'place_object'])
+print(f"11. Save and continue:      saved at step {saved_t.group(2) if saved_t else '-'} on both: {same_save}; "
+      f"continued from it: {same_load}; own hospitals: {seats}; {result('tom-2')} / {result('sara-2')}; "
+      f"commands after it: {' '.join(kinds11)}")
+fail |= not ok11
+
 if with_referee:
     rooms = ['ward', 'leave', 'build', 'crowd', 'fax', 'coop', 'events', 'staff']
     connected = [r for r in rooms if f"room '{r}': referee connected" in server]
@@ -312,7 +356,7 @@ if with_referee:
     confirmed = dict(re.findall(r"room '(\w+)': referee confirmed steps through (\d+)", server))
     def confirmed_after(room): return confirmed.get(room, 0)
     ok10 = connected == rooms and not differ and all(int(confirmed.get(r, 0)) > 300 for r in rooms)
-    print(f"11. Headless referee:       connected in {len(connected)}/{len(rooms)} rooms; "
+    print(f"12. Headless referee:       connected in {len(connected)}/{len(rooms)} rooms; "
           f"differs in {differ or 'none'}; confirmed through " +
           ", ".join(f"{r} {confirmed.get(r, 0)}" for r in rooms))
     fail |= not ok10
@@ -329,7 +373,7 @@ if with_referee:
               and result(join).startswith('IN SYNC through step 1000')
               and int(confirmed_after(room)) >= 900)
         where = f"at step {fixed.group(1)}, save {int(fixed.group(2)) // 1024} KiB" if fixed else "not repaired"
-        print(f"{12 + n}. Desync repair ({room}):{' ' * (8 - len(room))}{result(host)} / {result(join)}; "
+        print(f"{13 + n}. Desync repair ({room}):{' ' * (8 - len(room))}{result(host)} / {result(join)}; "
               f"{where}; commands after it ok on both: {same and later}")
         fail |= not ok
 
@@ -344,7 +388,7 @@ if with_referee:
             and result('vera-back').startswith('IN SYNC through step 1500')
             and after_u == after_v and kinds == ['hire', 'place_object']
             and int(confirmed_after('back')) >= 1400)
-    print(f"14. Rejoin after a crash:   {result('uma')} / {result('vera-back')}; "
+    print(f"15. Rejoin after a crash:   {result('uma')} / {result('vera-back')}; "
           f"rejoined at step {at if rejoined else '-'}; commands after it on both: {after_u == after_v} {kinds}")
     fail |= not ok13
 sys.exit(1 if fail else 0)

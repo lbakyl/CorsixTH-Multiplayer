@@ -47,7 +47,7 @@ local function view_of(lobby)
   return "rooms"
 end
 
-local heights = {connect = 190, rooms = 400, room = 300}
+local heights = {connect = 190, rooms = 435, room = 300}
 
 function UIMultiplayer:UIMultiplayer(ui, status)
   local lobby = TheApp.mp_lobby
@@ -167,7 +167,8 @@ function UIMultiplayer:_buildRooms()
     local r = lobby.rooms[i]
     local text = S.room_line:format(r.room, tonumber(r.players) or 0, tonumber(r.max) or 0,
         r.mode == "coop" and S.mode_coop or S.mode_shared, r.level or "?",
-        (r.locked == "1" and S.locked or "") .. (r.build_ok == "0" and S.other_build or ""))
+        (r.locked == "1" and S.locked or "") .. (r.build_ok == "0" and S.other_build or "") ..
+        (r["continue"] == "1" and S.saved_flag or ""))
     self:addBevelPanel(20, 40 + (i - 1) * 27, WIDTH - 40, 25, col.setting, nil, nil, nil,
         col.setting_active):setLabel(text)
         :makeToggleButton(0, 0, WIDTH - 40, 25, nil, function(window, state, btn)
@@ -191,6 +192,11 @@ function UIMultiplayer:_buildRooms()
   self.mode_button = button(self, 20, y, 160, S.mode_shared, self.buttonMode, T.mode)
   self.level_button = button(self, 185, y, 90, S.level:format(self.new_level), self.buttonLevel, T.level)
   self.max_button = button(self, 280, y, WIDTH - 300, S.players:format(self.new_max), self.buttonMax, T.players)
+  -- New game, or one of the saved multiplayer games (newest first).
+  self.saves = nil
+  self.continue_index = 0
+  self.continue_button = button(self, 20, y + 35, WIDTH - 40, S.continue_new, self.buttonContinue,
+      T.continue_game)
   y = heights.rooms - 50
   button(self, 20, y, 180, S.create, self.buttonCreate)
   button(self, WIDTH - 200, y, 180, S.disconnect, self.buttonDisconnect)
@@ -230,9 +236,41 @@ function UIMultiplayer:buttonMax()
   self.max_button.panel_for_sprite:setLabel(_S.multiplayer_window.players:format(self.new_max))
 end
 
+--! Cycle through "New game" and the saved multiplayer games. A saved game
+--! decides the mode, level and number of players.
+function UIMultiplayer:buttonContinue()
+  local S = _S.multiplayer_window
+  self.saves = self.saves or MultiplayerLobby.listSaves()
+  self.continue_index = (self.continue_index + 1) % (#self.saves + 1)
+  local save = self.saves[self.continue_index]
+  self.continue_button.panel_for_sprite:setLabel(save and S.continue_save:format(save.label) or S.continue_new)
+  if save then
+    self.new_mode = save.info.mode == "coop" and "coop" or "shared"
+    self.new_level = tonumber(save.info.level) or 1
+    self.new_max = math.max(2, tonumber(save.info.players) or 2)
+    self.mode_button.panel_for_sprite:setLabel(self.new_mode == "coop" and S.mode_coop or S.mode_shared)
+    self.level_button.panel_for_sprite:setLabel(S.level:format(self.new_level))
+    self.max_button.panel_for_sprite:setLabel(S.players:format(self.new_max))
+  end
+  for _, b in ipairs({self.mode_button, self.level_button, self.max_button}) do b:enable(not save) end
+end
+
+--! For scripted tests: choose a saved game by label ("latest": the newest).
+function UIMultiplayer:selectContinue(wanted)
+  self.saves = MultiplayerLobby.listSaves()
+  for i, save in ipairs(self.saves) do
+    if wanted == "latest" or save.label == wanted then
+      self.continue_index = i - 1
+      self:buttonContinue()
+      return save
+    end
+  end
+end
+
 function UIMultiplayer:buttonCreate()
   self.lobby:createRoom({room = self.room_name_box.text, password = self.password_box.text,
-      max = self.new_max, mode = self.new_mode, level = self.new_level, difficulty = "full"})
+      max = self.new_max, mode = self.new_mode, level = self.new_level, difficulty = "full",
+      continue_save = self.saves and self.saves[self.continue_index]})
 end
 
 function UIMultiplayer:buttonDisconnect()
@@ -279,7 +317,8 @@ function UIMultiplayer:_updateRoom()
   local s = lobby.summary
   self.summary_panel:setLabel(s and S.recommendation:format(s.speed, s.latency or "?") or S.measuring)
   self.mode_panel:setLabel((lobby.room.mode == "coop" and S.mode_coop or S.mode_shared) ..
-      ", " .. S.level:format(tonumber(lobby.room.level) or 1))
+      ", " .. S.level:format(tonumber(lobby.room.level) or 1) ..
+      (lobby.room["continue"] == "1" and (", " .. S.continuing:format((lobby.room.date or ""):gsub("T.*", ""))) or ""))
   local owner = lobby:isOwner()
   self.start_button:setVisible(owner)
   self.start_button:enable(owner)

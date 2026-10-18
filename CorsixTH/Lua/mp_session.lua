@@ -127,6 +127,7 @@ function MultiplayerSession:MultiplayerSession(params)
   self.held = false         -- stopped by the server while it repairs a desync
   self.load_data = nil      -- {step, data}: the shared save to load (see App:onTick)
   self.save_at = nil        -- the referee sends its save once at this step
+  self.local_save = nil     -- {at, kind}: every player saves the game at this step
   self.applying = false     -- true while command handlers run
   self.remote_blueprints = {} -- peer -> rectangle drawn on the map
 
@@ -231,7 +232,8 @@ end
 --! Is every other peer far enough along for us to run the next step?
 function MultiplayerSession:canStep()
   self:poll()
-  if self.held or self.load_data or (self.save_at and self.step >= self.save_at) then
+  if self.held or self.load_data or (self.save_at and self.step >= self.save_at) or
+      (self.local_save and self.step >= self.local_save.at) then
     return false
   end
   local needed = self.step + 1 - self.delay + 1
@@ -275,6 +277,26 @@ function MultiplayerSession:restartAt(world, step, peers)
   for p in pairs(self.peer_step) do self.peer_step[p] = step end
   self.wait_started, self.wait_notified = nil, false
   self.restarts = (self.restarts or 0) + 1
+end
+
+--! Save the game on this machine once the step being run is complete (the
+--! same step on every peer: from a save_game command or the monthly
+--! autosave, both in the simulation). Written between ticks, see
+--! MultiplayerLobby:serviceSaves.
+--!param kind (string) "save" or "autosave"
+function MultiplayerSession:requestLocalSave(kind)
+  if self.observer or self.local_save then return end
+  self.local_save = {at = self.step + 1, kind = kind}
+end
+
+--! File > Save in a multiplayer game: every player's game saves at the same
+--! game hour, so any of them can continue it later from the lobby.
+function MultiplayerSession.saveTogether()
+  local session = TheApp and TheApp.mp_session
+  if not session then return false end
+  session:issue({kind = "save_game"})
+  session.notify(_S.multiplayer_window.saving_note)
+  return true
 end
 
 --! Is a player action now to be sent as a command (rather than done here)?
@@ -658,6 +680,13 @@ function handlers.sell_object(world, cmd)
   local desk = obj.object_type.id == "reception_desk"
   world:destroyEntity(obj)
   if desk then hospital:buildReceptionDesksCache() end
+  return true
+end
+
+--! Save the game on every player's machine (File > Save): {}.
+function handlers.save_game(world, cmd) -- luacheck: ignore 212
+  local session = TheApp and TheApp.mp_session
+  if session then session:requestLocalSave("save") end
   return true
 end
 

@@ -272,7 +272,114 @@ function MultiplayerLobby:refreshRooms() self:send("LIST") end
 --!param opts (table) room, password, max, mode, level, difficulty, speed_control
 function MultiplayerLobby:createRoom(opts)
   self.error = nil
+  -- Continuing a saved game: the room gets its mode, level and hospitals,
+  -- and this game sends the save when the host starts (_onSTART).
+  local save = opts.continue_save
+  opts.continue_save = nil
+  self.continue_save = save
+  if save then
+    local info = save.info
+    opts["continue"] = 1
+    opts.step = info.step
+    opts.date = info.date
+    opts.mode = info.mode
+    opts.level = info.level
+    opts.difficulty = info.difficulty
+    opts.seats = info.hospitals
+    opts.max = math.max(2, tonumber(info.players) or 2)
+  end
   self:send("CREATE", opts)
+end
+
+--! The folder of multiplayer saves (in the savegames folder).
+function MultiplayerLobby.savesDir()
+  local sep = package.config:sub(1, 1)
+  local dir = TheApp.savegame_dir
+  if dir:sub(-1) ~= sep then dir = dir .. sep end
+  return dir .. "Multiplayer" .. sep
+end
+
+--! Multiplayer saves that can be continued, newest first:
+--! {label, path, info = {room, mode, level, difficulty, step, date, hospitals, players}}.
+function MultiplayerLobby.listSaves()
+  local lfs = require("lfs")
+  local dir = MultiplayerLobby.savesDir()
+  local saves = {}
+  if not lfs.attributes(dir, "mode") then return saves end
+  for file in lfs.dir(dir) do
+    if file:match("%.mpinfo$") then
+      local info = {}
+      local f = io.open(dir .. file, "r")
+      if f then
+        for line in f:lines() do
+          local k, v = line:match("^(%w+)=(.*)$")
+          if k then info[k] = v end
+        end
+        f:close()
+      end
+      local path = dir .. file:gsub("%.mpinfo$", ".sav")
+      if info.step and lfs.attributes(path, "size") then
+        saves[#saves + 1] = {label = file:gsub("%.mpinfo$", ""), path = path, info = info,
+            time = lfs.attributes(path, "modification") or 0}
+      end
+    end
+  end
+  table.sort(saves, function(a, b)
+    if a.time ~= b.time then return a.time > b.time end
+    return a.label < b.label
+  end)
+  return saves
+end
+
+--! Write this game to the multiplayer saves folder, with an .mpinfo file
+--! next to it for the lobby. Every peer does this at the same step.
+function MultiplayerLobby:_writeLocalSave(session, kind)
+  local lfs = require("lfs")
+  local world = TheApp.world
+  local dir = MultiplayerLobby.savesDir()
+  if not lfs.attributes(dir, "mode") then lfs.mkdir(dir) end
+  local room = (self.room and self.room.room or "game"):gsub("[^%w%-_ ']", "_")
+  local date = world.game_date
+  local label = kind == "autosave" and (room .. " autosave") or
+      string.format("%s y%d-%02d-%02d", room, date:year(), date:monthOfYear(), date:dayOfMonth())
+  local path = dir .. label .. ".sav"
+  TheApp:save(path)
+  local p = self.start_params or {}
+  local hospitals, n = {}, world.mp_coop and world.mp_coop.players or 1
+  for i = 1, n do
+    hospitals[#hospitals + 1] = tostring(world.hospitals[i].name):gsub(",", " ")
+  end
+  local f = assert(io.open(dir .. label .. ".mpinfo", "w"))
+  f:write("room=", self.room and self.room.room or "", "\n",
+      "mode=", world.mp_coop and "coop" or "shared", "\n",
+      "level=", tostring(p.level or 1), "\n",
+      "difficulty=", tostring(p.difficulty or "full"), "\n",
+      "step=", tostring(session.step), "\n",
+      "date=", date:tostring(), "\n",
+      "hospitals=", table.concat(hospitals, ","), "\n",
+      "players=", tostring(world.mp_coop and n or #session.peers), "\n")
+  f:close()
+  self.log(string.format("multiplayer: SAVED %s at step %d: %s", label, session.step,
+      MultiplayerSession.defaultFingerprint(world)))
+  if kind ~= "autosave" then session.notify(_S.multiplayer_window.saved_note:format(label)) end
+end
+
+--! The host of a room continuing a saved game sends the save once the game
+--! starts; the server passes it to everybody (like a desync repair).
+function MultiplayerLobby:_sendContinueSave()
+  local save = self.continue_save
+  self.continue_save = nil
+  local f = assert(io.open(save.path, "rb"))
+  local data = f:read("*a")
+  f:close()
+  local text = MultiplayerLobby.toBase64(data)
+  local parts = 0
+  for i = 1, #text, MultiplayerLobby.SAVE_CHUNK do
+    parts = parts + 1
+    self:send("SAVEDATA", {d = text:sub(i, i + MultiplayerLobby.SAVE_CHUNK - 1)})
+  end
+  self:send("SAVED", {step = save.info.step, parts = parts})
+  self.log(string.format("multiplayer: sent %s (step %s, %d bytes)", save.label, save.info.step, #data))
 end
 
 function MultiplayerLobby:joinRoom(room, password)
@@ -381,6 +488,9 @@ function MultiplayerLobby:_onSTART(f)
   self.state = "in_game"
   self:_changed("start", f)
   local ok, err = pcall(self._beginGame, self, f)
+  if ok and f.resume == "1" and self.continue_save then
+    ok, err = pcall(self._sendContinueSave, self)
+  end
   if not ok then
     self.log("multiplayer: could not start the game: " .. tostring(err))
     self.error = {code = "start_failed", text = tostring(err)}
@@ -489,6 +599,12 @@ MultiplayerLobby.SAVE_CHUNK = 48000
 --! Between game ticks (App:onTick): send the referee's save, or load the
 --! shared one.
 function MultiplayerLobby:serviceSaves(session)
+  if session.local_save and session.step >= session.local_save.at then
+    local kind = session.local_save.kind
+    session.local_save = nil
+    local ok, err = pcall(self._writeLocalSave, self, session, kind)
+    if not ok then self.log("multiplayer: could not save: " .. tostring(err)) end
+  end
   if session.save_at and session.step >= session.save_at then
     session.save_at = nil
     local persist = require("persist")
@@ -531,7 +647,8 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
     if entry.peer == session.peer_id and not self.is_referee then room_builder.show(world, entry) end
   end
   world:applySharedSpeed(self.is_referee and "And then some more" or (self.shared_speed or "Normal"))
-  self.log(string.format("multiplayer: loaded the shared save at step %d (%d bytes)", step, #data))
+  self.log(string.format("multiplayer: loaded the shared save at step %d (%d bytes): %s", step, #data,
+      MultiplayerSession.defaultFingerprint(world)))
 end
 
 -- Starting and ending the game ------------------------------------------------
@@ -622,6 +739,10 @@ function MultiplayerLobby:_beginGame(f)
       local player = self.players[p]
       names[i] = (start_names[i] or (player and player.name) or ("Player " .. p)):upper()
       if p == tonumber(f.peer) then my_index = i end
+    end
+    -- A saved game continued: the server gave every player a hospital.
+    for p, index in (f.seats or ""):gmatch("(%d+):(%d+)") do
+      if tonumber(p) == tonumber(f.peer) then my_index = tonumber(index) end
     end
     app.mp_coop = {players = #peers, local_index = my_index, names = names}
   end

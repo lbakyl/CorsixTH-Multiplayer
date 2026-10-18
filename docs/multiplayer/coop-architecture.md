@@ -101,8 +101,9 @@ for that, the rules new code must follow, and what is still missing.
 - **Trades beyond money and staff**: loans between players, patient
   referrals, renting rooms, selling research.
 - **Competitive mode**: a winner, and approval votes for speed and pause.
-- **Saving and loading** a multiplayer game from the menu. (Rejoining and
-  desync repair from the server's referee are done: `referee.md`.)
+- **Loading** a multiplayer save from the game's Load menu (stays blocked;
+  saved games are continued from the lobby, see `protocol.md`). Rejoining
+  and desync repair from the server's referee are done: `referee.md`.
 - **Other players' sounds and announcements** are still heard by everyone
   (cosmetic).
 

@@ -740,7 +740,11 @@ function UIMenuBar:makeGameMenu(app)
       if MultiplayerSession.blockUnsupported(self.ui) then return end
       self.ui:addWindow(UILoadGame(self.ui, "game"))
     end)
-    :appendItem(_S.menu_file.save:format(hotkey_value_label("ingame_saveMenu", hotkeys)), function() self.ui:addWindow(UISaveGame(self.ui)) end)
+    :appendItem(_S.menu_file.save:format(hotkey_value_label("ingame_saveMenu", hotkeys)), function()
+      -- Multiplayer: everybody's game saves at the same hour.
+      if MultiplayerSession.saveTogether() then return end
+      self.ui:addWindow(UISaveGame(self.ui))
+    end)
     :appendItem(_S.menu_file.restart:format(hotkey_value_label("ingame_restartLevel", hotkeys)), function()
       if MultiplayerSession.blockUnsupported(self.ui) then return end
       app:restart()

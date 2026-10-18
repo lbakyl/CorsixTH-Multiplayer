@@ -105,6 +105,7 @@ class Recovery:
     # player -> step it stopped at (None: rejoining, it has no game yet)
     held: dict[int, int | None] = field(default_factory=dict)
     asked: bool = False            # SAVE sent to the referee
+    saver: "Player | None" = None  # who sends the save (the referee, or the host of a continued game)
     parts: list[str] = field(default_factory=list)
     size: int = 0
 
@@ -131,6 +132,14 @@ class Room:
     left: dict[int, int] = field(default_factory=dict)  # peer -> last step
     left_names: dict[int, str] = field(default_factory=dict)  # peer -> name, for rejoining
     start_fields: dict[str, object] = field(default_factory=dict)  # START for everybody
+    # A room continuing a saved game: the step it was saved at, its date, and
+    # its hospitals' names (co-op: players get the hospital with their name).
+    continue_step: int | None = None
+    continue_date: str = ""
+    seat_names: list[str] = field(default_factory=list)
+    # The last shared save everybody loaded: (step, base64 parts), for a
+    # referee that connects after it.
+    base_save: tuple[int, list[str]] | None = None
     # Headless referee (peer 0): connection, process, its token, and the
     # fingerprints waiting to be checked against it (step -> fingerprint).
     referee: Player | None = None
@@ -344,9 +353,19 @@ class Server:
         room.referee = player
         player.send(encode("WELCOME", proto=PROTOCOL_VERSION, id=player.pid, server=SERVER_VERSION))
         player.send(encode("START", peer=0, **room.start_fields))
-        # Catch up: the game started before the referee was there.
+        # Catch up: the game started before the referee was there. If
+        # everybody loaded a shared save since, the referee loads it too.
+        if room.base_save is not None and room.recovery is None:
+            step, parts = room.base_save
+            player.send(encode("LOAD", step=step, parts=len(parts),
+                               peers=",".join(str(p) for p in sorted(room.players))))
+            for part in parts:
+                player.send(encode("SAVEDATA", d=part))
+            player.send(encode("LOADEND", step=step))
         for line in room.command_log:
             player.send(line)
+        if room.base_save is not None and room.recovery is None:
+            player.send(encode("RESUME", step=room.base_save[0]))
         for peer in sorted(room.players):
             if peer in room.last_report:
                 player.send(room.last_report[peer])
@@ -386,7 +405,8 @@ class Server:
             player.send(encode("ROOM", room=room.name, players=len(room.players),
                                max=room.max_players, mode=room.mode, level=room.level,
                                locked=room.password_hash is not None, state=room.state,
-                               build_ok=room.build == player.build))
+                               build_ok=room.build == player.build,
+                               **{"continue": 1 if room.continue_step is not None else None}))
         player.send(encode("ROOMS_END", count=len(self.rooms)))
 
     def _on_create(self, player: Player, f: dict[str, str]) -> None:
@@ -415,12 +435,25 @@ class Server:
         if mode not in MODES or difficulty not in DIFFICULTIES or speed_control not in SPEED_CONTROL:
             self._error(player, "bad_room", "Unknown mode, difficulty or speed control")
             return
+        continue_step = None
+        seat_names: list[str] = []
+        if f.get("continue") == "1":
+            try:
+                continue_step = max(0, int(f.get("step", "0")))
+            except ValueError:
+                self._error(player, "bad_room", "step must be a number")
+                return
+            seat_names = [n.strip()[:MAX_NAME] for n in f.get("seats", "").split(",") if n.strip()][:4]
+            if mode == "coop" and seat_names:
+                max_players = min(4, max(2, len(seat_names)))
         password = f.get("password", "")
         salt = secrets.token_bytes(16)
         room = Room(name=name, salt=salt,
                     password_hash=_hash_password(password, salt) if password else None,
                     build=player.build, max_players=max_players, mode=mode, level=level,
-                    difficulty=difficulty, speed_control=speed_control, owner=player)
+                    difficulty=difficulty, speed_control=speed_control, owner=player,
+                    continue_step=continue_step, continue_date=f.get("date", "")[:20],
+                    seat_names=seat_names)
         self.rooms[name] = room
         log.info("room %r created by %r (%s, level %d, %d players)", name, player.name, mode,
                  level, max_players)
@@ -479,7 +512,9 @@ class Server:
         room.players[peer] = player
         player.send(encode("JOINED", room=room.name, peer=peer, owner=room.owner is player,
                            mode=room.mode, level=room.level, difficulty=room.difficulty,
-                           max=room.max_players))
+                           max=room.max_players,
+                           date=room.continue_date if room.continue_step is not None else None,
+                           **{"continue": 1 if room.continue_step is not None else None}))
         room.broadcast(encode("CHAT", peer=0, name="server", text=f"{player.name} joined"),
                        exclude=player)
         self._send_lobby(room)
@@ -538,12 +573,44 @@ class Server:
                                  names=",".join(room.players[n].name.replace(",", " ")
                                                 for n in sorted(room.players)),
                                  **DEFAULT_SETTINGS)
+        if room.continue_step is not None:
+            # A saved game: nobody loads the level; the host sends the save,
+            # and everybody loads it like after a desync repair.
+            room.start_fields["resume"] = 1
+            if room.mode == "coop":
+                room.start_fields["seats"] = ",".join(
+                    f"{p}:{i}" for p, i in sorted(self._seats(room).items()))
         for peer, pl in room.players.items():
-            pl.last_step = 0
+            pl.last_step = room.continue_step or 0
             pl.send(encode("START", peer=peer, **room.start_fields))
+        if room.continue_step is not None:
+            rec = room.recovery = Recovery(step=room.continue_step, asked=True, saver=room.owner)
+            rec.held = {p: None for p in room.players}
+            asyncio.get_running_loop().call_later(RECOVERY_TIMEOUT, self._recovery_timeout,
+                                                  room, rec)
         if self.referee_config is not None:
             room.referee_token = secrets.token_hex(16)
             asyncio.get_running_loop().create_task(self._spawn_referee(room))
+
+    @staticmethod
+    def _seats(room: Room) -> dict[int, int]:
+        """Co-op saved game: peer -> hospital (1-based). A player gets the
+        hospital with their name; the others get the free ones in order."""
+        names = [n.upper() for n in room.seat_names]
+        seats: dict[int, int] = {}
+        taken: set[int] = set()
+        for peer in sorted(room.players):
+            name = room.players[peer].name.upper()
+            for i, n in enumerate(names, 1):
+                if n == name and i not in taken:
+                    seats[peer] = i
+                    taken.add(i)
+                    break
+        free = [i for i in range(1, max(len(names), len(room.players)) + 1) if i not in taken]
+        for peer in sorted(room.players):
+            if peer not in seats:
+                seats[peer] = free.pop(0)
+        return seats
 
     async def _spawn_referee(self, room: Room) -> None:
         try:
@@ -727,6 +794,7 @@ class Server:
             return
         if room.players and set(room.players) <= set(rec.held):
             rec.asked = True
+            rec.saver = room.referee
             steps = [rec.held[p] for p in room.players if rec.held[p] is not None]
             # Nobody but a rejoining player: the referee saves where it is.
             room.referee.send(encode("SAVE", step=min(steps) if steps else 0))
@@ -734,7 +802,7 @@ class Server:
     def _on_savedata(self, player: Player, f: dict[str, str]) -> None:
         room = player.room
         rec = room.recovery if room else None
-        if not player.is_referee or rec is None or not rec.asked:
+        if rec is None or not rec.asked or player is not rec.saver:
             return
         part = f.get("d", "")
         rec.size += len(part)
@@ -747,7 +815,7 @@ class Server:
     def _on_saved(self, player: Player, f: dict[str, str]) -> None:
         room = player.room
         rec = room.recovery if room else None
-        if not player.is_referee or rec is None or not rec.asked:
+        if rec is None or not rec.asked or player is not rec.saver:
             return
         step = int(f.get("step", "0") or 0)
         if int(f.get("parts", "-1") or -1) != len(rec.parts):
@@ -763,7 +831,8 @@ class Server:
         lines.append(encode("LOADEND", step=step))
         lines += replay
         lines.append(encode("RESUME", step=step))
-        targets = list(room.players.values()) + [room.referee]
+        targets = list(room.players.values()) + ([room.referee] if room.referee else [])
+        room.base_save = (step, list(rec.parts))
         for target in targets:
             for line in lines:
                 target.send(line)

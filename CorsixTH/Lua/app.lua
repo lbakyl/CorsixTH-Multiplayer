@@ -1294,7 +1294,8 @@ function App:onTick(...)
     -- Rejoining: no world yet to read the network, so read it here.
     if session and not self.world then session:poll() end
     if session and session.lobby and (session.load_data or
-        (session.save_at and session.step >= session.save_at)) then
+        (session.save_at and session.step >= session.save_at) or
+        (session.local_save and session.step >= session.local_save.at)) then
       session.lobby:serviceSaves(session)
     end
     if self.world then

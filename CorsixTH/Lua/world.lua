@@ -1372,7 +1372,11 @@ function World:onEndDay()
 
   -- Autosave
   local day = self.game_date:dayOfMonth()
-  if self.app.config.autosave_frequency == 3 then
+  if self.app.mp_session then
+    -- Multiplayer: every player's game saves at the end of each month, at the
+    -- same game hour (whatever each one's own autosave setting).
+    if day == self.game_date:lastDayOfMonth() then self.app.mp_session:requestLocalSave("autosave") end
+  elseif self.app.config.autosave_frequency == 3 then
     -- Daily autosave
     self.autosave_next_tick = true
   elseif self.app.config.autosave_frequency == 2 then

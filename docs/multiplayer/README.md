@@ -51,6 +51,7 @@ data, saves from it, or logs that contain it.**
 | Co-op | Original two- to four-player maps (tested with two); a hospital each, kept apart (rooms, staff, patients, heating, research, events, goals); trade window in the Multiplayer menu. Design and open points: `coop-architecture.md` |
 | Blocked in multiplayer | Editing existing rooms, moving objects inside rooms, buying extra objects for a new room, picking up staff, load game, restart (menu and hotkeys), cheats and debug tools, pushing patients over, the wage-increase menu setting. Epidemics are off in co-op |
 | Windows | CI artifact includes LuaSocket. **S0 passed**: Windows (MSVC) and Linux (GCC), both Lua 5.5, identical for 3 game years; shared and co-op games between a Windows and a Linux player IN SYNC (`cross-platform.md`) |
+| Save and continue | File > Save and a monthly autosave save every player's game at the same hour (`Multiplayer` save folder); the lobby's Continue button starts a room from such a save, players get their own hospitals back by name, everybody loads the host's save (check 11) |
 | Real network | LAN (Windows desktop ↔ Linux VM), and over the internet: server on a Hetzner VPS in Helsinki (set up with `setup-vps.sh`), 20 scripted players at home in Prague (30 ms round trip): all 10 lobby checks pass. The server chose delay 2 and Normal (one way 17 to 20 ms between players; one sample of 31 ms gave delay 3). Windows players over the internet: not yet |
 | Linux CI | Fails in the static-analysis step on upstream's own `CMakeLists.txt` formatting (gersemi); not caused by this fork's changes |
 
@@ -71,6 +72,7 @@ agents must not open PRs, so the owner opens them).
 | `mp/coop-full` | Full co-op: settings and entity actions as commands, hospitals kept apart, per-player events, heating, awards, goals |
 | `mp/vps-setup` | One-command VPS setup script (`mp_server/deploy/setup-vps.sh`) |
 | `mp/referee` | Headless referee per room, desync repair from its save, rejoin a running game |
+| `mp/save-continue` | Saving together and continuing a saved game from the lobby |
 | `mp/coop-gaps` | Firing, pay rise answers, the queue window, moving/selling corridor objects and furnishing new rooms by hand as commands; notices for refused actions |
 
 Working rule: small commits, push work-in-progress, one branch per step,
@@ -109,7 +111,7 @@ Tests and tools (`scripts/multiplayer/` unless noted):
 |---|---|
 | `CorsixTH/Luatest/spec/mp_session_spec.lua`, `mp_lobby_spec.lua` | Unit tests |
 | `mp_server/tests/` | Server tests (pytest) |
-| `run_lobby_probe.sh` | **Main integration test.** A local server (or `MP_EXTERNAL_SERVER`) and pairs of real games going through the main menu and lobby window. 10 checks, ~4 min; `MP_REFEREE=1` adds the referee and 4 checks (referee agrees, repair in shared and co-op games, rejoin) |
+| `run_lobby_probe.sh` | **Main integration test.** A local server (or `MP_EXTERNAL_SERVER`) and pairs of real games going through the main menu and lobby window. 11 checks, ~5 min; `MP_REFEREE=1` adds the referee and 4 checks (referee agrees, repair in shared and co-op games, rejoin) |
 | `run_ingame_probe.sh` | Two games connected directly (no server). 5 checks |
 | `run_sync_probe.sh` | Harness-level determinism checks. 7 checks |
 | `run_sp_regression.sh` | Single player, two builds, 3 game years, fingerprints must match |
@@ -142,9 +144,9 @@ cmake -S . -B build -G Ninja -DCMAKE_PREFIX_PATH="$PREFIX" -DCMAKE_BUILD_TYPE=Re
 cmake --build build -j4
 busted --directory=CorsixTH/Luatest          # 144 successes
 luacheck --quiet --codes --ranges CorsixTH    # 0 warnings
-(cd mp_server && python3 -m pytest -q)        # 26 passed
+(cd mp_server && python3 -m pytest -q)        # 28 passed
 bash scripts/multiplayer/run_lobby_probe.sh  $BIN $THDATA
-MP_REFEREE=1 bash scripts/multiplayer/run_lobby_probe.sh $BIN $THDATA   # 14 checks
+MP_REFEREE=1 bash scripts/multiplayer/run_lobby_probe.sh $BIN $THDATA   # 15 checks
 bash scripts/multiplayer/run_ingame_probe.sh $BIN $THDATA
 bash scripts/multiplayer/run_sync_probe.sh   $BIN $THDATA 6000
 ```

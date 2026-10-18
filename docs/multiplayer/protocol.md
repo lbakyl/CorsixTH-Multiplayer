@@ -25,7 +25,7 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 |---|---|---|
 | `HELLO` | first line | `proto` (1), `build` (game build id, must match the room's), `name`; the server's referee adds `role=referee`, `room` and `token` |
 | `LIST` | lobby | (none) |
-| `CREATE` | lobby | `room`, `password` (empty = open), `max` (2–4), `mode` (`shared` = one hospital for everybody, `coop` = one hospital each), `level` (1–12), `difficulty` (`easy`/`full`/`hard`), `speed_control` (`any`/`owner`) |
+| `CREATE` | lobby | `room`, `password` (empty = open), `max` (2–4), `mode` (`shared` = one hospital for everybody, `coop` = one hospital each), `level` (1–12), `difficulty` (`easy`/`full`/`hard`), `speed_control` (`any`/`owner`); to continue a saved game also `continue=1`, `step` (the step it was saved at), `date`, `seats` (its hospitals' names, comma-separated) |
 | `JOIN` | lobby | `room`, `password`; for a running room: rejoin under the name of a player who left |
 | `READY` | in a room | `ready` |
 | `START` | room owner | (none) |
@@ -38,7 +38,7 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 | `PING` | optional | `id` (server answers `PONG id=`) |
 | `QUIT` | any time | (none) |
 | `HELD` | after `HOLD` | `step`: the last step this game ran |
-| `SAVEDATA`, `SAVED` | referee only, after `SAVE` | `d` (base64 part of the save); then `step`, `parts` |
+| `SAVEDATA`, `SAVED` | the referee after `SAVE`; the host of a continued game after `START` | `d` (base64 part of the save); then `step`, `parts` |
 
 ## Server to client
 
@@ -46,8 +46,8 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 |---|---|
 | `WELCOME proto id server motd` | accepted |
 | `ERROR code text` | request refused; codes: `expected_hello`, `protocol`, `bad_room`, `room_exists`, `no_room`, `bad_password`, `build_mismatch`, `running`, `busy`, `room_full`, `in_room`, `not_owner`, `not_ready`, `not_enough`, `bad_speed`, `too_fast`, `bad_report`, `bad_command`, `unknown_verb`, `bad_message`, `not_referee` |
-| `ROOM room players max mode level locked state build_ok` | one per room after `LIST`, then `ROOMS_END count` |
-| `JOINED room peer owner mode level difficulty max` | you are in the room as player `peer` |
+| `ROOM room players max mode level locked state build_ok continue` | one per room after `LIST`, then `ROOMS_END count`; `continue=1` for a saved game |
+| `JOINED room peer owner mode level difficulty max continue date` | you are in the room as player `peer` (`continue`, `date`: a saved game) |
 | `PLAYER peer name ready rtt owner` | one per player, followed by |
 | `LOBBY room count max mode level delay speed one_way latency` | the room summary: recommended lockstep `delay` (steps), fastest smooth `speed`, worst player-to-player one-way time (ms) and click-to-effect `latency` at Normal speed (ms). Sent about once a second while in the lobby |
 | `OWNER` | you are now the room owner |
@@ -95,3 +95,16 @@ further lines once it has `LOADEND`: everything after it (the replayed
 commands, `RESUME`) belongs to the loaded game and is read after the load.
 The server replays every command for a step after the save, also to the
 player who sent it, because loading drops every pending command.
+
+## Saving and continuing
+
+Saving is a lockstep command (`save_game`, File > Save) or the monthly
+autosave in the simulation: every game saves after the same step into
+`<savegames>/Multiplayer/` (`<room> y<Y>-<MM>-<DD>.sav` or `<room>
+autosave.sav`) with an `.mpinfo` text file (room, mode, level, difficulty,
+step, date, hospitals, players) for the lobby. Continuing: the host creates
+the room with `continue=1`; on `START` (with `resume=1`, and in co-op `seats`:
+`peer:hospital`, a player getting the hospital with their name, the others
+the free ones in order) no game loads a level; the host's game sends the
+save, and the server passes it to everybody as `LOAD`/`SAVEDATA`/`LOADEND`/
+`RESUME`, like a desync repair.

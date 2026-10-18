@@ -50,6 +50,8 @@
 --                                                       by hand, one object at a time
 --                       cancelroom:<id>:<w>:<h>         draw a room, cancel while furnishing
 --   MP_FURNISH_PACE   game hours between furnishing steps (default 0)
+--   MP_CONTINUE       host: create the room continuing a saved multiplayer
+--                     game (its label, or "latest"); UI action mpsave saves one
 --   MP_UI_COMMANDS    optional file; every line added to it while the game
 --                     runs is done at once, as "action[:arg]" (the actions above),
 --                     to direct a scripted player during a game with a person
@@ -171,6 +173,10 @@ local function run_lobby()
     w.room_name_box:setText(room)
     w.password_box:setText(password)
     if coop then w:buttonMode() end -- "A hospital each"
+    if os.getenv("MP_CONTINUE") then
+      local save = w:selectContinue(os.getenv("MP_CONTINUE"))
+      log("continuing saved game " .. tostring(save and save.label))
+    end
     shot("lobby-create")
     w:buttonCreate()
     wait_for("own room", function() return lobby.state == "in_room" end)
@@ -242,13 +248,16 @@ local function run()
       p.peer, p.peers, p.seed, p.delay, p.max_speed, p.speed))
 
   local desk_x, desk_y
-  if rejoin then
-    -- The game comes with the shared save everybody loads.
+  if rejoin or p.resume == "1" then
+    -- The game comes with the shared save everybody loads (rejoining, or a
+    -- saved game continued).
     builder.register_handlers()
     wait_for("the shared save", function() return (session.restarts or 0) > 0 end, 60)
     world = TheApp.world
     if world.mp_coop then builder.hospital = world.ui.hospital end
-    log(string.format("REJOINED: loaded the shared save at step %d", session.step))
+    log(string.format("%s: loaded the shared save at step %d; playing %s (hospital %d): %s",
+        rejoin and "REJOINED" or "LOADED", session.step, tostring(world.ui.hospital.name),
+        world:getHospitalIndex(world.ui.hospital), MultiplayerSession.defaultFingerprint(world)))
   elseif scenario == "none" then
     -- Playing with a person: their game has no test setup, so neither has this.
     builder.register_handlers()
@@ -524,6 +533,10 @@ local function run()
           else
             log("UI: no " .. entry.arg .. " to pick up")
           end
+        elseif a == "mpsave" then
+          -- File > Save: every player's game saves at the same hour.
+          log("UI: File > Save at step " .. session.step)
+          MultiplayerSession.saveTogether()
         elseif a == "transfers" then
           -- Where the staff on their way to another hospital are.
           for _, st in ipairs(world.mp_transfers or {}) do
