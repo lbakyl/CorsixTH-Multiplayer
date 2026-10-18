@@ -252,6 +252,7 @@ local function run()
   elseif scenario == "none" then
     -- Playing with a person: their game has no test setup, so neither has this.
     builder.register_handlers()
+    if world.mp_coop then builder.hospital = world.ui.hospital end -- this player's own
   else
     -- The same test setup runs on every peer (and on the server's referee).
     desk_x, desk_y = builder.start_game(world, session, scenario, log)
@@ -481,9 +482,17 @@ local function run()
         elseif a == "furnishroom" or a == "cancelroom" then
           -- Draw a room, then place its furniture by hand (or cancel then).
           local id, rw, rh = entry.arg:match("^([%w_]+):(%d+):(%d+)$")
-          builder.ui_room(world, desk_x, desk_y, id, tonumber(rw), tonumber(rh), false, log, nil, true)
-          furnishing = {cancel = a == "cancelroom", pace = furnish_pace,
-              not_before = furnish_pace and session.step + furnish_pace}
+          rw, rh = tonumber(rw), tonumber(rh)
+          -- Smaller if there is no space (a room is at least 4 x 4 here).
+          local drawn = false
+          while not drawn and rw >= 4 and rh >= 4 do
+            drawn = builder.ui_room(world, desk_x, desk_y, id, rw, rh, false, log, nil, true)
+            if not drawn then rw, rh = rw - 1, rh - 1 end
+          end
+          if drawn then
+            furnishing = {cancel = a == "cancelroom", pace = furnish_pace,
+                not_before = furnish_pace and session.step + furnish_pace}
+          end
         elseif a == "moveobject" or a == "sellobject" then
           -- Pick up a corridor object of this hospital (right click), then
           -- put it down a few tiles away, or sell it (close the window).

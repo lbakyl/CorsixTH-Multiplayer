@@ -342,7 +342,10 @@ function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at, by_
   local room_type = assert(TheApp.rooms[room_id], "unknown room " .. room_id)
   local x, y
   if at then x, y = at[1], at[2] else x, y = builder.find_free_rect(world, cx, cy, w, h, 40) end
-  assert(x, "no space for " .. room_id)
+  if not x then
+    log(string.format("UI: no space for %s %dx%d", room_id, w, h))
+    return false
+  end
   local dlg = UIEditRoom(ui, room_type)
   dlg.mp_auto_furnish = not by_hand
   ui:addWindow(dlg)
@@ -375,20 +378,38 @@ function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at, by_
   dlg:confirm()
   log(string.format("UI: drew %s at %d,%d size %dx%d%s (editor %s)", room_id, x, y, w, h,
       with_window and " with a window" or "", dlg.phase))
+  return true
 end
 
 --! A tile to search from for this player's rooms and objects: the first
---! reception desk of their hospital, or else its first tile (row by row).
+--! reception desk of their hospital, or else the free floor tile nearest the
+--! middle of the hospital (its corners are often unusable).
 function builder.anchor(world)
   local hospital = hospital_of(world)
   local desk = hospital:getReceptionDesks()[1]
   if desk and desk.tile_x then return desk.tile_x, desk.tile_y end
-  local map = world.map
+  local map, th = world.map, world.map.th
+  local tiles, sx, sy = {}, 0, 0
   for y = 1, map.height do
     for x = 1, map.width do
-      if hospital:isInHospital(x, y) then return x, y end
+      if hospital:isInHospital(x, y) then
+        tiles[#tiles + 1] = {x, y}
+        sx, sy = sx + x, sy + y
+      end
     end
   end
+  if #tiles == 0 then return nil end
+  local cx, cy = sx / #tiles, sy / #tiles
+  local best, best_d
+  for _, t in ipairs(tiles) do
+    local flags = th:getCellFlags(t[1], t[2])
+    if flags.buildable and flags.passable and not world:getRoom(t[1], t[2]) then
+      local d = (t[1] - cx) ^ 2 + (t[2] - cy) ^ 2
+      if not best_d or d < best_d then best, best_d = t, d end
+    end
+  end
+  best = best or tiles[1]
+  return best[1], best[2]
 end
 
 --! Multiplayer, a room furnished by hand: call once per tick while it runs.
@@ -419,12 +440,11 @@ function builder.furnish_tick(world, state, log)
     -- Wait until the object is in the room (or the command was refused).
     local count = 0
     for _, o in ipairs(dlg.objects) do count = count + o.qty end
-    state.pending.ticks = state.pending.ticks + 1
     if count < state.pending.count then
       log(string.format("UI: furnishing: %s is in the room", state.pending.id))
       state.pending = nil
       if state.pace then state.not_before = step + state.pace return false end
-    elseif state.pending.ticks > 60 then
+    elseif step > state.pending.by_step then
       state.pending = nil -- refused; that spot was marked as tried
     else
       return false
@@ -452,7 +472,9 @@ function builder.furnish_tick(world, state, log)
             state.tried[key] = true
             local count = 0
             for _, p in ipairs(dlg.objects) do count = count + p.qty end
-            state.pending = {id = o.object.id, count = count, ticks = 0}
+            -- It runs `delay` game hours from now; a refusal shows as no change.
+            local delay = TheApp.mp_session and TheApp.mp_session.delay or 2
+            state.pending = {id = o.object.id, count = count, by_step = step + delay + 2}
             log(string.format("UI: furnishing: put %s at %d,%d facing %s", o.object.id, tx, ty, dir))
             dlg:placeObject()
             return false
