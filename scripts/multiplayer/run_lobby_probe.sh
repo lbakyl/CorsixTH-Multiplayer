@@ -26,9 +26,14 @@
 #   9. co-op events: an emergency and a VIP visit for player 2's hospital,
 #      accepted by player 2; the emergency countdown runs in the simulation
 #      -> IN SYNC
+#  10. staff and queues: two pay rises asked (test command) and answered in
+#      the pay rise window (accepted, declined), a nurse fired in staff
+#      management, a queue reordered by dragging in the queue window by each
+#      player -> IN SYNC, every command accepted
 # With MP_REFEREE=1 the local server also runs its headless referee for every
-# room, and a 10th check needs the referee to agree with the players in every
-# room except 'cheat' (that one desyncs before the referee is there).
+# room, and four more checks: 11. the referee agrees with the players in every
+# room except 'cheat' (that one desyncs before the referee is there); 12, 13.
+# desync repair in a shared and a co-op game; 14. rejoin after a quit.
 # Exits 0 only if all checks behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
@@ -65,7 +70,7 @@ else
     export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
     export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/referee"
     export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
-    export MP_REFEREE_PROBE_SCENARIO="crowd=busy" # the probes' own start, see below
+    export MP_REFEREE_PROBE_SCENARIO="crowd=busy;staff=busy" # the probes' own start, see below
   fi
   PYTHONPATH="$source_dir/mp_server" python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
     --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
@@ -137,6 +142,14 @@ run_probe nico MP_ROLE=join MP_ROOM=coop MP_STEPS=1200 MP_DRAW_EVERY=3 \
 run_probe olga MP_ROLE=host MP_ROOM=events MP_COOP=1 MP_STEPS=1600   MP_UI_SCRIPT="20:openhospital;100:emergency:2;400:vip:2" & pids+=($!)
 sleep 1
 run_probe paul MP_ROLE=join MP_ROOM=events MP_STEPS=1600 MP_DRAW_EVERY=3   MP_UI_SCRIPT="30:openhospital;130:answerfax:emergency:1;430:answerfax:personality:1" & pids+=($!)
+# Staff and queues: pay rises asked (test command) and answered in the pay
+# rise window, one accepted and one declined; a nurse fired; queues
+# reordered by dragging in the queue window.
+run_probe wade MP_ROLE=host MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
+  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse" & pids+=($!)
+sleep 1
+run_probe yara MP_ROLE=join MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
+  MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront" & pids+=($!)
 if [[ "${MP_REFEREE:-0}" == 1 ]]; then
   # Desync repair: one player changes money locally, the server holds both
   # games, both load the referee's save and play on (shared and co-op).
@@ -266,14 +279,25 @@ print(f"9. Co-op events, player 2:  {result('olga')}; emergency and VIP for hosp
 for x in co: print("   " + x)
 fail |= not ok9
 
+w_, y_ = log('wade'), log('yara')
+cw = applied('wade')
+okw = [x for x in cw if x.endswith('-> ok')]
+kinds10 = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in okw)
+ok10 = (result('wade').startswith('IN SYNC through step 1000') and result('yara').startswith('IN SYNC')
+        and cw == applied('yara') and kinds10.count('pay_rise') == 2 and kinds10.count('probe_raise') == 2
+        and 'fire_staff' in kinds10 and kinds10.count('queue_move') >= 1 and 'probe_patients' in kinds10
+        and 'accepted the pay rise' in y_ and 'declined the pay rise' in y_)
+print(f"10. Staff and queues:       {result('wade')}; commands {len(okw)}/{len(cw)} ok, identical: {cw == applied('yara')}; {' '.join(kinds10)}")
+fail |= not ok10
+
 if with_referee:
-    rooms = ['ward', 'leave', 'build', 'crowd', 'fax', 'coop', 'events']
+    rooms = ['ward', 'leave', 'build', 'crowd', 'fax', 'coop', 'events', 'staff']
     connected = [r for r in rooms if f"room '{r}': referee connected" in server]
     differ = re.findall(r"room '(\w+)': the players differ from the referee", server)
     confirmed = dict(re.findall(r"room '(\w+)': referee confirmed steps through (\d+)", server))
     def confirmed_after(room): return confirmed.get(room, 0)
     ok10 = connected == rooms and not differ and all(int(confirmed.get(r, 0)) > 300 for r in rooms)
-    print(f"10. Headless referee:       connected in {len(connected)}/{len(rooms)} rooms; "
+    print(f"11. Headless referee:       connected in {len(connected)}/{len(rooms)} rooms; "
           f"differs in {differ or 'none'}; confirmed through " +
           ", ".join(f"{r} {confirmed.get(r, 0)}" for r in rooms))
     fail |= not ok10
@@ -290,7 +314,7 @@ if with_referee:
               and result(join).startswith('IN SYNC through step 1000')
               and int(confirmed_after(room)) >= 900)
         where = f"at step {fixed.group(1)}, save {int(fixed.group(2)) // 1024} KiB" if fixed else "not repaired"
-        print(f"{11 + n}. Desync repair ({room}):{' ' * (8 - len(room))}{result(host)} / {result(join)}; "
+        print(f"{12 + n}. Desync repair ({room}):{' ' * (8 - len(room))}{result(host)} / {result(join)}; "
               f"{where}; commands after it ok on both: {same and later}")
         fail |= not ok
 
@@ -305,7 +329,7 @@ if with_referee:
             and result('vera-back').startswith('IN SYNC through step 1500')
             and after_u == after_v and kinds == ['hire', 'place_object']
             and int(confirmed_after('back')) >= 1400)
-    print(f"13. Rejoin after a crash:   {result('uma')} / {result('vera-back')}; "
+    print(f"14. Rejoin after a crash:   {result('uma')} / {result('vera-back')}; "
           f"rejoined at step {at if rejoined else '-'}; commands after it on both: {after_u == after_v} {kinds}")
     fail |= not ok13
 sys.exit(1 if fail else 0)

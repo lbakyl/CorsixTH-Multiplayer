@@ -782,7 +782,8 @@ function Humanoid:_handleEmptyActionQueue()
     self:queueAction(SeekReceptionAction())
   end
 
-  if TheApp.config.debug then
+  -- (Not in multiplayer: the dialog's choice would change only this game.)
+  if TheApp.config.debug and not TheApp.mp_session then
     -- Open the dialog of the humanoid as feedback to the user.
     local ui = self.world.ui
     if class.is(self, Patient) then

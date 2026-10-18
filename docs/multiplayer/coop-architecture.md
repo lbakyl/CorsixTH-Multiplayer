@@ -79,20 +79,19 @@ for that, the rules new code must follow, and what is still missing.
 - **Epidemics** stay disabled in co-op (`hospital.epidemics_disabled`):
   the epidemic countdown and the vaccination cursor still live in windows.
   Move the countdown to the simulation like the emergency one.
-- **Pay rises** are resolved by the hospital policy in multiplayer; the
-  raise window is blocked. Needs a command per answer.
 - **Moving and selling objects, picking up and moving staff, editing and
-  selling rooms, firing**: blocked. Each needs a command with explicit
-  positions.
-- **Queue reordering and dragging patients between rooms** (queue window):
-  not converted yet; not blocked either (see the audit list in the commit
-  history of this branch).
+  selling rooms**: blocked. Each needs a command with explicit positions.
+  (Done on `mp/coop-gaps`: firing (`fire_staff`), answering pay rises in
+  the pay rise window (`pay_rise`), reordering a queue (`queue_move`) and
+  sending a queued patient to another room of the same kind
+  (`queue_redirect`).)
 - **Placing objects inside a room by hand**: rooms are furnished
   automatically when the command builds them.
 - **Trades beyond money and staff**: loans between players, patient
   referrals, renting rooms, selling research.
 - **Competitive mode**: a winner, and approval votes for speed and pause.
-- **Saving and loading** a multiplayer game, and rejoining (milestone S4).
+- **Saving and loading** a multiplayer game from the menu. (Rejoining and
+  desync repair from the server's referee are done: `referee.md`.)
 - **Other players' sounds and announcements** are still heard by everyone
   (cosmetic).
 

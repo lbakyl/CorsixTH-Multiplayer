@@ -78,14 +78,52 @@ function UIQueue:decreaseMaxSize()
   self.queue:decreaseMaxSize(amount)
 end
 
---! Multiplayer: send the new longest-queue setting as a command, naming the
---! door or reception desk the queue belongs to.
-function UIQueue:_issueQueueSize(size)
+--! Multiplayer: the entity id of the door or reception desk this queue
+--! belongs to (commands name the queue by it).
+function UIQueue:_queueOwnerId()
   for _, entity in ipairs(self.ui.app.world.entities) do
-    if entity.queue == self.queue and entity.mp_id then
-      TheApp.mp_session:issue({kind = "queue_size", owner = entity.mp_id, size = size})
-      return
+    if entity.queue == self.queue and entity.mp_id then return entity.mp_id end
+  end
+end
+
+--! Multiplayer: send the new longest-queue setting as a command.
+function UIQueue:_issueQueueSize(size)
+  local owner = self:_queueOwnerId()
+  if owner then
+    TheApp.mp_session:issue({kind = "queue_size", owner = owner, size = size})
+  end
+end
+
+--! Move the patient at `index` of the queue to `to` ("front", "back" or a slot).
+function UIQueue:_movePatient(index, to)
+  if MultiplayerSession.actionsAreCommands() then
+    local owner = self:_queueOwnerId()
+    local patient = self.queue:reportedHumanoid(index)
+    if owner and patient and patient.mp_id then
+      TheApp.mp_session:issue({kind = "queue_move", owner = owner, patient = patient.mp_id, to = to})
     end
+    return
+  end
+  self.queue:movePatient(index, to)
+end
+
+--! Can the patient be sent to `room` instead of the one it queues for? It must
+--! be another room of the same kind, and in use.
+function UIQueue.canSendToRoom(patient, room)
+  local this_room = patient.next_room_to_visit
+  return this_room and room and room ~= this_room and
+      room.room_info.id == this_room.room_info.id and room.is_active
+end
+
+--! Send the patient to `room` (dragged from the queue window onto it).
+function UIQueue.sendToRoom(patient, room)
+  patient:setNextAction(room:createEnterAction(patient))
+  patient.next_room_to_visit = room
+  patient:setDynamicInfoText(_S.dynamic_info.patient.actions.on_my_way_to:format(room.room_info.name))
+  room.door:updateDynamicInfo()
+  -- call staff to room if required
+  if not room:testStaffCriteria(room:getRequiredStaffCriteria()) then
+    patient.world.dispatcher:callForStaff(room)
   end
 end
 
@@ -200,15 +238,15 @@ function UIQueue:onMouseUp(button, x, y)
       return
     end
     if x > 170 * s and x < 210 * s and y > 25 * s and y < 105 * s then -- Inside door bounding box
-      queue:movePatient(index, 'front') -- move to front
+      self:_movePatient(index, 'front') -- move to front
     elseif x > 542 * s and x < 585 * s and y > 50 * s and y < 105 * s then -- Inside exit sign bounding box
-      queue:movePatient(index, 'back') -- move to back
+      self:_movePatient(index, 'back') -- move to back
     elseif isInsideQueueBoundingBox(x, y) then
       local dx = 1
       if num_patients ~= 1 then
         dx = math.floor(width / (num_patients - 1))
       end
-      queue:movePatient(index, math.floor((x - 220 * s) / dx)) -- move to dropped position
+      self:_movePatient(index, math.floor((x - 220 * s) / dx)) -- move to dropped position
       self:onMouseMove(x, y, 0, 0)
     end
 
@@ -222,18 +260,14 @@ function UIQueue:onMouseUp(button, x, y)
     end
 
     -- The new room must be of the same class as the current one and active
-    local this_room = self.dragged.patient.next_room_to_visit
-    if this_room and room and room ~= this_room and
-        room.room_info.id == this_room.room_info.id and room.is_active then
-      -- Move to another room
-      local patient = self.dragged.patient
-      patient:setNextAction(room:createEnterAction(patient))
-      patient.next_room_to_visit = room
-      patient:setDynamicInfoText(_S.dynamic_info.patient.actions.on_my_way_to:format(room.room_info.name))
-      room.door:updateDynamicInfo()
-      -- call staff to room if required
-      if not room:testStaffCriteria(room:getRequiredStaffCriteria()) then
-        patient.world.dispatcher:callForStaff(room)
+    local patient = self.dragged.patient
+    if UIQueue.canSendToRoom(patient, room) then
+      if MultiplayerSession.actionsAreCommands() then
+        if patient.mp_id then
+          TheApp.mp_session:issue({kind = "queue_redirect", patient = patient.mp_id, room = room.id})
+        end
+      else
+        UIQueue.sendToRoom(patient, room)
       end
     end
   end

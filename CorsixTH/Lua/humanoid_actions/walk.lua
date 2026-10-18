@@ -200,6 +200,13 @@ local action_walk_tick; action_walk_tick = permanent"action_walk_tick"( function
   map:getCellFlags(x2, y2, flags_there)
   local avoid = (not flags_here.avoidTile) and flags_there.avoidTile
   local not_passable = flags_here.passable and (not flags_there.passable)
+  -- Avoided tiles (a room being drawn) only cost the pathfinder more. If the
+  -- new route after the last restart steps onto the same avoided tile, it is
+  -- the only way: walk on, or this would restart forever within one tick.
+  local step_key = ((x1 * 256 + y1) * 256 + x2) * 256 + y2
+  if avoid and not not_passable and action.avoid_restart == step_key then
+    avoid = false
+  end
   local obstacle_on_the_way = not_passable or avoid -- approaching avoidable or impassable tile
 
   -- Also make sure that a room hasn't unexpectedly been built on top of the
@@ -235,6 +242,7 @@ local action_walk_tick; action_walk_tick = permanent"action_walk_tick"( function
         return
       end
       -- find new path
+      action.avoid_restart = avoid and not not_passable and step_key or nil
       return action:on_restart(humanoid)
     end
   end
@@ -243,6 +251,7 @@ local action_walk_tick; action_walk_tick = permanent"action_walk_tick"( function
   -- then to be called AFTER the next raw walk or tile set, which is why we
   -- remember the previous value and call that, rather than call the new value.
   local on_next_tile_set = action.on_next_tile_set
+  action.avoid_restart = nil
   action_walk_raw(humanoid, x1, y1, x2, y2, check_doors and map, action_walk_tick)
   action.path_index = path_index + 1
   if on_next_tile_set then

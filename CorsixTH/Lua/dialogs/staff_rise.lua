@@ -37,7 +37,8 @@ function UIStaffRise:UIStaffRise(ui, staff, rise_amount)
   self.on_top = true
 
   local final_wage = self.staff.profile.wage + rise_amount
-  self.text = _S.pay_rise.regular.__random:format(rise_amount, final_wage) -- Random complaint text
+  -- Random complaint text (cosmetic: only this player opens the window)
+  self.text = _S.pay_rise.regular.__cosmetic_random:format(rise_amount, final_wage)
 
   self.width = 362
   self.height = 288
@@ -176,13 +177,25 @@ function UIStaffRise:drawDoctorAttributes(canvas)
   end
 end
 
+--! Multiplayer: send the answer as a command; it closes this window when it
+--! runs (on every peer).
+function UIStaffRise:_issueAnswer(accept)
+  if not MultiplayerSession.actionsAreCommands() then return false end
+  TheApp.mp_session:issue({kind = "pay_rise", staff = self.staff.mp_id, accept = accept and 1 or 0,
+      amount = self.rise_amount})
+  self:close()
+  return true
+end
+
 function UIStaffRise:fireStaff()
+  if self:_issueAnswer(false) then return end
   self.staff.message_callback = nil
   self.staff:fire()
   self:close()
 end
 
 function UIStaffRise:increaseSalary()
+  if self:_issueAnswer(true) then return end
   self.staff.message_callback = nil
   self.staff:increaseWage(self.rise_amount)
   self.staff.quitting_in = nil

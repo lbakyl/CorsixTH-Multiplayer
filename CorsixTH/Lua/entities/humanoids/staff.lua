@@ -174,6 +174,14 @@ function Staff:checkIfWaitedTooLongForRaise()
       end
     end
 
+    -- Multiplayer: the window is only this peer's view; decide the same way
+    -- on every peer (the policy and getRiseAmount), as if it were closed.
+    if staff_rise_window and TheApp.mp_session then
+      staff_rise_window:close()
+      staff_rise_window = nil
+      self.message_callback = nil
+    end
+
     -- If the hospital policy is set to automatically grant wage increases, grant
     -- the requested raise instead of firing the staff member
     if self.hospital.policies.grant_wage_increase then

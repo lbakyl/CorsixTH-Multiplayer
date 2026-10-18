@@ -430,6 +430,81 @@ local function run()
         elseif a == "quit" then
           log("UI: quitting at step " .. session.step)
           quit = true
+        elseif a == "patients" then
+          session:issue({kind = "probe_patients", n = tonumber(entry.arg)})
+        elseif a == "askraise" then
+          session:issue({kind = "probe_raise", class = entry.arg})
+        elseif a == "answerraise" then
+          local icon
+          for _, i in ipairs(world.ui.bottom_panel:allMessageIcons()) do
+            if i.type == "strike" then icon = i break end
+          end
+          if icon then
+            icon:openMessage()
+            local w = world.ui:getWindow(UIStaffRise)
+            log(string.format("UI: %s the pay rise of %s at step %d", entry.arg == "accept" and
+                "accepted" or "declined", w and tostring(w.staff.profile:getFullName()):gsub("^.*:", "") or "?",
+                session.step))
+            if w and entry.arg == "accept" then w:increaseSalary() elseif w then w:fireStaff() end
+          else
+            log("UI: no pay rise request to answer")
+          end
+        elseif a == "fire" then
+          local w = UIStaffManagement(world.ui)
+          world.ui:addWindow(w)
+          w:setCategory(entry.arg)
+          if #(w.staff_members[entry.arg] or {}) > 0 then
+            w.selected_staff = 1
+            w:fire()
+            local confirm = world.ui:getWindow(UIConfirmDialog)
+            log(string.format("UI: fired %s %s at step %d", entry.arg,
+                (tostring(w.staff_members[entry.arg][1].profile:getFullName()):gsub("^.*:", "")), session.step))
+            if confirm then confirm:ok() end
+          else
+            log("UI: nobody to fire in " .. entry.arg)
+          end
+          w:close()
+        elseif a == "queuefront" then
+          -- Drag the last patient of a queue of this hospital to its front.
+          local queue
+          for _, e in ipairs(world.entities) do
+            if not queue and e.queue and e.queue:reportedSize() >= 2 then
+              local p1 = e.queue:reportedHumanoid(1)
+              if p1 and p1.hospital == world.ui.hospital then queue = e.queue end
+            end
+          end
+          if not queue then
+            local sizes, patients = {}, 0
+            for _, e in ipairs(world.entities) do
+              if e.queue then sizes[#sizes + 1] = e.queue:reportedSize() .. "/" .. e.queue:size() end
+              if class.is(e, Patient) then patients = patients + 1 end
+            end
+            log(string.format("UI: queue sizes at step %d: %s (%d patients)", session.step,
+                table.concat(sizes, " "), patients))
+          end
+          if not queue and (entry.retries or 0) < 40 and entry.hour < target - 100 then
+            -- Not now; look again a little later.
+            entry.retries = (entry.retries or 0) + 1
+            entry.hour = entry.hour + 10
+            done[i] = nil
+          elseif queue then
+            local w = UIQueue(world.ui, queue)
+            world.ui:addWindow(w)
+            local n = queue:reportedSize()
+            local patient = queue:reportedHumanoid(n)
+            w.dragged = {patient = patient}
+            local s = TheApp.gfx:getUIScale()
+            log(string.format("UI: dragged patient #%s from place %d to the front at step %d",
+                tostring(patient.mp_id), n, session.step))
+            w:onMouseUp("left", 190 * s, 60 * s)
+            w:close()
+          else
+            local sizes = {}
+            for _, e in ipairs(world.entities) do
+              if e.queue then sizes[#sizes + 1] = e.queue:reportedSize() .. "/" .. e.queue:size() end
+            end
+            log("UI: no queue of two to reorder; queues " .. table.concat(sizes, " "))
+          end
         elseif a == "waitrejoin" then
           -- Pause (shared) until a player has rejoined, then play on.
           log("UI: paused for a rejoin at step " .. session.step)

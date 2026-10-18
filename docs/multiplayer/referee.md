@@ -102,14 +102,14 @@ for them again.
 
 - `mp_server/tests/test_server.py`: referee hello and token, catching up,
   fingerprint check, repair, timeout, rejoin (26 tests in total).
-- `MP_REFEREE=1 scripts/multiplayer/run_lobby_probe.sh BIN DATA` runs the nine
+- `MP_REFEREE=1 scripts/multiplayer/run_lobby_probe.sh BIN DATA` runs the ten
   lobby checks with a referee and adds four:
-  10. the referee agrees with the players in all seven rooms;
-  11. shared game: one player changes money locally at step 300; both load
+  11. the referee agrees with the players in all eight rooms;
+  12. shared game: one player changes money locally at step 300; both load
       the referee's game at step 301 and play on to step 1000 in sync, with
       commands after it;
-  12. the same in a co-op game (step 401);
-  13. a co-op player quits at step 300 and joins again in a new game process;
+  13. the same in a co-op game (step 401);
+  14. a co-op player quits at step 300 and joins again in a new game process;
       both play on to step 1500 in sync, with commands after the rejoin.
 
 ## Limits and next steps

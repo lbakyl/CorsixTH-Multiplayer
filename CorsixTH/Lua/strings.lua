@@ -135,6 +135,8 @@ local shadows = setmetatable({}, {__mode = "k"})
 -- (unless no_restriction is set to true), to add a special string called
 -- "__random" to each table (which always resolves to a random string from
 -- the table), and to prevent editing or adding to a string table.
+-- "__cosmetic_random" is the same for text only one player sees (it uses the
+-- cosmetic random stream, which multiplayer games do not share).
 local strings_metatable = function(no_restriction) return {
   __index = function(t, key)
     t = shadows[t]
@@ -142,7 +144,7 @@ local strings_metatable = function(no_restriction) return {
     if val ~= nil then
       return val
     end
-    if key ~= "__random" then
+    if key ~= "__random" and key ~= "__cosmetic_random" then
       if no_restriction then return nil end
       error("Non-existent string: " .. tostring(key), 2)
     end
@@ -150,7 +152,8 @@ local strings_metatable = function(no_restriction) return {
     for _, v in pairs(t) do
       candidates[#candidates + 1] = v
     end
-    return candidates[math.random(1, #candidates)]
+    local random = key == "__cosmetic_random" and math.cosmetic_random or math.random
+    return candidates[random(1, #candidates)]
   end,
   __newindex = function(_, _, _)
     error("String tables are read-only", 2)

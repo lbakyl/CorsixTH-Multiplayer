@@ -672,11 +672,16 @@ function UIStaffManagement:increaseSalary()
 end
 
 function UIStaffManagement:fire()
-  if MultiplayerSession.blockUnsupported(self.ui) then return end -- firing staff
   if self.selected_staff then
     self.ui:playSound(self.default_button_sound)
     self.ui:addWindow(UIConfirmDialog(self.ui, false, _S.confirmation.sack_staff, --[[persistable:staff_management_confirm_sack]] function()
       local current_category = self.staff_members[self.category]
+      if MultiplayerSession.actionsAreCommands() then
+        -- Every peer fires them when the command runs (the list updates then).
+        local staff = current_category[self.selected_staff]
+        if staff then TheApp.mp_session:issue({kind = "fire_staff", staff = staff.mp_id}) end
+        return
+      end
       current_category[self.selected_staff]:fire()
       -- Close the staff window if open
       local staff_window = self.ui:getWindow(UIStaff)

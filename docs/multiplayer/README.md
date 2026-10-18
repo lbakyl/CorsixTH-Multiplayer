@@ -46,10 +46,10 @@ data, saves from it, or logs that contain it.**
 | Headless referee (S3/S4) | Optional: the server runs one more copy of each game without a screen. It checks the players' fingerprints, repairs a desync (everybody loads its save and plays on) and lets a player who left rejoin. Tested on the VM, shared and co-op (`referee.md`); not in the Docker image yet |
 | In-game lobby | Main menu → Multiplayer: server address, name, room list, create (shared / a hospital each, level, players), password, ready, start |
 | Shared speed and pause | Any player's speed or pause applies to everybody, capped at the room's ping-based maximum |
-| Player actions as commands | Corridor objects, hiring, rooms (draw outline/door/windows), opening the hospital early, fax answers, hospital settings (loans, prices, research, policies, plots, heating, handymen, queues), actions on one patient/staff/machine/rat, co-op money and staff transfers |
+| Player actions as commands | Corridor objects, hiring, firing, pay rise answers, rooms (draw outline/door/windows), opening the hospital early, fax answers, hospital settings (loans, prices, research, policies, plots, heating, handymen, queue sizes), queue order and sending a queued patient to another room, actions on one patient/staff/machine/rat, co-op money and staff transfers |
 | Room outlines | While someone draws a room the others see its floor in blue (reserved); the finished room appears for everyone at once |
 | Co-op | Original two- to four-player maps (tested with two); a hospital each, kept apart (rooms, staff, patients, heating, research, events, goals); trade window in the Multiplayer menu. Design and open points: `coop-architecture.md` |
-| Blocked in multiplayer | Editing/moving existing rooms and objects, picking up staff, firing, pay-rise answers (resolved by policy), load game, restart (menu and hotkeys), cheats and debug tools, pushing patients over, the wage-increase menu setting. Epidemics are off in co-op |
+| Blocked in multiplayer | Editing/moving existing rooms and objects, picking up staff, load game, restart (menu and hotkeys), cheats and debug tools, pushing patients over, the wage-increase menu setting. Epidemics are off in co-op |
 | Windows | CI artifact includes LuaSocket. **S0 passed**: Windows (MSVC) and Linux (GCC), both Lua 5.5, identical for 3 game years; shared and co-op games between a Windows and a Linux player IN SYNC (`cross-platform.md`) |
 | Real network | LAN only (Windows desktop ↔ Linux VM); not over the internet yet |
 | Linux CI | Fails in the static-analysis step on upstream's own `CMakeLists.txt` formatting (gersemi); not caused by this fork's changes |
@@ -71,6 +71,7 @@ agents must not open PRs, so the owner opens them).
 | `mp/coop-full` | Full co-op: settings and entity actions as commands, hospitals kept apart, per-player events, heating, awards, goals |
 | `mp/vps-setup` | One-command VPS setup script (`mp_server/deploy/setup-vps.sh`) |
 | `mp/referee` | Headless referee per room, desync repair from its save, rejoin a running game |
+| `mp/coop-gaps` | Firing, pay rise answers and the queue window as commands |
 
 Working rule: small commits, push work-in-progress, one branch per step,
 never push directly to `mp/dev` or `master`.
@@ -108,7 +109,7 @@ Tests and tools (`scripts/multiplayer/` unless noted):
 |---|---|
 | `CorsixTH/Luatest/spec/mp_session_spec.lua`, `mp_lobby_spec.lua` | Unit tests |
 | `mp_server/tests/` | Server tests (pytest) |
-| `run_lobby_probe.sh` | **Main integration test.** A local server (or `MP_EXTERNAL_SERVER`) and pairs of real games going through the main menu and lobby window. 9 checks, ~3 min; `MP_REFEREE=1` adds the referee and 4 checks (referee agrees, repair in shared and co-op games, rejoin) |
+| `run_lobby_probe.sh` | **Main integration test.** A local server (or `MP_EXTERNAL_SERVER`) and pairs of real games going through the main menu and lobby window. 10 checks, ~4 min; `MP_REFEREE=1` adds the referee and 4 checks (referee agrees, repair in shared and co-op games, rejoin) |
 | `run_ingame_probe.sh` | Two games connected directly (no server). 5 checks |
 | `run_sync_probe.sh` | Harness-level determinism checks. 7 checks |
 | `run_sp_regression.sh` | Single player, two builds, 3 game years, fingerprints must match |
@@ -143,7 +144,7 @@ busted --directory=CorsixTH/Luatest          # 144 successes
 luacheck --quiet --codes --ranges CorsixTH    # 0 warnings
 (cd mp_server && python3 -m pytest -q)        # 26 passed
 bash scripts/multiplayer/run_lobby_probe.sh  $BIN $THDATA
-MP_REFEREE=1 bash scripts/multiplayer/run_lobby_probe.sh $BIN $THDATA   # 13 checks
+MP_REFEREE=1 bash scripts/multiplayer/run_lobby_probe.sh $BIN $THDATA   # 14 checks
 bash scripts/multiplayer/run_ingame_probe.sh $BIN $THDATA
 bash scripts/multiplayer/run_sync_probe.sh   $BIN $THDATA 6000
 ```
@@ -231,6 +232,16 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
 27. **Everybody loads, the referee too.** All games then continue from the
     same bytes loaded the same way, and the referee runs up to the slowest
     player's step first, so nobody goes back further than needed.
+28. **`__random` strings use the gameplay random generator.** The pay rise
+    window picked its complaint text that way, so opening it changed the
+    game on that machine only. Text for one player uses
+    `__cosmetic_random` (the cosmetic stream).
+29. **A walk could restart forever** (upstream bug, single player too): when
+    the next tile became an avoided one (a room being drawn) and the only
+    route crossed it, the walk recomputed the same route again and again in
+    one tick. It now walks on through that tile (`walk.lua`,
+    `avoid_restart`). Found by a probe hang; `gdb` on the VM showed the
+    repeated path query.
 
 ## 8. Next steps
 
@@ -247,7 +258,7 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
    messages.
 5. **Rooms**: let the drawing player place the objects (now automatic), move
    and sell objects, edit rooms.
-6. **Pay rises** as commands; picking up staff/objects as commands.
+6. **Picking up** staff and objects as commands.
 7. **Encryption** (S8): passwords travel in clear text now.
 
 ## 9. Open questions

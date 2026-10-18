@@ -419,6 +419,34 @@ function builder.register_handlers()
     local err = w.hospitals[cmd.target or 1]:createEmergency()
     return err == nil, err
   end
+  -- `n` patients arrive at once next to the reception desk (to make a queue
+  -- now; from the map edge they would walk for hundreds of hours).
+  MultiplayerSession.default_handlers.probe_patients = function(w, cmd)
+    local hospital = w.hospitals[cmd.hospital or 1]
+    local desk = hospital:getReceptionDesks()[1]
+    if not desk then return false, "no reception desk" end
+    local x, y = builder.find_free_rect(w, desk.tile_x, desk.tile_y + 3, 1, 1, 10)
+    if not x then return false, "no room next to the desk" end
+    for _ = 1, math.min(tonumber(cmd.n) or 1, 20) do
+      local patient = w:spawnPatient(hospital)
+      if patient then patient:setNextAction(SpawnAction("spawn", {x = x, y = y, direction = "north"})) end
+    end
+    return true
+  end
+  -- A member of staff of `class` asks for a pay rise (like Staff:requestRaise,
+  -- without the dice).
+  MultiplayerSession.default_handlers.probe_raise = function(w, cmd)
+    local h = w.hospitals[cmd.hospital or 1]
+    for _, s in ipairs(h.staff) do
+      if s.humanoid_class == cmd.class and not s.fired and not s.quitting_in then
+        h:makeRaiseRequest(math.floor(s.profile.wage * 0.1) + 1, s)
+        s.quitting_in = 25 * 30
+        s:setMood("pay_rise", "activate")
+        return true
+      end
+    end
+    return false, "nobody to ask"
+  end
 end
 
 function builder.start_game(world, session, scenario, log)

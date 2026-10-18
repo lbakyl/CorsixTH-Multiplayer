@@ -324,8 +324,11 @@ function UIStaff:pickupStaff()
 end
 
 function UIStaff:fireStaff()
-  if MultiplayerSession.blockUnsupported(self.ui) then return end -- firing staff
   self.ui:addWindow(UIConfirmDialog(self.ui, false, _S.confirmation.sack_staff, --[[persistable:staff_dialog_confirm_sack]] function()
+    if MultiplayerSession.actionsAreCommands() then
+      TheApp.mp_session:issue({kind = "fire_staff", staff = self.staff.mp_id})
+      return
+    end
     self.staff:fire()
   end))
 end

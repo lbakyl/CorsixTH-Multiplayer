@@ -865,6 +865,76 @@ function handlers.raise_wage(world, cmd)
   return true
 end
 
+--! Fire a member of staff (staff window, staff management): {staff}.
+function handlers.fire_staff(world, cmd)
+  local staff = entity_of(world, cmd.staff, Staff)
+  if not staff or staff.fired then return false, "no such staff member" end
+  if staff.hospital ~= hospital_of(world, cmd) then return false, "not our staff" end
+  staff:fire()
+  return true
+end
+
+--! Answer a pay rise request (pay rise window): {staff, accept (1 or 0), amount}.
+--! Like the end of Staff:checkIfWaitedTooLongForRaise, but chosen by the player.
+function handlers.pay_rise(world, cmd)
+  local staff = entity_of(world, cmd.staff, Staff)
+  if not staff or staff.fired or not staff.quitting_in then return false, "no pay rise asked" end
+  if staff.hospital ~= hospital_of(world, cmd) then return false, "not our staff" end
+  local amount = math.floor(tonumber(cmd.amount) or 0)
+  local accept = tonumber(cmd.accept) == 1
+  if accept and amount <= 0 then return false, "bad amount" end
+  staff.quitting_in = nil
+  staff.hospital:removeMessage(staff)
+  staff.message_callback = nil
+  -- The window may be open on another peer too (it is that peer's view).
+  for _, w in ipairs(world.ui:getWindows(UIStaffRise)) do
+    if w.staff == staff then w:close() end
+  end
+  if accept then
+    staff:increaseWage(amount)
+  else
+    staff:fire()
+  end
+  return true
+end
+
+--! Move a patient in a queue (queue window): {owner (door or desk), patient,
+--! to ("front", "back" or the slot it was dropped on, from 0)}.
+function handlers.queue_move(world, cmd)
+  local owner = entity_of(world, cmd.owner)
+  local humanoid = entity_of(world, cmd.patient)
+  local queue = owner and owner.queue
+  if not queue or not humanoid then return false, "no such queue or patient" end
+  if humanoid.hospital ~= hospital_of(world, cmd) then return false, "not our patient" end
+  local index
+  for i = 1, queue:reportedSize() do
+    if queue:reportedHumanoid(i) == humanoid then index = i break end
+  end
+  if not index then return false, "not in this queue any more" end
+  local to = cmd.to
+  if to ~= "front" and to ~= "back" then
+    to = math.floor(tonumber(to) or -1)
+    if to < 0 then return false, "bad position" end
+    to = math.min(to, queue:reportedSize() - 1)
+  end
+  queue:movePatient(index, to)
+  return true
+end
+
+--! Send a patient to another room of the same kind (dragged from the queue
+--! window onto the room): {patient, room (room id)}.
+function handlers.queue_redirect(world, cmd)
+  local humanoid = entity_of(world, cmd.patient)
+  local room = world.rooms[math.floor(tonumber(cmd.room) or -1)]
+  if not humanoid or not room or humanoid.going_home then return false, "no such patient or room" end
+  if humanoid.hospital ~= hospital_of(world, cmd) or room.hospital ~= humanoid.hospital then
+    return false, "not our patient or room"
+  end
+  if not UIQueue.canSendToRoom(humanoid, room) then return false, "not that room" end
+  UIQueue.sendToRoom(humanoid, room)
+  return true
+end
+
 --! Ask a handyman to repair a machine now: {machine}.
 function handlers.call_handyman(world, cmd)
   local machine = entity_of(world, cmd.machine, Machine)
