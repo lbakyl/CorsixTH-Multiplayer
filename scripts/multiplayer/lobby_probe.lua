@@ -31,6 +31,10 @@
 --                       priceup                         casebook: raise the first price by 1%
 --                       research:<area>                 research window: -1% for an area
 --                       heatup                          town map: radiators one step warmer
+--                       bonus:<class>, raise:<class>    staff management: bonus or 10% raise
+--                                                       for the first member of staff of <class>
+--                       sendhome                        patient window: send this hospital's
+--                                                       first patient home
 --                       pause[:<ticks>]                 press P (shared through the server),
 --                                                       optionally <ticks> later; works
 --                                                       while the game is paused
@@ -291,6 +295,34 @@ local function run()
           else w:increaseHeat() end
           log(string.format("UI: %s%s at step %d", a, entry.arg ~= "" and (" " .. entry.arg) or "", session.step))
           w:close()
+        elseif a == "bonus" or a == "raise" then
+          local w = UIStaffManagement(world.ui)
+          world.ui:addWindow(w)
+          w:setCategory(entry.arg)
+          if #(w.staff_members[entry.arg] or {}) > 0 then
+            w.selected_staff = 1
+            log(string.format("UI: %s for %s at step %d", a, entry.arg, session.step))
+            if a == "bonus" then w:payBonus() else w:increaseSalary() end
+          else
+            log("UI: no " .. entry.arg .. " for " .. a)
+          end
+          w:close()
+        elseif a == "sendhome" then
+          local patient
+          for _, e in ipairs(world.entities) do
+            if not patient and class.is(e, Patient) and e.hospital == world.ui.hospital and
+                not e.going_home and e.tile_x then
+              patient = e
+            end
+          end
+          if patient then
+            local w = UIPatient(world.ui, patient)
+            world.ui:addWindow(w)
+            log(string.format("UI: sent patient #%d home at step %d", patient.mp_id, session.step))
+            w:goHome()
+          else
+            log("UI: no patient to send home")
+          end
         elseif a == "vip" then
           session:issue({kind = "probe_vip"})
           log("UI: asked for a VIP fax at step " .. session.step)

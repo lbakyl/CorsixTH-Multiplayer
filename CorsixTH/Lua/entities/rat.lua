@@ -241,12 +241,23 @@ end
 --!param ui (GameUI) The game UI.
 --!param button (string) The mouse button used.
 function Rat:onClick(ui, button)
-  if button ~= "left" or self.shot then
+  if button ~= "left" or self.shot or self.mp_shot_requested then
     return
   end
-  self.shot = true
   ui:playSound("shotgun.wav")
   ui:playSound("deadrat2.wav")
+  if (TheApp and TheApp.mp_session and not TheApp.mp_session.applying) then
+    -- Every peer removes the rat at the same step (shoot_rat command).
+    self.mp_shot_requested = true
+    TheApp.mp_session:issue({kind = "shoot_rat", rat = self.mp_id})
+    return
+  end
+  self:shoot()
+end
+
+--! Remove the shot rat and leave a dead-rat splat where it was.
+function Rat:shoot()
+  self.shot = true
   local map = self.world.map
   local px, py = self.th:getPosition()
   local screen_x, screen_y = map:WorldToScreen(self.tile_x, self.tile_y)

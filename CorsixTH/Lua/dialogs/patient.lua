@@ -326,6 +326,10 @@ function UIPatient:goHome()
   end
   self:close()
   self.patient:playSound("sack.wav")
+  if MultiplayerSession.actionsAreCommands() then
+    TheApp.mp_session:issue({kind = "send_home", patient = self.patient.mp_id, text = 1})
+    return
+  end
   self.patient:goHome("kicked")
   self.patient:setDynamicInfoText(_S.dynamic_info.patient.actions.sent_home)
 end
@@ -342,6 +346,10 @@ function UIPatient:guessDisease()
       patient.going_home or patient.going_to_die or patient:getRoom() or
       not patient.hospital.disease_casebook[patient.disease.id].discovered then
     self.ui:playSound("wrong2.wav")
+    return
+  end
+  if MultiplayerSession.actionsAreCommands() then
+    TheApp.mp_session:issue({kind = "guess_cure", patient = patient.mp_id})
     return
   end
   patient:setDiagnosed()

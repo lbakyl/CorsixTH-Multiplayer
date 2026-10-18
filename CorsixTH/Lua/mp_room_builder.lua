@@ -110,6 +110,54 @@ function builder.releaseArea(world, x, y, w, h)
   end
 end
 
+--! Would placing an object of `object_type` at (tx, ty) facing `o` keep the
+--! use tile of every object in the room (this one included) reachable from
+--! the entrance? The room editor's own checks allow layouts in which, for
+--! example, the desk walls off the cabinet's use tile; a player would see
+--! that and move things, but the automatic placement must avoid it (a doctor
+--! looking for the cabinet would find none).
+--!param placed (table) list of {footprint, use_x, use_y} already in the room
+local function keeps_room_usable(room, rect, placed, object_type, tx, ty, o)
+  local orientation = object_type.orientations[o]
+  local blocked = {}
+  local function key(x, y) return x * 1000 + y end
+  local uses = {}
+  local candidate = {footprint = {}, use_x = tx + orientation.use_position[1],
+      use_y = ty + orientation.use_position[2]}
+  for _, t in ipairs(orientation.footprint) do
+    if not t.only_passable then candidate.footprint[#candidate.footprint + 1] = {tx + t[1], ty + t[2]} end
+  end
+  for _, item in ipairs(placed) do
+    for _, xy in ipairs(item.footprint) do blocked[key(xy[1], xy[2])] = true end
+    uses[#uses + 1] = {item.use_x, item.use_y}
+  end
+  for _, xy in ipairs(candidate.footprint) do blocked[key(xy[1], xy[2])] = true end
+  uses[#uses + 1] = {candidate.use_x, candidate.use_y}
+
+  local ex, ey = room:getEntranceXY(true)
+  if blocked[key(ex, ey)] then return false, candidate end
+  local function inside(x, y)
+    return x >= rect.x and x < rect.x + rect.w and y >= rect.y and y < rect.y + rect.h
+  end
+  local seen, queue, head = {[key(ex, ey)] = true}, {{ex, ey}}, 1
+  while queue[head] do
+    local x, y = queue[head][1], queue[head][2]
+    head = head + 1
+    for _, d in ipairs({{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) do
+      local nx, ny = x + d[1], y + d[2]
+      local k = key(nx, ny)
+      if inside(nx, ny) and not blocked[k] and not seen[k] then
+        seen[k] = true
+        queue[#queue + 1] = {nx, ny}
+      end
+    end
+  end
+  for _, u in ipairs(uses) do
+    if not seen[key(u[1], u[2])] then return false, candidate end
+  end
+  return true, candidate
+end
+
 local function try_build(world, hospital, cmd)
   local ui = world.ui
   local room_type = TheApp.rooms[cmd.room]
@@ -158,6 +206,7 @@ local function try_build(world, hospital, cmd)
 
   -- 5. Required objects, in name order, first fitting tile and orientation.
   local orientations = {"north", "east", "south", "west"}
+  local placed = {}
   local guard = 0
   while dlg.phase == "objects" and #dlg.objects > 0 and guard < 40 do
     guard = guard + 1
@@ -166,22 +215,28 @@ local function try_build(world, hospital, cmd)
       if o.object.id < dlg.objects[first].object.id then first = i end
     end
     dlg:setActiveIndex(first)
-    local placed = false
+    local done = false
     for ty = y, y + h - 1 do
       for tx = x, x + w - 1 do
         for _, o in ipairs(orientations) do
-          if not placed and dlg.objects[dlg.active_index].object.orientations[o] then
+          -- (Once placed, the object is gone from dlg.objects.)
+          local object_type = not done and dlg.objects[dlg.active_index].object
+          if object_type and object_type.orientations[o] then
             dlg:setOrientation(o)
             dlg:setBlueprintCell(tx, ty)
             if dlg.object_blueprint_good then
-              dlg:placeObject()
-              placed = true
+              local usable, item = keeps_room_usable(room, cmd, placed, object_type, tx, ty, o)
+              if usable then
+                dlg:placeObject()
+                placed[#placed + 1] = item
+                done = true
+              end
             end
           end
         end
       end
     end
-    if not placed then
+    if not done then
       dlg:abortRoom()
       return nil, "required objects do not fit"
     end

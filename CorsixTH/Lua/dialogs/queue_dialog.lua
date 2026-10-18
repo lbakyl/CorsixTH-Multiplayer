@@ -416,12 +416,20 @@ function UIQueuePopup:draw(canvas, x, y)
 end
 
 function UIQueuePopup:sendToReception()
-  self.patient:setNextAction(SeekReceptionAction())
+  if MultiplayerSession.actionsAreCommands() then
+    TheApp.mp_session:issue({kind = "to_reception", patient = self.patient.mp_id})
+  else
+    self.patient:setNextAction(SeekReceptionAction())
+  end
   self:close()
 end
 
 function UIQueuePopup:sendHome()
-  self.patient:goHome("kicked")
+  if MultiplayerSession.actionsAreCommands() then
+    TheApp.mp_session:issue({kind = "send_home", patient = self.patient.mp_id})
+  else
+    self.patient:goHome("kicked")
+  end
   self:close()
 end
 

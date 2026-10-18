@@ -764,6 +764,114 @@ function handlers.queue_size(world, cmd)
   return true
 end
 
+--------------------------------------------------------------------------------
+-- Actions on one patient, member of staff, machine or rat, named by entity id
+-- (World:_numberEntity). Handlers check again that the action still makes
+-- sense; a stale click is rejected on every peer alike.
+--------------------------------------------------------------------------------
+
+--! Send a patient home: {patient, text (1: show "sent home")}.
+function handlers.send_home(world, cmd)
+  local patient = entity_of(world, cmd.patient, Patient)
+  if not patient or patient.going_home then return false, "no such patient" end
+  patient:goHome("kicked")
+  if tonumber(cmd.text) == 1 then
+    patient:setDynamicInfoText(_S.dynamic_info.patient.actions.sent_home)
+  end
+  return true
+end
+
+--! Guess the cure for a patient (patient window): {patient}.
+function handlers.guess_cure(world, cmd)
+  local patient = entity_of(world, cmd.patient, Patient)
+  if not patient or patient.is_debug or patient.diagnosis_progress == 0 or patient.diagnosed or
+      patient.going_home or patient.going_to_die or patient:getRoom() or
+      not patient.hospital.disease_casebook[patient.disease.id].discovered then
+    return false, "cannot guess the cure"
+  end
+  patient:setDiagnosed()
+  if patient:agreesToPay(patient.disease.id) then
+    patient:setNextAction(SeekRoomAction(patient.disease.treatment_rooms[1]):enableTreatmentRoom(), 1)
+  else
+    patient:goHome("over_priced")
+  end
+  return true
+end
+
+--! Send a queueing patient back to reception: {patient}.
+function handlers.to_reception(world, cmd)
+  local patient = entity_of(world, cmd.patient, Patient)
+  if not patient or patient.going_home then return false, "no such patient" end
+  patient:setNextAction(SeekReceptionAction())
+  return true
+end
+
+--! Pay a member of staff a bonus: {staff}.
+function handlers.staff_bonus(world, cmd)
+  local staff = entity_of(world, cmd.staff, Staff)
+  if not staff or staff.fired then return false, "no such staff member" end
+  local bonus = math.floor(staff.profile.wage * 0.1)
+  if staff.hospital.balance <= bonus then return false, "not enough money" end
+  staff:changeAttribute("happiness", 0.5)
+  staff.hospital:spendMoney(bonus, _S.transactions.personal_bonus)
+  return true
+end
+
+--! Raise a member of staff's wage by 10 percent: {staff}.
+function handlers.raise_wage(world, cmd)
+  local staff = entity_of(world, cmd.staff, Staff)
+  if not staff or staff.fired then return false, "no such staff member" end
+  if not staff:increaseWage(math.floor(staff.profile.wage * 0.1)) then return false, "no raise" end
+  return true
+end
+
+--! Ask a handyman to repair a machine now: {machine}.
+function handlers.call_handyman(world, cmd)
+  local machine = entity_of(world, cmd.machine, Machine)
+  if not machine or machine.times_used == 0 then return false, "nothing to repair" end
+  local hospital = machine.hospital
+  local task = hospital:getIndexOfTask(machine.tile_x, machine.tile_y, "repairing")
+  if task == -1 then
+    local call = world.dispatcher:callForRepair(machine, false, true)
+    hospital:addHandymanTask(machine, "repairing", 2, machine.tile_x, machine.tile_y, call)
+  else
+    hospital:modifyHandymanTaskPriority(task, 2, "repairing")
+  end
+  machine:setRepairingStatus()
+  return true
+end
+
+--! Replace a worn machine with a new one: {machine}.
+function handlers.replace_machine(world, cmd)
+  local machine = entity_of(world, cmd.machine, Machine)
+  if not machine then return false, "no such machine" end
+  local hospital = machine.hospital
+  local cost = hospital.research.research_progress[machine.object_type].cost
+  if hospital.balance < cost then return false, "not enough money" end
+  machine:replaceMachine(cost)
+  return true
+end
+
+--! Shoot a rat: {rat}.
+function handlers.shoot_rat(world, cmd)
+  local rat = entity_of(world, cmd.rat, Rat)
+  if not rat or rat.shot then return false, "no such rat" end
+  rat:shoot()
+  return true
+end
+
+--! Mark an infected patient for vaccination during an epidemic: {patient}.
+function handlers.mark_vaccinate(world, cmd)
+  local patient = entity_of(world, cmd.patient, Patient)
+  local epidemic = patient and patient.hospital and patient.hospital.epidemic
+  if not epidemic or not epidemic.coverup_selected or epidemic.timer.closed or
+      not patient.infected or patient.marked_for_vaccination then
+    return false, "cannot vaccinate"
+  end
+  epidemic:markForVaccination(patient)
+  return true
+end
+
 --! Language-independent identity of a staff profile in the hiring pool.
 --! (Names are translated strings and may differ between peers.)
 function MultiplayerSession.staffProfileKey(profile)

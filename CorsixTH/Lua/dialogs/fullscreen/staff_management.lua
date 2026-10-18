@@ -644,6 +644,11 @@ end
 function UIStaffManagement:payBonus()
   local staff = self.staff_members[self.category][self.selected_staff]
   if self.selected_staff and self.hospital.balance > math_floor(staff.profile.wage*0.1) then
+    if MultiplayerSession.actionsAreCommands() then
+      TheApp.mp_session:issue({kind = "staff_bonus", staff = staff.mp_id})
+      self.ui:playSound("cashreg.wav")
+      return
+    end
     staff:changeAttribute("happiness", 0.5)
     self.hospital:spendMoney(math_floor(staff.profile.wage*0.1), _S.transactions.personal_bonus)
     self.ui:playSound("cashreg.wav")
@@ -655,6 +660,10 @@ end
 function UIStaffManagement:increaseSalary()
   if self.selected_staff then
     local staff = self.staff_members[self.category][self.selected_staff]
+    if MultiplayerSession.actionsAreCommands() then
+      TheApp.mp_session:issue({kind = "raise_wage", staff = staff.mp_id})
+      return
+    end
     if staff:increaseWage(math_floor(staff.profile.wage * 0.1)) then
       return
     end

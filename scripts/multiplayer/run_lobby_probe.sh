@@ -118,10 +118,10 @@ run_probe kate MP_ROLE=host MP_ROOM=fax MP_STEPS=1300 MP_UI_SCRIPT="100:vip;400:
 sleep 1
 run_probe liam MP_ROLE=join MP_ROOM=fax MP_STEPS=1300 MP_DRAW_EVERY=2   MP_UI_SCRIPT="160:answerfax:personality:2" & pids+=($!)
 run_probe mira MP_ROLE=host MP_ROOM=coop MP_COOP=1 MP_STEPS=1200 \
-  MP_UI_SCRIPT="20:openhospital;60:buy:bench;80:hire:Doctor;200:givemoney:5000;250:loan;260:priceup;270:research:cure;280:heatup" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;60:buy:bench;80:hire:Doctor;200:givemoney:5000;250:loan;260:priceup;270:research:cure;280:heatup;400:bonus:Doctor;410:raise:Doctor" & pids+=($!)
 sleep 1
 run_probe nico MP_ROLE=join MP_ROOM=coop MP_STEPS=1200 MP_DRAW_EVERY=3 \
-  MP_UI_SCRIPT="30:openhospital;60:buy:plant;90:hire:Nurse;300:sendstaff:Nurse;350:loan;360:heatup;370:heatup" & pids+=($!)
+  MP_UI_SCRIPT="30:openhospital;60:buy:plant;90:hire:Nurse;300:sendstaff:Nurse;350:loan;360:heatup;370:heatup;600:sendhome" & pids+=($!)
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 if [[ -n "${MP_SERVER_LOG_CMD:-}" ]]; then eval "$MP_SERVER_LOG_CMD" > "$out/server.log" 2>&1 || true; fi
@@ -205,7 +205,8 @@ ok_all = all(x.endswith('-> ok') for x in cm)
 ok8 = (result('mira').startswith('IN SYNC') and result('nico').startswith('IN SYNC') and cm == applied('nico')
        and ok_all and sorted(kinds) == sorted(['open_hospital', 'open_hospital', 'place_object', 'place_object',
                                                'hire', 'hire', 'give_money', 'send_staff', 'loan', 'loan',
-                                               'set_price', 'research_frac', 'set_heat', 'set_heat', 'set_heat'])
+                                               'set_price', 'research_frac', 'set_heat', 'set_heat', 'set_heat',
+                                               'staff_bonus', 'raise_wage', 'send_home'])
        and 'co-op: 2 hospitals' in m)
 print(f"8. Co-op, a hospital each:  {result('mira')}; commands {len(cm)} all ok: {ok_all}; identical: {cm == applied('nico')}")
 for line in re.findall(r'hospital \d (?:[A-Z]+:|settings:).*', m)[-4:]:

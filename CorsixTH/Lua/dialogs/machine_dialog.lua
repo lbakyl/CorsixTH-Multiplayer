@@ -90,7 +90,9 @@ function UIMachine:draw(canvas, x, y)
 end
 
 function UIMachine:callHandyman()
-  if self.machine.times_used ~= 0 then
+  if self.machine.times_used ~= 0 and MultiplayerSession.actionsAreCommands() then
+    TheApp.mp_session:issue({kind = "call_handyman", machine = self.machine.mp_id})
+  elseif self.machine.times_used ~= 0 then
     local taskIndex = self.machine.hospital:getIndexOfTask(self.machine.tile_x, self.machine.tile_y, "repairing")
     if taskIndex == -1 then
       local call = self.ui.app.world.dispatcher:callForRepair(self.machine, false, true)
@@ -125,7 +127,12 @@ function UIMachine:replaceMachine()
   end
 
   self.ui:addWindow(UIConfirmDialog(self.ui, true, prompt,
-    --[[persistable:replace_machine_confirm_dialog]]function() machine:replaceMachine(cost)
+    --[[persistable:replace_machine_confirm_dialog]]function()
+      if MultiplayerSession.actionsAreCommands() then
+        TheApp.mp_session:issue({kind = "replace_machine", machine = machine.mp_id})
+        return
+      end
+      machine:replaceMachine(cost)
     end
   ))
 end
