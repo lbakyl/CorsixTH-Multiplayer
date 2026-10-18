@@ -29,7 +29,8 @@
 #  10. staff and queues: two pay rises asked (test command) and answered in
 #      the pay rise window (accepted, declined), a nurse fired in staff
 #      management, a queue reordered by dragging in the queue window by each
-#      player -> IN SYNC, every command accepted
+#      player, a bench picked up and put down elsewhere, another sold
+#      -> IN SYNC, every command accepted
 # With MP_REFEREE=1 the local server also runs its headless referee for every
 # room, and four more checks: 11. the referee agrees with the players in every
 # room except 'cheat' (that one desyncs before the referee is there); 12, 13.
@@ -146,7 +147,7 @@ run_probe paul MP_ROLE=join MP_ROOM=events MP_STEPS=1600 MP_DRAW_EVERY=3   MP_UI
 # rise window, one accepted and one declined; a nurse fired; queues
 # reordered by dragging in the queue window.
 run_probe wade MP_ROLE=host MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
-  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse" & pids+=($!)
+  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench" & pids+=($!)
 sleep 1
 run_probe yara MP_ROLE=join MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
   MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront" & pids+=($!)
@@ -290,6 +291,7 @@ kinds10 = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in okw)
 ok10 = (result('wade').startswith('IN SYNC through step 1000') and result('yara').startswith('IN SYNC')
         and cw == applied('yara') and kinds10.count('pay_rise') == 2 and kinds10.count('probe_raise') == 2
         and 'fire_staff' in kinds10 and kinds10.count('queue_move') >= 1 and 'probe_patients' in kinds10
+        and 'move_object' in kinds10 and 'sell_object' in kinds10
         and 'accepted the pay rise' in y_ and 'declined the pay rise' in y_)
 print(f"10. Staff and queues:       {result('wade')}; commands {len(okw)}/{len(cw)} ok, identical: {cw == applied('yara')}; {' '.join(kinds10)}")
 fail |= not ok10

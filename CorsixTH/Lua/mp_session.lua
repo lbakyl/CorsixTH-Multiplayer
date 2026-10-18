@@ -346,6 +346,8 @@ MultiplayerSession.rejection_texts = {
           ["invalid position"] = "Could not place the new member of staff there."},
   place_object = {["tile not free"] = "Could not place the object there: the spot was taken.",
                   ["someone is in the way"] = "Could not place the object there: someone was in the way."},
+  move_object = {["tile not free"] = "Could not move the object there: the spot was taken.",
+                 ["someone is in the way"] = "Could not move the object there: someone was in the way."},
   build_room = {["gave up"] = "The room could not be built: people did not leave the area."},
 }
 
@@ -519,6 +521,77 @@ function handlers.place_object(world, cmd)
   if cmd.object == "reception_desk" then
     hospital:buildReceptionDesksCache()
   end
+  return true
+end
+
+--! A corridor object of `hospital` that a player may pick up, or nil.
+local function movable_object(world, hospital, id)
+  local obj = world:getEntityById(tonumber(id))
+  if not obj or not class.is(obj, Object) or not obj.tile_x or obj:getRoom() or
+      not obj.object_type.corridor_object or not hospital:isInHospital(obj.tile_x, obj.tile_y) then
+    return nil
+  end
+  return obj
+end
+
+--! What picking an object up does to the game (Object:onClick in single
+--! player): its users stop, and a plant's or machine's handyman task goes.
+local function pick_up(obj)
+  if obj.object_type.class == "Plant" or obj.object_type.class == "Machine" then
+    local task_type = obj.object_type.class == "Machine" and "repairing" or "watering"
+    local index = obj.hospital and obj.hospital:getIndexOfTask(obj.tile_x, obj.tile_y, task_type) or -1
+    if index ~= -1 then obj.hospital:removeHandymanTask(index, task_type) end
+  end
+  obj:onPickUp()
+end
+
+--! Put an object (off the map) down at x, y facing `direction`, like
+--! UIPlaceObjects:placeObject does with a picked-up object.
+local function put_down(world, obj, x, y, direction)
+  if direction ~= obj.direction then obj:initOrientation(direction) end
+  world:prepareFootprintTilesForBuild(obj.footprint, x, y)
+  obj:setTile(x, y)
+  world:objectPlaced(obj)
+  if obj.slave then world:objectPlaced(obj.slave) end
+  if obj:isMachine() then obj:placed(nil) end
+end
+
+--! Move a corridor object (picked up and put down): {object, x, y, orientation}.
+function handlers.move_object(world, cmd)
+  local hospital = world.hospitals[cmd.hospital or 1]
+  local obj = hospital and movable_object(world, hospital, cmd.object)
+  if not obj then return false, "cannot move that" end
+  local orientation = obj.object_type.orientations[cmd.orientation]
+  if not orientation then return false, "unknown orientation" end
+  local old_x, old_y, old_direction = obj.tile_x, obj.tile_y, obj.direction
+  if world:anyHumanoidObscuringArea(cmd.x, cmd.y) then return false, "someone is in the way" end
+  pick_up(obj)
+  obj:setTile(nil)
+  obj:rebuildPassableCellFlags()
+  local free = true
+  for _, t in ipairs(orientation.footprint) do
+    if not tile_free_for_object(world, hospital, cmd.x + t[1], cmd.y + t[2], t) then free = false end
+  end
+  if not free then
+    put_down(world, obj, old_x, old_y, old_direction)
+    return false, "tile not free"
+  end
+  put_down(world, obj, cmd.x, cmd.y, cmd.orientation)
+  if obj.object_type.id == "reception_desk" then hospital:buildReceptionDesksCache() end
+  return true
+end
+
+--! Sell a corridor object (picked up, then sold): {object}.
+function handlers.sell_object(world, cmd)
+  local hospital = world.hospitals[cmd.hospital or 1]
+  local obj = hospital and movable_object(world, hospital, cmd.object)
+  if not obj then return false, "cannot sell that" end
+  local cost = hospital:getObjectBuildCost(obj.object_type.id)
+  hospital:receiveMoney(cost, _S.transactions.sell_object .. ": " .. obj.object_type.name, cost)
+  pick_up(obj)
+  local desk = obj.object_type.id == "reception_desk"
+  world:destroyEntity(obj)
+  if desk then hospital:buildReceptionDesksCache() end
   return true
 end
 

@@ -251,7 +251,8 @@ function UIPlaceObjects:removeObject(object, dont_close_if_empty, placed, move_c
   local sale_previously_placed = not placed and existing_object and not move_canceled
 
   -- In multiplayer nothing was paid for a not-yet-placed purchase.
-  if sale_previously_placed or (purchase_cancellation and not MultiplayerSession.actionsAreCommands()) then
+  if (sale_previously_placed and not self.mp_moving) or
+      (purchase_cancellation and not MultiplayerSession.actionsAreCommands()) then
     -- Object sell.
     -- The player should be reimbursed for the cost of the item, i.e.
     -- whether they were previously purchased. So do refund.
@@ -260,7 +261,13 @@ function UIPlaceObjects:removeObject(object, dont_close_if_empty, placed, move_c
     self.ui.hospital:receiveMoney(build_cost, msg, build_cost)
   end
 
-  if move_cancellation then
+  if move_cancellation and self.mp_moving then -- luacheck: ignore 542
+    -- Multiplayer: the object never left its place.
+  elseif sale_previously_placed and self.mp_moving then
+    -- Multiplayer: every peer sells it when the command runs.
+    TheApp.mp_session:issue({kind = "sell_object", object = object.existing_object.mp_id})
+    sale_previously_placed = false
+  elseif move_cancellation then
     -- Move cancelled. Place object back. Restore coordinate and orientation.
     self.object_cell_x = object.existing_object.tile_x
     self.object_cell_y = object.existing_object.tile_y
@@ -547,6 +554,16 @@ function UIPlaceObjects:placeObject(dont_close_if_empty, dont_remove)
   end
   local room = self.room or self.world:getRoom(self.object_cell_x, self.object_cell_y)
   local session = TheApp.mp_session
+  if real_obj and self.mp_moving and MultiplayerSession.actionsAreCommands() then
+    -- Multiplayer: every peer moves it when the command runs.
+    session:issue({kind = "move_object", object = real_obj.mp_id,
+        x = self.object_cell_x, y = self.object_cell_y, orientation = self.object_orientation})
+    self.ui:playSound("place_r.wav")
+    if not dont_remove then
+      self:removeObject(object, dont_close_if_empty, true, false)
+    end
+    return nil
+  end
   if MultiplayerSession.actionsAreCommands() and not real_obj then
     -- Multiplayer: do not place locally. Send a command; every peer (this
     -- one included) buys and places the object when it runs.

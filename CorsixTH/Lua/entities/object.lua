@@ -762,7 +762,21 @@ function Object:onClick(ui, button, data)
   -- Flag 'in_pickup_mode' can be used if for example some things
   -- should only happen as long as the object is not picked up.
   if button == "right" or (button == "left" and window and window.in_pickup_mode) then
-    if MultiplayerSession.blockUnsupported(ui) then return end -- moving objects
+    if TheApp.mp_session then
+      -- Multiplayer: only corridor objects, outside the room editor; moving
+      -- one is a command (UIPlaceObjects:placeObject), so the object stays
+      -- where it is in the shared game until then.
+      if window or self:getRoom() or not self.object_type.corridor_object then
+        MultiplayerSession.blockUnsupported(ui)
+        return
+      end
+      local place = UIPlaceObjects(ui, {{object = self.object_type, qty = 1, existing_object = self}}, false)
+      place.mp_moving = self
+      ui:addWindow(place)
+      place:setOrientation(self.direction)
+      ui:playSound("pickup.wav")
+      return
+    end
     local room = self:getRoom()
     window = window and window.visible and window
 

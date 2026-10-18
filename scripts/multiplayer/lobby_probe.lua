@@ -437,6 +437,36 @@ local function run()
         elseif a == "quit" then
           log("UI: quitting at step " .. session.step)
           quit = true
+        elseif a == "moveobject" or a == "sellobject" then
+          -- Pick up a corridor object of this hospital (right click), then
+          -- put it down a few tiles away, or sell it (close the window).
+          local obj
+          for _, e in ipairs(world.entities) do
+            if not obj and class.is(e, Object) and e.object_type.id == entry.arg and e.tile_x and
+                not e:getRoom() and world.ui.hospital:isInHospital(e.tile_x, e.tile_y) then
+              obj = e
+            end
+          end
+          if obj then
+            obj:onClick(world.ui, "right")
+            local place = world.ui:getWindow(UIPlaceObjects)
+            if a == "moveobject" and place then
+              local x, y = builder.find_free_rect(world, obj.tile_x + 3, obj.tile_y, 1, 1, 10,
+                  function(tx, ty) return not world:anyHumanoidObscuringArea(tx, ty) end)
+              place:setBlueprintCell(x, y)
+              place.object_cell_x, place.object_cell_y = x, y
+              place:onMouseUp("left", 100000, 100000)
+              log(string.format("UI: moved %s #%d from %d,%d to %d,%d at step %d", entry.arg, obj.mp_id,
+                  obj.tile_x, obj.tile_y, x, y, session.step))
+              place = world.ui:getWindow(UIPlaceObjects)
+              if place then place:close(true) end -- click refused: put it back
+            elseif place then
+              log(string.format("UI: sold %s #%d at step %d", entry.arg, obj.mp_id, session.step))
+              place:close(false)
+            end
+          else
+            log("UI: no " .. entry.arg .. " to pick up")
+          end
         elseif a == "patients" then
           session:issue({kind = "probe_patients", n = tonumber(entry.arg)})
         elseif a == "askraise" then
