@@ -331,8 +331,8 @@ function builder.ui_hire(world, desk_x, desk_y, class, log)
 end
 
 --! Draw a room in the room editor like a player: outline next to (cx, cy),
---! the first valid door clockwise from the top-left, optionally one window
---! in the middle of the top wall, then confirm. In multiplayer the confirm
+--! the first valid door clockwise from the top-left, optionally a window
+--! on each wall, then confirm. In multiplayer the confirm
 --! sends the build_room command; nothing is built locally yet.
 --!param at (table) optional {x, y}: exact top-left corner instead of a search
 --!param by_hand (bool) optional; multiplayer: place the furniture by hand
@@ -372,8 +372,28 @@ function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at, by_
     return
   end
   if with_window then
-    dlg:setWindowBlueprint(x + math.floor(w / 2), y, "north")
-    dlg:placeWindowBlueprint()
+    -- One window on each wall where one fits (not on the door): windows on
+    -- the south and east walls once left blue markers on the corridor.
+    local walls = {
+      north = {}, west = {}, south = {}, east = {},
+    }
+    for tx = x + 1, x + w - 2 do
+      walls.north[#walls.north + 1] = {tx, y}
+      walls.south[#walls.south + 1] = {tx, y + h - 1}
+    end
+    for ty = y + 1, y + h - 2 do
+      walls.west[#walls.west + 1] = {x, ty}
+      walls.east[#walls.east + 1] = {x + w - 1, ty}
+    end
+    for _, wall in ipairs({"north", "west", "south", "east"}) do
+      for _, c in ipairs(walls[wall]) do
+        dlg:setWindowBlueprint(c[1], c[2], wall)
+        if dlg.blueprint_window.anim and dlg.blueprint_window.valid then
+          dlg:placeWindowBlueprint()
+          break
+        end
+      end
+    end
   end
   dlg:confirm()
   log(string.format("UI: drew %s at %d,%d size %dx%d%s (editor %s)", room_id, x, y, w, h,

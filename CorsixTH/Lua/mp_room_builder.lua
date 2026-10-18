@@ -82,6 +82,47 @@ function builder.windowsOf(dlg)
   return windows
 end
 
+--! The floor tile and wall to place a recorded window from, as a player
+--! would: a window on the south or east wall is recorded as the north or
+--! west wall of the tile outside the room, but placed from the tile inside
+--! (the editor's blue marker goes on that tile, which the finished room
+--! clears; on the outside tile it stayed on the corridor floor).
+--!param win (table) {x, y, wall} from builder.windowsOf
+--!return x, y, wall
+function builder.windowCell(win, x, y, w, h)
+  local wx, wy, wall = win[1], win[2], win[3]
+  if wall == "north" and wy == y + h then return wx, wy - 1, "south" end
+  if wall == "west" and wx == x + w then return wx - 1, wy, "east" end
+  return wx, wy, wall
+end
+
+-- Values the room editor paints on the overlay layer (4) in front of a door
+-- or window it is placing (see door_floor_blueprint_markers in edit_room.lua).
+local OVERLAY_LAYER, FIRST_MARKER, LAST_MARKER = 4, 25, 36
+
+--! Remove door and window markers no room editor is showing (left on the
+--! floor by games before builder.windowCell). Only while no editor is open.
+function builder.clearStaleMarkers(world)
+  local ui = world and world.ui
+  local th = world and world.map and world.map.th
+  if not (ui and th) then return 0 end
+  for _, window in ipairs(ui.windows or {}) do
+    if class.is(window, UIEditRoom) then return 0 end
+  end
+  local cleared = 0
+  local mw, mh = th:size()
+  for ty = 1, mh do
+    for tx = 1, mw do
+      local v = th:getCell(tx, ty, OVERLAY_LAYER)
+      if v >= FIRST_MARKER and v <= LAST_MARKER then
+        th:setCell(tx, ty, OVERLAY_LAYER, 0)
+        cleared = cleared + 1
+      end
+    end
+  end
+  return cleared
+end
+
 --! Humanoids standing in a rectangle (plus nothing else), in entity order.
 local function humanoids_in(world, x, y, w, h)
   local found = {}
@@ -199,7 +240,7 @@ local function try_build(world, hospital, cmd)
   if dlg.phase ~= "windows" then return fail("door not accepted") end
   -- 3. Windows (an invalid one is skipped, like a click on a bad wall)
   for _, win in ipairs(builder.decodeWindows(cmd.windows)) do
-    dlg:setWindowBlueprint(win[1], win[2], win[3])
+    dlg:setWindowBlueprint(builder.windowCell(win, x, y, w, h))
     dlg:placeWindowBlueprint()
   end
   -- 4. Area is empty (checked above), so this goes straight to objects.

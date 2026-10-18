@@ -354,7 +354,7 @@ local function run()
           if n > commands_seen and line:match("%S") then
             local action, arg = line:match("^%s*(%w+):?(.-)%s*$")
             if action then
-              ui_script[#ui_script + 1] = {hour = session.step, action = action, arg = arg}
+              ui_script[#ui_script + 1] = {hour = session.step, action = action, arg = arg, live = true}
               log(string.format("UI: live instruction %q at step %d", line, session.step))
             end
           end
@@ -369,7 +369,7 @@ local function run()
     for i, entry in ipairs(ui_script) do
       if not done[i] and session.step >= entry.hour then
         done[i] = true
-        local a = entry.action
+        local a, live = entry.action, entry.live
         if a == "buy" then builder.ui_buy(world, desk_x, desk_y, entry.arg, log)
         elseif a == "openhospital" then
           local watch
@@ -543,6 +543,35 @@ local function run()
           else
             log("UI: no " .. entry.arg .. " to pick up")
           end
+        elseif a == "players" then
+          -- MULTIPLAYER > PLAYERS: open the window and log its rows.
+          local win = UIMultiplayerPlayers(world.ui)
+          world.ui:addWindow(win)
+          local parts = {}
+          local function text(v) return (tostring(v):gsub("^<LocalisedString> Current value:", "")) end
+          for _, r in ipairs(UIMultiplayerPlayers.rows(lobby, session, world)) do
+            parts[#parts + 1] = table.concat({text(r.name), text(r.hospital), text(r.ping), text(r.status),
+                text(r.value)}, "|")
+          end
+          log(string.format("UI: players at step %d: %s", session.step, table.concat(parts, "; ")))
+          if entry.arg == "shot" then shot("players") end
+          win:close()
+        elseif a == "overlay" then
+          -- Blue marks left on the map's overlay layer (4) outside any room
+          -- being edited: value, tile, room id there.
+          local th = world.map.th
+          local mw, mh = th:size()
+          local marks = {}
+          for y = 1, mh do
+            for x = 1, mw do
+              local v = th:getCell(x, y, 4)
+              if v ~= 0 then
+                marks[#marks + 1] = string.format("%d@%d,%d(room %d)", v, x, y, th:getCellFlags(x, y).roomId or 0)
+              end
+            end
+          end
+          log(string.format("UI: overlay at step %d: %d marks %s", session.step, #marks,
+              table.concat(marks, " ", 1, math.min(#marks, 40))))
         elseif a == "uistate" then
           -- What decides whether clicks on the map reach people and objects.
           local ui = world.ui
@@ -686,6 +715,7 @@ local function run()
         elseif a == "cheat" then
           world.hospitals[1].balance = world.hospitals[1].balance + 1
           log("UI: changed money locally only (cheat)")
+        elseif live then log("UI: unknown action " .. a .. " (ignored)") -- a typo must not end a person's game
         else error("unknown UI action " .. a) end
       end
     end

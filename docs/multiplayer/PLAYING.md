@@ -63,6 +63,10 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   member of staff, who then walks over to the other hospital (it takes a few
   game days). Faxes, emergencies and VIP visits come to the hospital they
   are for.
+- **Players:** the **MULTIPLAYER** menu, **PLAYERS** lists everybody in the
+  game: their ping (average of the last 10 seconds), whether they are still
+  connected (or have not answered for a while, or are behind), and their
+  hospital's value, balance and reputation.
 - If an action cannot be done (somebody stands in the way, a candidate is
   gone), the adviser tells you why.
 

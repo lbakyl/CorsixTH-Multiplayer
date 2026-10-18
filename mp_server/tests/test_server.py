@@ -220,6 +220,33 @@ def test_leaving_during_game(run):
     run(body)
 
 
+def test_players_list_during_a_game(run, monkeypatch):
+    # Every ping interval each player gets the room's players: name,
+    # connected or left, ping over the last seconds, quiet time, last step.
+    monkeypatch.setattr(srv, "PING_INTERVAL_GAME", 0.05)
+
+    async def body(server, port):
+        a, b = await two_players_in_room(port)
+        await start(a, b)
+        b.send("S 2 7 x")
+        await a.expect("S")
+        # Both answer pings while reading; a list with both pings comes soon.
+        for _ in range(40):
+            await b.expect("PLAYERS")
+            p = await a.expect("PLAYERS")
+            if int(p["rtt1"]) >= 0 and int(p["rtt2"]) >= 0:
+                break
+        assert p["n"] == "2"
+        assert (p["peer1"], p["name1"], p["state1"]) == ("1", "Alice", "on")
+        assert (p["peer2"], p["name2"], p["state2"], p["step2"]) == ("2", "Bob", "on", "7")
+        assert int(p["rtt1"]) >= 0 and int(p["rtt2"]) >= 0 and int(p["quiet2"]) < 2
+        await b.close()
+        await a.expect("LEFT")
+        p = await a.expect("PLAYERS")
+        assert (p["name2"], p["state2"], p["rtt2"], p["step2"]) == ("Bob", "left", "-1", "7")
+    run(body)
+
+
 def test_owner_handover_in_lobby(run):
     async def body(server, port):
         a, b = await two_players_in_room(port)

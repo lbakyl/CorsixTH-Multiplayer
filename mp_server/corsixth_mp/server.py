@@ -44,7 +44,8 @@ MODES = ("shared", "coop")
 SPEED_CONTROL = ("any", "owner")
 DIFFICULTIES = ("easy", "full", "hard")
 PING_INTERVAL_LOBBY = 1.0
-PING_INTERVAL_GAME = 5.0
+PING_INTERVAL_GAME = 2.0  # also how often players get the PLAYERS list
+RTT_WINDOW = 10.0  # seconds of pings averaged for the PLAYERS list
 HELLO_TIMEOUT = 15.0
 # A public server should not let one address (or everybody) open unlimited
 # connections. Defaults; see the CORSIXTH_MP_MAX_* environment variables.
@@ -77,6 +78,8 @@ class Player:
     peer: int = 0
     ready: bool = False
     rtt_samples: list[float] = field(default_factory=list)
+    rtt_recent: list[tuple[float, float]] = field(default_factory=list)  # (time, ms)
+    last_heard: float = field(default_factory=time.monotonic)
     pings: dict[int, float] = field(default_factory=dict)
     next_ping_id: int = 1
     last_step: int = 0
@@ -87,6 +90,12 @@ class Player:
     @property
     def rtt(self) -> float:
         return pacing.effective_rtt(self.rtt_samples)
+
+    def recent_rtt(self, now: float) -> float | None:
+        """Average round trip of the pings answered in the last RTT_WINDOW
+        seconds (None: none answered)."""
+        recent = [ms for t, ms in self.rtt_recent if now - t <= RTT_WINDOW]
+        return sum(recent) / len(recent) if recent else None
 
     def send(self, line: str) -> None:
         if self.closed:
@@ -277,6 +286,7 @@ class Server:
                 raw = await reader.readline()
                 if not raw:
                     break
+                player.last_heard = time.monotonic()
                 if not raw.endswith(b"\n"):
                     break  # over-long line or connection cut mid-line
                 self._dispatch(player, raw.decode("utf-8", "replace").rstrip("\r\n"))
@@ -307,6 +317,8 @@ class Server:
                 room = player.room
                 if room and room.state == "lobby" and room.owner is player:
                     self._send_lobby(room)  # refresh everyone's ping, once per room
+                if room and room.state == "running" and not player.is_referee:
+                    player.send(self._players_line(room))
         except asyncio.CancelledError:
             pass
 
@@ -391,11 +403,36 @@ class Server:
             return
         handler(player, f)
 
+    def _players_line(self, room: Room) -> str:
+        """PLAYERS: everybody who played in this running room, for the
+        in-game player list: peer, name, average round trip over the last
+        RTT_WINDOW seconds (-1: none), on (connected) or left, seconds since
+        the server last heard from them, and the last step they reported."""
+        now = time.monotonic()
+        seats: dict[int, tuple[str, str, int, int, int]] = {}
+        for peer, name in room.left_names.items():
+            seats[peer] = (name, "left", -1, 0, room.left.get(peer, 0))
+        for peer, pl in room.players.items():
+            if pl.is_referee:
+                continue
+            rtt = pl.recent_rtt(now)
+            seats[peer] = (pl.name, "on", -1 if rtt is None else round(rtt),
+                           int(now - pl.last_heard), pl.last_step)
+        fields: dict[str, object] = {"n": len(seats)}
+        for i, peer in enumerate(sorted(seats), start=1):
+            name, state, rtt, quiet, step = seats[peer]
+            fields.update({f"peer{i}": peer, f"name{i}": name, f"state{i}": state,
+                           f"rtt{i}": rtt, f"quiet{i}": quiet, f"step{i}": step})
+        return encode("PLAYERS", **fields)
+
     def _on_pong(self, player: Player, f: dict[str, str]) -> None:
         sent = player.pings.pop(int(f.get("id", "0") or 0), None)
         if sent is not None:
-            player.rtt_samples.append((time.monotonic() - sent) * 1000)
+            now = time.monotonic()
+            player.rtt_samples.append((now - sent) * 1000)
             del player.rtt_samples[:-20]
+            player.rtt_recent.append((now, (now - sent) * 1000))
+            player.rtt_recent = [(t, ms) for t, ms in player.rtt_recent if now - t <= RTT_WINDOW]
 
     def _on_ping(self, player: Player, f: dict[str, str]) -> None:
         player.send(encode("PONG", id=f.get("id")))
@@ -503,6 +540,7 @@ class Server:
         player.send(encode("START", peer=peer, **fields))
         room.broadcast(encode("CHAT", peer=0, name="server", text=f"{player.name} is back"),
                        exclude=player)
+        room.broadcast(self._players_line(room))
         self._start_recovery(room, player.last_step, rejoining=peer)
 
     def _add_to_room(self, player: Player, room: Room) -> None:
@@ -583,6 +621,7 @@ class Server:
         for peer, pl in room.players.items():
             pl.last_step = room.continue_step or 0
             pl.send(encode("START", peer=peer, **room.start_fields))
+        room.broadcast(self._players_line(room))  # the player list from the start
         if room.continue_step is not None:
             rec = room.recovery = Recovery(step=room.continue_step, asked=True, saver=room.owner)
             rec.held = {p: None for p in room.players}
@@ -874,6 +913,7 @@ class Server:
             room.last_report.pop(player.peer, None)
             room.left_log.append(left)
             room.broadcast(left, referee=True)
+            room.broadcast(self._players_line(room))
             # Reports still missing only from the leaver are complete now.
             for step in sorted(room.fingerprints):
                 fps = room.fingerprints[step]

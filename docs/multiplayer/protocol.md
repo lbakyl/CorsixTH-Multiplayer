@@ -61,7 +61,8 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 | `LOAD step parts peers`, `SAVEDATA d`, `LOADEND step` | the shared save (base64 in `parts` lines); load it and restart at `step` with `peers` |
 | `RESUME step` | play on |
 | `CHAT peer name text` | chat (`peer=0`: a server notice) |
-| `PING id` | answer with `PONG id=` |
+| `PING id` | answer with `PONG id=` (every 2 seconds during a game) |
+| `PLAYERS n peerI nameI stateI rttI quietI stepI` | every 2 seconds during a game, for MULTIPLAYER > PLAYERS: each player (I = 1..n) with `state` `on` or `left`, the average round trip in ms over the last 10 seconds (`-1`: none), seconds since the server last heard from them, and their last reported step. Older clients ignore it |
 
 ## Pacing
 

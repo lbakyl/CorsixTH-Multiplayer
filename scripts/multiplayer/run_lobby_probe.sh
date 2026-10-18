@@ -10,7 +10,8 @@
 #   2. wrong password -> refused
 #   3. one player changes money locally only -> DESYNC (found by the game
 #      and by the server)
-#   4. one player leaves mid-game -> the other is told and carries on alone
+#   4. one player leaves mid-game -> the other is told and carries on alone;
+#      MULTIPLAYER > PLAYERS lists both with a ping, then the leaver as left
 #   5. rooms: both draw a room on the same spot in the same hour (one wins
 #      on both machines), the other player sees the reserved outline, a
 #      later room elsewhere, a window -> IN SYNC, same rooms on both
@@ -31,7 +32,8 @@
 #      management, a queue reordered by dragging in the queue window by each
 #      player, a bench picked up and put down elsewhere, another sold, a GP's
 #      office furnished by hand (one command per object, then confirmed),
-#      toilets drawn and cancelled while furnishing -> IN SYNC
+#      toilets drawn and cancelled while furnishing -> IN SYNC; no door or
+#      window markers left on the floor (windows on every wall)
 #  11. save and continue: a co-op game saved with File > Save, continued from
 #      the lobby by the same players (other host, own hospitals by name),
 #      loaded state identical to the saved one -> IN SYNC, commands after it;
@@ -128,7 +130,7 @@ run_probe mallory MP_ROLE=join MP_ROOM=ward MP_JOIN_PASSWORD=guess & pids+=($!)
 run_probe carol MP_ROLE=host MP_ROOM=cheat MP_STEPS=400 & pids+=($!)
 sleep 1
 run_probe dave MP_ROLE=join MP_ROOM=cheat MP_STEPS=400 MP_UI_SCRIPT="50:cheat" & pids+=($!)
-run_probe erin MP_ROLE=host MP_ROOM=leave MP_STEPS=800 MP_UI_SCRIPT="100:buy:bench" & pids+=($!)
+run_probe erin MP_ROLE=host MP_ROOM=leave MP_STEPS=800 MP_UI_SCRIPT="100:buy:bench;250:players;600:players" & pids+=($!)
 sleep 1
 run_probe frank MP_ROLE=join MP_ROOM=leave MP_STEPS=800 MP_UI_SCRIPT="300:quit" & pids+=($!)
 run_probe gina MP_ROLE=host MP_ROOM=build MP_STEPS=900 MP_DRAW_EVERY=4   MP_UI_SCRIPT="100:room:gp:5:5:window;400:buy:bench" & pids+=($!)
@@ -152,10 +154,10 @@ run_probe paul MP_ROLE=join MP_ROOM=events MP_STEPS=1600 MP_DRAW_EVERY=3   MP_UI
 # rise window, one accepted and one declined; a nurse fired; queues
 # reordered by dragging in the queue window.
 run_probe wade MP_ROLE=host MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
-  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench" & pids+=($!)
+  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench;950:overlay" & pids+=($!)
 sleep 1
 run_probe yara MP_ROLE=join MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
-  MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront;500:furnishroom:gp:5:5;750:cancelroom:toilets:4:4;900:uistate" & pids+=($!)
+  MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront;500:furnishroom:gp:5:5;750:cancelroom:toilets:4:4;900:uistate;950:overlay" & pids+=($!)
 # Save and continue: a co-op game saves at step 300 (File > Save) and ends;
 # then the same two players continue it from the lobby, the other one
 # hosting this time (each gets their own hospital back by name).
@@ -246,8 +248,13 @@ fail |= not ok3
 e = log('erin')
 told = re.search(r'multiplayer: peer 2 left after step \d+', e) is not None
 alone = re.search(r'steps=800 .* peers=1', e) is not None
-ok4 = told and alone and result('erin').startswith('IN SYNC through step 800')
-print(f"4. Player leaves:           told: {told}; carried on alone to step 800: {alone}")
+# MULTIPLAYER > PLAYERS before and after frank quits.
+lists4 = re.findall(r'UI: players at step \d+: (.*)', e)
+listed = (len(lists4) == 2 and re.search(r'erin\|[^|]*\|\d+ ms\|you', lists4[0]) is not None
+          and re.search(r'frank\|[^|]*\|[^|]*\|playing', lists4[0]) is not None  # (no ping yet: frank's game lasts a second)
+          and 'frank|' in lists4[1] and '|-|left the game|' in lists4[1])
+ok4 = told and alone and listed and result('erin').startswith('IN SYNC through step 800')
+print(f"4. Player leaves:           told: {told}; carried on alone to step 800: {alone}; player list: {listed} {lists4[-1] if lists4 else ''}")
 fail |= not ok4
 
 g, h = log('gina'), log('hugo')
@@ -320,7 +327,11 @@ drawn10 = {k: f"{k}@{x},{yy}" for k, x, yy in re.findall(r'UI: drew (\w+) at (\d
 # After furnishing by hand and cancelling, clicks reach the whole map again.
 states10 = [l for l in y_.splitlines() if 'UI: state at step' in l]
 clicks10 = bool(states10) and 'world hit test on, edit_room false' in states10[-1]
-ok10 = clicks10 and (result('wade').startswith('IN SYNC through step 1000') and result('yara').startswith('IN SYNC')
+# No door or window markers left on the floor (yara's rooms have a window on
+# every wall; south and east ones once left blue tiles on the corridor).
+marks10 = [m.group(1) for m in (re.search(r'UI: overlay at step \d+: (\d+) marks', t) for t in (w_, y_)) if m]
+clean10 = marks10 == ['0', '0']
+ok10 = clean10 and clicks10 and (result('wade').startswith('IN SYNC through step 1000') and result('yara').startswith('IN SYNC')
         and cw == applied('yara') and kinds10.count('pay_rise') == 2 and kinds10.count('probe_raise') == 2
         and 'fire_staff' in kinds10 and kinds10.count('queue_move') >= 1 and 'probe_patients' in kinds10
         and 'move_object' in kinds10 and 'sell_object' in kinds10
@@ -328,7 +339,7 @@ ok10 = clicks10 and (result('wade').startswith('IN SYNC through step 1000') and 
         and rooms10 == re.search(r'rooms built: (.*)', y_).group(1)
         and drawn10.get('gp', '-') in rooms10.split() and drawn10.get('toilets', '-') not in rooms10.split()
         and 'accepted the pay rise' in y_ and 'declined the pay rise' in y_)
-print(f"10. Staff and queues:       {result('wade')}; commands {len(okw)}/{len(cw)} ok, identical: {cw == applied('yara')}; {' '.join(kinds10)}; rooms {rooms10 or 'none'}; clicks after furnishing: {clicks10}")
+print(f"10. Staff and queues:       {result('wade')}; commands {len(okw)}/{len(cw)} ok, identical: {cw == applied('yara')}; {' '.join(kinds10)}; rooms {rooms10 or 'none'}; clicks after furnishing: {clicks10}; markers left: {'/'.join(marks10) or '-'}")
 fail |= not ok10
 
 sa, to, t2, s2 = log('sara'), log('tom'), log('tom-2'), log('sara-2')

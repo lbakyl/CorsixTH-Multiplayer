@@ -451,6 +451,24 @@ multiplayer_window = {
   goals_failed = "Your hospital has failed this level's goals. You can keep playing.",
   menu_caption = "  MULTIPLAYER  ",
   menu_trade = "  TRADE WITH OTHER PLAYERS  ",
+  menu_players = "  PLAYERS  ",
+  -- Player list (in game)
+  players_caption = "Players",
+  players_name = "Player",
+  players_hospital = "Hospital",
+  players_ping = "Ping",
+  players_status = "Status",
+  players_value = "Value",
+  players_balance = "Balance",
+  players_reputation = "Reputation",
+  players_ms = "%d ms",
+  players_you = "you",
+  players_playing = "playing",
+  players_left = "left the game",
+  players_quiet = "no answer for %d s",
+  players_behind = "%d hours behind",
+  players_waiting = "Waiting for the server's list...",
+  players_note = "Ping: average of the last 10 seconds. Value: the hospital value (a level goal).",
 }
 
 tooltip.multiplayer_window = {

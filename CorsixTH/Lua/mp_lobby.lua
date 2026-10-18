@@ -312,7 +312,7 @@ function MultiplayerLobby.listSaves()
       local f = io.open(dir .. file, "r")
       if f then
         for line in f:lines() do
-          local k, v = line:match("^(%w+)=(.*)$")
+          local k, v = line:match("^(%w+)=(.-)%s*$") -- (a save made on Windows has CRLF line ends)
           if k then info[k] = v end
         end
         f:close()
@@ -513,6 +513,10 @@ function MultiplayerLobby:_onSPEED(f)
 end
 
 function MultiplayerLobby:_onLEFT(f)
+  -- The player list shows it at once (the server's next list says so too).
+  for _, p in ipairs(self.game_players or {}) do
+    if p.peer == tonumber(f.peer) then p.connected = false end
+  end
   local session = TheApp and TheApp.mp_session
   if session and session.lobby == self then
     session:removePeer(tonumber(f.peer))
@@ -638,13 +642,16 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
   if world.mp_coop then
     world.mp_local_index = session.hospital_index
     app.ui.hospital = world:getUIHospital()
-    self:_addTradeMenu(app.ui) -- a rejoining player's first game UI
   end
+  -- A continued or rejoined game's first game UI (no-op for the same menu bar).
+  self:_addMultiplayerMenu(app.ui, world.mp_coop ~= nil)
   session:restartAt(world, step, peers)
   -- The saved UI may still point at a room editor that is not open here
   -- (clicks would then be limited to that room).
   local room_builder = corsixth.require("mp_room_builder")
   room_builder.sanitizeUI(app.ui)
+  local cleared = room_builder.clearStaleMarkers(world)
+  if cleared > 0 then self.log("multiplayer: cleared " .. cleared .. " stale door/window markers") end
   -- Rooms this player was furnishing by hand: their editors again.
   for _, entry in pairs(world.mp_furnishing or {}) do
     if entry.peer == session.peer_id and not self.is_referee then room_builder.show(world, entry) end
@@ -696,14 +703,37 @@ end
 
 --! The co-op Multiplayer menu (money and staff to the other players), once
 --! per menu bar.
-function MultiplayerLobby:_addTradeMenu(ui)
-  if not (ui and ui.menu_bar) or self.trade_menu_bar == ui.menu_bar then return end
-  self.trade_menu_bar = ui.menu_bar
-  ui.menu_bar:addMenu(_S.multiplayer_window.menu_caption, UIMenu()
-    :appendItem(_S.multiplayer_window.menu_trade, function()
-      local current = TheApp.ui -- the menu bar outlives a desync repair's load
+--! The MULTIPLAYER menu: the player list, and in co-op games trades.
+function MultiplayerLobby:_addMultiplayerMenu(ui, coop)
+  if not (ui and ui.menu_bar) or self.mp_menu_bar == ui.menu_bar then return end
+  self.mp_menu_bar = ui.menu_bar
+  local menu = UIMenu()
+  menu:appendItem(_S.multiplayer_window.menu_players, function()
+    local current = TheApp.ui -- the menu bar outlives a desync repair's load
+    current:addWindow(UIMultiplayerPlayers(current))
+  end)
+  if coop then
+    menu:appendItem(_S.multiplayer_window.menu_trade, function()
+      local current = TheApp.ui
       current:addWindow(UIMultiplayerTrade(current))
-    end))
+    end)
+  end
+  ui.menu_bar:addMenu(_S.multiplayer_window.menu_caption, menu)
+end
+
+--! The server's list of the players in this game (every 2 seconds): name,
+--! connected or left, average round trip over the last 10 seconds, seconds
+--! since it last heard from them, and their last step.
+function MultiplayerLobby:_onPLAYERS(f)
+  local list = {}
+  for i = 1, tonumber(f.n) or 0 do
+    list[#list + 1] = {
+      peer = tonumber(f["peer" .. i]), name = f["name" .. i] or "?",
+      connected = f["state" .. i] == "on", rtt = tonumber(f["rtt" .. i]) or -1,
+      quiet = tonumber(f["quiet" .. i]) or 0, step = tonumber(f["step" .. i]) or 0,
+    }
+  end
+  self.game_players = list
 end
 
 --! Load the agreed level and attach a lockstep session to it. A player
@@ -731,6 +761,14 @@ function MultiplayerLobby:_beginGame(f)
 
   local coop = f.mode == "coop"
   local my_index = 1
+  -- Each player's hospital (for the player list): one each in peer order, or
+  -- as the server seated them in a continued game; all share hospital 1.
+  self.peer_hospital = {}
+  for i, p in ipairs(peers) do self.peer_hospital[p] = coop and i or 1 end
+  for p, index in (f.seats or ""):gmatch("(%d+):(%d+)") do
+    if coop then self.peer_hospital[tonumber(p)] = tonumber(index) end
+  end
+  self.game_players = nil
   if coop then
     -- One hospital per player, in peer order; this machine runs its own.
     -- Names from START (in peer order), so a peer that never saw the room
@@ -803,7 +841,7 @@ function MultiplayerLobby:_beginGame(f)
     self.log("multiplayer: rejoining; waiting for the shared save")
     return
   end
-  if coop then self:_addTradeMenu(world.ui) end
+  self:_addMultiplayerMenu(world.ui, coop)
   world:applySharedSpeed(f.speed or "Normal")
   self.log(string.format("multiplayer: playing as %s of %s, seed %s, delay %s, max speed %s",
       f.peer, f.peers, f.seed, f.delay, tostring(f.max_speed)))

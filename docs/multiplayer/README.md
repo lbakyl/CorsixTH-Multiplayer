@@ -271,6 +271,14 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
     died at the same tick while a room was drawn over people. Fixed in
     `th_pathfind.cpp`; `CppTest/test_th_pathfind.cpp` checks path costs on
     random maps against a plain search.
+33. **Replay a command the way a player clicks.** The room command records
+    each window by its wall tile, and a south or east wall is stored as the
+    north or west wall of the tile outside the room. Replayed as is, the
+    editor's blue window marker went on that outside tile, which the finished
+    room does not clear: blue patches on the corridor in every game. Found
+    from a player's screenshot; listing the overlay layer of his save showed
+    the four tiles. `builder.windowCell` turns them back; loading a shared
+    save clears old markers.
 
 ## 8. Next steps
 
