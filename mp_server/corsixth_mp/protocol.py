@@ -82,6 +82,12 @@ def parse_step_report(line: str) -> tuple[int, int, str] | None:
     return int(m.group(1)), int(m.group(2)), m.group(3)
 
 
+def command_step(line: str) -> int | None:
+    """The ``step`` field of a ``C`` command line, if present."""
+    m = re.search(r"(?:^C | )step=(\d+)(?: |$)", line)
+    return int(m.group(1)) if m else None
+
+
 def command_peer(line: str) -> int | None:
     """The ``peer`` field of a ``C`` command line, if present."""
     m = re.search(r"(?:^C | )peer=(\d+)(?: |$)", line)

@@ -137,6 +137,31 @@ run_probe nico MP_ROLE=join MP_ROOM=coop MP_STEPS=1200 MP_DRAW_EVERY=3 \
 run_probe olga MP_ROLE=host MP_ROOM=events MP_COOP=1 MP_STEPS=1600   MP_UI_SCRIPT="20:openhospital;100:emergency:2;400:vip:2" & pids+=($!)
 sleep 1
 run_probe paul MP_ROLE=join MP_ROOM=events MP_STEPS=1600 MP_DRAW_EVERY=3   MP_UI_SCRIPT="30:openhospital;130:answerfax:emergency:1;430:answerfax:personality:1" & pids+=($!)
+if [[ "${MP_REFEREE:-0}" == 1 ]]; then
+  # Desync repair: one player changes money locally, the server holds both
+  # games, both load the referee's save and play on (shared and co-op).
+  run_probe quinn MP_ROLE=host MP_ROOM=fix MP_STEPS=1000 MP_EXPECT_REPAIR=1 \
+    MP_UI_SCRIPT="500:buy:bench" & pids+=($!)
+  sleep 1
+  run_probe rosa MP_ROLE=join MP_ROOM=fix MP_STEPS=1000 MP_EXPECT_REPAIR=1 \
+    MP_UI_SCRIPT="300:cheat;520:hire:Nurse" & pids+=($!)
+  run_probe sam MP_ROLE=host MP_ROOM=fixcoop MP_COOP=1 MP_STEPS=1000 MP_EXPECT_REPAIR=1 \
+    MP_UI_SCRIPT="20:openhospital;400:cheat;500:buy:bench" & pids+=($!)
+  sleep 1
+  run_probe tess MP_ROLE=join MP_ROOM=fixcoop MP_STEPS=1000 MP_EXPECT_REPAIR=1 \
+    MP_UI_SCRIPT="30:openhospital;520:hire:Nurse" & pids+=($!)
+  # Rejoin: a player quits (as after a crash) and joins the running game
+  # again under the same name, in a new game process.
+  # The host pauses after the other one quits, until the rejoin is done.
+  run_probe uma MP_ROLE=host MP_ROOM=back MP_COOP=1 MP_STEPS=1500 \
+    MP_UI_SCRIPT="20:openhospital;400:waitrejoin;800:buy:bench;900:hire:Doctor" & pids+=($!)
+  sleep 1
+  run_probe vera MP_ROLE=join MP_ROOM=back MP_STEPS=1500 \
+    MP_UI_SCRIPT="30:openhospital;300:quit" & pids+=($!)
+  (for _ in $(seq 600); do grep -qs "UI: quitting" "$out/vera/log.txt" && break; sleep 0.1; done
+   sleep 1
+   run_probe vera-back MP_NAME=vera MP_ROLE=join MP_ROOM=back MP_STEPS=1500 MP_REJOIN=1) & pids+=($!)
+fi
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 if [[ -n "${MP_SERVER_LOG_CMD:-}" ]]; then eval "$MP_SERVER_LOG_CMD" > "$out/server.log" 2>&1 || true; fi
@@ -246,10 +271,42 @@ if with_referee:
     connected = [r for r in rooms if f"room '{r}': referee connected" in server]
     differ = re.findall(r"room '(\w+)': the players differ from the referee", server)
     confirmed = dict(re.findall(r"room '(\w+)': referee confirmed steps through (\d+)", server))
+    def confirmed_after(room): return confirmed.get(room, 0)
     ok10 = connected == rooms and not differ and all(int(confirmed.get(r, 0)) > 300 for r in rooms)
     print(f"10. Headless referee:       connected in {len(connected)}/{len(rooms)} rooms; "
           f"differs in {differ or 'none'}; confirmed through " +
           ", ".join(f"{r} {confirmed.get(r, 0)}" for r in rooms))
     fail |= not ok10
+
+    for n, (host, join, room) in enumerate([('quinn', 'rosa', 'fix'), ('sam', 'tess', 'fixcoop')]):
+        hl, jl = log(host), log(join)
+        repaired = 'REPAIRED' in hl and 'REPAIRED' in jl
+        fixed = re.search(rf"room '{room}': repaired: everybody loads the referee's game at step (\d+) \((\d+) bytes", server)
+        same = applied(host) == applied(join)
+        kinds = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in applied(host) if x.endswith('-> ok'))
+        later = 'place_object' in kinds and 'hire' in kinds
+        ok = (repaired and fixed is not None and same and later
+              and result(host).startswith('IN SYNC through step 1000')
+              and result(join).startswith('IN SYNC through step 1000')
+              and int(confirmed_after(room)) >= 900)
+        where = f"at step {fixed.group(1)}, save {int(fixed.group(2)) // 1024} KiB" if fixed else "not repaired"
+        print(f"{11 + n}. Desync repair ({room}):{' ' * (8 - len(room))}{result(host)} / {result(join)}; "
+              f"{where}; commands after it ok on both: {same and later}")
+        fail |= not ok
+
+    u, v = log('uma'), log('vera-back')
+    rejoined = re.search(r"REJOINED: loaded the shared save at step (\d+)", v)
+    at = int(rejoined.group(1)) if rejoined else 10**9
+    after_u = [x for x in applied('uma') if int(re.search(r'step (\d+):', x).group(1)) > at]
+    after_v = [x for x in applied('vera-back') if int(re.search(r'step (\d+):', x).group(1)) > at]
+    kinds = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in after_u if x.endswith('-> ok'))
+    ok13 = (rejoined is not None and "room 'back': 'vera' rejoins as player 2" in server
+            and result('uma').startswith('IN SYNC through step 1500')
+            and result('vera-back').startswith('IN SYNC through step 1500')
+            and after_u == after_v and kinds == ['hire', 'place_object']
+            and int(confirmed_after('back')) >= 1400)
+    print(f"13. Rejoin after a crash:   {result('uma')} / {result('vera-back')}; "
+          f"rejoined at step {at if rejoined else '-'}; commands after it on both: {after_u == after_v} {kinds}")
+    fail |= not ok13
 sys.exit(1 if fail else 0)
 PY

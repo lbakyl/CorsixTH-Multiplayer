@@ -336,9 +336,9 @@ def test_referee_follows_and_checks_the_players():
         a.send("S 1 2 fp-two")
         b.send("S 2 2 fp-two")
         ref.send("S 0 2 fp-other")
-        d = await a.expect("DESYNC")
-        assert d["step"] == "2" and d["referee"] == "1"
-        assert (await b.expect("DESYNC"))["step"] == "2"
+        # With a referee the server repairs the games instead (see below).
+        assert (await a.expect("HOLD"))["step"] == "2"
+        assert (await b.expect("HOLD"))["step"] == "2"
         assert not any(x.startswith("C ") and "peer=0" in x for x in a.inbox + b.inbox)
         assert server.rooms["r1"].verified_step == 1
     run_with_referee(body)
@@ -355,4 +355,111 @@ def test_referee_with_another_build_is_refused():
         ref = await connect_referee(port, "r1", started[0][2], build="other")
         assert (await ref.expect("ERROR"))["code"] == "build_mismatch"
         assert server.rooms["r1"].referee is None
+    run_with_referee(body)
+
+
+def test_desync_repair_from_the_referee_save():
+    async def body(server, port, started):
+        a, b = await two_players_in_room(port)
+        await start(a, b)
+        for _ in range(50):
+            if started:
+                break
+            await asyncio.sleep(0.01)
+        ref = await connect_referee(port, "r1", started[0][2])
+        await ref.expect("START")
+        a.send("C kind=hire peer=1 seq=1 step=2")
+        a.send("S 1 3 fp-a")
+        b.send("S 2 3 fp-b")
+        assert (await a.expect("HOLD"))["step"] == "3"
+        assert (await b.expect("HOLD"))["step"] == "3"
+        # Sent before stopping: still logged, so replayed after the load.
+        b.send("C kind=hire peer=2 seq=1 step=5")
+        a.send(encode("HELD", step=4))
+        b.send(encode("HELD", step=3))
+        # The referee runs to the step every player has run, then saves.
+        assert (await ref.expect("SAVE"))["step"] == "3"
+        ref.send(encode("SAVEDATA", d="QUJD=="))
+        ref.send(encode("SAVEDATA", d="REVG"))
+        ref.send(encode("SAVED", step=3, parts=2))
+        for c in (a, b, ref):
+            assert (await c.expect("LOAD")) == {"step": "3", "parts": "2", "peers": "1,2"}
+            assert (await c.expect("SAVEDATA"))["d"] == "QUJD=="
+            assert (await c.expect("SAVEDATA"))["d"] == "REVG"
+            assert (await c.expect("LOADEND"))["step"] == "3"
+            assert await c.expect("C") == "C kind=hire peer=2 seq=1 step=5"
+            assert (await c.expect("RESUME"))["step"] == "3"
+        room = server.rooms["r1"]
+        assert room.recovery is None and room.recoveries == 1 and room.desync_step is None
+        # The games go on from step 3 and are compared again.
+        a.send("S 1 4 fp-ok")
+        b.send("S 2 4 fp-ok")
+        ref.send("S 0 4 fp-ok")
+        assert await b.expect("S") == "S 1 4 fp-ok"
+        for _ in range(50):
+            if room.verified_step == 4:
+                break
+            await asyncio.sleep(0.01)
+        assert room.verified_step == 4
+    run_with_referee(body)
+
+
+def test_desync_without_referee_answer_ends_the_game(monkeypatch):
+    monkeypatch.setattr(srv, "RECOVERY_TIMEOUT", 0.2)
+
+    async def body(server, port, started):
+        a, b = await two_players_in_room(port)
+        await start(a, b)
+        for _ in range(50):
+            if started:
+                break
+            await asyncio.sleep(0.01)
+        ref = await connect_referee(port, "r1", started[0][2])
+        await ref.expect("START")
+        a.send("S 1 1 fp-a")
+        b.send("S 2 1 fp-b")
+        await a.expect("HOLD")
+        a.send(encode("HELD", step=1))
+        b.send(encode("HELD", step=1))
+        await ref.expect("SAVE")
+        # The referee never answers: after the timeout the game is over.
+        assert (await a.expect("DESYNC"))["step"] == "1"
+        assert (await b.expect("DESYNC"))["step"] == "1"
+    run_with_referee(body)
+
+
+def test_rejoin_a_running_game_under_the_same_name():
+    async def body(server, port, started):
+        a, b = await two_players_in_room(port)
+        await start(a, b)
+        for _ in range(50):
+            if started:
+                break
+            await asyncio.sleep(0.01)
+        ref = await connect_referee(port, "r1", started[0][2])
+        await ref.expect("START")
+        b.send("S 2 6 fp")
+        await b.close()
+        assert (await a.expect("LEFT"))["peer"] == "2"
+        # Somebody else cannot take the place.
+        eve = await Client.connect(port, "Eve")
+        eve.send(encode("JOIN", room="r1", password="pw"))
+        assert (await eve.expect("ERROR"))["code"] == "running"
+        # The same name can, and gets the start without a level to load.
+        back = await Client.connect(port, "bob")
+        back.send(encode("JOIN", room="r1", password="pw"))
+        assert (await back.expect("JOINED"))["peer"] == "2"
+        st = await back.expect("START")
+        assert st["resume"] == "1" and st["peer"] == "2" and st["active"] == "1,2"
+        assert (await a.expect("HOLD")) is not None
+        a.send(encode("HELD", step=7))
+        assert (await ref.expect("SAVE"))["step"] == "7"
+        ref.send(encode("SAVEDATA", d="eA=="))
+        ref.send(encode("SAVED", step=7, parts=1))
+        for c in (a, back, ref):
+            assert (await c.expect("LOAD")) == {"step": "7", "parts": "1", "peers": "1,2"}
+            assert (await c.expect("SAVEDATA"))["d"] == "eA=="
+            await c.expect("LOADEND")
+            assert (await c.expect("RESUME"))["step"] == "7"
+        assert sorted(server.rooms["r1"].players) == [1, 2]
     run_with_referee(body)

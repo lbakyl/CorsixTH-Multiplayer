@@ -42,7 +42,8 @@ data, saves from it, or logs that contain it.**
 | Linux headless build | Works; Debian 13 recipe in `scripts/multiplayer/setup_debian13.sh` |
 | Determinism, same build | Proven for ~3 game years of a busy hospital |
 | Single player unchanged | `run_sp_regression.sh`: identical fingerprints for 54,749 hours vs. the pre-multiplayer branch |
-| Relay/lobby server | `mp_server/`; rooms, passwords, build check, ping, pacing, start, relay, fingerprint check, leave handling; 19 pytest tests |
+| Relay/lobby server | `mp_server/`; rooms, passwords, build check, ping, pacing, start, relay, fingerprint check, leave handling; 26 pytest tests |
+| Headless referee (S3/S4) | Optional: the server runs one more copy of each game without a screen. It checks the players' fingerprints, repairs a desync (everybody loads its save and plays on) and lets a player who left rejoin. Tested on the VM, shared and co-op (`referee.md`); not in the Docker image yet |
 | In-game lobby | Main menu → Multiplayer: server address, name, room list, create (shared / a hospital each, level, players), password, ready, start |
 | Shared speed and pause | Any player's speed or pause applies to everybody, capped at the room's ping-based maximum |
 | Player actions as commands | Corridor objects, hiring, rooms (draw outline/door/windows), opening the hospital early, fax answers, hospital settings (loans, prices, research, policies, plots, heating, handymen, queues), actions on one patient/staff/machine/rat, co-op money and staff transfers |
@@ -68,6 +69,8 @@ agents must not open PRs, so the owner opens them).
 | `mp/windows-s0` | LuaSocket in the Windows build; same definition order on every platform; S0 tests |
 | `mp/server-docker` | Server container, compose file, image workflow (ghcr.io), VPS guide |
 | `mp/coop-full` | Full co-op: settings and entity actions as commands, hospitals kept apart, per-player events, heating, awards, goals |
+| `mp/vps-setup` | One-command VPS setup script (`mp_server/deploy/setup-vps.sh`) |
+| `mp/referee` | Headless referee per room, desync repair from its save, rejoin a running game |
 
 Working rule: small commits, push work-in-progress, one branch per step,
 never push directly to `mp/dev` or `master`.
@@ -79,7 +82,7 @@ Gameplay code (`CorsixTH/Lua/`):
 | File | Role |
 |---|---|
 | `mp_session.lua` | `MultiplayerSession`: command queue, lockstep rule, fingerprints, desync detection, all command handlers (`place_object`, `hire`, `build_room`, `open_hospital`, `fax_choice`, `give_money`, `send_staff`), retries, remote room outlines, `actionsAreCommands()`, `blockUnsupported()` |
-| `mp_lobby.lua` | `MultiplayerLobby`: server connection, build id, rooms, start handshake; starts the level and the session; handles `SPEED`, `LEFT`, `DESYNC`, `SHOW`, `CHAT` during the game |
+| `mp_lobby.lua` | `MultiplayerLobby`: server connection, build id, rooms, start handshake; starts the level and the session; handles `SPEED`, `LEFT`, `DESYNC`, `SHOW`, `CHAT` during the game, and the repair messages (`HOLD`, `SAVE`, `LOAD`, `RESUME`: saving and loading the shared game) |
 | `mp_transport.lua` | Line-based TCP over LuaSocket |
 | `mp_room_builder.lua` | Builds a finished room for `build_room` with a hidden room editor |
 | `dialogs/resizables/multiplayer.lua` | `UIMultiplayer`: the lobby window |
@@ -93,9 +96,11 @@ Gameplay code (`CorsixTH/Lua/`):
 `world.mp_coop`). With no session the code paths are the original ones. The
 session and lobby live on the App, not the World, so they are never saved.
 
-Server (`mp_server/`): `corsixth_mp/server.py` (rooms, relay),
-`pacing.py` (delay/speed from ping), `protocol.py` (line codec); protocol in
-`docs/multiplayer/protocol.md`.
+Server (`mp_server/`): `corsixth_mp/server.py` (rooms, relay, repair,
+rejoin), `referee.py` (starts the headless referee), `pacing.py` (delay/speed
+from ping), `protocol.py` (line codec); protocol in
+`docs/multiplayer/protocol.md`. The referee itself is
+`scripts/multiplayer/referee.lua` (`referee.md`).
 
 Tests and tools (`scripts/multiplayer/` unless noted):
 
@@ -103,7 +108,7 @@ Tests and tools (`scripts/multiplayer/` unless noted):
 |---|---|
 | `CorsixTH/Luatest/spec/mp_session_spec.lua`, `mp_lobby_spec.lua` | Unit tests |
 | `mp_server/tests/` | Server tests (pytest) |
-| `run_lobby_probe.sh` | **Main integration test.** A local server (or `MP_EXTERNAL_SERVER`) and pairs of real games going through the main menu and lobby window. 9 checks, ~3 min |
+| `run_lobby_probe.sh` | **Main integration test.** A local server (or `MP_EXTERNAL_SERVER`) and pairs of real games going through the main menu and lobby window. 9 checks, ~3 min; `MP_REFEREE=1` adds the referee and 4 checks (referee agrees, repair in shared and co-op games, rejoin) |
 | `run_ingame_probe.sh` | Two games connected directly (no server). 5 checks |
 | `run_sync_probe.sh` | Harness-level determinism checks. 7 checks |
 | `run_sp_regression.sh` | Single player, two builds, 3 game years, fingerprints must match |
@@ -136,13 +141,15 @@ cmake -S . -B build -G Ninja -DCMAKE_PREFIX_PATH="$PREFIX" -DCMAKE_BUILD_TYPE=Re
 cmake --build build -j4
 busted --directory=CorsixTH/Luatest          # 144 successes
 luacheck --quiet --codes --ranges CorsixTH    # 0 warnings
-(cd mp_server && python3 -m pytest -q)        # 19 passed
+(cd mp_server && python3 -m pytest -q)        # 26 passed
 bash scripts/multiplayer/run_lobby_probe.sh  $BIN $THDATA
+MP_REFEREE=1 bash scripts/multiplayer/run_lobby_probe.sh $BIN $THDATA   # 13 checks
 bash scripts/multiplayer/run_ingame_probe.sh $BIN $THDATA
 bash scripts/multiplayer/run_sync_probe.sh   $BIN $THDATA 6000
 ```
 
-**Before every push:** busted, luacheck, pytest, the three probe scripts.
+**Before every push:** busted, luacheck, pytest, the three probe scripts
+(the lobby probe with and without `MP_REFEREE=1`).
 **If you touch the simulation path** (world, hospital, entities), also run
 `run_sp_regression.sh` against a build of the previous commit.
 
@@ -210,14 +217,30 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
     furnishing**: a desk could wall off the cabinet, and the GP then crashed
     looking for it. The builder checks that every use tile stays reachable.
 
+24. **A late peer needs the history.** The referee connects half a second
+    or more after the players started, so the server keeps every command
+    and replays it, with each player's latest step report.
+25. **Everything that changes the world before step 1 must happen on the
+    referee too.** The test probes set up their hospitals directly on every
+    peer; the referee runs the same setup (`probe_builder.start_game`) or it
+    differs from step 1.
+26. **After the shared save, stop reading.** Lines after `LOADEND` are for
+    the loaded game; reading them before the load would put replayed
+    commands into the old one. Load between ticks, never inside a world
+    tick.
+27. **Everybody loads, the referee too.** All games then continue from the
+    same bytes loaded the same way, and the referee runs up to the slowest
+    player's step first, so nobody goes back further than needed.
+
 ## 8. Next steps
 
 1. **Internet test**: the server on the VPS, two Windows clients (S7);
    real latency for the pacing.
-2. **S3/S4: headless referee and desync recovery**: the server runs one game
-   per room, saves regularly; on desync everyone reloads its save.
-3. **VPS**: image, compose file and guide are done (`vps-guide.md`); the
-   internet test itself is still to do.
+2. **Referee in production**: a Linux CorsixTH build in the server image (or
+   next to it), the game data on a read-only volume; regular saves; restart a
+   crashed referee.
+3. **VPS**: image, compose file, guide and setup script are done
+   (`vps-guide.md`); the internet test itself is still to do.
 4. **Co-op, missing pieces**: epidemics, emergencies and VIPs for every
    player, level goals per player, per-hospital heating, loans, patient
    referrals, renting rooms, selling research; hide other players' adviser

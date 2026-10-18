@@ -87,12 +87,16 @@ end
 function MultiplayerTransport:receive()
   self:_flush()
   local nl = self.in_buf:find("\n", 1, true)
-  if not nl and not self.closed then
-    local data, err, partial = self.conn:receive(8192)
+  -- Read what has arrived (a shared save comes in long lines).
+  local reads = 0
+  while not nl and not self.closed and reads < 64 do
+    reads = reads + 1
+    local data, err, partial = self.conn:receive(65536)
     data = data or partial
     if data and data ~= "" then self.in_buf = self.in_buf .. data end
     if err == "closed" then self.closed = true end
     nl = self.in_buf:find("\n", 1, true)
+    if not data or #data < 65536 then break end
   end
   if not nl then return nil end
   local line = self.in_buf:sub(1, nl - 1)

@@ -1289,6 +1289,14 @@ end
 
 function App:onTick(...)
   if (not self.moviePlayer.playing) then
+    -- Multiplayer desync repair: save or load between game ticks.
+    local session = self.mp_session
+    -- Rejoining: no world yet to read the network, so read it here.
+    if session and not self.world then session:poll() end
+    if session and session.lobby and (session.load_data or
+        (session.save_at and session.step >= session.save_at)) then
+      session.lobby:serviceSaves(session)
+    end
     if self.world then
       self.world:onTick(...)
     end

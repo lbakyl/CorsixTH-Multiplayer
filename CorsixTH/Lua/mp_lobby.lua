@@ -61,6 +61,41 @@ local function decode_value(v)
   return (v:gsub("%%(%x%x)", function(h) return string.char(tonumber(h, 16)) end))
 end
 
+local B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+local b64_char, b64_value = {}, {}
+for i = 0, 63 do
+  b64_char[i] = B64:sub(i + 1, i + 1)
+  b64_value[B64:byte(i + 1)] = i
+end
+
+--! Base64 (saves travel as text; no bit operations, for Lua 5.1 too).
+function MultiplayerLobby.toBase64(data)
+  local out, floor = {}, math.floor
+  local pad = (3 - #data % 3) % 3
+  data = data .. string.rep("\0", pad)
+  for i = 1, #data, 3 do
+    local a, b, c = data:byte(i, i + 2)
+    local n = a * 65536 + b * 256 + c
+    out[#out + 1] = b64_char[floor(n / 262144)] .. b64_char[floor(n / 4096) % 64] ..
+        b64_char[floor(n / 64) % 64] .. b64_char[n % 64]
+  end
+  local text = table.concat(out)
+  return text:sub(1, #text - pad) .. string.rep("=", pad)
+end
+
+function MultiplayerLobby.fromBase64(text)
+  local out, floor = {}, math.floor
+  local pad = #text:match("=*$")
+  text = text:sub(1, #text - pad) .. string.rep("A", pad)
+  for i = 1, #text - 3, 4 do
+    local a, b, c, d = text:byte(i, i + 3)
+    local n = b64_value[a] * 262144 + b64_value[b] * 4096 + b64_value[c] * 64 + b64_value[d]
+    out[#out + 1] = string.char(floor(n / 65536), floor(n / 256) % 256, n % 256)
+  end
+  local data = table.concat(out)
+  return data:sub(1, #data - pad)
+end
+
 --! Build one protocol line: verb plus fields in sorted key order.
 function MultiplayerLobby.encode(verb, fields)
   local keys = {}
@@ -355,6 +390,7 @@ function MultiplayerLobby:_onSTART(f)
 end
 
 function MultiplayerLobby:_onSPEED(f)
+  self.shared_speed = f.speed
   if self.is_referee then return end -- the referee always runs at full speed
   local world = TheApp and TheApp.world
   if world and TheApp.mp_session and TheApp.mp_session.lobby == self then
@@ -386,8 +422,111 @@ end
 function MultiplayerLobby:_onDESYNC(f)
   local session = TheApp and TheApp.mp_session
   if session and session.lobby == self then
+    session.held = false
     session:serverDesync(tonumber(f.step))
   end
+end
+
+-- Desync repair: the server holds every game, the referee saves its game,
+-- everybody (the referee too) loads that save and the commands after it, then
+-- the server resumes the game. See docs/multiplayer/protocol.md.
+
+function MultiplayerLobby:_ownSession()
+  local session = TheApp and TheApp.mp_session
+  if session and session.lobby == self then return session end
+end
+
+function MultiplayerLobby:_onHOLD(f)
+  local session = self:_ownSession()
+  if not session then return end
+  session.held = true
+  self.log(string.format("multiplayer: held at step %d (desync at step %s)", session.step,
+      tostring(f.step)))
+  if not self.is_referee then
+    session.notify("The games went out of sync. The server is putting them back in sync...")
+  end
+  self:send("HELD", {step = session.step})
+end
+
+function MultiplayerLobby:_onSAVE(f)
+  local session = self:_ownSession()
+  if session and self.is_referee then session.save_at = tonumber(f.step) or session.step end
+end
+
+function MultiplayerLobby:_onLOAD(f)
+  local peers
+  if f.peers then
+    peers = {}
+    for p in f.peers:gmatch("%d+") do peers[#peers + 1] = tonumber(p) end
+  end
+  self.incoming_save = {step = tonumber(f.step), parts = {}, peers = peers}
+end
+
+function MultiplayerLobby:_onSAVEDATA(f)
+  local save = self.incoming_save
+  if save then save.parts[#save.parts + 1] = f.d end
+end
+
+function MultiplayerLobby:_onLOADEND()
+  local save, session = self.incoming_save, self:_ownSession()
+  self.incoming_save = nil
+  if save and session then
+    session.load_data = {step = save.step, data = table.concat(save.parts), peers = save.peers}
+  end
+end
+
+function MultiplayerLobby:_onRESUME(f)
+  local session = self:_ownSession()
+  if not session then return end
+  session.held = false
+  self.log("multiplayer: resumed at step " .. tostring(f.step))
+  if not self.is_referee then session.notify("The games are back in sync.") end
+end
+
+--! Characters of save data per SAVEDATA line (lines are at most 64 KiB).
+MultiplayerLobby.SAVE_CHUNK = 48000
+
+--! Between game ticks (App:onTick): send the referee's save, or load the
+--! shared one.
+function MultiplayerLobby:serviceSaves(session)
+  if session.save_at and session.step >= session.save_at then
+    session.save_at = nil
+    local persist = require("persist")
+    local data = assert(persist.compress(SaveGame()))
+    local text = MultiplayerLobby.toBase64(data)
+    local parts = 0
+    for i = 1, #text, MultiplayerLobby.SAVE_CHUNK do
+      parts = parts + 1
+      self:send("SAVEDATA", {d = text:sub(i, i + MultiplayerLobby.SAVE_CHUNK - 1)})
+    end
+    self:send("SAVED", {step = session.step, parts = parts})
+    session.held = true -- until everybody, the referee too, has loaded it
+    self.log(string.format("multiplayer: sent the save at step %d (%d bytes)", session.step, #data))
+  end
+  local load = session.load_data
+  if load then
+    session.load_data = nil
+    self:_loadShared(session, load.step, MultiplayerLobby.fromBase64(load.data), load.peers)
+  end
+end
+
+function MultiplayerLobby:_loadShared(session, step, data, peers)
+  local app = TheApp
+  local persist = require("persist")
+  local raw = assert(persist.decompress(data))
+  local old_world = app.world
+  LoadGame(raw)
+  local world = app.world
+  assert(world and world ~= old_world, "the shared save could not be loaded")
+  -- The save is the referee's: show this player's own hospital again.
+  if world.mp_coop then
+    world.mp_local_index = session.hospital_index
+    app.ui.hospital = world:getUIHospital()
+    self:_addTradeMenu(app.ui) -- a rejoining player's first game UI
+  end
+  session:restartAt(world, step, peers)
+  world:applySharedSpeed(self.is_referee and "And then some more" or (self.shared_speed or "Normal"))
+  self.log(string.format("multiplayer: loaded the shared save at step %d (%d bytes)", step, #data))
 end
 
 -- Starting and ending the game ------------------------------------------------
@@ -430,11 +569,32 @@ function MultiplayerLobby.useCanonicalOrder(app)
   end
 end
 
---! Load the agreed level and attach a lockstep session to it.
+--! The co-op Multiplayer menu (money and staff to the other players), once
+--! per menu bar.
+function MultiplayerLobby:_addTradeMenu(ui)
+  if not (ui and ui.menu_bar) or self.trade_menu_bar == ui.menu_bar then return end
+  self.trade_menu_bar = ui.menu_bar
+  ui.menu_bar:addMenu(_S.multiplayer_window.menu_caption, UIMenu()
+    :appendItem(_S.multiplayer_window.menu_trade, function()
+      local current = TheApp.ui -- the menu bar outlives a desync repair's load
+      current:addWindow(UIMultiplayerTrade(current))
+    end))
+end
+
+--! Load the agreed level and attach a lockstep session to it. A player
+--! rejoining a running game (f.resume) gets no level: the game comes with the
+--! shared save that everybody loads (see _loadShared).
 function MultiplayerLobby:_beginGame(f)
   local app = TheApp
   local peers = {}
   for p in (f.peers or ""):gmatch("%d+") do peers[#peers + 1] = tonumber(p) end
+  local resume = f.resume == "1"
+  -- The players now (some may have left); `peers` stays the start order.
+  local active = peers
+  if f.active then
+    active = {}
+    for p in f.active:gmatch("%d+") do active[#active + 1] = tonumber(p) end
+  end
   -- Gameplay settings come from the server so every peer simulates the
   -- same rules (handover README, lesson 4). Restored when the game ends.
   self.saved_config = {
@@ -462,27 +622,32 @@ function MultiplayerLobby:_beginGame(f)
   end
 
   self.restore_order = MultiplayerLobby.useCanonicalOrder(app)
-  math.randomseed(tonumber(f.seed))
-  local level = tonumber(f.level) or 1
-  local level_id = coop and MultiplayerLobby.coopLevelId(#peers, level) or level
-  local loaded = app:loadLevel(level_id, f.difficulty or "full", nil, nil, nil, nil,
-      _S.errors.load_level_prefix, nil)
-  app.mp_coop = nil
-  if not loaded or not app.world then
-    error("level " .. tostring(level_id) .. " could not be loaded")
+  local world
+  if not resume then
+    math.randomseed(tonumber(f.seed))
+    local level = tonumber(f.level) or 1
+    local level_id = coop and MultiplayerLobby.coopLevelId(#peers, level) or level
+    local loaded = app:loadLevel(level_id, f.difficulty or "full", nil, nil, nil, nil,
+        _S.errors.load_level_prefix, nil)
+    if not loaded or not app.world then
+      app.mp_coop = nil
+      error("level " .. tostring(level_id) .. " could not be loaded")
+    end
+    world = app.world
   end
-  local world = app.world
+  app.mp_coop = nil
   local lobby = self
   local session = MultiplayerSession({
     world = world,
     peer_id = tonumber(f.peer),
-    peers = peers,
+    peers = active,
     transport = self.transport,
     delay = tonumber(f.delay) or 2,
     log = function(msg) lobby.log("multiplayer: " .. msg) end,
     notify = function(msg)
-      if world.ui and world.ui.adviser then
-        world.ui.adviser:say({text = msg, priority = 10})
+      local ui = TheApp.ui -- a desync repair loads another world and UI
+      if TheApp.world and ui and ui.adviser then
+        ui.adviser:say({text = msg, priority = 10})
       end
     end,
     control = function(line) lobby:handleLine(line) end,
@@ -498,13 +663,13 @@ function MultiplayerLobby:_beginGame(f)
   session.max_speed = f.max_speed
   session.hospital_index = my_index
   app.mp_session = session
-  if coop and world.ui and world.ui.menu_bar then
-    local ui = world.ui
-    world.ui.menu_bar:addMenu(_S.multiplayer_window.menu_caption, UIMenu()
-      :appendItem(_S.multiplayer_window.menu_trade, function()
-        ui:addWindow(UIMultiplayerTrade(ui))
-      end))
+  self.shared_speed = f.speed or "Normal"
+  if resume then
+    session.held = true -- until the shared save is loaded and the server resumes
+    self.log("multiplayer: rejoining; waiting for the shared save")
+    return
   end
+  if coop then self:_addTradeMenu(world.ui) end
   world:applySharedSpeed(f.speed or "Normal")
   self.log(string.format("multiplayer: playing as %s of %s, seed %s, delay %s, max speed %s",
       f.peer, f.peers, f.seed, f.delay, tostring(f.max_speed)))

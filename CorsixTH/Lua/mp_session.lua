@@ -123,6 +123,9 @@ function MultiplayerSession:MultiplayerSession(params)
   self.request_speed = params.request_speed
   self.send_cosmetic = params.send_cosmetic
   self.observer = params.observer
+  self.held = false         -- stopped by the server while it repairs a desync
+  self.load_data = nil      -- {step, data}: the shared save to load (see App:onTick)
+  self.save_at = nil        -- the referee sends its save once at this step
   self.applying = false     -- true while command handlers run
   self.remote_blueprints = {} -- peer -> rectangle drawn on the map
 
@@ -144,6 +147,11 @@ end
 --!param cmd (table) plain values; must contain `kind`
 function MultiplayerSession:issue(cmd)
   if self.observer then return cmd end -- the referee never acts
+  if self.held then
+    -- The games are being repaired; this step may not exist afterwards.
+    self.notify("Please wait; the games are being put back in sync.")
+    return cmd
+  end
   self.seq = self.seq + 1
   -- The hospital the action is for: this player's (multiplayer co-op).
   if cmd.hospital == nil then cmd.hospital = self.hospital_index or 1 end
@@ -163,6 +171,8 @@ end
 --! Read everything the transport has for us right now.
 function MultiplayerSession:poll()
   while true do
+    -- Lines after a shared save are for the game loaded from it.
+    if self.load_data then break end
     local line = self.transport:receive()
     if not line then break end
     local cmd = MultiplayerSession.decodeCommand(line)
@@ -220,6 +230,9 @@ end
 --! Is every other peer far enough along for us to run the next step?
 function MultiplayerSession:canStep()
   self:poll()
+  if self.held or self.load_data or (self.save_at and self.step >= self.save_at) then
+    return false
+  end
   local needed = self.step + 1 - self.delay + 1
   for _, step in pairs(self.peer_step) do
     if step < needed then
@@ -239,6 +252,28 @@ function MultiplayerSession:canStep()
   self.wait_started = nil
   self.wait_notified = false
   return true
+end
+
+--! Start again from `step` in `world`, freshly loaded from the save every peer
+--! loaded (desync repair). Commands for later steps come again from the server.
+--!param peers (list) optional; the players from now on (a player rejoined)
+function MultiplayerSession:restartAt(world, step, peers)
+  self.world = world
+  if peers then
+    self.peers = peers
+    self.peer_step = {}
+    for _, p in ipairs(peers) do
+      if p ~= self.peer_id then self.peer_step[p] = step end
+    end
+  end
+  self.step = step
+  self.pending = {}
+  self.own_fps, self.peer_fps = {}, {}
+  self.desync = nil
+  self.remote_blueprints = {}
+  for p in pairs(self.peer_step) do self.peer_step[p] = step end
+  self.wait_started, self.wait_notified = nil, false
+  self.restarts = (self.restarts or 0) + 1
 end
 
 --! Is a player action now to be sent as a command (rather than done here)?

@@ -31,13 +31,14 @@ local function rect_is_free(world, x, y, w, h)
 end
 
 --! Find the nearest free rectangle to (cx, cy), scanning in a fixed order.
-function builder.find_free_rect(world, cx, cy, w, h, max_radius)
+--!param extra (function) optional; x, y -> also acceptable?
+function builder.find_free_rect(world, cx, cy, w, h, max_radius, extra)
   for r = 0, max_radius or 30 do
     for dy = -r, r do
       for dx = -r, r do
         if math.max(math.abs(dx), math.abs(dy)) == r then
           local x, y = cx + dx, cy + dy
-          if rect_is_free(world, x, y, w, h) then return x, y end
+          if rect_is_free(world, x, y, w, h) and (not extra or extra(x, y)) then return x, y end
         end
       end
     end
@@ -280,13 +281,16 @@ function builder.ui_buy(world, desk_x, desk_y, object_id, log)
   shop:confirm() -- opens UIPlaceObjects
   local place = ui:getWindow(UIPlaceObjects)
   assert(place, "no placement window")
-  -- Same search order on both peers, but only this peer clicks.
-  local x, y = builder.find_free_rect(world, desk_x, desk_y, 1, 1, 40)
+  -- Same search order on both peers, but only this peer clicks. Nobody may
+  -- stand there (the game ignores the click then).
+  local x, y = builder.find_free_rect(world, desk_x, desk_y, 1, 1, 40,
+      function(tx, ty) return not world:anyHumanoidObscuringArea(tx, ty) end)
   place:setBlueprintCell(x, y)
   place.object_cell_x, place.object_cell_y = x, y
   place:onMouseUp("left", 100000, 100000) -- a click outside the window
-  log(string.format("UI: bought %s, clicked %d,%d (balance unchanged locally: %s)",
-      object_id, x, y, tostring(world.hospitals[1].balance == balance_before)))
+  log(string.format("UI: bought %s, clicked %d,%d (balance unchanged locally: %s)%s",
+      object_id, x, y, tostring(world.hospitals[1].balance == balance_before),
+      ui:getWindow(UIPlaceObjects) and " (click refused)" or ""))
   if ui:getWindow(UIPlaceObjects) then ui:getWindow(UIPlaceObjects):close() end
 end
 
@@ -403,17 +407,22 @@ end
 --! Test setup at the start of a multiplayer game, the same on every peer
 --! before the first step: test-only commands and the scenario's hospital
 --! (each player's, in co-op). Returns this player's desk tile.
-function builder.start_game(world, session, scenario, log)
-  -- Test-only command, registered on every peer: a VIP asks to visit.
+--! Test-only commands, registered on every peer.
+function builder.register_handlers()
+  -- A VIP asks to visit.
   MultiplayerSession.default_handlers.probe_vip = function(w, cmd)
     w.hospitals[cmd.target or 1]:createVip()
     return true
   end
-  -- Test-only command: an emergency for hospital `target`.
+  -- An emergency for hospital `target`.
   MultiplayerSession.default_handlers.probe_emergency = function(w, cmd)
     local err = w.hospitals[cmd.target or 1]:createEmergency()
     return err == nil, err
   end
+end
+
+function builder.start_game(world, session, scenario, log)
+  builder.register_handlers()
 
   -- Same setup on every peer before the first step, so it stays in sync.
   -- It changes the shared world directly, like a command handler does.

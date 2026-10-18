@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 
 from . import pacing
 from .referee import RefereeConfig, start_referee
-from .protocol import (MAX_LINE_BYTES, PROTOCOL_VERSION, ProtocolError, command_peer,
+from .protocol import (MAX_LINE_BYTES, PROTOCOL_VERSION, ProtocolError, command_peer, command_step,
                        decode, encode, is_game_line, parse_step_report)
 
 log = logging.getLogger("corsixth_mp")
@@ -53,6 +53,10 @@ MAX_PER_ADDRESS = 8
 # Commands kept per room for a referee that joins late (bytes; later the
 # referee's saves let the server forget older ones).
 MAX_COMMAND_LOG = 16 * 1024 * 1024
+# Desync recovery: the referee's save (base64, in SAVEDATA lines) may be this
+# big, and everybody must have loaded it within the timeout.
+MAX_SAVE_BYTES = 64 * 1024 * 1024
+RECOVERY_TIMEOUT = 60.0
 # Gameplay settings every peer must use (lesson 4 in the handover README).
 DEFAULT_SETTINGS = {"grant_wage_increase": 1, "free_build_mode": 0}
 
@@ -90,6 +94,18 @@ class Player:
             self.closed = True
 
 
+@dataclass
+class Recovery:
+    """A desync being repaired: everybody holds, the referee saves its game,
+    everybody (the referee too) loads that save and the commands after it."""
+    step: int                      # where the desync was found
+    # player -> step it stopped at (None: rejoining, it has no game yet)
+    held: dict[int, int | None] = field(default_factory=dict)
+    asked: bool = False            # SAVE sent to the referee
+    parts: list[str] = field(default_factory=list)
+    size: int = 0
+
+
 @dataclass(eq=False)
 class Room:
     name: str
@@ -110,6 +126,7 @@ class Room:
     fingerprints: dict[int, dict[int, str]] = field(default_factory=dict)
     desync_step: int | None = None
     left: dict[int, int] = field(default_factory=dict)  # peer -> last step
+    left_names: dict[int, str] = field(default_factory=dict)  # peer -> name, for rejoining
     start_fields: dict[str, object] = field(default_factory=dict)  # START for everybody
     # Headless referee (peer 0): connection, process, its token, and the
     # fingerprints waiting to be checked against it (step -> fingerprint).
@@ -125,6 +142,8 @@ class Room:
     command_log_bytes: int = 0
     left_log: list[str] = field(default_factory=list)
     last_report: dict[int, str] = field(default_factory=dict)
+    recovery: "Recovery | None" = None  # desync repair in progress
+    recoveries: int = 0
 
     def check_password(self, password: str) -> bool:
         if self.password_hash is None:
@@ -332,6 +351,7 @@ class Server:
             player.send(line)
         log.info("room %r: referee connected (%d commands to catch up)", room.name,
                  len(room.command_log))
+        self._recovery_progress(room)
         return True
 
     def _dispatch(self, player: Player, line: str) -> None:
@@ -416,11 +436,38 @@ class Server:
             self._error(player, "build_mismatch",
                         f"The room runs build {room.build}; you run {player.build}")
         elif room.state != "lobby":
-            self._error(player, "running", "The game has already started")
+            self._rejoin(player, room)
         elif len(room.players) >= room.max_players:
             self._error(player, "room_full", "The room is full")
         else:
             self._add_to_room(player, room)
+
+    def _rejoin(self, player: Player, room: Room) -> None:
+        """A player who left a running game comes back under the same name:
+        everybody, the newcomer too, loads the referee's game."""
+        peer = next((p for p, n in sorted(room.left_names.items())
+                     if n.lower() == player.name.lower()), None)
+        if peer is None or not room.referee_token:
+            self._error(player, "running", "The game has already started")
+            return
+        if room.recovery is not None:
+            self._error(player, "busy", "The game is being repaired; try again")
+            return
+        del room.left_names[peer]
+        room.left.pop(peer, None)
+        player.room, player.peer, player.ready = room, peer, True
+        room.players[peer] = player
+        log.info("room %r: %r rejoins as player %d", room.name, player.name, peer)
+        player.send(encode("JOINED", room=room.name, peer=peer, owner=False, mode=room.mode,
+                           level=room.level, difficulty=room.difficulty, max=room.max_players))
+        # The start as it was (hospital order, names), with today's players
+        # and speed; the game itself comes with the shared save.
+        fields = dict(room.start_fields, speed=room.speed, resume=1,
+                      active=",".join(str(p) for p in sorted(room.players)))
+        player.send(encode("START", peer=peer, **fields))
+        room.broadcast(encode("CHAT", peer=0, name="server", text=f"{player.name} is back"),
+                       exclude=player)
+        self._start_recovery(room, player.last_step, rejoining=peer)
 
     def _add_to_room(self, player: Player, room: Room) -> None:
         peer = room.free_peer()
@@ -501,6 +548,9 @@ class Server:
                                                     room.name, room.referee_token)
         except OSError as exc:
             log.warning("room %r: cannot start the referee: %s", room.name, exc)
+            room.referee_token = ""
+            if room.recovery is not None:
+                self._recovery_failed(room)
 
     def _on_speed(self, player: Player, f: dict[str, str]) -> None:
         room = player.room
@@ -561,7 +611,7 @@ class Server:
         room.broadcast(line, exclude=player, referee=True)
 
     def _record_fingerprint(self, room: Room, peer: int, step: int, fp: str) -> None:
-        if room.desync_step is not None:
+        if room.desync_step is not None or room.recovery is not None:
             return
         fps = room.fingerprints.setdefault(step, {})
         fps[peer] = fp
@@ -570,16 +620,15 @@ class Server:
             values = {fps[p] for p in active}
             del room.fingerprints[step]
             if len(values) > 1:
-                room.desync_step = step
                 log.warning("room %r: desync at step %d: %s", room.name, step,
                             {p: fps[p] for p in sorted(active)})
-                room.broadcast(encode("DESYNC", step=step))
+                self._desync(room, step)
             elif room.referee_token:
                 # All players agree; the referee checks them too.
                 self._check_with_referee(room, step, values.pop(), None)
 
     def _referee_fingerprint(self, room: Room, step: int, fp: str) -> None:
-        if room.desync_step is not None:
+        if room.desync_step is not None or room.recovery is not None:
             return
         self._check_with_referee(room, step, None, fp)
 
@@ -605,10 +654,119 @@ class Server:
         if players_fp == referee_fp:
             room.verified_step = max(room.verified_step, step)
             return
-        room.desync_step = step
         log.warning("room %r: the players differ from the referee at step %d: players %s, "
                     "referee %s", room.name, step, players_fp, referee_fp)
-        room.broadcast(encode("DESYNC", step=step, referee=1))
+        self._desync(room, step)
+
+    # ------------------------------------------------------------ recovery
+
+    def _desync(self, room: Room, step: int) -> None:
+        """The games differ at `step`: repair them from the referee's game if
+        there is one, otherwise tell everybody it is over."""
+        if room.recovery is not None:
+            return
+        # A referee still starting counts: it catches up, then saves.
+        if room.referee_token:
+            log.info("room %r: repairing the desync at step %d from the referee's game",
+                     room.name, step)
+            self._start_recovery(room, step)
+            return
+        room.desync_step = step
+        room.broadcast(encode("DESYNC", step=step))
+
+    def _start_recovery(self, room: Room, step: int, rejoining: int | None = None) -> None:
+        rec = room.recovery = Recovery(step=step)
+        if rejoining is not None:
+            rec.held[rejoining] = None
+        for peer, p in room.players.items():
+            if peer != rejoining:
+                p.send(encode("HOLD", step=step))
+        asyncio.get_running_loop().call_later(RECOVERY_TIMEOUT, self._recovery_timeout,
+                                              room, rec)
+        self._recovery_progress(room)
+
+    def _recovery_timeout(self, room: Room, rec: Recovery) -> None:
+        if room.recovery is rec:
+            log.warning("room %r: desync repair timed out", room.name)
+            self._recovery_failed(room)
+
+    def _recovery_failed(self, room: Room) -> None:
+        rec, room.recovery = room.recovery, None
+        if rec is not None and room.name in self.rooms:
+            room.desync_step = rec.step
+            room.broadcast(encode("DESYNC", step=rec.step), referee=True)
+
+    def _on_held(self, player: Player, f: dict[str, str]) -> None:
+        room = player.room
+        rec = room.recovery if room else None
+        if rec is None or player.is_referee:
+            return
+        rec.held[player.peer] = int(f.get("step", "0") or 0)
+        self._recovery_progress(room)
+
+    def _recovery_progress(self, room: Room) -> None:
+        """Once every player has stopped (so every command they sent is in the
+        command log), ask the referee for its game as soon as it has run the
+        steps all of them have run: nobody goes back further than needed."""
+        rec = room.recovery
+        if rec is None or rec.asked or room.referee is None:
+            return
+        if room.players and set(room.players) <= set(rec.held):
+            rec.asked = True
+            steps = [rec.held[p] for p in room.players if rec.held[p] is not None]
+            # Nobody but a rejoining player: the referee saves where it is.
+            room.referee.send(encode("SAVE", step=min(steps) if steps else 0))
+
+    def _on_savedata(self, player: Player, f: dict[str, str]) -> None:
+        room = player.room
+        rec = room.recovery if room else None
+        if not player.is_referee or rec is None or not rec.asked:
+            return
+        part = f.get("d", "")
+        rec.size += len(part)
+        if rec.size > MAX_SAVE_BYTES:
+            log.warning("room %r: the referee's save is too big", room.name)
+            self._recovery_failed(room)
+            return
+        rec.parts.append(part)
+
+    def _on_saved(self, player: Player, f: dict[str, str]) -> None:
+        room = player.room
+        rec = room.recovery if room else None
+        if not player.is_referee or rec is None or not rec.asked:
+            return
+        step = int(f.get("step", "0") or 0)
+        if int(f.get("parts", "-1") or -1) != len(rec.parts):
+            log.warning("room %r: the referee's save is incomplete", room.name)
+            self._recovery_failed(room)
+            return
+        # Everybody (the referee too) loads the save, then gets every command
+        # for the steps after it, then carries on from there.
+        replay = [line for line in room.command_log if (command_step(line) or 0) > step]
+        lines = [encode("LOAD", step=step, parts=len(rec.parts),
+                        peers=",".join(str(p) for p in sorted(room.players)))]
+        lines += [encode("SAVEDATA", d=part) for part in rec.parts]
+        lines.append(encode("LOADEND", step=step))
+        lines += replay
+        lines.append(encode("RESUME", step=step))
+        targets = list(room.players.values()) + [room.referee]
+        for target in targets:
+            for line in lines:
+                target.send(line)
+        room.command_log = replay
+        room.command_log_bytes = sum(len(line) for line in replay)
+        room.fingerprints.clear()
+        room.agreed.clear()
+        room.referee_fps.clear()
+        room.last_report.clear()
+        room.left_log.clear()  # LOAD names the players from now on
+        for p in room.players.values():
+            p.last_step = step
+        room.recovery = None
+        room.recoveries += 1
+        room.verified_step = min(room.verified_step, step)
+        log.info("room %r: repaired: everybody loads the referee's game at step %d "
+                 "(%d bytes, %d commands after it)", room.name, step, rec.size, len(replay))
 
     # ------------------------------------------------------------ departures
 
@@ -621,10 +779,14 @@ class Server:
         if player.is_referee:
             if room.referee is player:
                 room.referee = None
+                room.referee_token = ""  # no more repairs in this room
                 log.warning("room %r: the referee disconnected", room.name)
+                if room.recovery is not None:
+                    self._recovery_failed(room)
             return
         if room.state == "running":
             room.left[player.peer] = player.last_step
+            room.left_names[player.peer] = player.name
             left = encode("LEFT", peer=player.peer, step=player.last_step, name=player.name)
             room.last_report.pop(player.peer, None)
             room.left_log.append(left)
@@ -636,10 +798,10 @@ class Server:
                 if not fps:
                     del room.fingerprints[step]
                 elif set(room.players) <= set(fps):
-                    if len(set(fps.values())) > 1 and room.desync_step is None:
-                        room.desync_step = step
-                        room.broadcast(encode("DESYNC", step=step))
                     del room.fingerprints[step]
+                    if len(set(fps.values())) > 1 and room.desync_step is None:
+                        self._desync(room, step)
+            self._recovery_progress(room)
         else:
             room.broadcast(encode("CHAT", peer=0, name="server", text=f"{player.name} left"))
         if not room.players:

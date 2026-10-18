@@ -66,6 +66,10 @@ local fast = (os.getenv("MP_FAST") or "1") == "1"
 local draw_every = tonumber(os.getenv("MP_DRAW_EVERY") or "0")
 local coop = os.getenv("MP_COOP") == "1"
 local shot_dir = os.getenv("MP_SHOT_DIR")
+-- With the server's referee a desync is repaired: keep playing through it.
+local expect_repair = os.getenv("MP_EXPECT_REPAIR") == "1"
+-- Join a running game again (this name left it earlier).
+local rejoin = os.getenv("MP_REJOIN") == "1"
 
 local function log(msg)
   io.stdout:write("[" .. name .. "] " .. msg .. "\n")
@@ -182,12 +186,18 @@ local function run_lobby()
     w:selectRoom(index, true)
     w.password_box:setText(join_password)
     w:buttonJoin()
-    wait_for("joining", function() return lobby.state == "in_room" or lobby.error ~= nil end)
-    if lobby.state ~= "in_room" then
+    wait_for("joining", function()
+      return lobby.state == "in_room" or lobby.state == "in_game" or lobby.error ~= nil
+    end)
+    if lobby.state ~= "in_room" and lobby.state ~= "in_game" then
       log("JOIN REFUSED: " .. tostring(lobby.error.code))
       return nil
     end
     log("joined room " .. room .. " as player " .. lobby.room.peer)
+    if rejoin then
+      wait_for("game start", function() return lobby.state == "in_game" end, 30)
+      return lobby
+    end
     wait_for("ready button", function() return lobby_window() and lobby_window().view == "room" end)
     lobby_window():buttonReady(true)
     wait_for("lobby update", function() return lobby.summary ~= nil end, 10)
@@ -210,10 +220,20 @@ local function run()
   log(string.format("START: peer %s of %s, seed %s, delay %s, max speed %s, speed %s",
       p.peer, p.peers, p.seed, p.delay, p.max_speed, p.speed))
 
-  -- The same test setup runs on every peer (and on the server's referee).
-  local desk_x, desk_y = builder.start_game(world, session, scenario, log)
+  local desk_x, desk_y
+  if rejoin then
+    -- The game comes with the shared save everybody loads.
+    builder.register_handlers()
+    wait_for("the shared save", function() return (session.restarts or 0) > 0 end, 60)
+    world = TheApp.world
+    if world.mp_coop then builder.hospital = world.ui.hospital end
+    log(string.format("REJOINED: loaded the shared save at step %d", session.step))
+  else
+    -- The same test setup runs on every peer (and on the server's referee).
+    desk_x, desk_y = builder.start_game(world, session, scenario, log)
+  end
   if fast then world:setSpeed("And then some more") end
-  look_at(desk_x, desk_y)
+  if desk_x then look_at(desk_x, desk_y) end
   shot("game-start")
 
   local done = {}
@@ -224,10 +244,20 @@ local function run()
   local seen_blueprints = {}
   local presses = {} -- {wait = ticks, paused = only count while paused}
   local last_speed = world:getCurrentSpeed()
-  while session.step < target and not session.desync and not quit do
+  local repairs = session.restarts or 0
+  local waiting_rejoin -- restarts seen when the "waitrejoin" pause began
+  while session.step < target and (expect_repair or not session.desync) and not quit do
     local before = session.step
     tick()
     ticks = ticks + 1
+    if (session.restarts or 0) > repairs then
+      -- Desync repaired: everybody loaded the referee's game.
+      repairs = session.restarts
+      world = TheApp.world
+      if world.mp_coop then builder.hospital = world.ui.hospital end
+      if fast then world:setSpeed("And then some more") end
+      log(string.format("REPAIRED: loaded the shared save at step %d (repair %d)", session.step, repairs))
+    end
     if TheApp.world ~= world then log("LEVEL ENDED at step " .. session.step) break end
     for peer, r in pairs(session.remote_blueprints) do
       local key = string.format("%d:%s:%d,%d", peer, tostring(r.room), r.x, r.y)
@@ -249,6 +279,11 @@ local function run()
         world:setSpeed("And then some more")
         last_speed = world:getCurrentSpeed()
       end
+    end
+    if waiting_rejoin and (session.restarts or 0) > waiting_rejoin and not session.held then
+      waiting_rejoin = nil
+      log("UI: a player rejoined; unpausing at step " .. session.step)
+      world:setUserSpeed("Max speed")
     end
     if draw_every > 0 and ticks % draw_every == 0 then TheApp:drawFrame() end
     local report = TheApp.ui:getWindow(UIAnnualReport)
@@ -395,6 +430,11 @@ local function run()
         elseif a == "quit" then
           log("UI: quitting at step " .. session.step)
           quit = true
+        elseif a == "waitrejoin" then
+          -- Pause (shared) until a player has rejoined, then play on.
+          log("UI: paused for a rejoin at step " .. session.step)
+          waiting_rejoin = session.restarts or 0
+          world:setUserSpeed("Pause")
         elseif a == "cheat" then
           world.hospitals[1].balance = world.hospitals[1].balance + 1
           log("UI: changed money locally only (cheat)")

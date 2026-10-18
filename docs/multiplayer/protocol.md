@@ -15,17 +15,18 @@ lines of `MultiplayerSession` (see `in-game-lockstep.md`) unchanged:
 | `C key=value ...` | a player command, scheduled for step `step` (must carry the sender's `peer`) |
 | `S <peer> <step> <fingerprint>` | the sender finished `step`; state fingerprint |
 
-The server compares the fingerprints of all players for each step and sends
-`DESYNC` when they differ.
+The server compares the fingerprints of all players for each step. Without a
+referee it sends `DESYNC` when they differ; with one it repairs the games
+(see `referee.md` and the last section below).
 
 ## Client to server
 
 | Message | When | Fields |
 |---|---|---|
-| `HELLO` | first line | `proto` (1), `build` (game build id, must match the room's), `name` |
+| `HELLO` | first line | `proto` (1), `build` (game build id, must match the room's), `name`; the server's referee adds `role=referee`, `room` and `token` |
 | `LIST` | lobby | (none) |
 | `CREATE` | lobby | `room`, `password` (empty = open), `max` (2–4), `mode` (`shared` = one hospital for everybody, `coop` = one hospital each), `level` (1–12), `difficulty` (`easy`/`full`/`hard`), `speed_control` (`any`/`owner`) |
-| `JOIN` | lobby | `room`, `password` |
+| `JOIN` | lobby | `room`, `password`; for a running room: rejoin under the name of a player who left |
 | `READY` | in a room | `ready` |
 | `START` | room owner | (none) |
 | `LEAVE` | in a room | (none) |
@@ -35,23 +36,29 @@ The server compares the fingerprints of all players for each step and sends
 | `PONG` | reply to `PING` | `id` |
 | `PING` | optional | `id` (server answers `PONG id=`) |
 | `QUIT` | any time | (none) |
+| `HELD` | after `HOLD` | `step`: the last step this game ran |
+| `SAVEDATA`, `SAVED` | referee only, after `SAVE` | `d` (base64 part of the save); then `step`, `parts` |
 
 ## Server to client
 
 | Message | Meaning |
 |---|---|
 | `WELCOME proto id server motd` | accepted |
-| `ERROR code text` | request refused; codes: `expected_hello`, `protocol`, `bad_room`, `room_exists`, `no_room`, `bad_password`, `build_mismatch`, `running`, `room_full`, `in_room`, `not_owner`, `not_ready`, `not_enough`, `bad_speed`, `too_fast`, `bad_report`, `bad_command`, `unknown_verb`, `bad_message` |
+| `ERROR code text` | request refused; codes: `expected_hello`, `protocol`, `bad_room`, `room_exists`, `no_room`, `bad_password`, `build_mismatch`, `running`, `busy`, `room_full`, `in_room`, `not_owner`, `not_ready`, `not_enough`, `bad_speed`, `too_fast`, `bad_report`, `bad_command`, `unknown_verb`, `bad_message`, `not_referee` |
 | `ROOM room players max mode level locked state build_ok` | one per room after `LIST`, then `ROOMS_END count` |
 | `JOINED room peer owner mode level difficulty max` | you are in the room as player `peer` |
 | `PLAYER peer name ready rtt owner` | one per player, followed by |
 | `LOBBY room count max mode level delay speed one_way latency` | the room summary: recommended lockstep `delay` (steps), fastest smooth `speed`, worst player-to-player one-way time (ms) and click-to-effect `latency` at Normal speed (ms). Sent about once a second while in the lobby |
 | `OWNER` | you are now the room owner |
-| `START peer peers seed level difficulty mode delay max_speed speed speed_control grant_wage_increase free_build_mode` | the game starts: everybody seeds the gameplay random generator with `seed`, loads `level` and plays as `peer` among `peers` (comma-separated) |
+| `START peer peers names seed level difficulty mode delay max_speed speed speed_control grant_wage_increase free_build_mode` | the game starts: everybody seeds the gameplay random generator with `seed`, loads `level` and plays as `peer` among `peers` (comma-separated, start order; `names` in the same order). A rejoining player also gets `resume=1` and `active` (the players now) and loads no level |
 | `SPEED peer name speed` | a player changed the speed (or paused); every client applies it, the sender included |
 | `SHOW peer kind ...` | another player's cosmetic information, relayed unchanged with the sender's `peer` |
 | `LEFT peer step name` | a player left the game after reporting `step`; stop waiting for them |
-| `DESYNC step` | fingerprints differed at `step` |
+| `DESYNC step` | fingerprints differed at `step` and cannot be repaired: the game is over |
+| `HOLD step` | stop stepping and issuing commands; answer `HELD` (desync at `step`, or a player rejoins) |
+| `SAVE step` | referee only: save once at `step` (or later) |
+| `LOAD step parts peers`, `SAVEDATA d`, `LOADEND step` | the shared save (base64 in `parts` lines); load it and restart at `step` with `peers` |
+| `RESUME step` | play on |
 | `CHAT peer name text` | chat (`peer=0`: a server notice) |
 | `PING id` | answer with `PONG id=` |
 
@@ -79,3 +86,11 @@ step that player reported. Commands of that player were all sent before the
 *s* is for step *s + delay*, and nobody can run that step before the player's
 report of *s + 1*), so every remaining peer applies the same ones and simply
 stops waiting for that peer.
+
+## Repair and rejoin
+
+Only with the headless referee (`referee.md`). After `HOLD`, a game reads no
+further lines once it has `LOADEND`: everything after it (the replayed
+commands, `RESUME`) belongs to the loaded game and is read after the load.
+The server replays every command for a step after the save, also to the
+player who sent it, because loading drops every pending command.
