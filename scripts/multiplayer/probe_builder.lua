@@ -377,6 +377,20 @@ function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at, by_
       with_window and " with a window" or "", dlg.phase))
 end
 
+--! A tile to search from for this player's rooms and objects: the first
+--! reception desk of their hospital, or else its first tile (row by row).
+function builder.anchor(world)
+  local hospital = hospital_of(world)
+  local desk = hospital:getReceptionDesks()[1]
+  if desk and desk.tile_x then return desk.tile_x, desk.tile_y end
+  local map = world.map
+  for y = 1, map.height do
+    for x = 1, map.width do
+      if hospital:isInHospital(x, y) then return x, y end
+    end
+  end
+end
+
 --! Multiplayer, a room furnished by hand: call once per tick while it runs.
 --! Waits for this player's room editor, then puts down one object at a
 --! time like a click (each one a room_object command) and waits for it to
@@ -386,6 +400,9 @@ end
 function builder.furnish_tick(world, state, log)
   local ui = world.ui
   local dlg = ui.edit_room
+  -- A person watching: wait state.pace game hours between objects.
+  local step = TheApp.mp_session and TheApp.mp_session.step or 0
+  if state.not_before and step < state.not_before then return false end
   if not (dlg and dlg.mp_room_id) then
     state.waited = (state.waited or 0) + 1
     if state.started and state.waited > 400 then log("UI: furnishing: editor gone") return true end
@@ -406,6 +423,7 @@ function builder.furnish_tick(world, state, log)
     if count < state.pending.count then
       log(string.format("UI: furnishing: %s is in the room", state.pending.id))
       state.pending = nil
+      if state.pace then state.not_before = step + state.pace return false end
     elseif state.pending.ticks > 60 then
       state.pending = nil -- refused; that spot was marked as tried
     else

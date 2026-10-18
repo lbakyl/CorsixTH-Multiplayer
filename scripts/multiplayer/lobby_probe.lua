@@ -46,6 +46,13 @@
 --                       speed:<name>                    choose a speed in the menu
 --                       quit                            close the connection and stop
 --                       cheat                           change money locally only (must desync)
+--                       furnishroom:<id>:<w>:<h>        draw a room and place its furniture
+--                                                       by hand, one object at a time
+--                       cancelroom:<id>:<w>:<h>         draw a room, cancel while furnishing
+--   MP_FURNISH_PACE   game hours between furnishing steps (default 0)
+--   MP_UI_COMMANDS    optional file; every line added to it while the game
+--                     runs is done at once, as "action[:arg]" (the actions above),
+--                     to direct a scripted player during a game with a person
 --   MP_DRAW_EVERY     draw a frame every N ticks (0 = never)
 --   MP_SHOT_DIR       if set, save screenshots (PNG) of the lobby views and of
 --                     moments in the game there, named <player>-<what>.png;
@@ -86,6 +93,16 @@ if os.getenv("MP_LUA_PATH") then package.path = os.getenv("MP_LUA_PATH") .. ";" 
 local builder = assert(loadfile(source_dir .. "/scripts/multiplayer/probe_builder.lua"))()
 
 local ui_script = {}
+local commands_file = os.getenv("MP_UI_COMMANDS")
+-- Game hours to wait between the steps of furnishing a room (for a person
+-- watching; default none).
+local furnish_pace = tonumber(os.getenv("MP_FURNISH_PACE") or "")
+local commands_seen = 0
+if commands_file then
+  -- Only lines added from now on count.
+  local f = io.open(commands_file, "r")
+  if f then for _ in f:lines() do commands_seen = commands_seen + 1 end f:close() end
+end
 for entry in (os.getenv("MP_UI_SCRIPT") or ""):gmatch("[^;]+") do
   local hour, action, arg = entry:match("^(%d+):(%w+):?(.*)$")
   ui_script[#ui_script + 1] = {hour = tonumber(hour), action = action, arg = arg}
@@ -307,6 +324,28 @@ local function run()
         world:pauseOrUnpause()
       end
     end
+    -- Live instructions: new lines in the MP_UI_COMMANDS file, done now.
+    if commands_file and ticks % 25 == 0 then
+      local f = io.open(commands_file, "r")
+      if f then
+        local n = 0
+        for line in f:lines() do
+          n = n + 1
+          if n > commands_seen and line:match("%S") then
+            local action, arg = line:match("^%s*(%w+):?(.-)%s*$")
+            if action then
+              ui_script[#ui_script + 1] = {hour = session.step, action = action, arg = arg}
+              log(string.format("UI: live instruction %q at step %d", line, session.step))
+            end
+          end
+        end
+        commands_seen = math.max(commands_seen, n)
+        f:close()
+      end
+    end
+    -- Joining a person's game: the anchor for room and object searches is
+    -- their reception desk (or the first tile of this hospital).
+    if not desk_x and #ui_script > 0 then desk_x, desk_y = builder.anchor(world) end
     for i, entry in ipairs(ui_script) do
       if not done[i] and session.step >= entry.hour then
         done[i] = true
@@ -443,7 +482,8 @@ local function run()
           -- Draw a room, then place its furniture by hand (or cancel then).
           local id, rw, rh = entry.arg:match("^([%w_]+):(%d+):(%d+)$")
           builder.ui_room(world, desk_x, desk_y, id, tonumber(rw), tonumber(rh), false, log, nil, true)
-          furnishing = {cancel = a == "cancelroom"}
+          furnishing = {cancel = a == "cancelroom", pace = furnish_pace,
+              not_before = furnish_pace and session.step + furnish_pace}
         elseif a == "moveobject" or a == "sellobject" then
           -- Pick up a corridor object of this hospital (right click), then
           -- put it down a few tiles away, or sell it (close the window).
