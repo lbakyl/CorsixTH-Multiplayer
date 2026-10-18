@@ -130,7 +130,10 @@ function UITownMap:onMouseUp(button, x, y)
     local width, height = map:size()
     if 0 <= tx and tx < width and 0 <= ty and ty < height then
       local plot = map:getCellFlags(tx + 1, ty + 1, flag_cache).parcelId
-      if plot ~= 0 then
+      if plot ~= 0 and MultiplayerSession.actionsAreCommands() then
+        TheApp.mp_session:issue({kind = "buy_plot", plot = plot})
+        self.ui:playSound("cashreg.wav")
+      elseif plot ~= 0 then
         if self.ui.hospital:purchasePlot(plot) then
           self.ui:playSound("cashreg.wav")
           redraw = true
@@ -336,6 +339,10 @@ function UITownMap:decreaseHeat()
   local heat = math.floor(h.heating.radiator_heat * 10 + 0.5)
   if not h.heating.heating_broke then
     heat = math.max(heat - 1, 1)
+    if MultiplayerSession.actionsAreCommands() then
+      TheApp.mp_session:issue({kind = "set_heat", level = heat})
+      return
+    end
     h.heating.radiator_heat = heat / 10
   end
 end
@@ -345,6 +352,10 @@ function UITownMap:increaseHeat()
   local heat = math.floor(h.heating.radiator_heat * 10 + 0.5)
   if not h.heating.heating_broke then
     heat = math.min(heat + 1, 10)
+    if MultiplayerSession.actionsAreCommands() then
+      TheApp.mp_session:issue({kind = "set_heat", level = heat})
+      return
+    end
     h.heating.radiator_heat = heat / 10
   end
 end

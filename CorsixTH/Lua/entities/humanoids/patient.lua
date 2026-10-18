@@ -98,8 +98,9 @@ function Patient:onClick(ui, button)
     -- The object we're using is made invisible, as the animation contains both
     -- the humanoid and the object. Hence send the click onto the object.
     self.user_of:onClick(ui, button)
-  elseif button == "right" then
-    -- Attempt to push patient over
+  elseif button == "right" and not TheApp.mp_session then
+    -- Attempt to push patient over (not in multiplayer: it uses gameplay
+    -- randomness on one machine only)
     if not self.world:isPaused() and not (self.cured or self.going_to_die or self.dead or self.going_home)
          and math.random(1, 2) == 2 then
       self:falling(true)

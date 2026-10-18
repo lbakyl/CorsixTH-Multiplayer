@@ -284,7 +284,8 @@ end
 
 --! The plant needs to retain its animation and reset its unreachable flag when being moved
 function Plant:onClick(ui, button)
-  if button == "right" then
+  -- In multiplayer picking up is refused (Object.onClick); don't half-start it.
+  if button == "right" and not TheApp.mp_session then
     self.unreachable = false
     self.picked_up = true
     self.current_frame = self.base_frame + self.current_state

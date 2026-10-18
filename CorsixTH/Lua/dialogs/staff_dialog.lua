@@ -40,11 +40,12 @@ function UIStaff:changeParcel()
       break
     end
   end
-  if not self.staff.hospital.ownedPlots[index + 1] then
-    self.staff.parcelNr = 0
-  else
-    self.staff.parcelNr = self.staff.hospital.ownedPlots[index + 1]
+  local parcel = self.staff.hospital.ownedPlots[index + 1] or 0
+  if MultiplayerSession.actionsAreCommands() then
+    TheApp.mp_session:issue({kind = "handyman_parcel", staff = self.staff.mp_id, parcel = parcel})
+    return
   end
+  self.staff.parcelNr = parcel
 end
 
 function UIStaff:getParcelText()
@@ -344,6 +345,17 @@ function UIStaff:changeHandymanAttributes(increased)
     self.ui.hospital.handyman_popup = true
   end
 
+  if MultiplayerSession.actionsAreCommands() then
+    TheApp.mp_session:issue({kind = "handyman_prio", staff = self.staff.mp_id, attr = increased})
+    return
+  end
+  UIStaff.raiseHandymanPriority(self.staff, increased)
+end
+
+--! Raise one of a handyman's priorities ('cleaning', 'watering' or
+--! 'repairing'); the other two go down so that they stay balanced.
+--! (Also used by the multiplayer handyman_prio command.)
+function UIStaff.raiseHandymanPriority(staff, increased)
   local incr_value = 0.1  -- Increase of 'increased'
   local smallest_decr = 0.05 -- Smallest decrement that can be performed.
   local decr_attrs = {}
@@ -352,13 +364,13 @@ function UIStaff:changeHandymanAttributes(increased)
   for _, attr in ipairs(attributes) do
     if attr == increased then
       -- Adding too much is not a problem, it gets clipped to 1.
-      self.staff:changeAttribute(attr, incr_value)
-      if self.staff:getAttribute(attr) == 1 then
+      staff:changeAttribute(attr, incr_value)
+      if staff:getAttribute(attr) == 1 then
         incr_value = 2.0 -- Doing 'increased' 100%, set other attributes to 0.
       end
     else
       decr_attrs[#decr_attrs + 1] = attr
-      smallest_decr = math.min(smallest_decr, self.staff:getAttribute(attr))
+      smallest_decr = math.min(smallest_decr, staff:getAttribute(attr))
     end
   end
   assert(#decr_attrs == 2)
@@ -369,7 +381,7 @@ function UIStaff:changeHandymanAttributes(increased)
   local decr_value = incr_value - smallest_decr
   for _, attr in ipairs(decr_attrs) do
     -- Subtracting too much is not a problem, it gets clipped to 0.
-    self.staff:changeAttribute(attr, -decr_value)
+    staff:changeAttribute(attr, -decr_value)
   end
 end
 

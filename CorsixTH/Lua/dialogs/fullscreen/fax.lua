@@ -274,6 +274,7 @@ function UIFax:validate()
   end
   local code = self.code
   self.code = ""
+  if MultiplayerSession.blockUnsupported(self.ui) then return end -- cheat codes change the shared game
   local code_n = (tonumber(code) or 0) / 10^5
   local x = math.abs((code_n ^ 5.00001 - code_n ^ 5) * 10^5 - code_n ^ 5)
   local cheats = self.ui.hospital.hosp_cheats

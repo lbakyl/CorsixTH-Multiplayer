@@ -841,11 +841,13 @@ function UIMenuBar:makeGameMenu(app)
     app.ui:limitCamera(item.checked)
   end
   local function disable_salary_raise(item)
+    if MultiplayerSession.blockUnsupported(app.ui) then return end
     app.world:debugDisableSalaryRaise(item.checked)
   end
   local levels_menu = UIMenu()
   for L = 1, 12 do
     levels_menu:appendItem(("  L%i  "):format(L), function()
+      if MultiplayerSession.blockUnsupported(app.ui) then return end
       if app:loadLevel(L, nil, nil, nil, nil, nil, _S.errors.load_level_prefix, nil) then
         self.ui.app.moviePlayer:playAdvanceMovie(L)
       end
@@ -862,9 +864,12 @@ function UIMenuBar:makeGameMenu(app)
       :appendCheckItem(_S.menu_debug.limit_camera,         true, limit_camera, nil, function() return self.ui.limit_to_visible_diamond end)
       :appendCheckItem(_S.menu_debug.disable_salary_raise, false, disable_salary_raise, nil, function() return self.ui.app.world.debug_disable_salary_raise end)
       :appendItem(_S.menu_debug.make_debug_fax,     function() self.ui:makeDebugFax() end)
-      :appendItem(_S.menu_debug.make_debug_patient, function() self.ui:addWindow(UIMakeDebugPatient(self.ui)) end)
+      :appendItem(_S.menu_debug.make_debug_patient, function()
+          if MultiplayerSession.blockUnsupported(self.ui) then return end
+          self.ui:addWindow(UIMakeDebugPatient(self.ui))
+        end)
       :appendItem(_S.menu_debug.make_debug_rat, function() self.ui:makeDebugRat() end)
-      :appendItem(_S.menu_debug.cheats:format(hotkey_value_label("ingame_showCheatWindow", hotkeys)),             function() self.ui:addWindow(UICheats(self.ui)) end)
+      :appendItem(_S.menu_debug.cheats:format(hotkey_value_label("ingame_showCheatWindow", hotkeys)),             function() self.ui:showCheatsWindow() end)
       :appendItem(_S.menu_debug.lua_console:format(hotkey_value_label("global_showLuaConsole", hotkeys)),        function() self.ui:addWindow(UILuaConsole(self.ui)) end)
       :appendItem(_S.menu_debug.debug_script:format(hotkey_value_label("global_runDebugScript", hotkeys)),       function() self.ui:runDebugScript() end)
       :appendItem(_S.menu_debug.calls_dispatcher,   function() self.ui:addWindow(UICallsDispatcher(self.ui)) end)

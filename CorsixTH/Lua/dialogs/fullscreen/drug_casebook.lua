@@ -317,6 +317,12 @@ function UICasebook:increasePay()
   else
     self.ui:playSound("selectx.wav")
   end
+  if MultiplayerSession.actionsAreCommands() then
+    TheApp.mp_session:issue({kind = "set_price", disease = self.selected_disease,
+        percent = math.floor(price * 100 + 0.5)})
+    self.percentage_counter = 50
+    return
+  end
   self.casebook[self.selected_disease].price = price
   self.percentage_counter = 50
 end
@@ -336,12 +342,22 @@ function UICasebook:decreasePay()
   else
     self.ui:playSound("selectx.wav")
   end
+  if MultiplayerSession.actionsAreCommands() then
+    TheApp.mp_session:issue({kind = "set_price", disease = self.selected_disease,
+        percent = math.floor(price * 100 + 0.5)})
+    self.percentage_counter = 50
+    return
+  end
   self.casebook[self.selected_disease].price = price
   self.percentage_counter = 50
 end
 
 function UICasebook:concentrateResearch()
   if self.hospital:canConcentrateResearch(self.selected_disease) then
+    if MultiplayerSession.actionsAreCommands() then
+      TheApp.mp_session:issue({kind = "concentrate_research", disease = self.selected_disease})
+      return
+    end
     self.hospital.research:concentrateResearch(self.selected_disease)
   end
 end

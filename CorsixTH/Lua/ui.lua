@@ -198,6 +198,7 @@ function UI:UI(app, minimal)
 end
 
 function UI:runDebugScript()
+  if MultiplayerSession.blockUnsupported(self) then return end
   -- luacheck: ignore 111 _ is set in debug code
   print("Executing Debug Script...")
   local debug_script = self.app:getFullPath({"Lua", "debug_script.lua"})
@@ -1251,11 +1252,13 @@ end
 
 --! Shows the Lua console
 function UI:showLuaConsole()
+  if MultiplayerSession.blockUnsupported(self) then return end
   self:addWindow(UILuaConsole(self))
 end
 
 --! Triggers reset of the application (reloads .lua files)
 function UI:resetApp()
+  if MultiplayerSession.blockUnsupported(self) then return end
   self.app:reset()
 end
 

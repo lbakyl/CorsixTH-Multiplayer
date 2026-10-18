@@ -434,6 +434,11 @@ function UIBankManager:increaseLoan()
   local max_loan = not self.world.free_build_mode and (math.floor((hospital.value * 0.33) / 5000) * 5000) + 10000 or 0
   if hospital.loan + 5000 <= max_loan  then
     local amount = self.ui.app.key_modifiers.ctrl and max_loan - hospital.loan or 5000
+    if MultiplayerSession.actionsAreCommands() then
+      TheApp.mp_session:issue({kind = "loan", amount = amount})
+      self.ui:playSound("selectx.wav")
+      return
+    end
     hospital.loan = hospital.loan + amount
     hospital:receiveMoney(amount, _S.transactions.bank_loan)
     self.ui:playSound("selectx.wav")
@@ -452,6 +457,11 @@ function UIBankManager:decreaseLoan()
     end
   end
   if hospital.loan > 0 and hospital.balance >= amount then
+    if MultiplayerSession.actionsAreCommands() then
+      TheApp.mp_session:issue({kind = "loan", amount = -amount})
+      self.ui:playSound("selectx.wav")
+      return
+    end
     hospital.loan = hospital.loan - amount
     hospital:spendMoney(amount, _S.transactions.loan_repayment)
     self.ui:playSound("selectx.wav")

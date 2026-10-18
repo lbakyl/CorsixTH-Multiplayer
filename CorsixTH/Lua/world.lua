@@ -1970,6 +1970,7 @@ function World:newEntity(class, animation, mood_marker)
   if not table_contains(self.entities, entity) then
     self.entities[#self.entities + 1] = entity
   end
+  self:_numberEntity(entity)
   entity.world = self
   entity.mood_marker = mood_marker
   return entity
@@ -2391,6 +2392,23 @@ end
 --  interested entities in the vicinity of the new arrival.
 --!param entity (Entity) The entity that was just placed.
 --!param id (optional string) That entity's id.
+--! Give an entity a number, in creation order. Every multiplayer peer
+--! creates entities in the same order, so commands can name an entity (a
+--! patient, a member of staff, a rat) by this number.
+function World:_numberEntity(entity)
+  if not entity.mp_id then
+    self.next_entity_id = (self.next_entity_id or 0) + 1
+    entity.mp_id = self.next_entity_id
+  end
+end
+
+--! The entity with a number from World:_numberEntity, or nil.
+function World:getEntityById(id)
+  for _, entity in ipairs(self.entities) do
+    if entity.mp_id == id then return entity end
+  end
+end
+
 function World:objectPlaced(entity, id)
   -- If id is not supplied, we can use the entities internal id if it exists
   -- This is so the bench check below works
@@ -2402,6 +2420,7 @@ function World:objectPlaced(entity, id)
   if not table_contains(self.entities, entity) then
     self.entities[#self.entities + 1] = entity
   end
+  self:_numberEntity(entity)
 
   -- Warn a hospital if that is possible.
   if not entity.tile_x or not entity.tile_y then return end

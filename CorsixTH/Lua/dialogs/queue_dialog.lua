@@ -71,7 +71,22 @@ function UIQueue:decreaseMaxSize()
   elseif self.ui.app.key_modifiers.shift then
     amount = amount * 5
   end
+  if MultiplayerSession.actionsAreCommands() then
+    self:_issueQueueSize(math.max(0, self.queue.max_size - amount))
+    return
+  end
   self.queue:decreaseMaxSize(amount)
+end
+
+--! Multiplayer: send the new longest-queue setting as a command, naming the
+--! door or reception desk the queue belongs to.
+function UIQueue:_issueQueueSize(size)
+  for _, entity in ipairs(self.ui.app.world.entities) do
+    if entity.queue == self.queue and entity.mp_id then
+      TheApp.mp_session:issue({kind = "queue_size", owner = entity.mp_id, size = size})
+      return
+    end
+  end
 end
 
 function UIQueue:increaseMaxSize()
@@ -80,6 +95,10 @@ function UIQueue:increaseMaxSize()
     amount = amount * 10
   elseif self.ui.app.key_modifiers.shift then
     amount = amount * 5
+  end
+  if MultiplayerSession.actionsAreCommands() then
+    self:_issueQueueSize(math.min(30, self.queue.max_size + amount))
+    return
   end
   self.queue:increaseMaxSize(amount)
 end

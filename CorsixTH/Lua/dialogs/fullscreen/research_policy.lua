@@ -143,22 +143,27 @@ function UIResearch:adjustResearch(area, mode)
   elseif self.ui.app.key_modifiers.shift then
     amount = amount * 5
   end
+  local frac
   if mode == "less" then
     if res.research_policy[area].frac > 0 then
-      res.research_policy[area].frac = math.max(0, res.research_policy[area].frac - amount)
+      frac = math.max(0, res.research_policy[area].frac - amount)
       self.ui:playSound("selectx.wav")
     else
       self.ui:playSound("Wrong2.wav")
     end
   elseif mode == "more" then
     if res.research_policy.total < 100 and res.research_policy[area].current then
-      res.research_policy[area].frac = res.research_policy[area].frac +
-        math.min(amount, 100 - res.research_policy.total)
+      frac = res.research_policy[area].frac + math.min(amount, 100 - res.research_policy.total)
       self.ui:playSound("selectx.wav")
     else
       self.ui:playSound("Wrong2.wav")
     end
   end
+  if frac and MultiplayerSession.actionsAreCommands() then
+    TheApp.mp_session:issue({kind = "research_frac", area = area, frac = frac})
+    return
+  end
+  if frac then res.research_policy[area].frac = frac end
 
   res.research_policy.total = 0
   for _, category in ipairs(research_categories) do

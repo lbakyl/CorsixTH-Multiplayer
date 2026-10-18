@@ -45,14 +45,22 @@ function UIPolicy:UIPolicy(ui)
   local --[[persistable:hospital_policy_allow_staff]] function allowStaff(name)
     if name == "Allow" then
       if self.prohibit_button.toggled then -- Changing setting from prohibit to allow
-        hosp.policies["staff_allowed_to_move"] = true
+        if MultiplayerSession.actionsAreCommands() then
+          TheApp.mp_session:issue({kind = "set_policy", key = "staff_allowed_to_move", value = 1})
+        else
+          hosp.policies["staff_allowed_to_move"] = true
+        end
         self.prohibit_button:toggle()
       else -- Already allowed, toggle again
         self.allow_button:toggle()
       end
     else -- Clicking the prohibit button
       if self.allow_button.toggled then -- Changing setting from allow to prohibit
-        hosp.policies["staff_allowed_to_move"] = false
+        if MultiplayerSession.actionsAreCommands() then
+          TheApp.mp_session:issue({kind = "set_policy", key = "staff_allowed_to_move", value = 0})
+        else
+          hosp.policies["staff_allowed_to_move"] = false
+        end
         self.allow_button:toggle()
       else -- Already prohibited, toggle again
         self.prohibit_button:toggle()
@@ -226,7 +234,16 @@ function UIPolicy:close()
   for key, s in pairs(self.sliders or {}) do
     local divider = (s.total_max_x or s.max_x) - (s.total_min_x or s.min_x)
     local number = (s.addition and 1 or 0)
-    self.hospital.policies[key] = number + (s.x - (s.total_min_x or s.min_x))/divider
+    local value = number + (s.x - (s.total_min_x or s.min_x))/divider
+    if MultiplayerSession.actionsAreCommands() then
+      -- Only real changes, as whole slider positions (no float rounding).
+      if value ~= self.hospital.policies[key] and s.x ~= s.mp_start_x then
+        TheApp.mp_session:issue({kind = "set_policy", key = key, base = number,
+            offset = s.x - (s.total_min_x or s.min_x), range = divider})
+      end
+    else
+      self.hospital.policies[key] = value
+    end
   end
   UIFullscreen.close(self)
   self.ui:getWindow(UIBottomPanel):updateButtonStates()

@@ -27,6 +27,10 @@
 --                       givemoney:<amount>              co-op trade window: send money
 --                       sendstaff:<class>               co-op trade window: send the first
 --                                                       member of staff of that class
+--                       loan                            bank manager: borrow $5,000
+--                       priceup                         casebook: raise the first price by 1%
+--                       research:<area>                 research window: -1% for an area
+--                       heatup                          town map: radiators one step warmer
 --                       pause[:<ticks>]                 press P (shared through the server),
 --                                                       optionally <ticks> later; works
 --                                                       while the game is paused
@@ -273,6 +277,20 @@ local function run()
             log("UI: no " .. entry.arg .. " to send")
           end
           trade:close()
+        elseif a == "loan" or a == "priceup" or a == "research" or a == "heatup" then
+          -- Hospital settings through their real windows.
+          local w
+          if a == "loan" then w = UIBankManager(world.ui)
+          elseif a == "priceup" then w = UICasebook(world.ui)
+          elseif a == "research" then w = UIResearch(world.ui)
+          else w = UITownMap(world.ui) end
+          world.ui:addWindow(w)
+          if a == "loan" then w:increaseLoan()
+          elseif a == "priceup" then w:increasePay()
+          elseif a == "research" then w:adjustResearch(entry.arg, "less")
+          else w:increaseHeat() end
+          log(string.format("UI: %s%s at step %d", a, entry.arg ~= "" and (" " .. entry.arg) or "", session.step))
+          w:close()
         elseif a == "vip" then
           session:issue({kind = "probe_vip"})
           log("UI: asked for a VIP fax at step " .. session.step)
@@ -358,6 +376,11 @@ local function run()
     table.sort(classes)
     log(string.format("hospital %d %s: balance %s, open %s, staff %s", i, h.name, tostring(h.balance),
         tostring(h.opened), table.concat(classes, ",")))
+    if h.research and h.heating then
+      log(string.format("hospital %d settings: loan %s, heat %s, cure research %s%%", i,
+          tostring(h.loan), tostring(h.heating.radiator_heat),
+          tostring(h.research.research_policy.cure and h.research.research_policy.cure.frac)))
+    end
   end
   log(session.desync and ("RESULT: DESYNC at step " .. session.desync.step)
       or ("RESULT: IN SYNC through step " .. session.step))

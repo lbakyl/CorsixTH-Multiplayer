@@ -402,6 +402,8 @@ function GameUI:onKeyUp(rawchar, modifiers)
 end
 
 function GameUI:makeDebugFax()
+  -- Would number messages differently on this peer only.
+  if MultiplayerSession.blockUnsupported(self) then return end
   local message = {
     {text = "debug fax"}, -- no translation needed imo
     choices = {{text = "close debug fax", choice = "close"}},
@@ -413,6 +415,7 @@ end
 
 --! Debug: ensure two visible ratholes and spawn a rat from one.
 function GameUI:makeDebugRat()
+  if MultiplayerSession.blockUnsupported(self) then return end
   local scr_w, scr_h = self.app.video:getRenderSize()
   local zoom = self:getEffectiveZoom()
   self.hospital:makeDebugRat(self.screen_offset_x, self.screen_offset_y,
@@ -702,7 +705,7 @@ function GameUI:onMouseUp(code, x, y)
 
   -- Controlling debug patients movement with a cursor
   local button = self.button_codes[code]
-  if button == "right" and not self.map_editor and highlight_x then
+  if button == "right" and not self.map_editor and highlight_x and not TheApp.mp_session then
     local window = self:getWindow(UIPatient)
     local patient = (window and window.patient.is_debug and window.patient) or self.hospital:getDebugPatient()
     if patient then
@@ -726,7 +729,7 @@ function GameUI:onMouseUp(code, x, y)
             self.edit_room = room
             room:tryToEdit()
           else
-            if self.app.config.remove_destroyed_rooms then
+            if self.app.config.remove_destroyed_rooms and not MultiplayerSession.blockUnsupported(self) then
               local room_cost = room:calculateRemovalCost()
               self:setEditRoom(false)
               -- show confirmation dialog for removing the room
@@ -1387,6 +1390,7 @@ function GameUI:quit(mapeditor)
 end
 
 function GameUI:showCheatsWindow()
+  if MultiplayerSession.blockUnsupported(self) then return end -- cheats change the shared game
   self:addWindow(UICheats(self))
 end
 

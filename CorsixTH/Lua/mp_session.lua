@@ -145,8 +145,12 @@ function MultiplayerSession:issue(cmd)
   cmd.step = self.step + self.delay
   cmd.peer = self.peer_id
   cmd.seq = self.seq
+  local line = MultiplayerSession.encodeCommand(cmd)
+  -- Keep exactly what the other peers will decode (numbers sent as text,
+  -- booleans as strings...), so this peer applies the same values.
+  cmd = MultiplayerSession.decodeCommand(line)
   self.pending[#self.pending + 1] = cmd
-  self.transport:send(MultiplayerSession.encodeCommand(cmd))
+  self.transport:send(line)
   self.stats.issued = self.stats.issued + 1
   return cmd
 end
@@ -617,6 +621,147 @@ function MultiplayerSession.tellPlayer(world, hospital, text)
   if ui and ui.adviser and ui.hospital == hospital then
     ui.adviser:say({text = text, priority = 10})
   end
+end
+
+--------------------------------------------------------------------------------
+-- Hospital settings changed in the game windows. The window computes the new
+-- value; the handler checks it and sets it on every peer.
+--------------------------------------------------------------------------------
+
+local function hospital_of(world, cmd)
+  return world.hospitals[cmd.hospital or 1]
+end
+
+--! Take (amount > 0) or repay (amount < 0) a bank loan: {amount}.
+function handlers.loan(world, cmd)
+  local hospital = hospital_of(world, cmd)
+  local amount = math.floor(tonumber(cmd.amount) or 0)
+  if not hospital or amount == 0 then return false, "nothing to do" end
+  if amount > 0 then
+    local max_loan = not world.free_build_mode and
+        (math.floor((hospital.value * 0.33) / 5000) * 5000) + 10000 or 0
+    if hospital.loan + amount > max_loan then return false, "loan limit" end
+    hospital.loan = hospital.loan + amount
+    hospital:receiveMoney(amount, _S.transactions.bank_loan)
+  else
+    amount = -amount
+    if amount > hospital.loan or hospital.balance < amount then return false, "cannot repay" end
+    hospital.loan = hospital.loan - amount
+    hospital:spendMoney(amount, _S.transactions.loan_repayment)
+  end
+  return true
+end
+
+--! Treatment price for a disease: {disease, percent} (50..200).
+function handlers.set_price(world, cmd)
+  local hospital = hospital_of(world, cmd)
+  local entry = hospital and hospital.disease_casebook[cmd.disease]
+  local percent = math.floor(tonumber(cmd.percent) or 0)
+  if not entry or percent < 50 or percent > 200 then return false, "invalid price" end
+  entry.price = percent / 100
+  return true
+end
+
+--! Concentrate research on a disease (toggles, like the casebook button): {disease}.
+function handlers.concentrate_research(world, cmd)
+  local hospital = hospital_of(world, cmd)
+  if not hospital or not hospital:canConcentrateResearch(cmd.disease) then
+    return false, "cannot concentrate research"
+  end
+  hospital.research:concentrateResearch(cmd.disease)
+  return true
+end
+
+--! Share of research for an area: {area, frac} (0..100, total at most 100).
+function handlers.research_frac(world, cmd)
+  local hospital = hospital_of(world, cmd)
+  local policy = hospital and hospital.research.research_policy
+  local area = policy and policy[cmd.area]
+  local frac = math.floor(tonumber(cmd.frac) or -1)
+  if type(area) ~= "table" or area.frac == nil or frac < 0 then return false, "invalid research area" end
+  if frac > area.frac and not area.current then return false, "nothing to research" end
+  local others = (policy.total or 0) - area.frac
+  frac = math.min(frac, 100 - others)
+  area.frac = frac
+  policy.total = others + frac
+  return true
+end
+
+local POLICY_KEYS = {guess_cure = true, send_home = true, stop_procedure = true,
+  goto_staffroom = true, staff_allowed_to_move = true}
+
+--! A hospital policy: {key, value} for the staff-may-move switch (0/1), or
+--! {key, base, offset, range} for a slider (value = base + offset / range).
+function handlers.set_policy(world, cmd)
+  local hospital = hospital_of(world, cmd)
+  if not hospital or not POLICY_KEYS[cmd.key] then return false, "unknown policy" end
+  if cmd.key == "staff_allowed_to_move" then
+    hospital.policies[cmd.key] = tonumber(cmd.value) == 1
+  else
+    local range = tonumber(cmd.range) or 0
+    if range <= 0 then return false, "invalid slider" end
+    hospital.policies[cmd.key] = (tonumber(cmd.base) or 0) + (tonumber(cmd.offset) or 0) / range
+  end
+  return true
+end
+
+--! Buy a plot of land: {plot}.
+function handlers.buy_plot(world, cmd)
+  local hospital = hospital_of(world, cmd)
+  if not hospital then return false, "no such hospital" end
+  local ui = world.ui
+  -- purchasePlot gives cost advice through the UI; only to that player.
+  local adviser = ui and ui.adviser
+  if ui and ui.hospital ~= hospital then ui.adviser = nil end
+  local ok = hospital:purchasePlot(tonumber(cmd.plot))
+  if ui then ui.adviser = adviser end
+  return ok, not ok and "cannot buy this plot" or nil
+end
+
+--! Radiator heat: {level} (1..10, tenths).
+function handlers.set_heat(world, cmd)
+  local hospital = hospital_of(world, cmd)
+  local level = math.floor(tonumber(cmd.level) or 0)
+  if not hospital or level < 1 or level > 10 then return false, "invalid heat" end
+  if hospital.heating.heating_broke then return false, "heating is broken" end
+  hospital.heating.radiator_heat = level / 10
+  return true
+end
+
+--! Entity of the right class named by a command, or nil.
+local function entity_of(world, id, klass)
+  local entity = world:getEntityById(tonumber(id))
+  if entity and (not klass or class.is(entity, klass)) then return entity end
+end
+MultiplayerSession.entityOf = entity_of
+
+--! Which plot a handyman looks after: {staff, parcel} (0 = all).
+function handlers.handyman_parcel(world, cmd)
+  local staff = entity_of(world, cmd.staff, Handyman)
+  local parcel = math.floor(tonumber(cmd.parcel) or -1)
+  if not staff or staff.fired or parcel < 0 then return false, "no such handyman" end
+  if parcel ~= 0 and not table_contains(staff.hospital.ownedPlots, parcel) then
+    return false, "not our plot"
+  end
+  staff.parcelNr = parcel
+  return true
+end
+
+--! Raise one of a handyman's priorities: {staff, attr}.
+function handlers.handyman_prio(world, cmd)
+  local staff = entity_of(world, cmd.staff, Handyman)
+  if not staff or staff.fired or not staff:getAttribute(cmd.attr) then return false, "no such handyman" end
+  UIStaff.raiseHandymanPriority(staff, cmd.attr)
+  return true
+end
+
+--! Longest queue for a room door or reception desk: {owner, size} (0..30).
+function handlers.queue_size(world, cmd)
+  local owner = entity_of(world, cmd.owner)
+  local size = math.floor(tonumber(cmd.size) or -1)
+  if not owner or not owner.queue or size < 0 or size > 30 then return false, "no such queue" end
+  owner.queue.max_size = size
+  return true
 end
 
 --! Language-independent identity of a staff profile in the hiring pool.

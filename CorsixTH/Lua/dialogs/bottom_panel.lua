@@ -226,6 +226,8 @@ function UIBottomPanel:openSave()
 end
 
 function UIBottomPanel:openLoad()
+  -- Loading or restarting would leave the other multiplayer players behind.
+  if MultiplayerSession.blockUnsupported(self.ui) then return end
   self.ui:addWindow(UILoadGame(self.ui, "game"))
 end
 
@@ -234,10 +236,12 @@ function UIBottomPanel:quickSave()
 end
 
 function UIBottomPanel:quickLoad()
+  if MultiplayerSession.blockUnsupported(self.ui) then return end
   self.ui.app:quickLoad()
 end
 
 function UIBottomPanel:restart()
+  if MultiplayerSession.blockUnsupported(self.ui) then return end
   self.ui.app:restart()
 end
 

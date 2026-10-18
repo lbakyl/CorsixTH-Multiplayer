@@ -130,6 +130,7 @@ end
 --! Handles the choice of a cheat from the dialog
 --!param num (number) the index in the cheat list
 function UICheats:buttonClicked(num)
+  if MultiplayerSession.blockUnsupported(self.ui) then return end -- cheats change the shared game
   -- If the menu was opened by fax code, allow player to use it
   if self.ui.hospital.world:isUserActionProhibited() and not self.ui:getWindow(UIFax) then
     --TODO: Prevent selectx.wav playing with this
