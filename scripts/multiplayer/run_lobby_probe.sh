@@ -178,6 +178,10 @@ fi
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 if [[ -n "${MP_SERVER_LOG_CMD:-}" ]]; then eval "$MP_SERVER_LOG_CMD" > "$out/server.log" 2>&1 || true; fi
+if [[ ! -f "$out/server.log" ]]; then
+  echo "No server log (set MP_SERVER_LOG_CMD): the server-side part of check 3 fails."
+  : > "$out/server.log"
+fi
 
 python3 - "$out" "${MP_REFEREE:-0}" <<'PY'
 import pathlib, re, sys

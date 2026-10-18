@@ -51,7 +51,7 @@ data, saves from it, or logs that contain it.**
 | Co-op | Original two- to four-player maps (tested with two); a hospital each, kept apart (rooms, staff, patients, heating, research, events, goals); trade window in the Multiplayer menu. Design and open points: `coop-architecture.md` |
 | Blocked in multiplayer | Editing/moving existing rooms and objects, picking up staff, load game, restart (menu and hotkeys), cheats and debug tools, pushing patients over, the wage-increase menu setting. Epidemics are off in co-op |
 | Windows | CI artifact includes LuaSocket. **S0 passed**: Windows (MSVC) and Linux (GCC), both Lua 5.5, identical for 3 game years; shared and co-op games between a Windows and a Linux player IN SYNC (`cross-platform.md`) |
-| Real network | LAN only (Windows desktop ↔ Linux VM); not over the internet yet |
+| Real network | LAN (Windows desktop ↔ Linux VM), and over the internet: server on a Hetzner VPS in Helsinki (set up with `setup-vps.sh`), 20 scripted players at home in Prague (30 ms round trip): all 10 lobby checks pass. The server chose delay 2 and Normal (one way 17 to 20 ms between players; one sample of 31 ms gave delay 3). Windows players over the internet: not yet |
 | Linux CI | Fails in the static-analysis step on upstream's own `CMakeLists.txt` formatting (gersemi); not caused by this fork's changes |
 
 ## 3. Branches
