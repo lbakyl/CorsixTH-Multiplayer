@@ -46,10 +46,10 @@ data, saves from it, or logs that contain it.**
 | Headless referee (S3/S4) | Optional: the server runs one more copy of each game without a screen. It checks the players' fingerprints, repairs a desync (everybody loads its save and plays on) and lets a player who left rejoin. Tested on the VM, shared and co-op (`referee.md`); not in the Docker image yet |
 | In-game lobby | Main menu → Multiplayer: server address, name, room list, create (shared / a hospital each, level, players), password, ready, start |
 | Shared speed and pause | Any player's speed or pause applies to everybody, capped at the room's ping-based maximum |
-| Player actions as commands | Corridor objects, hiring, firing, pay rise answers, rooms (draw outline/door/windows), opening the hospital early, fax answers, hospital settings (loans, prices, research, policies, plots, heating, handymen, queue sizes), queue order and sending a queued patient to another room, actions on one patient/staff/machine/rat, co-op money and staff transfers |
+| Player actions as commands | Corridor objects (buy, move, sell), hiring, firing, pay rise answers, rooms (draw outline/door/windows, then place the furniture by hand), opening the hospital early, fax answers, hospital settings (loans, prices, research, policies, plots, heating, handymen, queue sizes), queue order and sending a queued patient to another room, actions on one patient/staff/machine/rat, co-op money and staff transfers |
 | Room outlines | While someone draws a room the others see its floor in blue (reserved); the finished room appears for everyone at once |
 | Co-op | Original two- to four-player maps (tested with two); a hospital each, kept apart (rooms, staff, patients, heating, research, events, goals); trade window in the Multiplayer menu. Design and open points: `coop-architecture.md` |
-| Blocked in multiplayer | Editing/moving existing rooms and objects, picking up staff, load game, restart (menu and hotkeys), cheats and debug tools, pushing patients over, the wage-increase menu setting. Epidemics are off in co-op |
+| Blocked in multiplayer | Editing existing rooms, moving objects inside rooms, buying extra objects for a new room, picking up staff, load game, restart (menu and hotkeys), cheats and debug tools, pushing patients over, the wage-increase menu setting. Epidemics are off in co-op |
 | Windows | CI artifact includes LuaSocket. **S0 passed**: Windows (MSVC) and Linux (GCC), both Lua 5.5, identical for 3 game years; shared and co-op games between a Windows and a Linux player IN SYNC (`cross-platform.md`) |
 | Real network | LAN (Windows desktop ↔ Linux VM), and over the internet: server on a Hetzner VPS in Helsinki (set up with `setup-vps.sh`), 20 scripted players at home in Prague (30 ms round trip): all 10 lobby checks pass. The server chose delay 2 and Normal (one way 17 to 20 ms between players; one sample of 31 ms gave delay 3). Windows players over the internet: not yet |
 | Linux CI | Fails in the static-analysis step on upstream's own `CMakeLists.txt` formatting (gersemi); not caused by this fork's changes |
@@ -71,7 +71,7 @@ agents must not open PRs, so the owner opens them).
 | `mp/coop-full` | Full co-op: settings and entity actions as commands, hospitals kept apart, per-player events, heating, awards, goals |
 | `mp/vps-setup` | One-command VPS setup script (`mp_server/deploy/setup-vps.sh`) |
 | `mp/referee` | Headless referee per room, desync repair from its save, rejoin a running game |
-| `mp/coop-gaps` | Firing, pay rise answers and the queue window as commands |
+| `mp/coop-gaps` | Firing, pay rise answers, the queue window, moving/selling corridor objects and furnishing new rooms by hand as commands; notices for refused actions |
 
 Working rule: small commits, push work-in-progress, one branch per step,
 never push directly to `mp/dev` or `master`.
@@ -256,9 +256,9 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
    player, level goals per player, per-hospital heating, loans, patient
    referrals, renting rooms, selling research; hide other players' adviser
    messages.
-5. **Rooms**: let the drawing player place the objects (now automatic), move
-   and sell objects, edit rooms.
-6. **Picking up** staff and objects as commands.
+5. **Rooms**: edit and sell existing rooms, move objects inside rooms, buy
+   extra objects while furnishing.
+6. **Picking up** staff as a command.
 7. **Encryption** (S8): passwords travel in clear text now.
 
 ## 9. Open questions

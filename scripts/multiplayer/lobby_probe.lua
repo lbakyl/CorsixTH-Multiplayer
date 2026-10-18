@@ -253,6 +253,7 @@ local function run()
   local last_speed = world:getCurrentSpeed()
   local repairs = session.restarts or 0
   local waiting_rejoin -- restarts seen when the "waitrejoin" pause began
+  local furnishing -- state of a room being furnished by hand (furnishroom)
   while session.step < target and (expect_repair or not session.desync) and not quit do
     local before = session.step
     tick()
@@ -292,6 +293,7 @@ local function run()
       log("UI: a player rejoined; unpausing at step " .. session.step)
       world:setUserSpeed("Max speed")
     end
+    if furnishing and builder.furnish_tick(world, furnishing, log) then furnishing = nil end
     if draw_every > 0 and ticks % draw_every == 0 then TheApp:drawFrame() end
     local report = TheApp.ui:getWindow(UIAnnualReport)
     if report then report:close() end
@@ -437,6 +439,11 @@ local function run()
         elseif a == "quit" then
           log("UI: quitting at step " .. session.step)
           quit = true
+        elseif a == "furnishroom" or a == "cancelroom" then
+          -- Draw a room, then place its furniture by hand (or cancel then).
+          local id, rw, rh = entry.arg:match("^([%w_]+):(%d+):(%d+)$")
+          builder.ui_room(world, desk_x, desk_y, id, tonumber(rw), tonumber(rh), false, log, nil, true)
+          furnishing = {cancel = a == "cancelroom"}
         elseif a == "moveobject" or a == "sellobject" then
           -- Pick up a corridor object of this hospital (right click), then
           -- put it down a few tiles away, or sell it (close the window).
@@ -473,8 +480,8 @@ local function run()
           session:issue({kind = "probe_raise", class = entry.arg})
         elseif a == "answerraise" then
           local icon
-          for _, i in ipairs(world.ui.bottom_panel:allMessageIcons()) do
-            if i.type == "strike" then icon = i break end
+          for _, candidate in ipairs(world.ui.bottom_panel:allMessageIcons()) do
+            if candidate.type == "strike" then icon = candidate break end
           end
           if icon then
             icon:openMessage()

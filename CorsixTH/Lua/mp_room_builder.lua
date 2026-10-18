@@ -24,9 +24,15 @@ SOFTWARE. --]]
 --! In multiplayer the player designing a room only draws it (outline, door,
 --! windows); nothing is built on their machine yet, so the other players'
 --! games stay identical. The command then builds the room everywhere at the
---! same step, through a hidden room editor window that is never shown and
---! never added to the UI (so it does not close the windows the local player
---! has open). Required objects are placed automatically, in a fixed order.
+--! same step, through a room editor window that is not added to the UI on
+--! the other players' machines (so it does not close the windows they have
+--! open).
+--!
+--! Furniture: either placed automatically, in a fixed order (scripted tests,
+--! or `furnish` not set), or by hand: the room then waits, unfinished, with
+--! its editor kept in world.mp_furnishing[room id]. Only the player who drew
+--! it sees that editor; each object they put down is a room_object command,
+--! and room_finish / room_abort end it on every peer.
 
 local builder = {}
 
@@ -203,10 +209,26 @@ local function try_build(world, hospital, cmd)
     return fail("unexpected phase " .. tostring(dlg.phase))
   end
   local room = dlg.room
+  if tonumber(cmd.furnish) == 1 and dlg.phase == "objects" then
+    -- Furnished by hand: keep the editor (see builder.placeObject), without
+    -- a blueprint on the map until its player's machine shows it.
+    dlg:clearBlueprint()
+    dlg.object_cell_x, dlg.object_cell_y = nil, nil
+    return room, nil, dlg
+  end
+  local ok, why = builder.autoFurnish(dlg, room, cmd, {})
+  if not ok then return nil, why end
+  return builder.finishEditor(dlg, room)
+end
 
-  -- 5. Required objects, in name order, first fitting tile and orientation.
-  local orientations = {"north", "east", "south", "west"}
-  local placed = {}
+local orientations = {"north", "east", "south", "west"}
+
+--! 5. Place the objects still to place, in name order, at the first fitting
+--! tile and orientation (the room editor dlg is in its objects phase).
+--!param rect {x, y, w, h} the room's outline
+--!param placed list of {footprint, use_x, use_y} already in the room
+function builder.autoFurnish(dlg, room, rect, placed)
+  local x, y, w, h = rect.x, rect.y, rect.w, rect.h
   local guard = 0
   while dlg.phase == "objects" and #dlg.objects > 0 and guard < 40 do
     guard = guard + 1
@@ -225,7 +247,7 @@ local function try_build(world, hospital, cmd)
             dlg:setOrientation(o)
             dlg:setBlueprintCell(tx, ty)
             if dlg.object_blueprint_good then
-              local usable, item = keeps_room_usable(room, cmd, placed, object_type, tx, ty, o)
+              local usable, item = keeps_room_usable(room, rect, placed, object_type, tx, ty, o)
               if usable then
                 dlg:placeObject()
                 placed[#placed + 1] = item
@@ -238,23 +260,26 @@ local function try_build(world, hospital, cmd)
     end
     if not done then
       dlg:abortRoom()
-      return nil, "required objects do not fit"
+      return false, "required objects do not fit"
     end
   end
-  -- 6. Pay and open the room.
+  return true
+end
+
+--! 6. Pay and open the room.
+function builder.finishEditor(dlg, room)
   if dlg.phase == "objects" then dlg:confirm(true) end
   if dlg.phase ~= "closed" then dlg:close() end
   if not room or not room.built then return nil, "room was not finished" end
   return room
 end
 
---! Build the room described by a build_room command on `hospital`.
---!return room, or nil and a reason
-function builder.build(world, hospital, cmd)
+--! Run fn(...) with the room editor working for `hospital`: the editor uses
+--! ui.hospital for money and research, and local settings that would change
+--! the result are fixed. All local UI state is restored afterwards.
+local function with_editor(world, hospital, fn, ...)
   local ui = world.ui
   local app = TheApp
-  -- The editor uses ui.hospital for money and research; build for the
-  -- command's hospital. Restore all local UI state afterwards.
   local saved = {
     hospital = ui.hospital,
     edit_room = ui.edit_room,
@@ -267,14 +292,123 @@ function builder.build(world, hospital, cmd)
     app.config[k] = v
   end
   ui.hospital = hospital
-  local ok, room, why = pcall(try_build, world, hospital, cmd)
+  local results = {pcall(fn, ...)}
   ui.hospital = saved.hospital
   ui.edit_room = saved.edit_room
   ui.do_world_hit_test = saved.hit_test
   if saved.cursor then ui:setCursor(saved.cursor) end
   for k, v in pairs(saved.config) do app.config[k] = v end
-  if not ok then error(room, 0) end
-  return room, why
+  if not results[1] then error(results[2], 0) end
+  return (table.unpack or unpack)(results, 2, 4)
+end
+
+--! Build the room described by a build_room command on `hospital`.
+--!return room, or nil and a reason; for a room furnished by hand also the
+--!  room editor, still in its objects phase
+function builder.build(world, hospital, cmd)
+  return with_editor(world, hospital, try_build, world, hospital, cmd)
+end
+
+--------------------------------------------------------------------------------
+-- Rooms furnished by hand (world.mp_furnishing[room id] = entry, with
+-- entry = {dlg, peer, hospital, x, y, w, h, placed}).
+--------------------------------------------------------------------------------
+
+--! Show the room editor of a room being furnished to its player (only on
+--! that player's machine). False if another room editor is open there.
+function builder.show(world, entry)
+  local ui = world.ui
+  if not ui or (ui.edit_room and ui.edit_room ~= entry.dlg) then return false end
+  local dlg = entry.dlg
+  dlg.mp_room_id = entry.dlg.room.id
+  if not dlg.parent then ui:addWindow(dlg) end
+  ui.edit_room = dlg
+  ui:setWorldHitTest(dlg.room)
+  -- Buying more objects and picking up placed ones are not commands yet.
+  if dlg.purchase_button then dlg.purchase_button:enable(false) end
+  if dlg.pickup_button then dlg.pickup_button:enable(false) end
+  return true
+end
+
+--! Take the editor away from its player's screen (not on the other peers,
+--! where it never was). The room itself is unchanged.
+function builder.hide(world, entry)
+  local ui, dlg = world.ui, entry.dlg
+  if dlg.parent then dlg.parent:removeWindow(dlg) end
+  if ui and ui.edit_room == dlg then
+    ui.edit_room = false
+    ui:setWorldHitTest(true)
+  end
+end
+
+--! Put down one object in a room being furnished: {object, x, y, orientation}.
+--!return true, or false and a reason
+function builder.placeObject(world, entry, cmd)
+  local dlg = entry.dlg
+  return with_editor(world, world.hospitals[entry.hospital], function()
+    if dlg.phase ~= "objects" then return false, "room is not being furnished" end
+    local index
+    for i, o in ipairs(dlg.objects) do
+      if o.object.id == cmd.object and o.qty > 0 then index = i break end
+    end
+    if not index then return false, "no such object to place" end
+    local object_type = dlg.objects[index].object
+    if not object_type.orientations[cmd.orientation] then return false, "unknown orientation" end
+    local cell_x, cell_y, orientation = dlg.object_cell_x, dlg.object_cell_y, dlg.object_orientation
+    local function restore()
+      if not dlg.parent then
+        -- Not shown on this machine: no blueprint on the map.
+        dlg:clearBlueprint()
+        dlg.object_cell_x, dlg.object_cell_y = nil, nil
+        return
+      end
+      -- This player's editor goes on following their mouse from where it was.
+      if dlg.objects[dlg.active_index] then
+        if orientation then dlg:setOrientation(orientation) end
+        if cell_x then dlg:setBlueprintCell(cell_x, cell_y) end
+      end
+    end
+    dlg:setActiveIndex(index)
+    dlg:setOrientation(cmd.orientation)
+    dlg:setBlueprintCell(cmd.x, cmd.y)
+    if not dlg.object_blueprint_good then restore() return false, "tile not free" end
+    if world:anyHumanoidObscuringArea(cmd.x, cmd.y) then restore() return false, "someone is in the way" end
+    local usable, item = keeps_room_usable(dlg.room, entry, entry.placed, object_type,
+        cmd.x, cmd.y, cmd.orientation)
+    if not usable then restore() return false, "it would block the room" end
+    dlg.object_cell_x, dlg.object_cell_y = cmd.x, cmd.y
+    dlg:placeObject()
+    entry.placed[#entry.placed + 1] = item
+    restore()
+    return true
+  end)
+end
+
+--! Finish a room being furnished (pay and open it); `auto` first places the
+--! objects still missing, like a room built without furnishing by hand.
+--!return room, or nil and a reason
+function builder.finish(world, entry, auto)
+  local dlg = entry.dlg
+  return with_editor(world, world.hospitals[entry.hospital], function()
+    if dlg.phase ~= "objects" then return nil, "room is not being furnished" end
+    if auto then
+      local ok, why = builder.autoFurnish(dlg, dlg.room, entry, entry.placed)
+      if not ok then return nil, why end
+    end
+    if not dlg:checkEnableConfirm() then return nil, "objects missing" end
+    return builder.finishEditor(dlg, dlg.room)
+  end)
+end
+
+--! Remove a room being furnished, like cancelling it in single player.
+function builder.abort(world, entry)
+  local dlg = entry.dlg
+  return with_editor(world, world.hospitals[entry.hospital], function()
+    if dlg.phase ~= "objects" then return false, "room is not being furnished" end
+    dlg.confirm_button:enable(false) -- close() would finish a complete room
+    dlg:abortRoom()
+    return true
+  end)
 end
 
 return builder

@@ -95,7 +95,23 @@ function UIEditRoom:registerKeyHandlers()
   self:addKeyHandler("global_confirm_alt", self.confirm)
 end
 
+--! Multiplayer, a room this player furnishes by hand (see mp_room_builder):
+--! leaving the editor sends room_finish if the room is complete, otherwise
+--! room_abort, and takes the editor off the screen; the command ends the
+--! room on every peer. Returns true if it handled the request.
+function UIEditRoom:_mpLeaveFurnishing(finish)
+  if not (self.mp_room_id and MultiplayerSession.actionsAreCommands()) then return false end
+  local entry = self.world.mp_furnishing and self.world.mp_furnishing[self.mp_room_id]
+  if entry then
+    if finish == nil then finish = self.confirm_button.enabled end
+    TheApp.mp_session:issue({kind = finish and "room_finish" or "room_abort", room = self.mp_room_id})
+    corsixth.require("mp_room_builder").hide(self.world, entry)
+  end
+  return true
+end
+
 function UIEditRoom:close(...)
+  if self.phase == "objects" and self:_mpLeaveFurnishing() then return end
   if MultiplayerSession.actionsAreCommands() and not self.mp_issued and not self.room then
     TheApp.mp_session:showBlueprint(nil) -- no longer drawing: free the area again
   end
@@ -142,6 +158,7 @@ function UIEditRoom:verifyOrAbortRoom()
 end
 
 function UIEditRoom:abortRoom()
+  if self.phase == "objects" and self:_mpLeaveFurnishing(false) then return end
   if self.paid then
     -- Return half the cost.
     local progress = self.ui.hospital.research.research_progress
@@ -193,6 +210,8 @@ function UIEditRoom:cancel()
     end
     self.ui:setCursor(self.ui.default_cursor)
   elseif self.phase == "objects" then
+    -- (Multiplayer: no going back to the door; cancelling removes the room.)
+    if self:_mpLeaveFurnishing(false) then return end
     self:stopPickupItems()
     self:returnToDoorPhase()
     self.world:resetSideObjects()
@@ -230,6 +249,7 @@ function UIEditRoom:confirm(force)
   elseif self.phase == "clear_area" then
     self:_enterObjectsPhase()
   else
+    if self:_mpLeaveFurnishing(true) then return end
     -- Pay for room (subtract cost of needed objects, which were already paid for)
     if not self.paid then
       local progress = self.ui.hospital.research.research_progress
@@ -269,7 +289,10 @@ function UIEditRoom:_issueBuildRoom()
   session:issue({kind = "build_room", room = self.room_type.id, hospital = hospital_index,
       x = rect.x, y = rect.y, w = rect.w, h = rect.h,
       door_x = door.floor_x, door_y = door.floor_y, door_wall = door.orig_wall,
-      windows = builder.encodeWindows(builder.windowsOf(self))})
+      windows = builder.encodeWindows(builder.windowsOf(self)),
+      -- The player places the furniture once the room is built (scripted
+      -- tests can ask for the automatic placement instead).
+      furnish = self.mp_auto_furnish and 0 or 1})
   session:showRemoteBlueprint(session.peer_id, rect)
   self.mp_issued = true
   self.ui:playSound("buildclk.wav")
@@ -1695,6 +1718,14 @@ function UIEditRoom:checkEnableConfirm()
 end
 
 function UIEditRoom:placeObject()
+  if self.mp_room_id and MultiplayerSession.actionsAreCommands() then
+    -- Multiplayer: every peer puts it into the room when the command runs.
+    TheApp.mp_session:issue({kind = "room_object", room = self.mp_room_id,
+        object = self.objects[self.active_index].object.id,
+        x = self.object_cell_x, y = self.object_cell_y, orientation = self.object_orientation})
+    self.ui:playSound("place_r.wav")
+    return
+  end
   local obj = UIPlaceObjects.placeObject(self, true)
   if obj then
     self:checkEnableConfirm()

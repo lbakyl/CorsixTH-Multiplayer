@@ -251,9 +251,11 @@ function UIMultiplayer:_buildRoom()
   self.summary_panel = label(self, 20, 40 + 4 * 27 + 5, WIDTH - 40, "")
   self.mode_panel = label(self, 20, 40 + 5 * 27 + 5, WIDTH - 40, "")
   local y = heights.room - 50
-  self:addBevelPanel(20, y, 120, 30, col.setting, nil, nil, nil, col.setting_active)
+  -- The host starts the game; the others say they are ready. Both buttons
+  -- sit in the same place, and only the one for this player is shown.
+  self.ready_button = self:addBevelPanel(20, y, 120, 30, col.setting, nil, nil, nil, col.setting_active)
       :setLabel(S.ready):makeToggleButton(0, 0, 120, 30, nil, self.buttonReady):setTooltip(T.ready)
-  self.start_button = button(self, 150, y, 120, S.start, self.buttonStart, T.start)
+  self.start_button = button(self, 20, y, 120, S.start, self.buttonStart, T.start)
   button(self, WIDTH - 140, y, 120, S.leave, self.buttonLeave)
   self:_updateRoom()
 end
@@ -266,8 +268,9 @@ function UIMultiplayer:_updateRoom()
     local p = lobby.players[i]
     local text = ""
     if p then
+      -- (The host is not asked whether they are ready.)
       text = S.player_line:format(p.name, p.owner == "1" and S.owner_mark or "", p.rtt or "?",
-          p.ready == "1" and S.is_ready or S.not_ready)
+          p.owner == "1" and "" or (p.ready == "1" and S.is_ready or S.not_ready))
     elseif i <= max then
       text = S.waiting_player
     end
@@ -277,7 +280,11 @@ function UIMultiplayer:_updateRoom()
   self.summary_panel:setLabel(s and S.recommendation:format(s.speed, s.latency or "?") or S.measuring)
   self.mode_panel:setLabel((lobby.room.mode == "coop" and S.mode_coop or S.mode_shared) ..
       ", " .. S.level:format(tonumber(lobby.room.level) or 1))
-  self.start_button:enable(lobby:isOwner())
+  local owner = lobby:isOwner()
+  self.start_button:setVisible(owner)
+  self.start_button:enable(owner)
+  self.ready_button:setVisible(not owner)
+  self.ready_button:enable(not owner)
 end
 
 function UIMultiplayer:buttonReady(state)

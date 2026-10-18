@@ -525,6 +525,11 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
     self:_addTradeMenu(app.ui) -- a rejoining player's first game UI
   end
   session:restartAt(world, step, peers)
+  -- Rooms this player was furnishing by hand: their editors again.
+  local room_builder = corsixth.require("mp_room_builder")
+  for _, entry in pairs(world.mp_furnishing or {}) do
+    if entry.peer == session.peer_id and not self.is_referee then room_builder.show(world, entry) end
+  end
   world:applySharedSpeed(self.is_referee and "And then some more" or (self.shared_speed or "Normal"))
   self.log(string.format("multiplayer: loaded the shared save at step %d (%d bytes)", step, #data))
 end

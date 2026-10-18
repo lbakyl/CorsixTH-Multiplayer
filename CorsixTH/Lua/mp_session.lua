@@ -349,6 +349,10 @@ MultiplayerSession.rejection_texts = {
   move_object = {["tile not free"] = "Could not move the object there: the spot was taken.",
                  ["someone is in the way"] = "Could not move the object there: someone was in the way."},
   build_room = {["gave up"] = "The room could not be built: people did not leave the area."},
+  room_object = {["tile not free"] = "The object does not fit there.",
+                 ["someone is in the way"] = "Could not place the object there: someone was in the way.",
+                 ["it would block the room"] = "Not there: it would block the way to another object."},
+  room_finish = {["objects missing"] = "The room still needs some of its objects."},
 }
 
 --! Tell this player that one of their actions could not be done. Every peer
@@ -358,6 +362,9 @@ function MultiplayerSession:_tellRejected(cmd, why)
   local text = texts and texts[why]
   if not text and (why == "not enough money" or why == "loan limit") then
     text = "Not enough money for that."
+  end
+  if not text and cmd.kind == "build_room" then
+    text = "The room could not be built: " .. tostring(why) .. "."
   end
   self.notify(text or ("That could not be done (" .. tostring(why) .. ")."))
 end
@@ -613,26 +620,76 @@ function handlers.open_hospital(world, cmd)
   return true
 end
 
---! Build a finished room the player drew: {room, x, y, w, h, door_x, door_y,
---! door_wall, windows}. If people stand in the area they are asked to walk
---! out and the command is retried a few steps later (on every peer alike).
+--! Build a room the player drew: {room, x, y, w, h, door_x, door_y,
+--! door_wall, windows, furnish}. If people stand in the area they are asked
+--! to walk out and the command is retried a few steps later (on every peer
+--! alike). With furnish=1 the room waits for its furniture (room_object,
+--! room_finish); otherwise the required objects are placed automatically.
 function handlers.build_room(world, cmd)
   local builder = corsixth.require("mp_room_builder")
   local hospital = world.hospitals[cmd.hospital or 1]
   if not hospital then return false, "no such hospital" end
-  local room, why = builder.build(world, hospital, cmd)
+  local room, why, dlg = builder.build(world, hospital, cmd)
   if why == "people in the area" then
     builder.clearArea(world, cmd.x, cmd.y, cmd.w, cmd.h)
     return false, "retry" -- the reserved outline stays visible meanwhile
   end
   local session = TheApp.mp_session
   if session then session:showRemoteBlueprint(cmd.peer, nil) end
-  if room then return true end
-  builder.releaseArea(world, cmd.x, cmd.y, cmd.w, cmd.h)
-  if cmd.peer == (session and session.peer_id) and world.ui and world.ui.adviser then
-    world.ui.adviser:say({text = "The room could not be built: " .. tostring(why) .. ".", priority = 10})
+  if not room then
+    builder.releaseArea(world, cmd.x, cmd.y, cmd.w, cmd.h)
+    return false, why
   end
-  return false, why
+  if dlg then
+    local entry = {dlg = dlg, peer = cmd.peer, hospital = cmd.hospital or 1,
+        x = cmd.x, y = cmd.y, w = cmd.w, h = cmd.h, placed = {}}
+    world.mp_furnishing = world.mp_furnishing or {}
+    world.mp_furnishing[room.id] = entry
+    -- The player who drew it now places the furniture; if they are in the
+    -- middle of drawing another room, it is placed automatically instead.
+    if session and cmd.peer == session.peer_id and not session.observer and
+        not builder.show(world, entry) then
+      session:issue({kind = "room_finish", room = room.id, auto = 1})
+    end
+  end
+  return true
+end
+
+--! The room being furnished by hand that a command names, if it is the
+--! sender's (only they place its furniture).
+local function furnishing(world, cmd)
+  local entry = world.mp_furnishing and world.mp_furnishing[tonumber(cmd.room)]
+  if entry and entry.peer == cmd.peer then return entry end
+end
+
+--! Put one object into a room being furnished: {room, object, x, y, orientation}.
+function handlers.room_object(world, cmd)
+  local entry = furnishing(world, cmd)
+  if not entry then return false, "room is not being furnished" end
+  return corsixth.require("mp_room_builder").placeObject(world, entry, cmd)
+end
+
+--! Finish a room being furnished: {room, auto (1: place what is missing)}.
+function handlers.room_finish(world, cmd)
+  local entry = furnishing(world, cmd)
+  if not entry then return false, "room is not being furnished" end
+  local builder = corsixth.require("mp_room_builder")
+  local room, why = builder.finish(world, entry, tonumber(cmd.auto) == 1)
+  if not room then return false, why end
+  builder.hide(world, entry)
+  world.mp_furnishing[tonumber(cmd.room)] = nil
+  return true
+end
+
+--! Remove a room being furnished (cancelled): {room}.
+function handlers.room_abort(world, cmd)
+  local entry = furnishing(world, cmd)
+  if not entry then return false, "room is not being furnished" end
+  local builder = corsixth.require("mp_room_builder")
+  builder.hide(world, entry)
+  local ok, why = builder.abort(world, entry)
+  world.mp_furnishing[tonumber(cmd.room)] = nil
+  return ok, why
 end
 
 function handlers.build_room_giveup(world, cmd)

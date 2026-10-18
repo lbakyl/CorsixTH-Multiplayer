@@ -335,13 +335,16 @@ end
 --! in the middle of the top wall, then confirm. In multiplayer the confirm
 --! sends the build_room command; nothing is built locally yet.
 --!param at (table) optional {x, y}: exact top-left corner instead of a search
-function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at)
+--!param by_hand (bool) optional; multiplayer: place the furniture by hand
+--!  afterwards (builder.furnish_tick); otherwise it is placed automatically
+function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at, by_hand)
   local ui = world.ui
   local room_type = assert(TheApp.rooms[room_id], "unknown room " .. room_id)
   local x, y
   if at then x, y = at[1], at[2] else x, y = builder.find_free_rect(world, cx, cy, w, h, 40) end
   assert(x, "no space for " .. room_id)
   local dlg = UIEditRoom(ui, room_type)
+  dlg.mp_auto_furnish = not by_hand
   ui:addWindow(dlg)
   dlg:setBlueprintRect(x, y, w, h)
   dlg:confirm()
@@ -372,6 +375,77 @@ function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at)
   dlg:confirm()
   log(string.format("UI: drew %s at %d,%d size %dx%d%s (editor %s)", room_id, x, y, w, h,
       with_window and " with a window" or "", dlg.phase))
+end
+
+--! Multiplayer, a room furnished by hand: call once per tick while it runs.
+--! Waits for this player's room editor, then puts down one object at a
+--! time like a click (each one a room_object command) and waits for it to
+--! appear; a refused spot is not tried again. When the room is complete it
+--! confirms (room_finish), or with `cancel` it cancels instead (room_abort).
+--!return true when done
+function builder.furnish_tick(world, state, log)
+  local ui = world.ui
+  local dlg = ui.edit_room
+  if not (dlg and dlg.mp_room_id) then
+    state.waited = (state.waited or 0) + 1
+    if state.started and state.waited > 400 then log("UI: furnishing: editor gone") return true end
+    return false
+  end
+  state.started = true
+  state.waited = 0
+  if state.cancel then
+    log(string.format("UI: cancelled furnishing room #%d", dlg.mp_room_id))
+    dlg:cancel()
+    return true
+  end
+  if state.pending then
+    -- Wait until the object is in the room (or the command was refused).
+    local count = 0
+    for _, o in ipairs(dlg.objects) do count = count + o.qty end
+    state.pending.ticks = state.pending.ticks + 1
+    if count < state.pending.count then
+      log(string.format("UI: furnishing: %s is in the room", state.pending.id))
+      state.pending = nil
+    elseif state.pending.ticks > 60 then
+      state.pending = nil -- refused; that spot was marked as tried
+    else
+      return false
+    end
+  end
+  if dlg.confirm_button.enabled then
+    log(string.format("UI: furnished room #%d; confirming", dlg.mp_room_id))
+    dlg:confirm()
+    return true
+  end
+  local o = dlg.objects[1]
+  if not o then return false end
+  state.tried = state.tried or {}
+  local room = dlg.room
+  local rx, ry, rw, rh = room.x, room.y, room.width, room.height
+  for ty = ry, ry + rh - 1 do
+    for tx = rx, rx + rw - 1 do
+      for _, dir in ipairs({"north", "east", "south", "west"}) do
+        local key = string.format("%s:%d,%d:%s", o.object.id, tx, ty, dir)
+        if o.object.orientations[dir] and not state.tried[key] then
+          dlg:setActiveIndex(1)
+          dlg:setOrientation(dir)
+          dlg:setBlueprintCell(tx, ty)
+          if dlg.object_blueprint_good and not world:anyHumanoidObscuringArea(tx, ty) then
+            state.tried[key] = true
+            local count = 0
+            for _, p in ipairs(dlg.objects) do count = count + p.qty end
+            state.pending = {id = o.object.id, count = count, ticks = 0}
+            log(string.format("UI: furnishing: put %s at %d,%d facing %s", o.object.id, tx, ty, dir))
+            dlg:placeObject()
+            return false
+          end
+        end
+      end
+    end
+  end
+  log("UI: furnishing: no place left for " .. o.object.id)
+  dlg:cancel()
+  return true
 end
 
 --! A free w x h rectangle that has a person standing in it right now
