@@ -394,6 +394,37 @@ function MultiplayerLobby.coopLevelId(players, level)
   return string.format("net%d%d", players, ((tonumber(level) or 1) - 1) % 5)
 end
 
+-- Lists of game definitions that App:loadLuaFolder() fills in directory
+-- listing order. That order differs between file systems (ext4 hashes, NTFS
+-- sorts by name), and the game picks from these lists by index (new
+-- patients' diseases, for example), so the same seed gave different games on
+-- Windows and Linux.
+local ORDERED_LISTS = {"diseases", "rooms", "objects", "walls"}
+
+--! Sort the definition lists by id, the same on every platform, for a
+--! multiplayer game. Single player keeps the original order, so it plays
+--! exactly as before.
+--!return (function) restores the original order
+function MultiplayerLobby.useCanonicalOrder(app)
+  local saved = {}
+  for _, name in ipairs(ORDERED_LISTS) do
+    local list = app[name]
+    if type(list) == "table" then
+      local original = {}
+      for i, v in ipairs(list) do original[i] = v end
+      saved[name] = original
+      table.sort(list, function(a, b) return tostring(a.id) < tostring(b.id) end)
+    end
+  end
+  return function()
+    for name, original in pairs(saved) do
+      local list = app[name]
+      for i = #list, 1, -1 do list[i] = nil end
+      for i, v in ipairs(original) do list[i] = v end
+    end
+  end
+end
+
 --! Load the agreed level and attach a lockstep session to it.
 function MultiplayerLobby:_beginGame(f)
   local app = TheApp
@@ -421,6 +452,7 @@ function MultiplayerLobby:_beginGame(f)
     app.mp_coop = {players = #peers, local_index = my_index, names = names}
   end
 
+  self.restore_order = MultiplayerLobby.useCanonicalOrder(app)
   math.randomseed(tonumber(f.seed))
   local level = tonumber(f.level) or 1
   local level_id = coop and MultiplayerLobby.coopLevelId(#peers, level) or level
@@ -475,6 +507,10 @@ function MultiplayerLobby:_endSession()
   if self.saved_config and app then
     for k, v in pairs(self.saved_config) do app.config[k] = v end
     self.saved_config = nil
+  end
+  if self.restore_order then
+    self.restore_order()
+    self.restore_order = nil
   end
 end
 

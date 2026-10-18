@@ -24,6 +24,9 @@
 --   MP_DEBUG_END      log speed, open windows and staff at the end
 --   MP_LUA_CPATH      extra package.cpath entries (for luasocket)
 --   MP_LUA_PATH       extra package.path entries
+--   MP_CANONICAL_ORDER  if 1, sort the game definition lists like a
+--                     multiplayer game does (MultiplayerLobby.useCanonicalOrder);
+--                     needed to compare different platforms
 local args = {...}
 local unpack_args = table.unpack or unpack
 local source_dir = assert(os.getenv("CORSIXTH_SOURCE"), "Missing CORSIXTH_SOURCE")
@@ -253,6 +256,10 @@ local function run()
   if mode ~= "solo" then connect() end
 
   -- Replace the clock-based seed from App:init before anything else runs.
+  if os.getenv("MP_CANONICAL_ORDER") == "1" then
+    corsixth.require("mp_lobby")
+    MultiplayerLobby.useCanonicalOrder(TheApp)
+  end
   math.randomseed(seed)
   TheApp:_loadLevel(1, "full", nil, "LEVEL.L1")
   assert(TheApp.world, "Level did not load")
