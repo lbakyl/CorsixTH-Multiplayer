@@ -66,6 +66,7 @@ agents must not open PRs, so the owner opens them).
 | `mp/room-blueprints` | Rooms as commands with reserved outlines; fax decisions as commands |
 | `mp/coop-hospitals` | Co-op: a hospital each, money/staff transfers |
 | `mp/windows-s0` | LuaSocket in the Windows build; same definition order on every platform; S0 tests |
+| `mp/server-docker` | Server container, compose file, image workflow (ghcr.io), VPS guide |
 
 Working rule: small commits, push work-in-progress, one branch per step,
 never push directly to `mp/dev` or `master`.
@@ -143,8 +144,9 @@ bash scripts/multiplayer/run_sync_probe.sh   $BIN $THDATA 6000
 **If you touch the simulation path** (world, hospital, entities), also run
 `run_sp_regression.sh` against a build of the previous commit.
 
-Running the server: `python3 -m corsixth_mp --port 47800` in `mp_server/`
-(or the Dockerfile there). In the game: main menu → Multiplayer → address.
+Running the server: `python3 -m corsixth_mp --port 47800` in `mp_server/`,
+or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-server`,
+`mp_server/compose.yaml`). In the game: main menu, Multiplayer, server address.
 
 ## 7. Lessons learned
 
@@ -205,7 +207,8 @@ Running the server: `python3 -m corsixth_mp --port 47800` in `mp_server/`
    real latency for the pacing.
 2. **S3/S4: headless referee and desync recovery**: the server runs one game
    per room, saves regularly; on desync everyone reloads its save.
-3. **Docker image and compose for the VPS** (S7); server Dockerfile exists.
+3. **VPS**: image, compose file and guide are done (`vps-guide.md`); the
+   internet test itself is still to do.
 4. **Co-op, missing pieces**: epidemics, emergencies and VIPs for every
    player, level goals per player, per-hospital heating, loans, patient
    referrals, renting rooms, selling research; hide other players' adviser
