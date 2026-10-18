@@ -4,26 +4,33 @@ Start here if you are picking up this fork. This page is the map: the current
 state, how to build and test, where things are, and what we learned the hard
 way. The other files in this folder are detailed reports from each step.
 
-Last updated: 2026-10-17, branch `mp/ui-commands` (PR #6).
+Last updated: 2026-10-18, branch `mp/coop-hospitals`.
 
 ## 1. Goal and approach
 
 An experimental multiplayer mod for CorsixTH (an open-source Theme Hospital
 remake), planned in this order:
 
-1. **Co-build**: two players run one shared hospital on a LAN. *(in progress)*
-2. **Co-op**: one hospital each, with trades between them: loans, staff
-   transfers, patient referrals, renting rooms, selling research.
-3. **Competitive**: 2–4 humans race for the level goals. No AI bots (a
-   deliberate decision; bots could become a separate project later).
+1. **Co-build**: 2–4 players run one shared hospital. *(works)*
+2. **Co-op**: one hospital each, with trades between them: money, staff
+   transfers; later loans, patient referrals, renting rooms, selling
+   research. *(first version works)*
+3. **Competitive**: 2–4 humans race for the level goals. AI bot hospitals are
+   deferred (lowest priority, not ruled out).
 
 **Sync model: deterministic lockstep.** Every machine runs the full
 simulation. Only player *commands* travel over the network, and every peer
 applies them at the same game hour in the same order. After each game hour
-the peers exchange a short state fingerprint to detect drift. We chose this
-over a host-streams-state model because CorsixTH's simulation already
-advances in discrete game hours and turned out to be deterministic once the
-problems below were fixed.
+the peers exchange a short state fingerprint to detect drift.
+
+**Networking: a relay and lobby server** (`mp_server/`, Python, no game
+code). Players connect from the game's main menu (Multiplayer), pick or
+create a password-protected room, get ready, and the room owner starts.
+The server checks that everybody runs the same build, measures ping and
+recommends the lockstep delay and fastest smooth speed, starts everyone with
+the same seed, level and settings, relays the lockstep messages, compares
+fingerprints, and shares speed/pause changes. A headless referee and
+desync recovery (milestones S3/S4) are not built yet.
 
 Players bring their own Theme Hospital data (GOG/EA/CD). **Never commit game
 data, saves from it, or logs that contain it.**
@@ -32,35 +39,35 @@ data, saves from it, or logs that contain it.**
 
 | Area | State |
 |---|---|
-| Linux headless build and smoke test | Works (PR #1) |
-| Same seed, two processes give identical games | Proven for ~3 game years of a busy hospital (PRs #2, #4) |
-| Rendering/audio no longer affect gameplay randomness | Fixed (PR #3) |
-| Lockstep inside the game (`MultiplayerSession`) | Works over loopback TCP (PR #6) |
-| Real UI actions as commands | Corridor objects (buy and place), hiring |
-| Pause / speed | Handled by the lockstep rule; "waiting for the other player" notice |
-| Desync detection | Hourly fingerprint; adviser warning on both peers |
-| Unsupported actions in MP | Refused with an adviser message: rooms, moving objects/staff, firing, pay-rise requests |
-| Host/join screen | **Not started.** Sessions are started by a script |
-| Windows | **Not tested yet.** The upstream Windows CI workflow should build the fork, but no successful run has been confirmed |
-| Real network / two machines | **Not tested yet.** All tests ran on one Linux machine over 127.0.0.1 |
+| Linux headless build | Works; Debian 13 recipe in `scripts/multiplayer/setup_debian13.sh` |
+| Determinism, same build | Proven for ~3 game years of a busy hospital |
+| Single player unchanged | `run_sp_regression.sh`: identical fingerprints for 54,749 hours vs. the pre-multiplayer branch |
+| Relay/lobby server | `mp_server/`; rooms, passwords, build check, ping, pacing, start, relay, fingerprint check, leave handling; 19 pytest tests |
+| In-game lobby | Main menu → Multiplayer: server address, name, room list, create (shared / a hospital each, level, players), password, ready, start |
+| Shared speed and pause | Any player's speed or pause applies to everybody, capped at the room's ping-based maximum |
+| Player actions as commands | Corridor objects, hiring, rooms (draw outline/door/windows), opening the hospital early, fax answers (emergency, VIP, epidemic, ...), co-op money and staff transfers |
+| Room outlines | While someone draws a room the others see its floor in blue (reserved); the finished room appears for everyone at once |
+| Co-op | Original two- to four-player maps (tested with two); a hospital each; trade window in the Multiplayer menu |
+| Blocked in multiplayer | Editing/moving existing rooms and objects, picking up staff, firing, pay-rise answers (resolved by policy), load game, restart, the wage-increase menu setting |
+| Windows | CI builds the fork (artifact on every push). Windows-vs-Linux determinism (S0) and LuaSocket in the Windows build: **not done** |
+| Real network | Only tested over loopback on one Linux VM |
+| Linux CI | Fails in the static-analysis step on upstream's own `CMakeLists.txt` formatting (gersemi); not caused by this fork's changes |
 
-## 3. Branches and PRs
+## 3. Branches
 
-Each step is a branch stacked on the previous one. None are merged into
-`mp/dev` yet. Merge in order (#1 → #6); after merging one, retarget the next
-PR to `mp/dev`.
+One branch per step, each stacked on the previous one. PRs #1–#6 cover the
+first six; the newer branches have no PR yet (upstream `AGENTS.md` says AI
+agents must not open PRs, so the owner opens them).
 
-| PR | Branch | What |
-|---|---|---|
-| [#1](https://github.com/lbakyl/CorsixTH-Multiplayer/pull/1) | `mp/runtime-baseline` | Linux build notes, headless smoke test |
-| [#2](https://github.com/lbakyl/CorsixTH-Multiplayer/pull/2) | `mp/sync-probe` | Determinism probe, loopback lockstep experiment |
-| [#3](https://github.com/lbakyl/CorsixTH-Multiplayer/pull/3) | `mp/cosmetic-rng` | Separate random stream for cosmetic code (first gameplay-code change) |
-| [#4](https://github.com/lbakyl/CorsixTH-Multiplayer/pull/4) | `mp/heavy-scenario` | Busy-hospital scenario, 3-year sync test |
-| [#5](https://github.com/lbakyl/CorsixTH-Multiplayer/pull/5) | `mp/first-command` | Harness-level command layer |
-| [#6](https://github.com/lbakyl/CorsixTH-Multiplayer/pull/6) | `mp/ui-commands` | Lockstep inside the game, real UI actions, pause/speed |
+| Branch | What |
+|---|---|
+| `mp/runtime-baseline` … `mp/ui-commands` | PRs #1–#6: baseline, determinism probe, cosmetic RNG, busy scenario, commands, in-game lockstep |
+| `mp/relay-server` | Relay/lobby server; lobby client, Multiplayer menu and window; shared pause/speed fixes |
+| `mp/room-blueprints` | Rooms as commands with reserved outlines; fax decisions as commands |
+| `mp/coop-hospitals` | Co-op: a hospital each, money/staff transfers |
 
-Working rule we follow: small commits, push work-in-progress, one branch per
-step, never push directly to `mp/dev` or `master`.
+Working rule: small commits, push work-in-progress, one branch per step,
+never push directly to `mp/dev` or `master`.
 
 ## 4. Code map
 
@@ -68,153 +75,142 @@ Gameplay code (`CorsixTH/Lua/`):
 
 | File | Role |
 |---|---|
-| `mp_session.lua` | `MultiplayerSession`: command queue, lockstep rule, fingerprints, desync detection, command handlers (`place_object`, `hire`), `blockUnsupported()`, player notices |
-| `mp_transport.lua` | `MultiplayerTransport`: line-based TCP over LuaSocket; non-blocking after connecting |
-| `cosmetic_random.lua` | `math.cosmetic_random`: Park-Miller generator for cosmetic choices |
-| `world.lua` | `World:onTick` → `World:_advanceHours`; in MP one game hour per step, gated by `session:canStep()` |
-| `dialogs/place_objects.lua`, `furnish_corridor.lua` | In MP, placing a new corridor object issues `place_object`; payment happens in the handler |
-| `dialogs/hire_staff.lua`, `place_staff.lua` | In MP, placing a new hire issues `hire` |
-| `room.lua`, `dialogs/build_room.lua`, `entities/object.lua`, `entities/humanoids/staff.lua`, `dialogs/staff_dialog.lua`, `fullscreen/staff_management.lua`, `dialogs/message.lua` | One-line `blockUnsupported` guards |
+| `mp_session.lua` | `MultiplayerSession`: command queue, lockstep rule, fingerprints, desync detection, all command handlers (`place_object`, `hire`, `build_room`, `open_hospital`, `fax_choice`, `give_money`, `send_staff`), retries, remote room outlines, `actionsAreCommands()`, `blockUnsupported()` |
+| `mp_lobby.lua` | `MultiplayerLobby`: server connection, build id, rooms, start handshake; starts the level and the session; handles `SPEED`, `LEFT`, `DESYNC`, `SHOW`, `CHAT` during the game |
+| `mp_transport.lua` | Line-based TCP over LuaSocket |
+| `mp_room_builder.lua` | Builds a finished room for `build_room` with a hidden room editor |
+| `dialogs/resizables/multiplayer.lua` | `UIMultiplayer`: the lobby window |
+| `dialogs/resizables/multiplayer_trade.lua` | `UIMultiplayerTrade`: co-op trade window |
+| `cosmetic_random.lua` | `math.cosmetic_random` for cosmetic choices |
+| `world.lua` | Lockstep in `World:onTick`/`_advanceHours`; co-op hospitals, `getUIHospital`, `getTileHospital`, co-op opening countdowns |
+| `map.lua` | Loads original multiplayer levels (`"net20"` … `"net44"`) |
+| `dialogs/edit_room.lua`, `place_objects.lua`, `place_staff.lua`, `furnish_corridor.lua`, `hire_staff.lua`, `watch.lua`, `fullscreen/fax.lua`, `message.lua`, `bottom_panel.lua` | Player actions turned into commands; fax numbering and game-hour timeouts |
 
-**Everything multiplayer is gated on `TheApp.mp_session`.** When it is nil
-(single player) the code paths are the original ones. The session lives on
-the App, not the World, so it is never written into save games.
+**Everything multiplayer is gated on `TheApp.mp_session`** (and co-op on
+`world.mp_coop`). With no session the code paths are the original ones. The
+session and lobby live on the App, not the World, so they are never saved.
 
-Tests and tools:
+Server (`mp_server/`): `corsixth_mp/server.py` (rooms, relay),
+`pacing.py` (delay/speed from ping), `protocol.py` (line codec); protocol in
+`docs/multiplayer/protocol.md`.
+
+Tests and tools (`scripts/multiplayer/` unless noted):
 
 | Path | Role |
 |---|---|
-| `CorsixTH/Luatest/spec/mp_session_spec.lua` | 13 unit tests: encoding, ordering, stalls, early/late commands, desync, notices |
-| `CorsixTH/Luatest/spec/cosmetic_random_spec.lua` | 6 unit tests |
-| `scripts/multiplayer/run_ingame_probe.sh` | **Main integration test.** Two real game processes over TCP, actions through the real windows. 5 checks, ~15 s |
-| `scripts/multiplayer/run_sync_probe.sh` | Harness-level determinism/lockstep checks. 7 checks, ~40 s |
-| `scripts/multiplayer/run_headless_smoke.sh` | Load, tick, save, reload |
-| `scripts/multiplayer/probe_builder.lua` | Drives the room editor, object placement and hiring without a mouse; used to build test hospitals |
-| `scripts/multiplayer/sync_probe.lua`, `commands.lua` | Harness from PRs #2–#5. Superseded by `mp_session.lua` for real play but kept as a regression test |
+| `CorsixTH/Luatest/spec/mp_session_spec.lua`, `mp_lobby_spec.lua` | Unit tests |
+| `mp_server/tests/` | Server tests (pytest) |
+| `run_lobby_probe.sh` | **Main integration test.** A local server and pairs of real games going through the main menu and lobby window. 8 checks, ~2 min |
+| `run_ingame_probe.sh` | Two games connected directly (no server). 5 checks |
+| `run_sync_probe.sh` | Harness-level determinism checks. 7 checks |
+| `run_sp_regression.sh` | Single player, two builds, 3 game years, fingerprints must match |
+| `setup_debian13.sh` | Build environment for Debian 13 |
+| `lobby_probe.lua`, `ingame_probe.lua`, `probe_builder.lua` | Scripted players |
 
 ## 5. Lockstep in one paragraph
 
-A command issued after step *k* is scheduled for step *k + 2* and sent
-immediately (`C key=value ...`, keys sorted, values percent-encoded). After
-finishing step *n* a peer sends `S <peer> <n> <fingerprint>`. A peer may run
-step *n* only when every other peer has reported *n − 1*. That guarantees all
-commands for step *n* have arrived, keeps peers at most one step apart, and
-makes pause and speed work with no extra protocol: a paused or slow peer
-simply holds the other back. Commands for the same step run in order
-(step, peer, seq). Every handler re-validates against the shared state, so a
-conflicting command is rejected identically on every peer.
+A command issued after step *k* is scheduled for step *k + delay* (delay ≥ 2,
+chosen by the server from ping) and sent immediately. After finishing step
+*n* a peer sends `S <peer> <n> <fingerprint>`. A peer may run step *n* only
+when every other peer has reported *n − delay + 1*. Commands for the same step
+run in order (step, peer, seq). Every handler re-validates against the shared
+state, so a conflicting command is rejected identically on every peer; a
+handler can also ask for a retry a few steps later (rooms wait for people to
+walk out). Handlers run with `session.applying` set, so the game code they
+call really acts instead of issuing another command.
 
-## 6. Build and test (Linux)
-
-The full dependency recipe is in `runtime-baseline.md`. In short: SDL 3.4.18,
-SDL_mixer 3.2.4, FluidSynth 2.4.8 and zstd 1.5.7 built into a prefix, then:
+## 6. Build and test (Debian 13 VM)
 
 ```bash
-cmake -S . -B build/linux-runtime -G Ninja -DCMAKE_PREFIX_PATH="$PREFIX" \
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSE_SOURCE_DATADIRS=ON \
-  -DENABLE_UNIT_TESTS=ON -DFETCH_CATCH2=ON \
-  -DWITH_MOVIES=OFF -DWITH_UPDATE_CHECK=OFF -DWITH_MIDI_DEVICE=OFF
-cmake --build build/linux-runtime -j2
+bash scripts/multiplayer/setup_debian13.sh ~/thdata/themehos   # once
+. ~/mp-env.sh
+cmake -S . -B build -G Ninja -DCMAKE_PREFIX_PATH="$PREFIX" -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DUSE_SOURCE_DATADIRS=ON -DENABLE_UNIT_TESTS=ON -DWITH_MOVIES=OFF -DWITH_UPDATE_CHECK=OFF -DWITH_MIDI_DEVICE=OFF
+cmake --build build -j4
+busted --directory=CorsixTH/Luatest          # 144 successes
+luacheck --quiet --codes --ranges CorsixTH    # 0 warnings
+(cd mp_server && python3 -m pytest -q)        # 19 passed
+bash scripts/multiplayer/run_lobby_probe.sh  $BIN $THDATA
+bash scripts/multiplayer/run_ingame_probe.sh $BIN $THDATA
+bash scripts/multiplayer/run_sync_probe.sh   $BIN $THDATA 6000
 ```
 
-LuaRocks tree with `busted`, `luacheck` and `luasocket 3.1.0-1` for Lua 5.4:
+**Before every push:** busted, luacheck, pytest, the three probe scripts.
+**If you touch the simulation path** (world, hospital, entities), also run
+`run_sp_regression.sh` against a build of the previous commit.
 
-```bash
-eval "$(luarocks --tree="$ROCKS" path)"
-busted --directory=CorsixTH/Luatest          # expect 136 successes
-luacheck --quiet --codes --ranges CorsixTH    # expect 0 warnings
-export LD_LIBRARY_PATH="$PREFIX/lib64:$PREFIX/lib" LUASOCKET_TREE="$ROCKS"
-bash scripts/multiplayer/run_ingame_probe.sh build/linux-runtime/CorsixTH/corsix-th /path/to/ThemeHospital
-bash scripts/multiplayer/run_sync_probe.sh  build/linux-runtime/CorsixTH/corsix-th /path/to/ThemeHospital 6000
-```
-
-**Before every push, run:** busted, luacheck, both probe scripts. **If you
-touch `world.lua`, `hospital.lua`, entity code or anything else on the
-simulation path**, also run the single-player regression: a busy 3-year solo
-run (`MP_SCENARIO=busy MP_CALLBACKS=80000` with `sync_probe.lua`) must produce
-fingerprints identical to the previous build for all 54,749 hours. That run
-caught a real bug (lesson 7).
+Running the server: `python3 -m corsixth_mp --port 47800` in `mp_server/`
+(or the Dockerfile there). In the game: main menu → Multiplayer → address.
 
 ## 7. Lessons learned
 
-These cost real debugging time. Read them before changing anything.
-
-1. **Rendering consumed gameplay randomness.** `GameUI:draw` called
-   `math.random()` for screen shake on every frame, even with no earthquake.
-   Different frame rates gave different games. Cosmetic code must use
-   `math.cosmetic_random`. Rule: anything that can run a different number of
-   times on different machines (drawing, audio, UI, announcements) must not
-   touch `math.random`.
-2. **`pairs()` order differs between processes.** Lua 5.4 randomises string
-   hashing per process. `UIEditRoom` builds its object list with `pairs()`,
-   so the GP's furniture landed in different places in different runs. Never
-   let `pairs()` order decide game state; sort keys, or have commands carry
-   explicit positions.
-3. **Save files are not a state hash.** The persistence layer walks tables in
-   `lua_next` order and includes UI state. Use an explicit, ordered gameplay
-   fingerprint (`MultiplayerSession.defaultFingerprint`).
-4. **Gameplay-affecting settings come from each player's config.**
-   `grant_wage_increase` (and likely `free_build_mode`, difficulty and
-   others) must be agreed when the session starts. Without it, staff were
-   fired on one machine only.
-5. **Names are translated.** Staff names are `LocalisedString` objects that
-   differ between languages. Identify game objects by position, index or
-   numeric attributes, never by display text. (Hires use pool index + wage +
-   skill.)
-6. **Some purchases are charged at confirm, not at placement.** The corridor
-   shop charges in `UIFurnishCorridor:confirm`. In MP that charge is skipped
-   and the `place_object` handler pays. Check where money moves before
-   turning an action into a command.
-7. **The original tick has quirks that single player depends on.** When the
-   annual report pauses the game mid-tick, the original `World:onTick` runs
-   no hourly update for that tick. The first refactor ran one; only the
-   3-year regression run caught it. Preserve such behaviour exactly
-   (`loop_hours = min(hours, self.hours_per_tick)` in `_advanceHours`).
-8. **Command handlers must not advance game time.** Building a room normally
-   waits for people to leave the area. In a command it must fail on every
-   peer instead (`build_room(..., no_wait)` in the harness).
-9. **"The game stalled at year end" was really the level being lost**
-   (back to the main menu). Probes now detect level end. Check for that
-   before blaming sync.
-10. **`UIAdviser:say` needs a table `{text = ..., priority = ...}`**, not a
-    plain string. It asserts.
-11. **The receptionist needs `setHospital()` before `onPlaceInCorridor()`.**
-12. **Make the tests fail on purpose too.** Every probe script has a negative
-    check (different seed, dropped command, local-only change) that must
-    report DESYNC. Without those, "IN SYNC" could just mean the check is
-    broken.
-
-Sandbox-specific notes for AI agents continuing this work: there is no
-`diff`/`cmp` (use Python); long software-rendered runs exceed a ~290 s
-command limit, so run them with `nohup` in the background; GitHub pushes go
-through the API, so `git reset` to the remote branch afterwards to keep the
-local clone in step.
+1. **Rendering consumed gameplay randomness** (screen shake). Cosmetic code
+   must use `math.cosmetic_random`.
+2. **`pairs()` order differs between processes** (Lua 5.4 string hashing).
+   Never let it decide game state.
+3. **Save files are not a state hash.** Use the ordered fingerprint.
+4. **Gameplay settings come from each player's config.** The server sends
+   them at the start (`grant_wage_increase`, `free_build_mode`).
+5. **Names are translated.** Identify things by index or numbers.
+6. **Some purchases are charged at confirm.** Check where money moves.
+7. **The original tick has quirks single player depends on** (no hourly update
+   in the tick the annual report pauses). Preserve them.
+8. **Command handlers must not advance game time.**
+9. **"Stalled at year end" was the level being lost.**
+10. **`UIAdviser:say` needs `{text, priority}`.**
+11. **Receptionist: `setHospital()` before `onPlaceInCorridor()`.**
+12. **Make the tests fail on purpose too** (negative checks).
+13. **A shared pause can arrive in the middle of a tick's step loop.** Reading
+    the network inside `canStep()` may set the speed to Pause; running that
+    step anyway advanced the date with no hourly ticks, on one peer only.
+    Re-check the speed after reading. And keep reading the network while
+    paused, or nobody ever receives the unpause.
+14. **Some "UI" is simulation.** Fax icons appear after a door animation that
+    runs on screen ticks, and their timeout used to start only then: a
+    timed-out fax happened at different game hours on different machines. In
+    multiplayer all message timers run in game hours from creation, in
+    creation order.
+15. **Room editing changes shared state before the room exists** (asking
+    people to leave, path flags). In multiplayer the drawing player only
+    draws; one command builds the room everywhere through a hidden editor
+    that is never added to the UI (adding it would close the local player's
+    windows: windows with the same modal class replace each other).
+16. **`__random` strings use gameplay randomness**, and the number of
+    candidates depends on the language: players must use the same language
+    (it is part of the build id).
+17. **Local config leaks into building**: average room contents and the
+    blocking-off-areas rule are fixed while a room command runs.
+18. **`getLocalPlayerHospital()` is called by simulation code**, so in co-op
+    it must stay the same on every peer (hospital 1). The UI uses
+    `World:getUIHospital()`; simulation code that needs the right hospital
+    uses the tile owner or the entity's own hospital.
+19. **Watches share one modal slot.** A second timer window closes the first,
+    and the opening watch exists only for the local player in co-op, so
+    timers that matter run in the simulation (`World:_tickCoopOpenings`).
+20. **Test timing is not game timing.** Several probe failures were the test
+    acting at a step the paused peer never reached; schedule actions on
+    conditions, not only on step numbers.
 
 ## 8. Next steps
 
-1. **Pay rises and fax decisions as commands.** Currently pay-rise requests
-   are blocked and resolve by policy; fax choices (VIPs, emergencies,
-   epidemics) are not intercepted at all and would desync.
-2. **Host/join screen.** Enter an address and port, start the session, and
-   agree on the seed, level and gameplay settings (lesson 4).
-3. **First Windows test.** Two laptops on a LAN. Needs LuaSocket in the
-   Windows build (vcpkg port or bundled DLL) and a firewall rule for the
-   game port.
-4. **Ghost previews for pending placements.** Items appear two game hours
-   after the click, with nothing shown in between.
-5. **More actions as commands:** rooms (with explicit object positions),
-   moving and selling objects, firing, prices, policies, loans, research.
-6. **Resync/rejoin** from a host save; **more than two peers**; **one
-   hospital per player** (`Hospital:getPlayerIndex`, plot ownership, the
-   `getLocalPlayerHospital()` call sites) for co-op and competitive modes.
+1. **S0: Windows vs Linux determinism.** Add LuaSocket to the Windows build
+   (vcpkg port `luasocket`), run the lobby probe between a Windows and a
+   Linux client.
+2. **S3/S4: headless referee and desync recovery**: the server runs one game
+   per room, saves regularly; on desync everyone reloads its save.
+3. **Docker image and compose for the VPS** (S7); server Dockerfile exists.
+4. **Co-op, missing pieces**: epidemics, emergencies and VIPs for every
+   player, level goals per player, per-hospital heating, loans, patient
+   referrals, renting rooms, selling research; hide other players' adviser
+   messages.
+5. **Rooms**: let the drawing player place the objects (now automatic), move
+   and sell objects, edit rooms.
+6. **Pay rises** as commands; picking up staff/objects as commands.
+7. **Encryption** (S8): passwords travel in clear text now.
 
 ## 9. Open questions
 
-- **Production networking library.** LuaSocket works and keeps the code in
-  Lua, but upstream dropped it. The alternative is a small C++ binding
-  (ENet or SDL3_net).
-- **Cross-platform determinism.** Windows vs Linux, MSVC vs GCC, Lua 5.4 vs
-  LuaJIT floating point: unproven. Ideally the mod would refuse to start a
-  session unless both peers run the same build.
-- **Upstreaming.** Generic fixes like the cosmetic random stream (#3) could
-  be offered to upstream CorsixTH separately.
+- **Production networking library.** LuaSocket keeps the code in Lua; the
+  alternative is a small C++ binding (ENet or SDL3_net).
+- **Cross-platform determinism** (MSVC vs GCC, Lua 5.4 vs LuaJIT): unproven.
+- **Upstreaming** generic fixes (cosmetic random stream).
