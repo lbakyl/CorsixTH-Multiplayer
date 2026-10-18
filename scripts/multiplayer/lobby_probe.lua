@@ -12,7 +12,8 @@
 --   MP_JOIN_PASSWORD  password the joiner types (default MP_PASSWORD)
 --   MP_PLAYERS        players the host waits for         (default 2)
 --   MP_COOP           1: the host creates a co-op room (a hospital each)
---   MP_SCENARIO       light | busy                       (default light)
+--   MP_SCENARIO       light | busy | none                (default light; none: no
+--                     test setup, to join a game a person hosts)
 --   MP_STEPS          game hours to play                 (default 1500)
 --   MP_FAST           1: run at the fastest local speed (test only, default 1)
 --   MP_UI_SCRIPT      ";"-separated "hour:action[:arg]":
@@ -61,6 +62,9 @@ local password = os.getenv("MP_PASSWORD") or "secret"
 local join_password = os.getenv("MP_JOIN_PASSWORD") or password
 local want_players = tonumber(os.getenv("MP_PLAYERS") or "2")
 local scenario = os.getenv("MP_SCENARIO") or "light"
+-- Seconds without progress before giving up (default 20, 30 while paused);
+-- longer when playing with a person, who may pause or read a fax.
+local stall_limit = tonumber(os.getenv("MP_STALL_LIMIT") or "")
 local target = tonumber(os.getenv("MP_STEPS") or "1500")
 local fast = (os.getenv("MP_FAST") or "1") == "1"
 local draw_every = tonumber(os.getenv("MP_DRAW_EVERY") or "0")
@@ -228,6 +232,9 @@ local function run()
     world = TheApp.world
     if world.mp_coop then builder.hospital = world.ui.hospital end
     log(string.format("REJOINED: loaded the shared save at step %d", session.step))
+  elseif scenario == "none" then
+    -- Playing with a person: their game has no test setup, so neither has this.
+    builder.register_handlers()
   else
     -- The same test setup runs on every peer (and on the server's referee).
     desk_x, desk_y = builder.start_game(world, session, scenario, log)
@@ -519,7 +526,7 @@ local function run()
     if session.step == before then
       socket.sleep(0.001)
       if lobby.transport.closed then log("SERVER CONNECTION LOST at step " .. session.step) break end
-      local limit = world:isCurrentSpeed("Pause") and 30 or 20
+      local limit = stall_limit or (world:isCurrentSpeed("Pause") and 30 or 20)
       if socket.gettime() - last_progress > limit then
         log(string.format("NO PROGRESS for %d s at step %d (speed %s)", limit, session.step,
             tostring(world:getCurrentSpeed())))

@@ -216,4 +216,20 @@ describe("MultiplayerSession notices", function()
     assert.is_not_nil(a.desync)
     assert.truthy(notes[#notes]:find("out of sync"))
   end)
+
+  it("tells only the player who asked when their action is turned down", function()
+    local notes = {a = {}, b = {}}
+    local ta, tb = linked_transports()
+    local function make(id, t, list)
+      return MultiplayerSession({world = {log = {}}, peer_id = id, peers = {1, 2}, transport = t,
+          handlers = handlers, fingerprint = fingerprint,
+          notify = function(msg) list[#list + 1] = msg end})
+    end
+    local a, b = make(1, ta, notes.a), make(2, tb, notes.b)
+    a:issue({kind = "append", value = "bad"})
+    run_both(a, b, 3)
+    assert.equal(1, #notes.a)
+    assert.truthy(notes.a[1]:find("rejected value"))
+    assert.equal(0, #notes.b)
+  end)
 end)

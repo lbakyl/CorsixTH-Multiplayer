@@ -330,10 +330,34 @@ function MultiplayerSession:beforeStep()
       self.stats.applied = self.stats.applied + 1
     else
       self.stats.rejected = self.stats.rejected + 1
+      if cmd.peer == self.peer_id and not tostring(why):find("^retry ") then
+        self:_tellRejected(cmd, why)
+      end
     end
     self.log(string.format("step %d: peer %d #%d %s -> %s", n, cmd.peer, cmd.seq,
         tostring(cmd.kind), ok and "ok" or ("rejected: " .. tostring(why))))
   end
+end
+
+--! What the player is told when one of their own actions is turned down
+--! (by command kind, then by reason); the reason is shown otherwise.
+MultiplayerSession.rejection_texts = {
+  hire = {["no longer available"] = "That candidate is no longer available. The list changes every month.",
+          ["invalid position"] = "Could not place the new member of staff there."},
+  place_object = {["tile not free"] = "Could not place the object there: the spot was taken.",
+                  ["someone is in the way"] = "Could not place the object there: someone was in the way."},
+  build_room = {["gave up"] = "The room could not be built: people did not leave the area."},
+}
+
+--! Tell this player that one of their actions could not be done. Every peer
+--! turns it down alike; only the player who asked sees the notice.
+function MultiplayerSession:_tellRejected(cmd, why)
+  local texts = MultiplayerSession.rejection_texts[cmd.kind]
+  local text = texts and texts[why]
+  if not text and (why == "not enough money" or why == "loan limit") then
+    text = "Not enough money for that."
+  end
+  self.notify(text or ("That could not be done (" .. tostring(why) .. ")."))
 end
 
 --! Record and send this peer's fingerprint for the step just completed.
