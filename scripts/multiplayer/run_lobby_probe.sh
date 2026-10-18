@@ -23,7 +23,10 @@
 #      early, purchases and hires in each player's own hospital, money and a
 #      nurse sent between them, loans, a price, research and heating changed
 #      in their windows -> IN SYNC, every command accepted
-# Exits 0 only if all eight behave as expected.
+#   9. co-op events: an emergency and a VIP visit for player 2's hospital,
+#      accepted by player 2; the emergency countdown runs in the simulation
+#      -> IN SYNC
+# Exits 0 only if all nine behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
 set -euo pipefail
@@ -122,6 +125,9 @@ run_probe mira MP_ROLE=host MP_ROOM=coop MP_COOP=1 MP_STEPS=1200 \
 sleep 1
 run_probe nico MP_ROLE=join MP_ROOM=coop MP_STEPS=1200 MP_DRAW_EVERY=3 \
   MP_UI_SCRIPT="30:openhospital;60:buy:plant;90:hire:Nurse;300:sendstaff:Nurse;350:loan;360:heatup;370:heatup;600:sendhome" & pids+=($!)
+run_probe olga MP_ROLE=host MP_ROOM=events MP_COOP=1 MP_STEPS=1600   MP_UI_SCRIPT="20:openhospital;100:emergency:2;400:vip:2" & pids+=($!)
+sleep 1
+run_probe paul MP_ROLE=join MP_ROOM=events MP_STEPS=1600 MP_DRAW_EVERY=3   MP_UI_SCRIPT="30:openhospital;130:answerfax:emergency:1;430:answerfax:personality:1" & pids+=($!)
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 if [[ -n "${MP_SERVER_LOG_CMD:-}" ]]; then eval "$MP_SERVER_LOG_CMD" > "$out/server.log" 2>&1 || true; fi
@@ -212,5 +218,17 @@ print(f"8. Co-op, a hospital each:  {result('mira')}; commands {len(cm)} all ok:
 for line in re.findall(r'hospital \d (?:[A-Z]+:|settings:).*', m)[-4:]:
     print("   " + line)
 fail |= not ok8
+
+o, q = log('olga'), log('paul')
+co = applied('olga')
+okc = [x for x in co if x.endswith('-> ok')]
+kinds9 = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in okc)
+helicopter_crash = 'Traceback' in o or 'Traceback' in q
+ok9 = (result('olga').startswith('IN SYNC') and result('paul').startswith('IN SYNC') and co == applied('paul')
+       and kinds9 == sorted(['open_hospital', 'open_hospital', 'probe_emergency', 'fax_choice', 'probe_vip', 'fax_choice'])
+       and 'clicked choice 1 of emergency fax' in q and 'clicked choice 1 of personality fax' in q)
+print(f"9. Co-op events, player 2:  {result('olga')}; emergency and VIP for hospital 2 accepted: {ok9}; commands {len(okc)}/{len(co)} ok")
+for x in co: print("   " + x)
+fail |= not ok9
 sys.exit(1 if fail else 0)
 PY

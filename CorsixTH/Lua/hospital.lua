@@ -1171,6 +1171,16 @@ function Hospital:checkEmergencyOver()
   local killed = self.emergency.killed_emergency_patients
   local cured = self.emergency.cured_emergency_patients
   if killed + cured >= self.emergency.victims then
+    if self.world.mp_coop then
+      -- End the simulated countdown (resolved in the next game hour) and the
+      -- watch showing it, if this player has it.
+      if self.mp_emergency_timer then self.mp_emergency_timer.open_timer = -1 end
+      local window = self.world.ui:getWindow(UIWatch)
+      if window and window.count_type == "emergency" and window.hospital == self then
+        window.open_timer = -1
+      end
+      return
+    end
     local window = self.world.ui:getWindow(UIWatch)
     if window then
       window:onCountdownEnd()

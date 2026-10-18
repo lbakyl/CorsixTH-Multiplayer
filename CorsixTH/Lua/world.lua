@@ -1132,10 +1132,46 @@ function World:_patientsCanArrive()
   return false
 end
 
---! Multiplayer co-op: one game hour of every hospital's opening countdown,
---! counted exactly like UIWatch:onWorldTick.
+--! Multiplayer co-op: the player hospital whose turn it is for an event
+--! ("vip", "emergency"), in hospital order.
+function World:_coopTurn(event)
+  self.mp_turns = self.mp_turns or {}
+  local turn = (self.mp_turns[event] or 0) % self.mp_coop.players + 1
+  self.mp_turns[event] = turn
+  return self.hospitals[turn]
+end
+
+--! A countdown like the watch window's (dialogs/watch.lua): 13 segments over
+--! `days` game days.
+function World.newCountdown(days)
+  local rate = math.floor((days * Date.hoursPerDay()) / 13)
+  return {tick_rate = rate, tick_timer = rate, open_timer = 12}
+end
+
+--! One game hour of a countdown, exactly like UIWatch:onWorldTick.
+--!return (bool) true when it has run out
+local function tick_countdown(c)
+  if c.tick_timer == 0 and c.open_timer >= 0 then
+    c.tick_timer = c.tick_rate
+    c.open_timer = c.open_timer - 1
+  elseif c.open_timer == -1 then
+    return true
+  else
+    c.tick_timer = c.tick_timer - 1
+  end
+  return false
+end
+
+--! Multiplayer co-op: one game hour of every hospital's countdowns (opening,
+--! emergency). The watch window exists only for the local player; these run
+--! on every peer.
 function World:_tickCoopOpenings()
   for _, hospital in ipairs(self.hospitals) do
+    local e = hospital.mp_emergency_timer
+    if e and tick_countdown(e) then
+      hospital.mp_emergency_timer = nil
+      if hospital.emergency then hospital:resolveEmergency() end
+    end
     local c = hospital.mp_opening
     if c and hospital.opened then
       hospital.mp_opening = nil
@@ -1222,8 +1258,10 @@ function World:onEndDay()
 
   --check if it's time for a VIP visit
   if self.game_date:isSameDay(self.next_vip_date) then
-    if #self.rooms > 0 and local_hospital:hasReceptionDesk(true) then
-      local_hospital:createVip()
+    -- Multiplayer co-op: the players' hospitals take turns.
+    local vip_hospital = self.mp_coop and self:_coopTurn("vip") or local_hospital
+    if #self.rooms > 0 and vip_hospital:hasReceptionDesk(true) then
+      vip_hospital:createVip()
     else
       self.next_vip_date = self:_generateNextVipDate()
     end
@@ -1239,6 +1277,8 @@ function World:onEndDay()
     -- multiplayer co-op the windows differ between peers; ask the hospital.)
     local busy
     if self.mp_coop then
+      -- The players' hospitals take turns.
+      local_hospital = self:_coopTurn("emergency")
       busy = local_hospital.mp_opening or local_hospital.emergency or local_hospital.epidemic
     else
       busy = self.ui:getWindow(UIWatch)
@@ -1248,7 +1288,7 @@ function World:onEndDay()
       local month_of_year = 1 + ((self.next_emergency_month - 1) % 12)
       self.next_emergency_day = math.random(1, Date(1, month_of_year):lastDayOfMonth())
     else
-      -- Do it only for the player hospital for now. TODO: Multiplayer
+      -- For the player hospital (multiplayer co-op: the one whose turn it is).
       local control = self.map.level_config.emergency_control
       if control[0].Mean or control[0].Random then
         -- The level uses random emergencies, so just create one.

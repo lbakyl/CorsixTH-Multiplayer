@@ -133,9 +133,19 @@ function Vip:tickDay()
   return Humanoid.tickDay(self)
 end
 
+--! The room after `key` in world.rooms (multiplayer co-op: of the VIP's
+--! hospital only).
+function Vip:_nextRoom(key)
+  local room
+  repeat
+    key, room = next(self.world.rooms, key)
+  until room == nil or not self.world.mp_coop or room.hospital == self.hospital
+  return key, room
+end
+
 function Vip:getNextRoom()
   -- Find out the next room to visit.
-  self.next_room_no, self.next_room = next(self.world.rooms, self.next_room_no)
+  self.next_room_no, self.next_room = self:_nextRoom(self.next_room_no)
   if self.next_room == nil then
     return self:setNextAction(VipGoToNextRoomAction())
   end
@@ -144,7 +154,7 @@ function Vip:getNextRoom()
     local roll_to_visit = math.random(0, self.room_visit_chance)
     -- Run a loop until roll_to_visit passes, or we hit a room the VIP must visit
     while roll_to_visit ~= self.room_visit_chance and not self.next_room.room_info.vip_must_visit do
-      self.next_room_no, self.next_room = next(self.world.rooms, self.next_room_no) -- get new room
+      self.next_room_no, self.next_room = self:_nextRoom(self.next_room_no) -- get new room
       if self.next_room == nil then
         -- We ran out of rooms, time to leave
         break
@@ -154,7 +164,7 @@ function Vip:getNextRoom()
   end
   -- Make sure room is active. If not, always visit the next available room.
   while self.next_room and not self.next_room.is_active do
-    self.next_room_no, self.next_room = next(self.world.rooms, self.next_room_no)
+    self.next_room_no, self.next_room = self:_nextRoom(self.next_room_no)
   end
   self:setNextAction(VipGoToNextRoomAction())
 end
@@ -247,11 +257,14 @@ function Vip:setVIPRating()
   local count_rooms = 0
   local max_queue = 0
   for _, room in pairs(self.world.rooms) do
-    if not room.crashed then
-      count_rooms = count_rooms + 1
-    end
-    if room.door.queue then
-      max_queue = max_queue < room.door.queue:size() and room.door.queue:size() or max_queue
+    -- Multiplayer co-op: rate the VIP's hospital only.
+    if not self.world.mp_coop or room.hospital == self.hospital then
+      if not room.crashed then
+        count_rooms = count_rooms + 1
+      end
+      if room.door.queue then
+        max_queue = max_queue < room.door.queue:size() and room.door.queue:size() or max_queue
+      end
     end
   end
 

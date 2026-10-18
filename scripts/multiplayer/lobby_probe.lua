@@ -19,8 +19,10 @@
 --                       buy:<object>, hire:<class>      as in ingame_probe.lua
 --                       room:<id>:<w>:<h>[:window]      draw a room in the room editor
 --                       crowdroom:<id>:<w>:<h>          draw it where somebody stands
---                       vip                             make a VIP visit fax appear for
---                                                       everybody (test-only command)
+--                       vip[:<hospital>]                make a VIP visit fax appear for
+--                                                       a hospital (test-only command)
+--                       emergency[:<hospital>]          an emergency fax for a hospital
+--                                                       (test-only command)
 --                       answerfax:<type>:<n>            open the first fax of <type> and
 --                                                       click choice <n> in the fax window
 --                       openhospital                    click the opening watch's button
@@ -173,9 +175,14 @@ local function run()
       p.peer, p.peers, p.seed, p.delay, p.max_speed, p.speed))
 
   -- Test-only command, registered on every peer: a VIP asks to visit.
-  MultiplayerSession.default_handlers.probe_vip = function(w)
-    w.hospitals[1]:createVip()
+  MultiplayerSession.default_handlers.probe_vip = function(w, cmd)
+    w.hospitals[cmd.target or 1]:createVip()
     return true
+  end
+  -- Test-only command: an emergency for hospital `target`.
+  MultiplayerSession.default_handlers.probe_emergency = function(w, cmd)
+    local err = w.hospitals[cmd.target or 1]:createEmergency()
+    return err == nil, err
   end
 
   -- Same setup on every peer before the first step, so it stays in sync.
@@ -323,8 +330,11 @@ local function run()
           else
             log("UI: no patient to send home")
           end
+        elseif a == "emergency" then
+          session:issue({kind = "probe_emergency", target = tonumber(entry.arg) or 1})
+          log("UI: asked for an emergency at step " .. session.step)
         elseif a == "vip" then
-          session:issue({kind = "probe_vip"})
+          session:issue({kind = "probe_vip", target = tonumber(entry.arg) or 1})
           log("UI: asked for a VIP fax at step " .. session.step)
         elseif a == "answerfax" then
           local ftype, n = entry.arg:match("^(%a+):(%d+)$")

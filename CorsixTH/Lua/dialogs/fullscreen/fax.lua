@@ -197,7 +197,16 @@ function UIFax:choice(choice_number)
   local vip_ignores_refusal = math.random(1, 2)
   if choice == "accept_emergency" then
     self.ui.app.world:newObject("helicopter", "north", nil, nil, nil, hospital)
-    self.ui:addWindow(UIWatch(self.ui, "emergency", hospital))
+    if self.ui.app.world.mp_coop then
+      -- The countdown runs in the simulation; the watch only shows it, to
+      -- the player whose emergency it is.
+      hospital.mp_emergency_timer = World.newCountdown(52)
+      if hospital == self.ui.hospital then
+        self.ui:addWindow(UIWatch(self.ui, "emergency", hospital))
+      end
+    else
+      self.ui:addWindow(UIWatch(self.ui, "emergency", hospital))
+    end
   elseif choice == "refuse_emergency" then
     -- Multiplayer co-op asks the hospital whether an emergency is under way.
     if self.ui.app.world.mp_coop then hospital.emergency = nil end
