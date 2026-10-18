@@ -53,6 +53,8 @@ MAX_PER_ADDRESS = 8
 # Commands kept per room for a referee that joins late (bytes; later the
 # referee's saves let the server forget older ones).
 MAX_COMMAND_LOG = 16 * 1024 * 1024
+# Game state a player may send for the log after a desync (DIAG).
+MAX_DIAG_BYTES = 256 * 1024
 # Desync recovery: the referee's save (base64, in SAVEDATA lines) may be this
 # big, and everybody must have loaded it within the timeout.
 MAX_SAVE_BYTES = 64 * 1024 * 1024
@@ -80,6 +82,7 @@ class Player:
     last_step: int = 0
     closed: bool = False
     is_referee: bool = False
+    diag_bytes: int = 0
 
     @property
     def rtt(self) -> float:
@@ -577,6 +580,17 @@ class Server:
             return
         fields = {k: v for k, v in f.items() if k != "peer"}
         room.broadcast(encode("SHOW", peer=player.peer, **fields), exclude=player)
+
+    def _on_diag(self, player: Player, f: dict[str, str]) -> None:
+        """A player's game state after a desync, for comparing the games in
+        this log. Limited per player."""
+        room = player.room
+        text = f.get("text", "")
+        player.diag_bytes += len(text)
+        if room is None or player.diag_bytes > MAX_DIAG_BYTES:
+            return
+        log.warning("room %r: state of %r (player %d) at step %s, part %s: %s", room.name,
+                    player.name, player.peer, f.get("step", "?"), f.get("part", "?"), text)
 
     def _game_line(self, player: Player, line: str) -> None:
         room = player.room

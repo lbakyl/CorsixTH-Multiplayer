@@ -660,6 +660,11 @@ function MultiplayerLobby:_beginGame(f)
     -- players never wait for it.
     observer = self.is_referee,
     send_cosmetic = function(fields) lobby:send("SHOW", fields) end,
+    send_diagnostics = function(step, text)
+      for i = 1, #text, 3000 do
+        lobby:send("DIAG", {step = step, part = math.floor(i / 3000) + 1, text = text:sub(i, i + 2999)})
+      end
+    end,
     request_speed = function(speed)
       lobby:send("SPEED", {speed = MultiplayerLobby.clampSpeed(speed, f.max_speed)})
     end,

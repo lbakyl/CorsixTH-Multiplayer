@@ -463,3 +463,20 @@ def test_rejoin_a_running_game_under_the_same_name():
             assert (await c.expect("RESUME"))["step"] == "7"
         assert sorted(server.rooms["r1"].players) == [1, 2]
     run_with_referee(body)
+
+
+def test_diagnostics_after_a_desync_go_to_the_log(run, caplog):
+    async def body(server, port):
+        a, b = await two_players_in_room(port)
+        await start(a, b)
+        with caplog.at_level("WARNING", logger="corsixth_mp"):
+            a.send(encode("DIAG", step=7, part=1, text="date 1-01-01T07; 12:Doctor@3,4"))
+            a.send(encode("PING", id=1))
+            await a.expect("PONG")
+        assert any("12:Doctor@3,4" in r.getMessage() and "'Alice'" in r.getMessage()
+                   for r in caplog.records)
+        # Nothing is relayed to the other player.
+        b.send(encode("PING", id=2))
+        await b.expect("PONG")
+        assert not any(x.startswith("DIAG") for x in b.inbox)
+    run(body)

@@ -33,6 +33,7 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 | `CHAT` | in a room | `text` |
 | `SPEED` | in game | `speed`: `Pause` or a speed name up to the room's `max_speed` |
 | `SHOW` | in game | cosmetic, outside the lockstep: `kind=blueprint room x y w h` (a room outline being drawn; `w=0` clears it) |
+| `DIAG` | after a desync | `step`, `part`, `text`: this game's state (money, rooms, every entity) for the server log, to compare the games |
 | `PONG` | reply to `PING` | `id` |
 | `PING` | optional | `id` (server answers `PONG id=`) |
 | `QUIT` | any time | (none) |

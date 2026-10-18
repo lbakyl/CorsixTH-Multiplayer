@@ -122,6 +122,7 @@ function MultiplayerSession:MultiplayerSession(params)
   self.control = params.control
   self.request_speed = params.request_speed
   self.send_cosmetic = params.send_cosmetic
+  self.send_diagnostics = params.send_diagnostics
   self.observer = params.observer
   self.held = false         -- stopped by the server while it repairs a desync
   self.load_data = nil      -- {step, data}: the shared save to load (see App:onTick)
@@ -403,6 +404,34 @@ function MultiplayerSession:_reportDesync(step, why, peer, own, other)
   self.notify(string.format("Multiplayer games are out of sync (step %d). Please restart the game.", step))
   if own then self.log("  local: " .. own) end
   if other then self.log("  peer:  " .. tostring(other)) end
+  -- For finding the cause: this game's state goes to the server's log.
+  if self.send_diagnostics and self.world then
+    local ok, text = pcall(MultiplayerSession.diagnostics, self.world)
+    if ok then self.send_diagnostics(self.step, text) end
+  end
+end
+
+--! A description of the game state for comparing two games after a desync:
+--! date, money, rooms, and every entity (id, kind, tile) in entity order.
+function MultiplayerSession.diagnostics(world)
+  local parts = {"date " .. world.game_date:tostring()}
+  for i, h in ipairs(world.hospitals) do
+    parts[#parts + 1] = string.format("h%d bal=%s staff=%d patients=%d", i, tostring(h.balance),
+        #h.staff, #h.patients)
+  end
+  local rooms = {}
+  for id, room in pairs(world.rooms) do
+    rooms[#rooms + 1] = string.format("room %05d %s@%d,%d %s", id, room.room_info.id, room.x, room.y,
+        room.built and "built" or "unfinished")
+  end
+  table.sort(rooms) -- (pairs order is not the same in two games)
+  for _, r in ipairs(rooms) do parts[#parts + 1] = r end
+  for _, e in ipairs(world.entities) do
+    local kind = e.humanoid_class or (e.object_type and e.object_type.id) or "entity"
+    parts[#parts + 1] = string.format("%s:%s@%s,%s", tostring(e.mp_id), kind,
+        tostring(e.tile_x), tostring(e.tile_y))
+  end
+  return table.concat(parts, "; ")
 end
 
 --! Tell the other players about the room outline this player is drawing
