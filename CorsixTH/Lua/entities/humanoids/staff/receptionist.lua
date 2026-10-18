@@ -73,6 +73,8 @@ function Receptionist:onPlaceInCorridor()
   local world = self.world
   world:findObjectNear(self, "reception_desk", nil, true, function(x, y)
     local obj = world:getObject(x, y, "reception_desk")
+    -- Multiplayer co-op: only a desk of this receptionist's hospital.
+    if obj and world.mp_coop and obj.hospital ~= self.hospital then return false end
     return obj and obj:occupy(self)
   end)
   self.hospital:buildReceptionDesksCache() -- Rebuild cache of staffed desks

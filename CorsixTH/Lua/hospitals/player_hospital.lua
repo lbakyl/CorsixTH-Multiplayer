@@ -281,7 +281,7 @@ function PlayerHospital:_warnForLongQueues()
     }
     self:giveAdvice(warn_msgs)
   else
-    self.world.ui.adviser:say(_A.warnings.queues_too_long)
+    self:say(_A.warnings.queues_too_long)
   end
 end
 
@@ -342,7 +342,7 @@ function PlayerHospital:msgNeedFirstReceptionDesk()
   if self.adviser_data.reception_advice then return end
 
   if self:countReceptionDesks() == 0 then
-    self.world.ui.adviser:say(_A.warnings.no_desk_4)
+    self:say(_A.warnings.no_desk_4)
     self.adviser_data.reception_advice = true
   end
 end
@@ -373,11 +373,11 @@ function PlayerHospital:msgMultiReceptionDesks()
   if (receptionists > 1 and num_desks > 0) or (receptionists > 0 and num_desks > 1) then
     local queue_avg = math.floor(queue_total / num_desks)
     if receptionists < num_desks and queue_avg > 5 then
-      self.world.ui.adviser:say(_A.warnings.reception_bottleneck)
+      self:say(_A.warnings.reception_bottleneck)
     elseif queue_avg > 4 then
-      self.world.ui.adviser:say(_A.warnings.queue_too_long_at_reception)
+      self:say(_A.warnings.queue_too_long_at_reception)
     elseif receptionists > num_desks then
-      self.world.ui.adviser:say(_A.warnings.another_desk)
+      self:say(_A.warnings.another_desk)
     end
   end
 end
@@ -402,6 +402,14 @@ end
 --    call actually says something.
 --!param stay_up (bool) If true, let the adviser remain visible afterwards.
 --!return (boolean) Whether a message was given to the user.
+--! Let the adviser say something about this hospital. In multiplayer co-op
+--! only the player running it hears it (every peer still runs the code
+--! deciding what to say, so the game stays the same everywhere).
+function PlayerHospital:say(speech, talk_until_next_announce, override_current)
+  if self.world.mp_coop and self ~= self.world:getUIHospital() then return end
+  self.world.ui.adviser:say(speech, talk_until_next_announce, override_current)
+end
+
 function PlayerHospital:giveAdvice(msgs, rnd_frac, stay_up)
   local max_rnd = #msgs
   if rnd_frac and rnd_frac > 0 and rnd_frac < 1 then
@@ -411,7 +419,7 @@ function PlayerHospital:giveAdvice(msgs, rnd_frac, stay_up)
 
   local index = (max_rnd == 1) and 1 or math.random(1, max_rnd)
   if index <= #msgs then
-    self.world.ui.adviser:say(msgs[index], stay_up)
+    self:say(msgs[index], stay_up)
     return true
   end
   return false
@@ -474,10 +482,10 @@ end
 function PlayerHospital:adviseBoilerBreakdown(broken_heat)
   local ui = self.world.ui
   if broken_heat == 0 then
-    ui.adviser:say(_A.boiler_issue.minimum_heat)
+    self:say(_A.boiler_issue.minimum_heat)
     ui:playRandomAnnouncement({ "sorry002.wav", "sorry004.wav" })
   else
-    ui.adviser:say(_A.boiler_issue.maximum_heat)
+    self:say(_A.boiler_issue.maximum_heat)
     ui:playRandomAnnouncement({ "sorry003.wav", "sorry004.wav" })
   end
 end
@@ -523,9 +531,9 @@ function PlayerHospital:onEndDay()
         ui:playRandomAnnouncement({ "vip001.wav", "vip002.wav", "vip003.wav",
             "vip004.wav", "vip005.wav" }, AnnouncementPriority.High)
         if self.num_vips < 1 then
-          ui.adviser:say(_A.information.initial_general_advice.first_VIP)
+          self:say(_A.information.initial_general_advice.first_VIP)
         else
-          ui.adviser:say(_A.information.vip_arrived:format(e.name))
+          self:say(_A.information.vip_arrived:format(e.name))
         end
         e.announced = true
         self.announce_vip = self.announce_vip - 1
@@ -567,7 +575,7 @@ end
 --! Give visual warning that player doesn't have enough $ to build
 -- Let the message remain until cancelled by the player as it is being displayed behind the town map
 function PlayerHospital:adviseCannotAffordPlot()
-  self.world.ui.adviser:say(_A.warnings.cannot_afford_2, true, true)
+  self:say(_A.warnings.cannot_afford_2, true, true)
 end
 
 --! Tell the player, through the advisor, about the impact of casebook prices
@@ -584,7 +592,7 @@ function PlayerHospital:advisePriceLevelImpact(judgment, name)
     assert(judgment == "fair", "Price level impact judgements must be under, over or fair")
     message = _A.warnings.fair_prices:format(name)
   end
-  self.world.ui.adviser:say(message)
+  self:say(message)
 end
 
 --! Makes the raise request for a staff member
@@ -595,7 +603,7 @@ function PlayerHospital:makeRaiseRequest(amount, staff)
   -- a staff member requesting a raise.
   -- Only show the help if the player is playing the campaign.
   if not self.has_seen_pay_rise and tonumber(self.world.map.level_number) then
-    self.world.ui.adviser:say(_A.information.pay_rise)
+    self:say(_A.information.pay_rise)
     self.has_seen_pay_rise = true
   end
   self.world.ui.bottom_panel:queueMessage("strike", amount, staff)
@@ -846,12 +854,12 @@ end
 function PlayerHospital:adviseNoGPOffice()
   if self:countStaffOfCategory("Doctor", 1) > 0 then -- Doctor without a room
     if not self.adviser_data.no_gp_office then
-      self.world.ui.adviser:say(_A.warnings.no_gp_office)
+      self:say(_A.warnings.no_gp_office)
       self.adviser_data.no_gp_office = true
     end
   else -- No room or doctor
     if not self.adviser_data.no_doctor_no_gp_office then
-      self.world.ui.adviser:say(_A.warnings.no_doctor_no_gp_office)
+      self:say(_A.warnings.no_doctor_no_gp_office)
       self.adviser_data.no_doctor_no_gp_office = true
     end
   end

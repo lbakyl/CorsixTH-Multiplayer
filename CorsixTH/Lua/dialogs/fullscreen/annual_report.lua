@@ -40,11 +40,14 @@ local function setActive(button, active)
   end
 end
 
-function UIAnnualReport:UIAnnualReport(ui, world)
+--!param report_hospital (Hospital) optional; whose year it is (default ui.hospital).
+--!  In multiplayer co-op a report is made for every player's hospital.
+function UIAnnualReport:UIAnnualReport(ui, world, report_hospital)
 
   self:UIFullscreen(ui)
 
   self.ui = ui
+  self.hospital = report_hospital or ui.hospital
   local gfx   = ui.app.gfx
   self.won_amount = 0
   self.award_won_amount = 0
@@ -171,7 +174,7 @@ end
 --! Finds out which awards and/or trophies the player has been awarded this year.
 function UIAnnualReport:checkTrophiesAndAwards(world)
 
-  local hosp = self.ui.hospital
+  local hosp = self.hospital or self.ui.hospital
   local level_config = world.map.level_config
   local prices = level_config and level_config.awards_trophies or nil
 
@@ -299,8 +302,11 @@ function UIAnnualReport:checkTrophiesAndAwards(world)
 end
 
 function UIAnnualReport:updateAwards()
+  -- Multiplayer: already applied when the year ended (World:_annualReports).
+  if self.awards_applied then return end
+  self.awards_applied = true
   -- Now apply the won/lost values.
-  local hosp = self.ui.hospital
+  local hosp = self.hospital or self.ui.hospital
   if self.won_amount ~= 0 then
     hosp:receiveMoney(self.won_amount, _S.transactions.eoy_trophy_bonus)
   end

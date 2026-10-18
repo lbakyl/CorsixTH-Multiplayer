@@ -182,6 +182,8 @@ end
   @param staff (Staff) staff member to verify if suitable to vaccinate
   @return true if suitable for vaccination false otherwise (boolean) ]]
 function CallsDispatcher.verifyStaffForVaccination(patient, staff)
+  -- Multiplayer co-op: only the patient's own hospital's nurses.
+  if staff.world.mp_coop and staff.hospital ~= patient.hospital then return false end
   -- If staff is not a nurse, or nurse is busy, or patient is busy, cannot vaccinate.
   if not class.is(staff, Nurse) or not staff:isIdle() or
       staff:getRoom() or patient:getRoom() then
@@ -480,6 +482,8 @@ function CallsDispatcher.unassignCall(call, answer_next_call)
 end
 
 function CallsDispatcher.verifyStaffForRoom(room, attribute, staff)
+  -- Multiplayer co-op: staff only work in their own hospital's rooms.
+  if staff.world.mp_coop and staff.hospital ~= room.hospital then return false end
   if not staff:isIdle() or not staff:fulfillsCriterion(attribute) then
     return false
   end

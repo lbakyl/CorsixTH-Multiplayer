@@ -491,6 +491,7 @@ function World:spawnPatient(hospital)
   -- Still need to count them even though you haven't got a staffed desk
   -- and you also don't want to spawn them on the map
   hospital.spawn_attempts = hospital.spawn_attempts + 1
+  if self.mp_coop and not hospital.opened then return end
   if not hospital:hasReceptionDesk(true) then
     if not hospital:isPlayerHospital() then
       -- TODO: Count patients for AIHospital for now.
@@ -689,7 +690,9 @@ function World:markRoomAsBuilt(room)
     hosp.disease_casebook["diag_" .. room.room_info.id].discovered = true
   end
   for _, entity in ipairs(self.entities) do
-    if entity.notifyNewRoom then
+    -- Multiplayer co-op: only the people of the room's hospital care.
+    if entity.notifyNewRoom and
+        (not self.mp_coop or not entity.hospital or entity.hospital == room.hospital) then
       entity:notifyNewRoom(room)
     end
   end
@@ -1029,7 +1032,7 @@ end
 function World:_advanceHours(hours, tick_earthquake)
   -- If the game is not paused then an earthquake may be taking place
   if tick_earthquake then
-    self.earthquake:tick()
+    self.earthquake:tick(hours)
   end
 
   local new_game_date = self.game_date:plusHours(hours)
@@ -1052,7 +1055,7 @@ function World:_advanceHours(hours, tick_earthquake)
       if self.game_date:isLastDayOfYear() then
         -- It is crucial that the annual report gets to initialize before onEndYear is called.
         -- Yearly statistics are reset there.
-        self.ui:addWindow(UIAnnualReport(self.ui, self))
+        self:_annualReports()
         self:onEndYear()
       end
     end
@@ -1095,6 +1098,27 @@ function World:_advanceHours(hours, tick_earthquake)
       self.ui:onWorldTick()
     end
     self.dispatcher:onTick()
+  end
+end
+
+--! The annual report. In single player it is one window, and its awards are
+--! paid when the player closes it. In multiplayer closing happens at a
+--! different moment on every machine, so the awards are paid now, at the same
+--! step everywhere; in co-op for every player's hospital, in hospital order,
+--! and only this player's report is shown.
+function World:_annualReports()
+  if not self.app.mp_session then
+    self.ui:addWindow(UIAnnualReport(self.ui, self))
+    return
+  end
+  local count = self.mp_coop and self.mp_coop.players or 1
+  for i = 1, count do
+    local hospital = self.hospitals[i]
+    local report = UIAnnualReport(self.ui, self, hospital)
+    report:updateAwards()
+    if hospital == self.ui.hospital then
+      self.ui:addWindow(report)
+    end
   end
 end
 
@@ -1904,8 +1928,11 @@ function World:findRoomNear(humanoid, room_type_id, max_distance, mode)
     max_distance = 2^30
   end
 
+  -- Multiplayer co-op: patients and staff only use their own hospital's rooms.
+  local own = self.mp_coop and humanoid.hospital
   for _, r in pairs(self.rooms) do
-    if r.built and r.room_info.id == room_type_id and r.is_active then
+    if r.built and r.room_info.id == room_type_id and r.is_active and
+        (not own or r.hospital == own) then
       local x, y = r:getEntranceXY(false)
       local d = self:getPathDistance(humanoid.tile_x, humanoid.tile_y, x, y)
 
@@ -2030,10 +2057,12 @@ end
 --!param flags Flags of the new object.
 --!param name Name of the new object.
 --!return The created object.
-function World:newObject(id, x, y, flags, name)
+--!param hospital (Hospital) optional; owner when the object has no tile yet
+--!  (the emergency helicopter). Default: the owner of the tile.
+function World:newObject(id, x, y, flags, name, hospital)
   local object_type = self.object_types[id]
   -- The owner of the tile (multiplayer co-op: the player whose plot it is).
-  local hospital = self:getTileHospital(x, y)
+  hospital = hospital or self:getTileHospital(x, y)
 
   local entity
   if object_type.class then

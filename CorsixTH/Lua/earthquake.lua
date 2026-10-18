@@ -70,7 +70,11 @@ function Earthquake:Earthquake(world, convert)
 end
 
 --! Perform actions to simulate an active earthquake.
-function Earthquake:tick()
+--!param hours (int) game hours this tick advances (default: the current
+--!  speed's hours per tick). Multiplayer passes 1 per lockstep step: the speed
+--!  can differ between peers at the same step.
+function Earthquake:tick(hours)
+  hours = hours or self.world.hours_per_tick
   if not self.active or self.disabled then return end
   local hosp = self.world:getLocalPlayerHospital()
   -- Check if this is the day that the earthquake is supposed to stop
@@ -95,12 +99,12 @@ function Earthquake:tick()
 
   -- End of warning quake
   if self.warning_timer >= warning_period - warning_length and
-      self.warning_timer - self.world.hours_per_tick < warning_period - warning_length then
+      self.warning_timer - hours < warning_period - warning_length then
     hosp:tickEarthquake("end")
   end
 
   if self.warning_timer > 0 then
-    self.warning_timer = self.warning_timer - self.world.hours_per_tick
+    self.warning_timer = self.warning_timer - hours
     -- Nothing more to do during inactive warning period
     if self.warning_timer < warning_period - warning_length then
       return
@@ -131,7 +135,7 @@ function Earthquake:tick()
   end
 
   -- Check if damage phase should go ahead
-  self.damage_timer = self.damage_timer - self.world.hours_per_tick
+  self.damage_timer = self.damage_timer - hours
   if self.damage_timer > 0 then return end
 
   for _, room in pairs(self.world.rooms) do

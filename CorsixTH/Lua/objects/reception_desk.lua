@@ -177,7 +177,8 @@ function ReceptionDesk:checkForNearbyStaff()
   local nearest_staff, nearest_d
   local use_x, use_y = self:getSecondaryUsageTile()
   for _, entity in ipairs(self.world.entities) do
-    if class.is(entity, Receptionist) and not entity.associated_desk and not entity.fired then
+    if class.is(entity, Receptionist) and not entity.associated_desk and not entity.fired and
+        (not self.world.mp_coop or entity.hospital == self.hospital) then
       local distance = self.world.pathfinder:findDistance(entity.tile_x, entity.tile_y, use_x, use_y)
       if not nearest_d or distance < nearest_d then
         nearest_staff = entity
@@ -231,8 +232,10 @@ function ReceptionDesk:resetUsageAndReservaton()
     self.world:findObjectNear(receptionist, "reception_desk", nil, false,
         function(x, y)
           local obj = self.world:getObject(x, y, "reception_desk")
-          -- Make sure we are not selecting the same desk again
-          if obj and obj ~= self then
+          -- Make sure we are not selecting the same desk again (and in
+          -- multiplayer co-op, only one of the receptionist's hospital)
+          if obj and obj ~= self and
+              (not self.world.mp_coop or obj.hospital == receptionist.hospital) then
             return obj:occupy(receptionist)
           end
         end)

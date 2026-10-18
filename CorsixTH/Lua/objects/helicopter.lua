@@ -59,14 +59,19 @@ end
 function Helicopter:tick()
   local phase = self.phase
   local ui = TheApp.ui
+  -- Multiplayer co-op: the emergency is this helicopter's hospital's; only
+  -- that player hears about it.
+  local mine = ui.hospital == self.hospital
   if phase == 0 then
     self.th:makeVisible()
     self:setSpeed(0, 10)
-    ui:playAnnouncement(ui.hospital.emergency.disease.emergency_sound, AnnouncementPriority.Critical)
+    if mine then
+      ui:playAnnouncement(self.hospital.emergency.disease.emergency_sound, AnnouncementPriority.Critical)
+    end
   elseif phase == 60 then
     self:setSpeed(0, 0)
     self.spawned_patients = 0
-    ui.adviser:say(_A.information.emergency)
+    if mine then ui.adviser:say(_A.information.emergency) end
   elseif phase == 85 then
     if self.spawned_patients < self.hospital.emergency.victims then
       self:spawnPatient()

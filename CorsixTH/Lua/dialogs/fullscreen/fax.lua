@@ -196,9 +196,11 @@ function UIFax:choice(choice_number)
   end
   local vip_ignores_refusal = math.random(1, 2)
   if choice == "accept_emergency" then
-    self.ui.app.world:newObject("helicopter", "north")
+    self.ui.app.world:newObject("helicopter", "north", nil, nil, nil, hospital)
     self.ui:addWindow(UIWatch(self.ui, "emergency", hospital))
   elseif choice == "refuse_emergency" then
+    -- Multiplayer co-op asks the hospital whether an emergency is under way.
+    if self.ui.app.world.mp_coop then hospital.emergency = nil end
     self.ui.app.world:nextEmergency()
   -- VIP may choose to visit anyway if he is refused too often
   elseif (hospital.vip_declined > 2 and vip_ignores_refusal == 2) and choice == "refuse_vip" then

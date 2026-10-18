@@ -1159,6 +1159,9 @@ function Hospital:resolveEmergency()
     self:changeReputation("emergency_failed", emer.disease)
   end
 
+  -- Multiplayer co-op asks the hospital whether an emergency is under way
+  -- (World:onEndDay), so it must end here.
+  if self.world.mp_coop then self.emergency = nil end
   self.world:nextEmergency()
 end
 

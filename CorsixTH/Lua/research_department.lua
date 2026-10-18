@@ -636,7 +636,9 @@ function ResearchDepartment:researchCost()
   -- Find out how many doctors are currently doing research
   local doctors = 0
   for _, room in pairs(self.world.rooms) do
-    if room.room_info.id == "research" then
+    -- Multiplayer co-op: only this hospital's research rooms.
+    if room.room_info.id == "research" and
+        (not self.world.mp_coop or room.hospital == self.hospital) then
       for _, _ in pairs(room.staff_member_set) do
         doctors = doctors + 1
       end
