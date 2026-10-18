@@ -18,17 +18,18 @@ It is a test version: expect rough edges, and please report what you find.
 
 ## Get the game
 
-1. Sign in to GitHub (downloads from Actions need an account).
-2. Open the fork's **Actions** tab, choose the **Windows** workflow, and open
-   the newest green run on `master`.
-3. Under **Artifacts**, download **CorsixTH** and unzip it into a new folder.
-4. Start `CorsixTH.exe`. The first time it asks for your Theme Hospital
+1. Open the fork's [Releases](https://github.com/lbakyl/CorsixTH-Multiplayer/releases)
+   and download the newest **Multiplayer test build** zip (no GitHub account
+   needed). Unzip it into a new folder.
+2. Start `CorsixTH.exe`. The first time it asks for your Theme Hospital
    folder.
-5. Use **English** as the game language for now: everybody in a game needs
+3. Use **English** as the game language for now: everybody in a game needs
    the same language.
 
-Everybody must use the same run (the same commit). When `master` moves on,
-everybody updates together, and the server too (see the VPS guide).
+Everybody in a game must use the same test build, and the server must run the
+matching version (each release names its server image). Builds of newer
+commits are also on the fork's **Actions** tab (Windows workflow, a run on
+`master`, Artifacts, CorsixTH; this needs a GitHub account).
 
 ## Play
 

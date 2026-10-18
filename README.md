@@ -14,9 +14,10 @@ trades), through a small relay server. It is a **test version**.
 - **Newest tested state: the `master` branch.** Work in progress lives on
   `mp/*` branches until it is tested and moved to `master`; the older
   `mp/*` branches are history.
-- **Players:** [docs/multiplayer/PLAYING.md](docs/multiplayer/PLAYING.md):
-  getting the Windows build, the lobby, co-op, saving and continuing, what
-  is not there yet.
+- **Players:** download the newest **Multiplayer test build** from
+  [Releases](https://github.com/lbakyl/CorsixTH-Multiplayer/releases), then
+  read [docs/multiplayer/PLAYING.md](docs/multiplayer/PLAYING.md): the lobby,
+  co-op, saving and continuing, what is not there yet.
 - **Running a server:** [docs/multiplayer/vps-guide.md](docs/multiplayer/vps-guide.md)
   (one command on a Debian or Ubuntu VPS).
 - **Developers:** [docs/multiplayer/README.md](docs/multiplayer/README.md)
