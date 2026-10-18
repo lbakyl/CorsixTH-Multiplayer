@@ -13,7 +13,7 @@ CorsixTH game code.
 On a fresh Debian or Ubuntu VPS, as root:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/lbakyl/CorsixTH-Multiplayer/mp/vps-setup/mp_server/deploy/setup-vps.sh
+curl -fsSLO https://raw.githubusercontent.com/lbakyl/CorsixTH-Multiplayer/master/mp_server/deploy/setup-vps.sh
 sudo bash setup-vps.sh --motd "Welcome"            # add --ufw to set up the firewall too
 ```
 
@@ -66,17 +66,16 @@ thinking about it.
 ```bash
 sudo mkdir -p /opt/corsixth-mp && cd /opt/corsixth-mp
 sudo curl -fsSLo compose.yaml \
-  https://raw.githubusercontent.com/lbakyl/CorsixTH-Multiplayer/mp/server-docker/mp_server/compose.yaml
+  https://raw.githubusercontent.com/lbakyl/CorsixTH-Multiplayer/master/mp_server/compose.yaml
 ```
 
-Once the branch is merged, use `mp/dev` instead of `mp/server-docker` in that
-address.
+`master` is the newest tested state of the fork.
 
 Optional settings go in `/opt/corsixth-mp/.env` (all have defaults):
 
 ```ini
-# Which image to run: a branch name (/ becomes -), sha-<commit>, or latest
-CORSIXTH_MP_TAG=mp-server-docker
+# Which image to run: latest (built from master), a branch name (/ becomes -), or sha-<commit>
+CORSIXTH_MP_TAG=latest
 # Port players connect to
 CORSIXTH_MP_PUBLISH=47800
 # Shown to players when they connect
@@ -87,8 +86,8 @@ CORSIXTH_MP_MAX_CONNECTIONS=256
 CORSIXTH_MP_MAX_PER_ADDRESS=8
 ```
 
-`:latest` exists once the server is merged into `mp/dev`; until then use the
-branch tag above (or a `sha-...` tag from the GitHub Actions run).
+`:latest` is built from `master`, the newest tested state. Players need the
+Windows build of the same commit (see `PLAYING.md`).
 
 ## 5. Access to the image
 

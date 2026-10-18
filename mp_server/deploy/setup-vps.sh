@@ -2,13 +2,13 @@
 # One-command setup of the CorsixTH multiplayer server on a Debian or Ubuntu
 # VPS. Run as root (or with sudo). Safe to run again: it updates the server.
 #
-#   curl -fsSLO https://raw.githubusercontent.com/lbakyl/CorsixTH-Multiplayer/mp/vps-setup/mp_server/deploy/setup-vps.sh
+#   curl -fsSLO https://raw.githubusercontent.com/lbakyl/CorsixTH-Multiplayer/master/mp_server/deploy/setup-vps.sh
 #   sudo bash setup-vps.sh [options]
 #
 # Options:
 #   --port N        port players connect to (default 47800)
-#   --tag TAG       server image tag (default mp-vps-setup; e.g. sha-1234abc, latest)
-#   --ref REF       git branch/commit to take compose.yaml from (default mp/vps-setup)
+#   --tag TAG       server image tag (default latest, built from master; e.g. sha-1234abc)
+#   --ref REF       git branch/commit to take compose.yaml from (default master)
 #   --motd TEXT     message shown to players when they connect
 #   --ufw           also set up the ufw firewall: allow SSH and the game port only
 #   --dir DIR       install directory (default /opt/corsixth-mp)
@@ -20,8 +20,8 @@
 set -euo pipefail
 
 PORT=47800
-TAG=mp-vps-setup
-REF=mp/vps-setup
+TAG=latest
+REF=master
 MOTD=""
 UFW=0
 DIR=/opt/corsixth-mp

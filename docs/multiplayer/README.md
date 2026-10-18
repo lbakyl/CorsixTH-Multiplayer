@@ -57,6 +57,10 @@ data, saves from it, or logs that contain it.**
 
 ## 3. Branches
 
+**`master` is the newest tested state** (all branches below are in it, as of
+`mp/save-continue`). New work: a branch on top of `master`, moved to `master`
+once the checks pass.
+
 One branch per step, each stacked on the previous one. PRs #1–#6 cover the
 first six; the newer branches have no PR yet (upstream `AGENTS.md` says AI
 agents must not open PRs, so the owner opens them).

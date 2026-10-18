@@ -5,6 +5,29 @@
 ##### [Matrix Space](https://matrix.to/#/#CorsixTH:matrix.org) | [Matrix Chat](https://matrix.to/#/#corsixth-general:matrix.org) | [Discord](https://discord.gg/Mxeztvh) | [Report Issue](https://github.com/CorsixTH/CorsixTH/issues/new) | [Reddit](https://www.reddit.com/r/corsixth) | [Twitter/X](https://twitter.com/CorsixTH) | [Facebook](https://facebook.com/CorsixTH)
 ----
 
+## CorsixTH-Multiplayer (this fork)
+
+This fork adds **network multiplayer** to CorsixTH: two to four players in
+**one shared hospital** or **a hospital each** (co-op, with money and staff
+trades), through a small relay server. It is a **test version**.
+
+- **Newest tested state: the `master` branch.** Work in progress lives on
+  `mp/*` branches until it is tested and moved to `master`; the older
+  `mp/*` branches are history.
+- **Players:** [docs/multiplayer/PLAYING.md](docs/multiplayer/PLAYING.md):
+  getting the Windows build, the lobby, co-op, saving and continuing, what
+  is not there yet.
+- **Running a server:** [docs/multiplayer/vps-guide.md](docs/multiplayer/vps-guide.md)
+  (one command on a Debian or Ubuntu VPS).
+- **Developers:** [docs/multiplayer/README.md](docs/multiplayer/README.md)
+  (design, tests, lessons learned).
+- Everybody in a game, and the server, use the same commit. You need your
+  own Theme Hospital data, as for CorsixTH itself.
+
+The rest of this page is upstream CorsixTH's README.
+
+----
+
 A reimplementation of the 1997 Bullfrog business sim Theme Hospital. As well as faithfully recreating the original, CorsixTH adds support for modern operating systems (Windows, macOS, Linux and BSD), high resolutions and much more.
 
 <picture>![image](https://github.com/CorsixTH/CorsixTH/assets/20030128/71a42d5f-d486-4309-ba85-77e114880bcb)</picture>
