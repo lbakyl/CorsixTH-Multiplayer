@@ -92,6 +92,8 @@ function UIPatient:UIPatient(ui, patient)
   end, 17, 216, 92, 292)
 
   self:registerKeyHandlers()
+  -- Co-op: another player's patient can be looked at, not sent anywhere.
+  MultiplayerSession.viewOnly(self, patient.hospital, {self.viewQueue, self.viewDiseases})
 end
 
 function UIPatient:registerKeyHandlers()

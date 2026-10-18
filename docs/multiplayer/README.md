@@ -242,6 +242,12 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
     one tick. It now walks on through that tile (`walk.lua`,
     `avoid_restart`). Found by a probe hang; `gdb` on the VM showed the
     repeated path query.
+30. **Play with a person early.** The first sessions with a real player
+    found what no scripted check had: actions that failed silently, a
+    handyman hired just as the month's candidates changed, a transfer that
+    looked like a sacking, other players' patients that could be sent home.
+    `run_lobby_player.sh` with `MP_SCENARIO=none` and `MP_UI_COMMANDS` puts
+    a scripted player into a person's game and lets you direct it live.
 
 ## 8. Next steps
 

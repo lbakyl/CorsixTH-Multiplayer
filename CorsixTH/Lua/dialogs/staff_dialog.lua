@@ -154,6 +154,8 @@ function UIStaff:UIStaff(ui, staff)
     end
   end, 17, 211 + offset, 92, 286 + offset)
 
+  -- Co-op: another player's staff can be looked at, not directed.
+  MultiplayerSession.viewOnly(self, staff.hospital)
 end
 
 function UIStaff:getStaffPosition(dx, dy)

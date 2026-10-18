@@ -114,7 +114,8 @@ end
 function Staff:tick()
   Entity.tick(self)
   -- don't do anything if they're fired or picked up or have no hospital
-  if self.fired or self.pickup or not self.hospital or self.dead then
+  -- (or are walking over to another player's hospital, multiplayer co-op)
+  if self.fired or self.pickup or not self.hospital or self.dead or self.mp_in_transit then
     return
   end
 

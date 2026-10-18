@@ -62,6 +62,8 @@ function UIMachine:UIMachine(ui, machine, room)
   self:makeTooltip(_S.tooltip.machine_window.name, 18, 19, 139, 42)
   self:makeTooltip(_S.tooltip.machine_window.times_used, 18, 49, 139, 77)
   self:makeTooltip(_S.tooltip.machine_window.status, 24, 88, 128, 115)
+  -- Co-op: another player's machine can be looked at only.
+  MultiplayerSession.viewOnly(self, machine.hospital or (room and room.hospital))
 end
 
 function UIMachine:draw(canvas, x, y)

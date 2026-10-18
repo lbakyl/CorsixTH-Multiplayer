@@ -356,11 +356,41 @@ MultiplayerSession.rejection_texts = {
   room_finish = {["objects missing"] = "The room still needs some of its objects."},
 }
 
+--! Multiplayer co-op: a window about another player's patient, staff or
+--! machine is for looking only. Its buttons (but the ones in `keep` and
+--! Close) then only say so. The commands are refused anyway (handlers check
+--! the owner); this saves the player a click that would do nothing.
+function MultiplayerSession.viewOnly(window, hospital, keep)
+  local world = TheApp and TheApp.world
+  if not (TheApp.mp_session and world and world.mp_coop) then return end
+  if not hospital or hospital == window.ui.hospital then return end
+  local allowed = {[window.close] = true}
+  for _, f in ipairs(keep or {}) do allowed[f] = true end
+  for _, button in ipairs(window.buttons) do
+    if button.on_click and not allowed[button.on_click] then
+      button.on_click = MultiplayerSession.refuseOthers
+    end
+  end
+  window.mp_view_only = true
+end
+
+function MultiplayerSession.refuseOthers(window)
+  local ui = window.ui
+  ui:playSound("wrong2.wav")
+  if ui.adviser then
+    ui.adviser:say({text = "That belongs to another player's hospital.", priority = 10})
+  end
+end
+
 --! Tell this player that one of their actions could not be done. Every peer
 --! turns it down alike; only the player who asked sees the notice.
 function MultiplayerSession:_tellRejected(cmd, why)
   local texts = MultiplayerSession.rejection_texts[cmd.kind]
   local text = texts and texts[why]
+  if not text and (why == "not ours" or why == "not our staff" or why == "not our patient" or
+      why == "not our patient or room") then
+    text = "That belongs to another player's hospital."
+  end
   if not text and (why == "not enough money" or why == "loan limit") then
     text = "Not enough money for that."
   end
@@ -734,6 +764,7 @@ function handlers.fax_choice(world, cmd)
   local panel = world.ui and world.ui.bottom_panel
   local icon = panel and panel:findMessageIcon(cmd.msg)
   if not icon then return false, "message no longer there" end
+  if icon.hospital and icon.hospital ~= world.hospitals[cmd.hospital or 1] then return false, "not ours" end
   local choices = icon.message and icon.message.choices
   if not choices or not choices[cmd.choice] then return false, "no such choice" end
   if choices[cmd.choice].enabled == false or choices[cmd.choice].choice == "disabled" then
@@ -797,8 +828,7 @@ local function arrival_tile(world, hospital)
 end
 
 --! Send a staff member to another player's hospital: {hospital (sender), to,
---! index, key}. They walk out of the old hospital and an identical member of
---! staff (same profile, wage and skills) starts at the new one. No hiring fee
+--! index, key}. They walk over to the new one and start work there. No hiring fee
 --! and no severance pay.
 function handlers.send_staff(world, cmd)
   local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
@@ -808,33 +838,31 @@ function handlers.send_staff(world, cmd)
   local x, y = arrival_tile(world, to)
   if not x then return false, "no room at the other hospital" end
 
-  -- Leave the old hospital, like Staff:fire() without the penalties.
-  local old_profile = staff.profile
+  -- Leave the old hospital (like being fired, but without the sack): the
+  -- same person walks over to the other hospital and starts work there on
+  -- arrival (World:_tickCoopTransfers). On the way they belong to neither.
   local staff_window = world.ui and world.ui:getWindow(UIStaff)
   if staff_window and staff_window.staff == staff then staff_window:close() end
   staff:removeQueuedStaffMessage()
-  staff:setMood("exit", "activate")
-  staff.fired = true
-  staff.going_home = true
-  staff:despawn()
-  staff.hover_cursor = nil
   staff:unregisterCallbacks()
-
-  -- Start at the new one with a copy of the profile.
-  local profile = setmetatable({}, getmetatable(old_profile))
-  for k, v in pairs(old_profile) do profile[k] = v end
-  local entity = world:newEntity(profile.humanoid_class, 2, 2)
-  entity:setProfile(profile)
-  entity:setTile(x, y)
-  to.staff[#to.staff + 1] = entity
-  entity:setHospital(to)
-  to:notifyOfStaffChange(entity)
-  entity:onPlaceInCorridor()
+  staff.dealing_with_patient = nil
+  staff:setMood("idea3", "deactivate")
+  staff:setMood("reflexion", "deactivate")
+  from:removeStaff(staff)
+  staff.mp_in_transit = {to = world:getHospitalIndex(to), x = x, y = y}
+  staff:setDynamicInfoText(_S.multiplayer_window.staff_on_the_way:format(to.name))
+  -- A brisk walk: the way between two hospitals is long (normal speed
+  -- again on arrival, Staff:onPlaceInCorridor).
+  staff.speed, staff.slow_animation = "fast", false
+  staff:setNextAction(WalkAction(x, y):setMustHappen(true))
+  staff:queueAction(IdleAction())
+  world.mp_transfers = world.mp_transfers or {}
+  world.mp_transfers[#world.mp_transfers + 1] = staff
 
   local window = world.ui and world.ui:getWindow(UIStaffManagement)
   if window then window:updateStaffList() end
   MultiplayerSession.tellPlayer(world, to,
-      _S.multiplayer_window.staff_received_note:format(from.name, "") .. profile:getFullName())
+      _S.multiplayer_window.staff_received_note:format(from.name, "") .. staff.profile:getFullName())
   return true
 end
 
@@ -952,6 +980,17 @@ function handlers.set_heat(world, cmd)
 end
 
 --! Entity of the right class named by a command, or nil.
+--! Does `entity` belong to the hospital of the player who sent `cmd`? In
+--! co-op every player acts on their own hospital's patients, staff,
+--! machines and queues only (they can look at the others').
+local function ours(world, cmd, entity)
+  if entity.mp_in_transit then return false end -- on the way to another hospital
+  local hospital = hospital_of(world, cmd)
+  if entity.hospital then return entity.hospital == hospital end
+  if entity.tile_x then return hospital:isInHospital(entity.tile_x, entity.tile_y) end
+  return false
+end
+
 local function entity_of(world, id, klass)
   local entity = world:getEntityById(tonumber(id))
   if entity and (not klass or class.is(entity, klass)) then return entity end
@@ -961,6 +1000,7 @@ MultiplayerSession.entityOf = entity_of
 --! Which plot a handyman looks after: {staff, parcel} (0 = all).
 function handlers.handyman_parcel(world, cmd)
   local staff = entity_of(world, cmd.staff, Handyman)
+  if staff and not ours(world, cmd, staff) then return false, "not ours" end
   local parcel = math.floor(tonumber(cmd.parcel) or -1)
   if not staff or staff.fired or parcel < 0 then return false, "no such handyman" end
   if parcel ~= 0 and not table_contains(staff.hospital.ownedPlots, parcel) then
@@ -973,6 +1013,7 @@ end
 --! Raise one of a handyman's priorities: {staff, attr}.
 function handlers.handyman_prio(world, cmd)
   local staff = entity_of(world, cmd.staff, Handyman)
+  if staff and not ours(world, cmd, staff) then return false, "not ours" end
   if not staff or staff.fired or not staff:getAttribute(cmd.attr) then return false, "no such handyman" end
   UIStaff.raiseHandymanPriority(staff, cmd.attr)
   return true
@@ -981,6 +1022,7 @@ end
 --! Longest queue for a room door or reception desk: {owner, size} (0..30).
 function handlers.queue_size(world, cmd)
   local owner = entity_of(world, cmd.owner)
+  if owner and not ours(world, cmd, owner) then return false, "not ours" end
   local size = math.floor(tonumber(cmd.size) or -1)
   if not owner or not owner.queue or size < 0 or size > 30 then return false, "no such queue" end
   owner.queue.max_size = size
@@ -996,6 +1038,7 @@ end
 --! Send a patient home: {patient, text (1: show "sent home")}.
 function handlers.send_home(world, cmd)
   local patient = entity_of(world, cmd.patient, Patient)
+  if patient and not ours(world, cmd, patient) then return false, "not ours" end
   if not patient or patient.going_home then return false, "no such patient" end
   patient:goHome("kicked")
   if tonumber(cmd.text) == 1 then
@@ -1007,6 +1050,7 @@ end
 --! Guess the cure for a patient (patient window): {patient}.
 function handlers.guess_cure(world, cmd)
   local patient = entity_of(world, cmd.patient, Patient)
+  if patient and not ours(world, cmd, patient) then return false, "not ours" end
   if not patient or patient.is_debug or patient.diagnosis_progress == 0 or patient.diagnosed or
       patient.going_home or patient.going_to_die or patient:getRoom() or
       not patient.hospital.disease_casebook[patient.disease.id].discovered then
@@ -1024,6 +1068,7 @@ end
 --! Send a queueing patient back to reception: {patient}.
 function handlers.to_reception(world, cmd)
   local patient = entity_of(world, cmd.patient, Patient)
+  if patient and not ours(world, cmd, patient) then return false, "not ours" end
   if not patient or patient.going_home then return false, "no such patient" end
   patient:setNextAction(SeekReceptionAction())
   return true
@@ -1032,6 +1077,7 @@ end
 --! Pay a member of staff a bonus: {staff}.
 function handlers.staff_bonus(world, cmd)
   local staff = entity_of(world, cmd.staff, Staff)
+  if staff and not ours(world, cmd, staff) then return false, "not ours" end
   if not staff or staff.fired then return false, "no such staff member" end
   local bonus = math.floor(staff.profile.wage * 0.1)
   if staff.hospital.balance <= bonus then return false, "not enough money" end
@@ -1043,6 +1089,7 @@ end
 --! Raise a member of staff's wage by 10 percent: {staff}.
 function handlers.raise_wage(world, cmd)
   local staff = entity_of(world, cmd.staff, Staff)
+  if staff and not ours(world, cmd, staff) then return false, "not ours" end
   if not staff or staff.fired then return false, "no such staff member" end
   if not staff:increaseWage(math.floor(staff.profile.wage * 0.1)) then return false, "no raise" end
   return true
@@ -1121,6 +1168,7 @@ end
 --! Ask a handyman to repair a machine now: {machine}.
 function handlers.call_handyman(world, cmd)
   local machine = entity_of(world, cmd.machine, Machine)
+  if machine and not ours(world, cmd, machine) then return false, "not ours" end
   if not machine or machine.times_used == 0 then return false, "nothing to repair" end
   local hospital = machine.hospital
   local task = hospital:getIndexOfTask(machine.tile_x, machine.tile_y, "repairing")
@@ -1137,6 +1185,7 @@ end
 --! Replace a worn machine with a new one: {machine}.
 function handlers.replace_machine(world, cmd)
   local machine = entity_of(world, cmd.machine, Machine)
+  if machine and not ours(world, cmd, machine) then return false, "not ours" end
   if not machine then return false, "no such machine" end
   local hospital = machine.hospital
   local cost = hospital.research.research_progress[machine.object_type].cost
@@ -1156,6 +1205,7 @@ end
 --! Mark an infected patient for vaccination during an epidemic: {patient}.
 function handlers.mark_vaccinate(world, cmd)
   local patient = entity_of(world, cmd.patient, Patient)
+  if patient and not ours(world, cmd, patient) then return false, "not ours" end
   local epidemic = patient and patient.hospital and patient.hospital.epidemic
   if not epidemic or not epidemic.coverup_selected or epidemic.timer.closed or
       not patient.infected or patient.marked_for_vaccination then

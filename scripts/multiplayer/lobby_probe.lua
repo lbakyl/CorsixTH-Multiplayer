@@ -486,7 +486,8 @@ local function run()
           -- Smaller if there is no space (a room is at least 4 x 4 here).
           local drawn = false
           while not drawn and rw >= 4 and rh >= 4 do
-            drawn = builder.ui_room(world, desk_x, desk_y, id, rw, rh, false, log, nil, true)
+            -- With a window in the top wall, like a person would build it.
+            drawn = builder.ui_room(world, desk_x, desk_y, id, rw, rh, true, log, nil, true)
             if not drawn then rw, rh = rw - 1, rh - 1 end
           end
           if drawn then
@@ -522,6 +523,15 @@ local function run()
             end
           else
             log("UI: no " .. entry.arg .. " to pick up")
+          end
+        elseif a == "transfers" then
+          -- Where the staff on their way to another hospital are.
+          for _, st in ipairs(world.mp_transfers or {}) do
+            local t = st.mp_in_transit or {}
+            local action = st:getCurrentAction()
+            log(string.format("UI: transfer of %s at %s,%s doing %s, to %s,%s (step %d)",
+                st.humanoid_class, tostring(st.tile_x), tostring(st.tile_y),
+                action and action.name or "-", tostring(t.x), tostring(t.y), session.step))
           end
         elseif a == "patients" then
           session:issue({kind = "probe_patients", n = tonumber(entry.arg)})

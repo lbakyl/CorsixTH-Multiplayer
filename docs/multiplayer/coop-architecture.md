@@ -26,6 +26,16 @@ for that, the rules new code must follow, and what is still missing.
 - **What a player sees is local.** Adviser messages, sounds, faxes, watch
   windows and the annual report of another player's hospital are hidden, but
   everything behind them still runs on every peer.
+- **Players act on their own hospital only.** Everyone can look at every
+  patient, member of staff and machine, but each command that acts on one
+  checks that it belongs to the sender's hospital (`ours()` in
+  `mp_session.lua`), and the windows about another player's ones are for
+  looking only (`MultiplayerSession.viewOnly`).
+- **Staff transfers walk.** `send_staff` takes the person off the sender's
+  staff list; they walk over (at a brisk pace) and join the other hospital
+  on arrival (`World:_tickCoopTransfers`). On the way they belong to neither
+  hospital, are not paid, and take no orders. On the original two-player
+  map the walk takes about ten game days.
 
 ## 2. Rules for new code
 

@@ -1098,7 +1098,10 @@ function World:_advanceHours(hours, tick_earthquake)
     end
     self.current_tick_entity = nil
     self:_flushDestroyedEntities()
-    if self.mp_coop then self:_tickCoopOpenings() end
+    if self.mp_coop then
+      self:_tickCoopOpenings()
+      self:_tickCoopTransfers()
+    end
     self.map:onTick()
     -- Multiplayer co-op: every player's radiators run at their own setting.
     local owner_heat
@@ -1182,6 +1185,33 @@ end
 --! Multiplayer co-op: one game hour of every hospital's countdowns (opening,
 --! emergency). The watch window exists only for the local player; these run
 --! on every peer.
+--! Multiplayer co-op: members of staff sent to another player's hospital
+--! (send_staff) join it once they have walked there; if they could not get
+--! there, they are put at its entrance.
+function World:_tickCoopTransfers()
+  local list = self.mp_transfers
+  if not list or #list == 0 then return end
+  local walking = {}
+  for _, staff in ipairs(list) do
+    local t = staff.mp_in_transit
+    local action = staff:getCurrentAction()
+    if t and action and action.name == "walk" then
+      walking[#walking + 1] = staff
+    elseif t then
+      if staff.tile_x ~= t.x or staff.tile_y ~= t.y then staff:setTile(t.x, t.y) end
+      local to = self.hospitals[t.to]
+      staff.mp_in_transit = nil
+      to.staff[#to.staff + 1] = staff
+      staff:setHospital(to)
+      to:notifyOfStaffChange(staff)
+      staff:onPlaceInCorridor()
+      MultiplayerSession.tellPlayer(self, to,
+          _S.multiplayer_window.staff_arrived_note:format(staff.profile:getFullName()))
+    end
+  end
+  self.mp_transfers = walking
+end
+
 function World:_tickCoopOpenings()
   for _, hospital in ipairs(self.hospitals) do
     local e = hospital.mp_emergency_timer
