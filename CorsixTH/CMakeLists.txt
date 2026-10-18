@@ -290,6 +290,28 @@ else()
   message("Lua modules are not linked and will be loaded at runtime")
 endif()
 
+# LuaSocket for the experimental multiplayer mode (vcpkg port "luasocket" on
+# Windows). It is a Lua C module loaded at runtime, so copy it next to the
+# game, where Lua's default search paths find socket/core.dll and socket.lua.
+if(VCPKG_TARGET_TRIPLET AND WIN32)
+  set(LUASOCKET_ROOT "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+  if(EXISTS "${LUASOCKET_ROOT}/bin/socket/core.dll")
+    message("  LuaSocket found (multiplayer)")
+    add_custom_command(
+      TARGET CorsixTH
+      POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:CorsixTH>/socket
+      COMMAND
+        ${CMAKE_COMMAND} -E copy
+        "${LUASOCKET_ROOT}/$<$<CONFIG:Debug>:debug/>bin/socket/core.dll"
+        $<TARGET_FILE_DIR:CorsixTH>/socket/core.dll
+      COMMAND
+        ${CMAKE_COMMAND} -E copy "${LUASOCKET_ROOT}/share/lua/socket.lua"
+        $<TARGET_FILE_DIR:CorsixTH>/socket.lua
+    )
+  endif()
+endif()
+
 # Find libpng
 find_package(PNG REQUIRED)
 target_link_libraries(CorsixTH_lib PRIVATE PNG::PNG)

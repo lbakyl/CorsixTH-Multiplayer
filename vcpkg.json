@@ -30,7 +30,11 @@
         "wavpack"
       ]
     },
-    "freetype"
+    "freetype",
+    {
+      "name": "luasocket",
+      "platform": "windows"
+    }
   ],
   "features": {
     "animview": {
