@@ -241,3 +241,35 @@ def test_cosmetic_show_is_relayed_with_sender(run):
         assert show == {"kind": "blueprint", "room": "gp", "x": "10", "y": "12", "w": "4",
                         "h": "5", "peer": "1"}
     run(body)
+
+
+def test_health_check_answers_without_hello(run):
+    async def body(server, port):
+        r, w = await asyncio.open_connection("127.0.0.1", port)
+        w.write(b"HEALTH\n")
+        verb, fields = decode((await r.readline()).decode())
+        assert verb == "OK" and fields["rooms"] == "0"
+        w.close()
+        assert server.players == {}
+    run(body)
+
+
+def test_connections_per_address_are_limited():
+    async def main():
+        server = srv.Server(max_per_address=2)
+        port = await server.start("127.0.0.1", 0)
+        try:
+            a = await Client.connect(port, "a")
+            b = await Client.connect(port, "b")
+            r, w = await asyncio.open_connection("127.0.0.1", port)
+            fields = decode((await r.readline()).decode())[1]
+            assert fields["code"] == "busy"
+            w.close()
+            await a.close()
+            await asyncio.sleep(0.1)
+            c = await Client.connect(port, "c")  # a slot is free again
+            await b.close()
+            await c.close()
+        finally:
+            await server.close()
+    asyncio.run(main())

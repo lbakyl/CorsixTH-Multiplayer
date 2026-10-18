@@ -45,13 +45,22 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIO_DRIVER=dummy SDL_RENDER_DRIVER=software
 export MP_LUA_CPATH="$LUASOCKET_TREE/lib/lua/$lua_ver/?.so"
 export MP_LUA_PATH="$LUASOCKET_TREE/share/lua/$lua_ver/?.lua"
 
-port=$((47000 + RANDOM % 900))
-PYTHONPATH="$source_dir/mp_server" python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
-  --log-level INFO > "$out/server.log" 2>&1 &
-server_pid=$!
-trap 'kill $server_pid 2>/dev/null || true' EXIT
-for _ in $(seq 50); do grep -q listening "$out/server.log" 2>/dev/null && break; sleep 0.1; done
-export MP_SERVER="127.0.0.1:$port"
+# By default a server is started here. MP_EXTERNAL_SERVER=host:port uses a
+# running one instead (e.g. the Docker container); MP_SERVER_LOG_CMD then
+# prints its log for the checks (e.g. "docker logs corsixth-mp-server").
+# All test players connect from one address, above the default limit of 8.
+if [[ -n "${MP_EXTERNAL_SERVER:-}" ]]; then
+  export MP_SERVER="$MP_EXTERNAL_SERVER"
+  echo "Using server $MP_SERVER"
+else
+  port=$((47000 + RANDOM % 900))
+  PYTHONPATH="$source_dir/mp_server" python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
+    --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
+  server_pid=$!
+  trap 'kill $server_pid 2>/dev/null || true' EXIT
+  for _ in $(seq 50); do grep -q listening "$out/server.log" 2>/dev/null && break; sleep 0.1; done
+  export MP_SERVER="127.0.0.1:$port"
+fi
 
 run_probe() { # name, then extra VAR=value assignments
   local name=$1; shift
@@ -113,6 +122,8 @@ sleep 1
 run_probe nico MP_ROLE=join MP_ROOM=coop MP_STEPS=1200 MP_DRAW_EVERY=3 \
   MP_UI_SCRIPT="30:openhospital;60:buy:plant;90:hire:Nurse;300:sendstaff:Nurse" & pids+=($!)
 for pid in "${pids[@]}"; do wait "$pid" || true; done
+
+if [[ -n "${MP_SERVER_LOG_CMD:-}" ]]; then eval "$MP_SERVER_LOG_CMD" > "$out/server.log" 2>&1 || true; fi
 
 python3 - "$out" <<'PY'
 import pathlib, re, sys

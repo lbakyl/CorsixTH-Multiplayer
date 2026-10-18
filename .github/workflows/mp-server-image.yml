@@ -1,0 +1,61 @@
+---
+# Test the multiplayer relay/lobby server (mp_server/) and publish its
+# container image to the GitHub container registry:
+#   ghcr.io/<owner>/corsixth-mp-server:<branch>   every push to an mp/* branch
+#   ghcr.io/<owner>/corsixth-mp-server:sha-<sha>  every push
+#   ghcr.io/<owner>/corsixth-mp-server:latest     pushes to mp/dev or master
+# The image contains no game code and no Theme Hospital data.
+name: Multiplayer server image
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - 'mp/**'
+      - 'master'
+    paths:
+      - 'mp_server/**'
+      - '.github/workflows/mp-server-image.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run server tests
+        working-directory: mp_server
+        run: |
+          python3 -m pip install --user pytest
+          python3 -m pytest -q
+
+  image:
+    needs: test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/corsixth-mp-server
+          tags: |
+            type=ref,event=branch
+            type=sha
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/mp/dev' || github.ref == 'refs/heads/master' }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: mp_server
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

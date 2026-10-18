@@ -26,6 +26,7 @@ import logging
 import os
 import random
 import secrets
+import signal
 import time
 from dataclasses import dataclass, field
 
@@ -44,6 +45,10 @@ DIFFICULTIES = ("easy", "full", "hard")
 PING_INTERVAL_LOBBY = 1.0
 PING_INTERVAL_GAME = 5.0
 HELLO_TIMEOUT = 15.0
+# A public server should not let one address (or everybody) open unlimited
+# connections. Defaults; see the CORSIXTH_MP_MAX_* environment variables.
+MAX_CONNECTIONS = 256
+MAX_PER_ADDRESS = 8
 # Gameplay settings every peer must use (lesson 4 in the handover README).
 DEFAULT_SETTINGS = {"grant_wage_increase": 1, "free_build_mode": 0}
 
@@ -122,7 +127,11 @@ class Room:
 
 
 class Server:
-    def __init__(self, motd: str = "") -> None:
+    def __init__(self, motd: str = "", max_connections: int = MAX_CONNECTIONS,
+                 max_per_address: int = MAX_PER_ADDRESS) -> None:
+        self.max_connections = max_connections
+        self.max_per_address = max_per_address
+        self.connections_by_address: dict[str, int] = {}
         self.rooms: dict[str, Room] = {}
         self.players: dict[int, Player] = {}
         self.next_pid = 1
@@ -154,6 +163,45 @@ class Server:
             await asyncio.wait_for(self._server.wait_closed(), 5)
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        peername = writer.get_extra_info("peername")
+        address = str(peername[0]) if peername else "?"
+        total = sum(self.connections_by_address.values())
+        if (total >= self.max_connections or
+                self.connections_by_address.get(address, 0) >= self.max_per_address):
+            log.warning("refusing connection from %s: too many connections", address)
+            writer.write(encode("ERROR", code="busy", text="Too many connections").encode() + b"\n")
+            await self._close_writer(writer)
+            return
+        self.connections_by_address[address] = self.connections_by_address.get(address, 0) + 1
+        try:
+            await self._serve_connection(reader, writer, peername)
+        finally:
+            left = self.connections_by_address.get(address, 1) - 1
+            if left > 0:
+                self.connections_by_address[address] = left
+            else:
+                self.connections_by_address.pop(address, None)
+
+    @staticmethod
+    async def _close_writer(writer: asyncio.StreamWriter) -> None:
+        try:
+            await writer.drain()
+            writer.close()
+        except (ConnectionError, RuntimeError):
+            pass
+
+    async def _serve_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
+                                peername: object) -> None:
+        try:
+            first = await asyncio.wait_for(reader.readline(), HELLO_TIMEOUT)
+        except (asyncio.TimeoutError, ConnectionError, ValueError):
+            await self._close_writer(writer)
+            return
+        if first.strip() == b"HEALTH":
+            # Health check (container HEALTHCHECK); answered quietly.
+            writer.write(encode("OK", rooms=len(self.rooms), players=len(self.players)).encode() + b"\n")
+            await self._close_writer(writer)
+            return
         player = Player(pid=self.next_pid, writer=writer)
         self._writers.add(writer)
         self.next_pid += 1
@@ -161,11 +209,9 @@ class Server:
         if sock is not None:
             import socket as _socket
             sock.setsockopt(_socket.IPPROTO_TCP, _socket.TCP_NODELAY, 1)
-        peername = writer.get_extra_info("peername")
         log.info("connection %d from %s", player.pid, peername)
         pinger = asyncio.create_task(self._pinger(player))
         try:
-            first = await asyncio.wait_for(reader.readline(), HELLO_TIMEOUT)
             if not first or not self._hello(player, first.decode("utf-8", "replace")):
                 return
             self.players[player.pid] = player
@@ -492,14 +538,31 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--port", type=int, default=int(os.environ.get("CORSIXTH_MP_PORT", "47800")))
     parser.add_argument("--motd", default=os.environ.get("CORSIXTH_MP_MOTD", ""))
     parser.add_argument("--log-level", default=os.environ.get("CORSIXTH_MP_LOG", "INFO"))
+    parser.add_argument("--max-connections", type=int,
+                        default=int(os.environ.get("CORSIXTH_MP_MAX_CONNECTIONS", MAX_CONNECTIONS)))
+    parser.add_argument("--max-per-address", type=int,
+                        default=int(os.environ.get("CORSIXTH_MP_MAX_PER_ADDRESS", MAX_PER_ADDRESS)))
     args = parser.parse_args(argv)
     logging.basicConfig(level=args.log_level.upper(),
                         format="%(asctime)s %(levelname)s %(message)s")
 
     async def run() -> None:
-        server = Server(motd=args.motd)
+        server = Server(motd=args.motd, max_connections=args.max_connections,
+                        max_per_address=args.max_per_address)
         await server.start(args.host, args.port)
-        await server.serve_forever()
+        # Stop cleanly on SIGTERM (docker stop) as well as Ctrl+C.
+        stop = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            try:
+                loop.add_signal_handler(sig, stop.set)
+            except (NotImplementedError, RuntimeError):
+                pass  # e.g. Windows; Ctrl+C still raises KeyboardInterrupt
+        serving = asyncio.create_task(server.serve_forever())
+        await stop.wait()
+        log.info("shutting down")
+        serving.cancel()
+        await server.close()
 
     try:
         asyncio.run(run())
