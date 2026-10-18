@@ -11,7 +11,8 @@
 #   3. one player changes money locally only -> DESYNC (found by the game
 #      and by the server)
 #   4. one player leaves mid-game -> the other is told and carries on alone;
-#      MULTIPLAYER > PLAYERS lists both with a ping, then the leaver as left
+#      MULTIPLAYER > PLAYERS lists both with a ping, then the leaver as left;
+#      the room the leaver was furnishing is taken over (room_takeover)
 #   5. rooms: both draw a room on the same spot in the same hour (one wins
 #      on both machines), the other player sees the reserved outline, a
 #      later room elsewhere, a window -> IN SYNC, same rooms on both
@@ -34,14 +35,17 @@
 #      office furnished by hand (one command per object, then confirmed),
 #      toilets drawn and cancelled while furnishing -> IN SYNC; no door or
 #      window markers left on the floor (windows on every wall)
+#  12. room editing: a GP's office built and furnished by hand, then edited
+#      while patients are about (picked up, placed, bought, moved, confirmed)
+#      and removed; every edit command ok, IN SYNC, no markers left
 #  11. save and continue: a co-op game saved with File > Save, continued from
 #      the lobby by the same players (other host, own hospitals by name),
 #      loaded state identical to the saved one -> IN SYNC, commands after it;
 #      an error in one game's screen tick is reported and that game carries on
 # With MP_REFEREE=1 the local server also runs its headless referee for every
-# room, and four more checks: 12. the referee agrees with the players in every
-# room except 'cheat' (that one desyncs before the referee is there); 13, 14.
-# desync repair in a shared and a co-op game; 15. rejoin after a quit.
+# room, and four more checks: 13. the referee agrees with the players in every
+# room except 'cheat' (that one desyncs before the referee is there); 14, 15.
+# desync repair in a shared and a co-op game; 16. rejoin after a quit.
 # Exits 0 only if all checks behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
@@ -78,7 +82,7 @@ else
     export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
     export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/referee"
     export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
-    export MP_REFEREE_PROBE_SCENARIO="crowd=busy;staff=busy" # the probes' own start, see below
+    export MP_REFEREE_PROBE_SCENARIO="crowd=busy;staff=busy;edit=busy" # the probes' own start, see below
   fi
   PYTHONPATH="$source_dir/mp_server" python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
     --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
@@ -132,7 +136,8 @@ sleep 1
 run_probe dave MP_ROLE=join MP_ROOM=cheat MP_STEPS=400 MP_UI_SCRIPT="50:cheat" & pids+=($!)
 run_probe erin MP_ROLE=host MP_ROOM=leave MP_STEPS=800 MP_UI_SCRIPT="100:buy:bench;250:players;600:players" & pids+=($!)
 sleep 1
-run_probe frank MP_ROLE=join MP_ROOM=leave MP_STEPS=800 MP_UI_SCRIPT="300:quit" & pids+=($!)
+run_probe frank MP_ROLE=join MP_ROOM=leave MP_STEPS=800 MP_FURNISH_PACE=40 \
+  MP_UI_SCRIPT="200:furnishroom:gp:5:5;300:quit" & pids+=($!)
 run_probe gina MP_ROLE=host MP_ROOM=build MP_STEPS=900 MP_DRAW_EVERY=4   MP_UI_SCRIPT="100:room:gp:5:5:window;400:buy:bench" & pids+=($!)
 sleep 1
 run_probe hugo MP_ROLE=join MP_ROOM=build MP_STEPS=900   MP_UI_SCRIPT="100:room:pharmacy:4:4;300:room:toilets:4:4" & pids+=($!)
@@ -158,6 +163,12 @@ run_probe wade MP_ROLE=host MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
 sleep 1
 run_probe yara MP_ROLE=join MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
   MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront;500:furnishroom:gp:5:5;750:cancelroom:toilets:4:4;900:uistate;950:overlay" & pids+=($!)
+# Room editing: ed builds a GP's office, then edits it while patients are
+# about (pick up, place, buy, move, confirm) and later removes it; flo watches.
+run_probe ed MP_ROLE=host MP_ROOM=edit MP_STEPS=1400 MP_SCENARIO=busy \
+  MP_UI_SCRIPT="100:furnishroom:gp:5:5;500:editroom:gp:pickup:cabinet+place+buy:first+place+move:1:0+place+done;950:overlay;1000:editroom:gp:delete;1300:overlay;1310:uistate" & pids+=($!)
+sleep 1
+run_probe flo MP_ROLE=join MP_ROOM=edit MP_STEPS=1400 MP_SCENARIO=busy MP_UI_SCRIPT="1350:overlay" & pids+=($!)
 # Save and continue: a co-op game saves at step 300 (File > Save) and ends;
 # then the same two players continue it from the lobby, the other one
 # hosting this time (each gets their own hospital back by name).
@@ -253,8 +264,10 @@ lists4 = re.findall(r'UI: players at step \d+: (.*)', e)
 listed = (len(lists4) == 2 and re.search(r'erin\|[^|]*\|\d+ ms\|you', lists4[0]) is not None
           and re.search(r'frank\|[^|]*\|[^|]*\|playing', lists4[0]) is not None  # (no ping yet: frank's game lasts a second)
           and 'frank|' in lists4[1] and '|-|left the game|' in lists4[1])
-ok4 = told and alone and listed and result('erin').startswith('IN SYNC through step 800')
-print(f"4. Player leaves:           told: {told}; carried on alone to step 800: {alone}; player list: {listed} {lists4[-1] if lists4 else ''}")
+# frank left while furnishing a room by hand: erin's game takes it over.
+taken4 = re.search(r'room_takeover -> ok', e) is not None
+ok4 = told and alone and listed and taken4 and result('erin').startswith('IN SYNC through step 800')
+print(f"4. Player leaves:           told: {told}; carried on alone to step 800: {alone}; room taken over: {taken4}; player list: {listed} {lists4[-1] if lists4 else ''}")
 fail |= not ok4
 
 g, h = log('gina'), log('hugo')
@@ -335,12 +348,36 @@ ok10 = clean10 and clicks10 and (result('wade').startswith('IN SYNC through step
         and cw == applied('yara') and kinds10.count('pay_rise') == 2 and kinds10.count('probe_raise') == 2
         and 'fire_staff' in kinds10 and kinds10.count('queue_move') >= 1 and 'probe_patients' in kinds10
         and 'move_object' in kinds10 and 'sell_object' in kinds10
-        and kinds10.count('room_object') >= 2 and 'room_finish' in kinds10 and 'room_abort' in kinds10
+        and kinds10.count('room_object') >= 2 and 'room_finish' in kinds10 and 'room_unbuild' in kinds10 and 'room_delete' in kinds10
         and rooms10 == re.search(r'rooms built: (.*)', y_).group(1)
         and drawn10.get('gp', '-') in rooms10.split() and drawn10.get('toilets', '-') not in rooms10.split()
         and 'accepted the pay rise' in y_ and 'declined the pay rise' in y_)
 print(f"10. Staff and queues:       {result('wade')}; commands {len(okw)}/{len(cw)} ok, identical: {cw == applied('yara')}; {' '.join(kinds10)}; rooms {rooms10 or 'none'}; clicks after furnishing: {clicks10}; markers left: {'/'.join(marks10) or '-'}")
 fail |= not ok10
+
+ed, fl = log('ed'), log('flo')
+ce = applied('ed')
+kinds12 = sorted(set(re.search(r'#\d+ (\w+) ->', x).group(1) for x in ce if x.endswith('-> ok')))
+# (A spot the probe tries for an object may be refused; it tries the next.)
+bad12 = [x for x in ce if not x.endswith('-> ok') and 'retry' not in x and 'room_object -> rejected' not in x]
+steps12 = re.findall(r'UI: edit (\S+) (ok|FAILED[^\n]*)', ed)
+failed12 = [f"{s} {r}" for s, r in steps12 if r != 'ok']
+want12 = ['room_buy', 'room_delete', 'room_edit', 'room_finish', 'room_object', 'room_pickup',
+          'room_rebuild', 'room_unbuild']
+moved12 = re.search(r'UI: edit: room now at (\d+),(\d+) \(was (\d+),(\d+)\)', ed)
+marks12 = re.findall(r'UI: overlay at step \d+: (\d+) marks', ed + fl)
+rooms12 = re.search(r'rooms built: (.*)', ed)
+clicks12 = 'world hit test on, edit_room false' in ''.join(l for l in ed.splitlines() if 'UI: state at step' in l)
+ok12 = (result('ed').startswith('IN SYNC through step 1400') and result('flo').startswith('IN SYNC through step 1400')
+        and ce == applied('flo') and all(k in kinds12 for k in want12) and not bad12
+        and len(steps12) == 8 and not failed12 and moved12 is not None and moved12.group(1, 2) != moved12.group(3, 4)
+        and marks12 == ['0', '0', '0'] and clicks12
+        and rooms12 is not None and rooms12.group(1) == re.search(r'rooms built: (.*)', fl).group(1)
+        and f"gp@{moved12.group(1)},{moved12.group(2)}" not in rooms12.group(1).split())  # the edited room, removed
+print(f"12. Room editing:           {result('ed')} / {result('flo')}; steps ok {len(steps12) - len(failed12)}/8 {' '.join(failed12)}; "
+      f"moved {moved12.group(3, 4) if moved12 else '-'} -> {moved12.group(1, 2) if moved12 else '-'}; commands {' '.join(kinds12)}; "
+      f"refused {len(bad12)}; markers {'/'.join(marks12)}; clicks {clicks12}; rooms at the end {rooms12.group(1) if rooms12 else '-'}")
+fail |= not ok12
 
 sa, to, t2, s2 = log('sara'), log('tom'), log('tom-2'), log('sara-2')
 saved_s = re.search(r"SAVED savegame (\S+) at step (\d+): (.*)", sa)
@@ -372,13 +409,13 @@ print(f"11. Save and continue:      saved at step {saved_t.group(2) if saved_t e
 fail |= not ok11
 
 if with_referee:
-    rooms = ['ward', 'leave', 'build', 'crowd', 'fax', 'coop', 'events', 'staff']
+    rooms = ['ward', 'leave', 'build', 'crowd', 'fax', 'coop', 'events', 'staff', 'edit']
     connected = [r for r in rooms if f"room '{r}': referee connected" in server]
     differ = re.findall(r"room '(\w+)': the players differ from the referee", server)
     confirmed = dict(re.findall(r"room '(\w+)': referee confirmed steps through (\d+)", server))
     def confirmed_after(room): return confirmed.get(room, 0)
     ok10 = connected == rooms and not differ and all(int(confirmed.get(r, 0)) > 300 for r in rooms)
-    print(f"12. Headless referee:       connected in {len(connected)}/{len(rooms)} rooms; "
+    print(f"13. Headless referee:       connected in {len(connected)}/{len(rooms)} rooms; "
           f"differs in {differ or 'none'}; confirmed through " +
           ", ".join(f"{r} {confirmed.get(r, 0)}" for r in rooms))
     fail |= not ok10
@@ -395,7 +432,7 @@ if with_referee:
               and result(join).startswith('IN SYNC through step 1000')
               and int(confirmed_after(room)) >= 900)
         where = f"at step {fixed.group(1)}, save {int(fixed.group(2)) // 1024} KiB" if fixed else "not repaired"
-        print(f"{13 + n}. Desync repair ({room}):{' ' * (8 - len(room))}{result(host)} / {result(join)}; "
+        print(f"{14 + n}. Desync repair ({room}):{' ' * (8 - len(room))}{result(host)} / {result(join)}; "
               f"{where}; commands after it ok on both: {same and later}")
         fail |= not ok
 
@@ -410,7 +447,7 @@ if with_referee:
             and result('vera-back').startswith('IN SYNC through step 1500')
             and after_u == after_v and kinds == ['hire', 'place_object']
             and int(confirmed_after('back')) >= 1400)
-    print(f"15. Rejoin after a crash:   {result('uma')} / {result('vera-back')}; "
+    print(f"16. Rejoin after a crash:   {result('uma')} / {result('vera-back')}; "
           f"rejoined at step {at if rejoined else '-'}; commands after it on both: {after_u == after_v} {kinds}")
     fail |= not ok13
 sys.exit(1 if fail else 0)

@@ -660,7 +660,13 @@ end
 
 function Room:enterEditMode()
   local ui = self.world.ui
-  if MultiplayerSession.blockUnsupported(ui) then return end -- editing rooms
+  if TheApp.mp_session then
+    -- Multiplayer: a room_edit command asked for this; every peer opens the
+    -- editor (shown to its player). Other emptied inactive rooms (crashed)
+    -- open nothing.
+    if self.mp_edit then corsixth.require("mp_room_builder").startEdit(self.world, self) end
+    return
+  end
 
   -- If we have the window for this room machine open, close it
   local window = ui:getWindow(UIMachine)

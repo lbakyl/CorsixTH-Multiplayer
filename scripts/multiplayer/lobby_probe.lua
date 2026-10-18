@@ -49,6 +49,7 @@
 --                       furnishroom:<id>:<w>:<h>        draw a room and place its furniture
 --                                                       by hand, one object at a time
 --                       cancelroom:<id>:<w>:<h>         draw a room, cancel while furnishing
+--                       editroom:<id>:<steps>           edit a room (see builder.edit_tick)
 --   MP_FURNISH_PACE   game hours between furnishing steps (default 0)
 --   MP_CONTINUE       host: create the room continuing a saved multiplayer
 --                     game (its label, or "latest"); UI action mpsave saves one
@@ -285,6 +286,7 @@ local function run()
   local repairs = session.restarts or 0
   local waiting_rejoin -- restarts seen when the "waitrejoin" pause began
   local furnishing -- state of a room being furnished by hand (furnishroom)
+  local editing -- state of a room being edited (editroom)
   while session.step < target and (expect_repair or not session.desync) and not quit do
     local before = session.step
     tick()
@@ -325,6 +327,7 @@ local function run()
       world:setUserSpeed("Max speed")
     end
     if furnishing and builder.furnish_tick(world, furnishing, log) then furnishing = nil end
+    if editing and not furnishing and builder.edit_tick(world, editing, log) then editing = nil end
     -- In a person's game: once everybody else has left, leave too, so the
     -- room closes instead of running on with nobody watching.
     if scenario == "none" and not quit and #session.peers <= 1 then
@@ -513,6 +516,12 @@ local function run()
             furnishing = {cancel = a == "cancelroom", pace = furnish_pace,
                 not_before = furnish_pace and session.step + furnish_pace}
           end
+        elseif a == "editroom" then
+          -- Edit a room of this player's: editroom:<room>:<step>+<step>...
+          local id, steps = entry.arg:match("^([%w_]+):(.+)$")
+          local list = {}
+          for s in steps:gmatch("[^+]+") do list[#list + 1] = s end
+          editing = {room_type = id, steps = list}
         elseif a == "moveobject" or a == "sellobject" then
           -- Pick up a corridor object of this hospital (right click), then
           -- put it down a few tiles away, or sell it (close the window).

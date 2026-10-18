@@ -279,6 +279,15 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
     from a player's screenshot; listing the overlay layer of his save showed
     the four tiles. `builder.windowCell` turns them back; loading a shared
     save clears old markers.
+34. **Room editing: one editor per peer, single player code on it.** Every
+    edit step (pick up, buy, take the walls down, draw again, remove) is a
+    command that runs the single player editor's own function on that
+    room's editor on every peer, inside `with_editor` (the right hospital,
+    fixed settings, the local UI restored). Only its player's machine shows
+    the editor; the others keep it quiet (no blueprint on their map). The
+    reachability rule for placements had to change for edited rooms: a
+    placement may not cut off a use tile that is reachable now, and a wall
+    object is used from its own tile (an extinguisher failed every spot).
 
 ## 8. Next steps
 
@@ -293,10 +302,9 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
    player, level goals per player, per-hospital heating, loans, patient
    referrals, renting rooms, selling research; hide other players' adviser
    messages.
-5. **Rooms**: edit and sell existing rooms, move objects inside rooms, buy
-   extra objects while furnishing.
-6. **Picking up** staff as a command.
-7. **Encryption** (S8): passwords travel in clear text now.
+5. **Picking up** staff as a command (rooms are done: building, furnishing,
+   editing, moving and removing, lesson 34).
+6. **Encryption** (S8): passwords travel in clear text now.
 
 ## 9. Open questions
 

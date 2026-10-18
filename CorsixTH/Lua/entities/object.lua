@@ -766,7 +766,16 @@ function Object:onClick(ui, button, data)
       -- Multiplayer: only corridor objects, outside the room editor; moving
       -- one is a command (UIPlaceObjects:placeObject), so the object stays
       -- where it is in the shared game until then.
-      if window or self:getRoom() or not self.object_type.corridor_object then
+      local room = self:getRoom()
+      if window and window.mp_room_id and room and room == window.room and window.visible then
+        -- An object of the room this player furnishes or edits: every peer
+        -- picks it up (room_pickup); it then waits in the editor's list.
+        TheApp.mp_session:issue({kind = "room_pickup", room = window.mp_room_id, object = self.mp_id})
+        window:stopPickupItems()
+        ui:playSound("pickup.wav")
+        return
+      end
+      if window or room or not self.object_type.corridor_object then
         MultiplayerSession.blockUnsupported(ui)
         return
       end

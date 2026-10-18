@@ -654,7 +654,9 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
   if cleared > 0 then self.log("multiplayer: cleared " .. cleared .. " stale door/window markers") end
   -- Rooms this player was furnishing by hand: their editors again.
   for _, entry in pairs(world.mp_furnishing or {}) do
-    if entry.peer == session.peer_id and not self.is_referee then room_builder.show(world, entry) end
+    if entry.peer == session.peer_id and not self.is_referee then
+      if entry.unbuilt then room_builder.startRedraw(world, entry) else room_builder.show(world, entry) end
+    end
   end
   world:applySharedSpeed(self.is_referee and "And then some more" or (self.shared_speed or "Normal"))
   self.log(string.format("multiplayer: loaded the shared save at step %d (%d bytes): %s", step, #data,

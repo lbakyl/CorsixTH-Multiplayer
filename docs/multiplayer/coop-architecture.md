@@ -89,15 +89,21 @@ for that, the rules new code must follow, and what is still missing.
 - **Epidemics** stay disabled in co-op (`hospital.epidemics_disabled`):
   the epidemic countdown and the vaccination cursor still live in windows.
   Move the countdown to the simulation like the emergency one.
-- **Editing and selling rooms, moving objects inside rooms, buying extra
-  objects for a new room, picking up staff**: blocked. Each needs a command
-  with explicit positions, like the ones done on `mp/coop-gaps`: firing
-  (`fire_staff`), pay rise answers (`pay_rise`), the queue window
-  (`queue_move`, `queue_redirect`), moving and selling corridor objects
-  (`move_object`, `sell_object`) and furnishing a new room by hand
-  (`build_room` with `furnish=1`, then `room_object` per object and
-  `room_finish` or `room_abort`; see `mp_room_builder.lua`). A room left
-  half-furnished by a player who quits stays unfinished.
+- **Picking up staff**: blocked; it needs a command with explicit
+  positions, like the ones done on `mp/coop-gaps`: firing (`fire_staff`),
+  pay rise answers (`pay_rise`), the queue window (`queue_move`,
+  `queue_redirect`) and moving and selling corridor objects (`move_object`,
+  `sell_object`).
+- **Rooms** are commands throughout (`mp_room_builder.lua`): building
+  (`build_room`, with `furnish=1` furnished by hand: `room_object`,
+  `room_pickup`, `room_buy`, then `room_finish`), editing a built room
+  (`room_edit`: it empties, then the same editor commands), moving or
+  resizing (`room_unbuild`, then `room_rebuild` with the new outline, door
+  and windows) and removing (`room_delete`, or `room_abort` for a room
+  closed unfinished). Every peer keeps an editor for such a room and runs
+  the single player editor code on it; only its player's machine shows it.
+  A player who leaves hands their rooms over (`room_takeover`: finished, or
+  removed if their walls are down).
 - **Trades beyond money and staff**: loans between players, patient
   referrals, renting rooms, selling research.
 - **Competitive mode**: a winner, and approval votes for speed and pause.

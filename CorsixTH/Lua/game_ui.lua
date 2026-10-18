@@ -724,7 +724,17 @@ function GameUI:onMouseUp(code, x, y)
       if button == "left" then -- Take the clicked one.
         local room = self.app.world:getRoom(self:ScreenToWorld(x, y))
         if room then
-          if not room.crashed then
+          if not room.crashed and MultiplayerSession.actionsAreCommands() then
+            -- Multiplayer: every peer empties the room; its editor opens
+            -- for this player once nobody is inside (room_edit).
+            local session = TheApp.mp_session
+            session:issue({kind = "room_edit", room = room.id,
+                hospital = self.app.world:getHospitalIndex(self.hospital)})
+            self:setEditRoom(false)
+            if self.adviser then
+              self.adviser:say({text = "The room is being emptied for editing.", priority = 5})
+            end
+          elseif not room.crashed then
             self:setCursor(self.waiting_cursor)
             self.edit_room = room
             room:tryToEdit()

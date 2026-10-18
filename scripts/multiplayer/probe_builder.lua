@@ -452,9 +452,20 @@ function builder.furnish_tick(world, state, log)
   state.started = true
   state.waited = 0
   if state.cancel then
-    log(string.format("UI: cancelled furnishing room #%d", dlg.mp_room_id))
-    dlg:cancel()
-    return true
+    -- Cancel: the walls come down (room_unbuild), then cancel once more in
+    -- the outline phase to remove the room (room_delete), as in single player.
+    local entry = world.mp_furnishing and world.mp_furnishing[dlg.mp_room_id]
+    if not state.cancelled then
+      log(string.format("UI: cancelled furnishing room #%d", dlg.mp_room_id))
+      state.cancelled = dlg.mp_room_id
+      dlg:cancel()
+      return false
+    elseif entry and entry.unbuilt and dlg.phase == "walls" then
+      log(string.format("UI: removing room #%d", dlg.mp_room_id))
+      dlg:cancel()
+      return true
+    end
+    return false
   end
   if state.pending then
     -- Wait until the object is in the room (or the command was refused).
@@ -470,13 +481,14 @@ function builder.furnish_tick(world, state, log)
       return false
     end
   end
-  if dlg.confirm_button.enabled then
+  if dlg.confirm_button.enabled and not (state.no_confirm and dlg.objects[1]) then
+    if state.no_confirm then return true end
     log(string.format("UI: furnished room #%d; confirming", dlg.mp_room_id))
     dlg:confirm()
     return true
   end
   local o = dlg.objects[1]
-  if not o then return false end
+  if not o then return state.no_confirm == true end
   state.tried = state.tried or {}
   local room = dlg.room
   local rx, ry, rw, rh = room.x, room.y, room.width, room.height
@@ -506,6 +518,164 @@ function builder.furnish_tick(world, state, log)
   log("UI: furnishing: no place left for " .. o.object.id)
   dlg:cancel()
   return true
+end
+
+--! Edit one of this player's rooms like a person would (multiplayer): the
+--! edit room button and a click on the room, then the steps in state.steps:
+--!   pickup:<object>   pick up an object of the room (pick up mode, click)
+--!   buy:<object>      buy one more in the purchase window (first allowed if "first")
+--!   place             put every object waiting in the list into the room
+--!   move:<dx>:<dy>    cancel (walls down), draw the room again shifted
+--!   done              confirm (the room opens again)
+--!   delete            cancel twice (walls down, then remove the room)
+--! Returns true when finished. Logs "UI: edit <step> ok" or "... FAILED".
+function builder.edit_tick(world, state, log)
+  local ui = world.ui
+  local session = TheApp.mp_session
+  local step = session.step
+  local entry = state.room and world.mp_furnishing and world.mp_furnishing[state.room.id]
+  local dlg = entry and entry.dlg
+  local shown = dlg and ui.edit_room == dlg
+  local function count()
+    local n = 0
+    for _, o in ipairs(dlg.objects) do n = n + o.qty end
+    return n
+  end
+  local function finish_step(ok, what)
+    log(string.format("UI: edit %s %s at step %d", state.current or "?", ok and "ok" or ("FAILED: " .. what), step))
+    state.current, state.wait = nil, nil
+    state.i = state.i + 1
+    if not ok then state.i = #state.steps + 1 end
+  end
+  if not state.room then
+    for _, room in pairs(world.rooms) do
+      if room.room_info.id == state.room_type and room.hospital == ui.hospital and room.built and
+          room.is_active and (not state.room or room.id < state.room.id) then
+        state.room = room
+      end
+    end
+    if not state.room then log("UI: edit: no " .. state.room_type .. " to edit") return true end
+    local x, y = state.room.x + 1, state.room.y + 1
+    ui:setEditRoom(true)
+    local sx, sy = ui:WorldToScreen(x + 0.5, y + 0.5)
+    ui:onMouseUp(1, sx, sy)
+    log(string.format("UI: edit: clicked %s #%d at %d,%d", state.room_type, state.room.id, x, y))
+    state.i, state.since = 1, step
+    return false
+  end
+  if state.i > #state.steps then return true end
+  -- Wait for this player's editor (the room empties first).
+  if not state.current then
+    if not (shown and dlg.phase == "objects") then
+      if step - state.since > 300 then
+        state.current = state.current or state.steps[state.i]
+        finish_step(false, "editor did not open")
+      end
+      return false
+    end
+    state.current = state.steps[state.i]
+    state.since = step
+    local name, a1, a2 = state.current:match("^(%w+):?([%w_%-]*):?([%-%d]*)$")
+    state.name, state.a1, state.a2 = name, a1, a2
+    if name == "pickup" then
+      local obj
+      for o in pairs(dlg.room.objects) do
+        if o.object_type.id == a1 and o ~= dlg.room.door and (not obj or o.mp_id < obj.mp_id) then obj = o end
+      end
+      if not obj then finish_step(false, "no " .. a1) return false end
+      state.before = count()
+      dlg:pickupItems()
+      obj:onClick(ui, "left")
+    elseif name == "buy" then
+      dlg:purchaseItems()
+      local shop = ui:getWindow(UIFurnishCorridor)
+      if not shop then finish_step(false, "no purchase window") return false end
+      local index
+      for i, o in ipairs(shop.objects) do
+        if not index and (a1 == "first" or o.object.id == a1) then index = i end
+      end
+      if not index then shop:close() finish_step(false, "nothing to buy") return false end
+      state.bought = shop.objects[index].object.id
+      state.before = count()
+      shop:purchaseItem(index, 1)
+      shop:confirm()
+    elseif name == "place" then
+      state.placing = {no_confirm = true}
+    elseif name == "move" then
+      state.old = {x = dlg.room.x, y = dlg.room.y, w = dlg.room.width, h = dlg.room.height}
+      dlg:cancel()
+    elseif name == "done" then
+      dlg:confirm()
+    elseif name == "delete" then
+      state.deleting = 1
+      dlg:cancel()
+    else
+      finish_step(false, "unknown step")
+    end
+    return false
+  end
+  local name = state.name
+  if step - state.since > 400 then finish_step(false, "timed out") return false end
+  if name == "pickup" then
+    if shown and count() > state.before then finish_step(true) end
+  elseif name == "buy" then
+    if shown and count() > state.before then
+      log("UI: edit: bought " .. state.bought)
+      finish_step(true)
+    end
+  elseif name == "place" then
+    if shown and dlg.phase == "objects" and builder.furnish_tick(world, state.placing, log) then
+      finish_step(#dlg.objects == 0, "objects left")
+    end
+  elseif name == "move" then
+    if shown and entry.unbuilt and dlg.phase == "walls" and not state.drawn then
+      -- Draw it again a little further (the first offset that works).
+      local dx, dy = tonumber(state.a1) or 1, tonumber(state.a2) or 0
+      local offsets = {{dx, dy}, {-dx, -dy}, {dy, dx}, {-dy, -dx}, {0, 0}}
+      for _, d in ipairs(offsets) do
+        if not state.drawn then
+          dlg:setBlueprintRect(state.old.x + d[1], state.old.y + d[2], state.old.w, state.old.h)
+          if dlg.confirm_button.enabled then
+            dlg:confirm()
+            if dlg.phase == "door" then
+              local r = dlg.blueprint_rect
+              for tx = r.x + 1, r.x + r.w - 2 do
+                if dlg.phase == "door" then
+                  dlg:setDoorBlueprint(tx, r.y + r.h - 1, "south")
+                  if dlg.blueprint_door.valid then dlg:placeDoorBlueprint() end
+                end
+              end
+              if dlg.phase == "windows" then
+                state.drawn = {x = r.x, y = r.y}
+                log(string.format("UI: edit: drew the room again at %d,%d", r.x, r.y))
+                dlg:confirm()
+              else
+                dlg:cancel()
+              end
+            end
+          end
+        end
+      end
+      if not state.drawn then finish_step(false, "no place to move to") end
+    elseif shown and state.drawn and not entry.unbuilt and dlg.phase == "objects" then
+      log(string.format("UI: edit: room now at %d,%d (was %d,%d)", dlg.room.x, dlg.room.y,
+          state.old.x, state.old.y))
+      state.drawn = nil
+      finish_step(true)
+    end
+  elseif name == "done" then
+    if not entry and state.room.is_active then finish_step(true) end
+  elseif name == "delete" then
+    if state.deleting == 1 and shown and entry.unbuilt and dlg.phase == "walls" then
+      state.deleting = 2
+      dlg:cancel() -- a paid room asks first
+      local confirm = ui:getWindow(UIConfirmDialog)
+      if confirm then confirm:ok() end
+    elseif state.deleting == 2 and not world.rooms[state.room.id] then
+      finish_step(true)
+    end
+  end
+  return false
 end
 
 --! A free w x h rectangle that has a person standing in it right now

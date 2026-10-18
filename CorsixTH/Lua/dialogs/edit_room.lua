@@ -110,8 +110,26 @@ function UIEditRoom:_mpLeaveFurnishing(finish)
   return true
 end
 
+--! Multiplayer: the furnishing entry of this editor's room, when this
+--! player's actions are commands (nil otherwise).
+function UIEditRoom:_mpEntry()
+  if not (self.mp_room_id and MultiplayerSession.actionsAreCommands()) then return nil end
+  return self.world.mp_furnishing and self.world.mp_furnishing[self.mp_room_id]
+end
+
+--! Multiplayer: remove a room whose walls are down (room_delete), as closing
+--! or cancelling the editor in its outline phase does in single player.
+function UIEditRoom:_mpDeleteUnbuilt()
+  local entry = self:_mpEntry()
+  if not (entry and entry.unbuilt) then return false end
+  TheApp.mp_session:issue({kind = "room_delete", room = self.mp_room_id})
+  corsixth.require("mp_room_builder").hide(self.world, entry)
+  return true
+end
+
 function UIEditRoom:close(...)
   if self.phase == "objects" and self:_mpLeaveFurnishing() then return end
+  if self:_mpDeleteUnbuilt() then return end
   if MultiplayerSession.actionsAreCommands() and not self.mp_issued and not self.room then
     TheApp.mp_session:showBlueprint(nil) -- no longer drawing: free the area again
   end
@@ -159,6 +177,7 @@ end
 
 function UIEditRoom:abortRoom()
   if self.phase == "objects" and self:_mpLeaveFurnishing(false) then return end
+  if self:_mpDeleteUnbuilt() then return end
   if self.paid then
     -- Return half the cost.
     local progress = self.ui.hospital.research.research_progress
@@ -210,8 +229,14 @@ function UIEditRoom:cancel()
     end
     self.ui:setCursor(self.ui.default_cursor)
   elseif self.phase == "objects" then
-    -- (Multiplayer: no going back to the door; cancelling removes the room.)
-    if self:_mpLeaveFurnishing(false) then return end
+    -- Multiplayer: every peer takes the walls down (room_unbuild); then
+    -- this player draws the room again, or cancels once more to remove it.
+    local entry = self:_mpEntry()
+    if entry then
+      TheApp.mp_session:issue({kind = "room_unbuild", room = self.mp_room_id})
+      corsixth.require("mp_room_builder").hide(self.world, entry)
+      return
+    end
     self:stopPickupItems()
     self:returnToDoorPhase()
     self.world:resetSideObjects()
@@ -282,6 +307,18 @@ function UIEditRoom:_issueBuildRoom()
   local builder = corsixth.require("mp_room_builder")
   local session = TheApp.mp_session
   local rect, door = self.blueprint_rect, self.blueprint_door
+  local entry = self:_mpEntry()
+  if entry and entry.unbuilt then
+    -- A room drawn again (moved or resized): every peer builds it there.
+    session:issue({kind = "room_rebuild", room = self.mp_room_id,
+        x = rect.x, y = rect.y, w = rect.w, h = rect.h,
+        door_x = door.floor_x, door_y = door.floor_y, door_wall = door.orig_wall,
+        windows = builder.encodeWindows(builder.windowsOf(self))})
+    session:showRemoteBlueprint(session.peer_id, rect)
+    self.ui:playSound("buildclk.wav")
+    builder.hide(self.world, entry)
+    return
+  end
   local hospital_index = 1
   for i, h in ipairs(self.world.hospitals) do
     if h == self.ui.hospital then hospital_index = i end
@@ -1276,7 +1313,8 @@ function UIEditRoom:setBlueprintRect(x, y, w, h)
   rect.w = w
   rect.h = h
   -- In multiplayer the other players see the outline as a reserved area.
-  if MultiplayerSession.actionsAreCommands() and self.phase ~= "closed" and not self.room then
+  if MultiplayerSession.actionsAreCommands() and self.phase ~= "closed" and
+      (not self.room or self.phase == "walls") then
     TheApp.mp_session:showBlueprint(w > 0 and h > 0 and
         {room = self.room_type.id, x = x, y = y, w = w, h = h} or nil)
   end

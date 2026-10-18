@@ -158,51 +158,97 @@ function builder.releaseArea(world, x, y, w, h)
 end
 
 --! Would placing an object of `object_type` at (tx, ty) facing `o` keep the
---! use tile of every object in the room (this one included) reachable from
---! the entrance? The room editor's own checks allow layouts in which, for
---! example, the desk walls off the cabinet's use tile; a player would see
---! that and move things, but the automatic placement must avoid it (a doctor
---! looking for the cabinet would find none).
+--! use tile of every object in the room reachable from the entrance, and its
+--! own? The room editor's own checks allow layouts in which, for example, the
+--! desk walls off the cabinet's use tile; a player would see that and move
+--! things, but the automatic placement must avoid it (a doctor looking for
+--! the cabinet would find none). A use tile that is already cut off (a room
+--! edited after single player play) does not stop other placements.
 --!param placed (table) list of {footprint, use_x, use_y} already in the room
 local function keeps_room_usable(room, rect, placed, object_type, tx, ty, o)
   local orientation = object_type.orientations[o]
-  local blocked = {}
   local function key(x, y) return x * 1000 + y end
-  local uses = {}
-  local candidate = {footprint = {}, use_x = tx + orientation.use_position[1],
-      use_y = ty + orientation.use_position[2]}
+  local candidate = {footprint = {}}
+  local own = {}
   for _, t in ipairs(orientation.footprint) do
-    if not t.only_passable then candidate.footprint[#candidate.footprint + 1] = {tx + t[1], ty + t[2]} end
+    if not t.only_passable then
+      candidate.footprint[#candidate.footprint + 1] = {tx + t[1], ty + t[2]}
+      own[key(tx + t[1], ty + t[2])] = true
+    end
   end
-  for _, item in ipairs(placed) do
-    for _, xy in ipairs(item.footprint) do blocked[key(xy[1], xy[2])] = true end
-    uses[#uses + 1] = {item.use_x, item.use_y}
+  -- (A wall object, such as an extinguisher, is used from its own tile.)
+  if orientation.use_position and
+      not own[key(tx + orientation.use_position[1], ty + orientation.use_position[2])] then
+    candidate.use_x = tx + orientation.use_position[1]
+    candidate.use_y = ty + orientation.use_position[2]
   end
-  for _, xy in ipairs(candidate.footprint) do blocked[key(xy[1], xy[2])] = true end
-  uses[#uses + 1] = {candidate.use_x, candidate.use_y}
-
   local ex, ey = room:getEntranceXY(true)
-  if blocked[key(ex, ey)] then return false, candidate end
   local function inside(x, y)
     return x >= rect.x and x < rect.x + rect.w and y >= rect.y and y < rect.y + rect.h
   end
-  local seen, queue, head = {[key(ex, ey)] = true}, {{ex, ey}}, 1
-  while queue[head] do
-    local x, y = queue[head][1], queue[head][2]
-    head = head + 1
-    for _, d in ipairs({{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) do
-      local nx, ny = x + d[1], y + d[2]
-      local k = key(nx, ny)
-      if inside(nx, ny) and not blocked[k] and not seen[k] then
-        seen[k] = true
-        queue[#queue + 1] = {nx, ny}
+  -- The tiles reachable from the entrance with these items in the room.
+  local function reach(items)
+    local blocked = {}
+    for _, item in ipairs(items) do
+      for _, xy in ipairs(item.footprint) do blocked[key(xy[1], xy[2])] = true end
+    end
+    if blocked[key(ex, ey)] then return {} end
+    local seen, queue, head = {[key(ex, ey)] = true}, {{ex, ey}}, 1
+    while queue[head] do
+      local x, y = queue[head][1], queue[head][2]
+      head = head + 1
+      for _, d in ipairs({{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) do
+        local nx, ny = x + d[1], y + d[2]
+        local k = key(nx, ny)
+        if inside(nx, ny) and not blocked[k] and not seen[k] then
+          seen[k] = true
+          queue[#queue + 1] = {nx, ny}
+        end
       end
     end
+    return seen
   end
-  for _, u in ipairs(uses) do
-    if not seen[key(u[1], u[2])] then return false, candidate end
+  local before = reach(placed)
+  local with = {candidate}
+  for _, item in ipairs(placed) do with[#with + 1] = item end
+  local after = reach(with)
+  if candidate.use_x and not after[key(candidate.use_x, candidate.use_y)] then return false, candidate end
+  for _, item in ipairs(placed) do
+    if item.use_x then
+      local k = key(item.use_x, item.use_y)
+      if before[k] and not after[k] then return false, candidate end
+    end
   end
   return true, candidate
+end
+
+--! The objects in a room (not its doors) as {footprint, use_x, use_y}, for
+--! keeps_room_usable.
+function builder.roomItems(room)
+  local items = {}
+  for obj in pairs(room.objects) do
+    local orientation = obj.tile_x and obj.object_type.orientations and
+        obj.object_type.orientations[obj.direction]
+    local door = obj == room.door or obj == room.door2 or class.is(obj, Door) or class.is(obj, SwingDoor)
+    if orientation and not door then
+      local item = {footprint = {}}
+      for _, t in ipairs(orientation.footprint) do
+        if not t.only_passable then
+          item.footprint[#item.footprint + 1] = {obj.tile_x + t[1], obj.tile_y + t[2]}
+        end
+      end
+      local ux, uy
+      if orientation.use_position then
+        ux, uy = obj.tile_x + orientation.use_position[1], obj.tile_y + orientation.use_position[2]
+      end
+      for _, xy in ipairs(item.footprint) do
+        if xy[1] == ux and xy[2] == uy then ux = nil end -- used from its own tile
+      end
+      item.use_x, item.use_y = ux, ux and uy
+      items[#items + 1] = item
+    end
+  end
+  return items
 end
 
 local function try_build(world, hospital, cmd)
@@ -374,9 +420,11 @@ function builder.show(world, entry)
   if not is_shown(ui, dlg) then ui:addWindow(dlg) end
   ui.edit_room = dlg
   ui:setWorldHitTest(dlg.room)
-  -- Buying more objects and picking up placed ones are not commands yet.
-  if dlg.purchase_button then dlg.purchase_button:enable(false) end
-  if dlg.pickup_button then dlg.pickup_button:enable(false) end
+  -- Buying and picking up objects: only while placing them (room_buy,
+  -- room_pickup), not while the outline is drawn again.
+  local objects = dlg.phase == "objects"
+  if dlg.purchase_button then dlg.purchase_button:enable(objects) end
+  if dlg.pickup_button then dlg.pickup_button:enable(objects) end
   return true
 end
 
@@ -450,12 +498,11 @@ function builder.placeObject(world, entry, cmd)
     dlg:setBlueprintCell(cmd.x, cmd.y)
     if not dlg.object_blueprint_good then restore() return false, "tile not free" end
     if world:anyHumanoidObscuringArea(cmd.x, cmd.y) then restore() return false, "someone is in the way" end
-    local usable, item = keeps_room_usable(dlg.room, entry, entry.placed, object_type,
-        cmd.x, cmd.y, cmd.orientation)
+    local usable = keeps_room_usable(dlg.room, dlg.blueprint_rect, builder.roomItems(dlg.room),
+        object_type, cmd.x, cmd.y, cmd.orientation)
     if not usable then restore() return false, "it would block the room" end
     dlg.object_cell_x, dlg.object_cell_y = cmd.x, cmd.y
     dlg:placeObject()
-    entry.placed[#entry.placed + 1] = item
     restore()
     return true
   end)
@@ -469,7 +516,7 @@ function builder.finish(world, entry, auto)
   return with_editor(world, world.hospitals[entry.hospital], function()
     if dlg.phase ~= "objects" then return nil, "room is not being furnished" end
     if auto then
-      local ok, why = builder.autoFurnish(dlg, dlg.room, entry, entry.placed)
+      local ok, why = builder.autoFurnish(dlg, dlg.room, dlg.blueprint_rect, builder.roomItems(dlg.room))
       if not ok then return nil, why end
     end
     if not dlg:checkEnableConfirm() then return nil, "objects missing" end
@@ -483,6 +530,246 @@ function builder.abort(world, entry)
   return with_editor(world, world.hospitals[entry.hospital], function()
     if dlg.phase ~= "objects" then return false, "room is not being furnished" end
     dlg.confirm_button:enable(false) -- close() would finish a complete room
+    dlg:abortRoom()
+    return true
+  end)
+end
+
+--------------------------------------------------------------------------------
+-- Editing rooms. A room being furnished (new) or edited (built before) has an
+-- editor on every peer; its player's machine shows it. Every command below
+-- runs the single player editor code on that editor, so all peers change the
+-- room alike. entry.edit: a built room being edited; entry.unbuilt: its
+-- walls are down (moved or resized), its objects wait in the editor's list.
+--------------------------------------------------------------------------------
+
+--! Hidden editors draw nothing on the map (a blueprint under this machine's
+--! mouse would show another player's editor).
+local function quiet(world, dlg)
+  if not is_shown(world.ui, dlg) then
+    dlg:clearBlueprint()
+    dlg.object_cell_x, dlg.object_cell_y = nil, nil
+  end
+end
+
+--! Show the editor to its player again after a command changed it.
+function builder.showAgain(world, entry)
+  local session = TheApp.mp_session
+  if session and entry.peer == session.peer_id and not session.observer then
+    return builder.show(world, entry)
+  end
+end
+
+--! A room asked to be edited (room.mp_edit = {peer}) is empty now: open its
+--! editor on every peer, shown to its player. Called by Room:enterEditMode.
+function builder.startEdit(world, room)
+  local want = room.mp_edit
+  room.mp_edit = nil
+  local dlg = with_editor(world, room.hospital, function() return UIEditRoom(world.ui, room) end)
+  quiet(world, dlg)
+  local entry = {dlg = dlg, peer = want.peer, hospital = world:getHospitalIndex(room.hospital),
+      x = room.x, y = room.y, w = room.width, h = room.height, placed = {}, edit = true}
+  world.mp_furnishing = world.mp_furnishing or {}
+  world.mp_furnishing[room.id] = entry
+  local session = TheApp.mp_session
+  if session and want.peer == session.peer_id and not session.observer and
+      not builder.show(world, entry) then
+    -- Busy with another editor: open the room again.
+    session:issue({kind = "room_finish", room = room.id, auto = 1})
+  end
+  return entry
+end
+
+--! Pick up an object of the room (it goes back into the editor's list), as
+--! a click in single player's pick up mode does.
+function builder.pickUp(world, entry, obj)
+  local dlg = entry.dlg
+  return with_editor(world, world.hospitals[entry.hospital], function()
+    if dlg.phase ~= "objects" then return false, "room is not being furnished" end
+    local room = dlg.room
+    if not room.objects[obj] or obj == room.door or obj == room.door2 then
+      return false, "not in this room"
+    end
+    if obj.object_type.class == "Plant" or obj.object_type.class == "Machine" then
+      -- (Object:onClick) The handyman task for it goes too.
+      local task = obj.object_type.class == "Plant" and "watering" or "repairing"
+      local index = obj.hospital and obj.hospital:getIndexOfTask(obj.tile_x, obj.tile_y, task) or -1
+      if index ~= -1 then obj.hospital:removeHandymanTask(index, task) end
+    end
+    local direction = obj.direction
+    obj.picked_up = true
+    world:destroyEntity(obj)
+    dlg:stopPickupItems()
+    dlg:addObjects({{object = obj.object_type, qty = 1, existing_object = obj}}, false)
+    dlg:selectObjectType(obj.object_type)
+    dlg:checkEnableConfirm()
+    dlg:setOrientation(direction)
+    obj.orientation_before = direction
+    quiet(world, dlg)
+    return true
+  end)
+end
+
+--! Parse "id:qty,id:qty" into {id = qty}.
+function builder.decodeCounts(text)
+  local counts = {}
+  for id, n in tostring(text or ""):gmatch("([%w_]+):(%d+)") do
+    counts[id] = (counts[id] or 0) + tonumber(n)
+  end
+  return counts
+end
+
+function builder.encodeCounts(counts)
+  local ids = {}
+  for id, n in pairs(counts) do if n > 0 then ids[#ids + 1] = id end end
+  table.sort(ids)
+  local parts = {}
+  for _, id in ipairs(ids) do parts[#parts + 1] = id .. ":" .. counts[id] end
+  return table.concat(parts, ",")
+end
+
+--! Buy more objects for the room, or sell objects not placed yet, as the
+--! room editor's purchase window does (UIFurnishCorridor:confirm).
+--!param buy, sell ({id = qty})
+function builder.buy(world, entry, buy, sell)
+  local dlg = entry.dlg
+  return with_editor(world, world.hospitals[entry.hospital], function()
+    if dlg.phase ~= "objects" then return false, "room is not being furnished" end
+    local hospital = world.ui.hospital
+    local allowed = {}
+    local cfg_objects = world.map.level_config.objects
+    for _, id in ipairs(dlg.room.room_info.objects_additional) do
+      local object = TheApp.objects[id]
+      local progress = hospital.research.research_progress[object]
+      if cfg_objects[object.thob].AvailableForLevel == 1 and (not progress or progress.discovered) then
+        allowed[id] = true
+      end
+    end
+    local in_list = {}
+    for _, o in ipairs(dlg.objects) do in_list[o.object.id] = (in_list[o.object.id] or 0) + o.qty end
+    local ids = {}
+    for id in pairs(buy) do ids[#ids + 1] = id end
+    for id in pairs(sell) do if not buy[id] then ids[#ids + 1] = id end end
+    table.sort(ids)
+    local cost = 0
+    for _, id in ipairs(ids) do
+      if (buy[id] or 0) > 0 then
+        if not allowed[id] then return false, "cannot buy that" end
+        cost = cost + buy[id] * hospital:getObjectBuildCost(id)
+      end
+      if (sell[id] or 0) > (in_list[id] or 0) then return false, "nothing to sell" end
+    end
+    if not world.free_build_mode and cost > 0 and hospital.balance < cost then
+      return false, "not enough money"
+    end
+    local to_purchase, to_sell = {}, {}
+    for _, id in ipairs(ids) do
+      local object = TheApp.objects[id]
+      local build_cost = hospital:getObjectBuildCost(id)
+      if (buy[id] or 0) > 0 then
+        to_purchase[#to_purchase + 1] = {object = object, qty = buy[id]}
+        hospital:spendMoney(build_cost * buy[id], _S.transactions.buy_object .. ": " .. object.name,
+            build_cost * buy[id])
+      end
+      if (sell[id] or 0) > 0 then
+        to_sell[#to_sell + 1] = {object = object, qty = sell[id]}
+        hospital:receiveMoney(build_cost * sell[id], _S.transactions.sell_object .. ": " .. object.name,
+            build_cost * sell[id])
+      end
+    end
+    if #to_purchase > 0 then dlg:addObjects(to_purchase, false) end
+    if #to_sell > 0 then dlg:removeObjects(to_sell) end
+    dlg:checkEnableConfirm()
+    quiet(world, dlg)
+    return true
+  end)
+end
+
+--! Walls down to move or resize the room, as cancelling in single player's
+--! objects phase does: the objects go into the editor's list, and its player
+--! draws the room again (builder.rebuild).
+function builder.unbuild(world, entry)
+  local dlg = entry.dlg
+  return with_editor(world, world.hospitals[entry.hospital], function()
+    if dlg.phase ~= "objects" then return false, "room is not being furnished" end
+    dlg:stopPickupItems()
+    dlg:returnToDoorPhase()
+    world:resetSideObjects()
+    dlg:returnToWallPhase()
+    -- Nothing on the map until the new outline is built; its player's
+    -- machine shows the old outline to start from.
+    dlg:setBlueprintRect(1, 1, 0, 0)
+    entry.unbuilt = true
+    return true
+  end)
+end
+
+--! Its player draws the room again: their editor shows the outline phase,
+--! starting from the old outline (or `cmd`'s, after a failed rebuild). Only
+--! on that player's machine; the other peers see the reserved outline.
+function builder.startRedraw(world, entry, cmd)
+  local session = TheApp.mp_session
+  if not (session and entry.peer == session.peer_id and not session.observer) then return end
+  if not builder.show(world, entry) then return end
+  local dlg = entry.dlg
+  local r = cmd or entry
+  dlg.desc_text = _S.place_objects_window.drag_blueprint
+  dlg:setBlueprintRect(r.x, r.y, r.w, r.h)
+end
+
+--! Back to the outline phase with nothing drawn (after a failed rebuild).
+local function reset_to_walls(dlg)
+  local guard = 0
+  while dlg.phase ~= "walls" and guard < 6 do
+    guard = guard + 1
+    dlg:cancel()
+  end
+  dlg:setBlueprintRect(1, 1, 0, 0)
+end
+
+--! Build an unbuilt room again where its player drew it: {x, y, w, h,
+--! door_x, door_y, door_wall, windows}. The objects then wait to be placed.
+--!return true, or false and a reason ("people in the area": retry)
+function builder.rebuild(world, entry, cmd)
+  local dlg = entry.dlg
+  return with_editor(world, world.hospitals[entry.hospital], function()
+    if not entry.unbuilt then return false, "room is not being moved" end
+    local x, y, w, h = cmd.x, cmd.y, cmd.w, cmd.h
+    reset_to_walls(dlg)
+    if #humanoids_in(world, x, y, w, h) > 0 then return false, "people in the area" end
+    local function fail(why)
+      reset_to_walls(dlg)
+      return false, why
+    end
+    dlg:setBlueprintRect(x, y, w, h)
+    if not dlg.confirm_button.enabled then return fail("invalid room outline") end
+    dlg:confirm(true)
+    if dlg.phase ~= "door" then return fail("room would block part of the hospital") end
+    dlg:setDoorBlueprint(cmd.door_x, cmd.door_y, cmd.door_wall)
+    if not dlg.blueprint_door.valid then return fail("invalid door position") end
+    dlg:placeDoorBlueprint()
+    if dlg.phase ~= "windows" then return fail("door not accepted") end
+    for _, win in ipairs(builder.decodeWindows(cmd.windows)) do
+      dlg:setWindowBlueprint(builder.windowCell(win, x, y, w, h))
+      dlg:placeWindowBlueprint()
+    end
+    dlg:confirm(true)
+    if dlg.phase == "clear_area" then return fail("people in the area") end
+    if dlg.phase ~= "objects" then return fail("unexpected phase " .. tostring(dlg.phase)) end
+    entry.unbuilt = nil
+    entry.x, entry.y, entry.w, entry.h = x, y, w, h
+    quiet(world, dlg)
+    return true
+  end)
+end
+
+--! Remove a room whose walls are down, as cancelling in single player's
+--! outline phase does (half the build cost back if it was paid).
+function builder.delete(world, entry)
+  local dlg = entry.dlg
+  return with_editor(world, world.hospitals[entry.hospital], function()
+    if not entry.unbuilt then return false, "room is not being moved" end
+    reset_to_walls(dlg)
     dlg:abortRoom()
     return true
   end)

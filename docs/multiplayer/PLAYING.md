@@ -54,7 +54,15 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   speed.
 - **Rooms:** after the walls, door and windows, you place the furniture as
   usual; the other players see the room fill up. While you draw a room, the
-  others see its outline in blue (the space is reserved).
+  others see its outline in blue (the space is reserved). While furnishing
+  you can buy extra objects and pick up and move the ones you placed.
+- **Editing rooms:** the edit room button, then click one of your rooms.
+  Everybody inside walks out first (the adviser says so); then the editor
+  opens as in single player: pick up and move objects, buy or sell extras,
+  confirm. Cancel takes the walls down to move or resize the room (draw it
+  again, door, windows, then place the furniture); cancel once more to
+  remove the room. If you leave the game meanwhile, the room is finished
+  for you (or removed if its walls are down).
 - **Objects** in corridors can be bought, picked up, moved and sold.
 - **Staff:** hire, fire, answer pay rises, as usual.
 - **A hospital each (co-op):** each player runs their own hospital and can
@@ -90,8 +98,7 @@ standard server image).
 
 ## Not there yet
 
-- Buying extra objects while furnishing a new room, editing or selling a
-  room, moving objects inside rooms, picking up staff.
+- Picking up staff.
 - Epidemics in hospital-each games.
 - In-game chat, asking another player for money, competitive games.
 - Passwords and traffic are not encrypted.

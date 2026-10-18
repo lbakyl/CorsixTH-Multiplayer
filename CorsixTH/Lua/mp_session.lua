@@ -214,6 +214,28 @@ function MultiplayerSession:removePeer(peer)
   end
   self.peers = remaining
   self.log(string.format("peer %d left after step %d", peer, self.step))
+  self:takeOverRooms(self.world, peer)
+end
+
+--! A player left: rooms they were furnishing or editing would stay closed.
+--! The remaining player with the lowest number hands them over with a
+--! command (room_takeover), so every peer does it at the same step.
+function MultiplayerSession:takeOverRooms(world, peer)
+  if self.observer or not world or not world.rooms then return end
+  local lowest
+  for _, p in ipairs(self.peers) do
+    if p ~= 0 and (not lowest or p < lowest) then lowest = p end
+  end
+  if lowest ~= self.peer_id then return end
+  local ids = {}
+  for id, entry in pairs(world.mp_furnishing or {}) do
+    if entry.peer == peer then ids[#ids + 1] = id end
+  end
+  for id, room in pairs(world.rooms) do
+    if room.mp_edit and room.mp_edit.peer == peer then ids[#ids + 1] = id end
+  end
+  table.sort(ids)
+  for _, id in ipairs(ids) do self:issue({kind = "room_takeover", room = id, left = peer}) end
 end
 
 --! The relay server found differing fingerprints at `step`.
@@ -376,6 +398,14 @@ MultiplayerSession.rejection_texts = {
                  ["someone is in the way"] = "Could not place the object there: someone was in the way.",
                  ["it would block the room"] = "Not there: it would block the way to another object."},
   room_finish = {["objects missing"] = "The room still needs some of its objects."},
+  room_edit = {["room cannot be edited now"] = "That room cannot be edited now.",
+               ["room is already being edited"] = "That room is already being edited."},
+  room_buy = {["cannot buy that"] = "That object is not available for this room."},
+  room_rebuild = {["gave up"] = "The room could not be built there: people did not leave the area.",
+                  ["invalid room outline"] = "The room does not fit there.",
+                  ["room would block part of the hospital"] = "The room would block part of the hospital.",
+                  ["invalid door position"] = "The door cannot go there.",
+                  ["door not accepted"] = "The door cannot go there."},
 }
 
 --! Multiplayer co-op: a window about another player's patient, staff or
@@ -830,6 +860,132 @@ function handlers.room_abort(world, cmd)
   builder.releaseUI(world.ui, entry.dlg)
   world.mp_furnishing[tonumber(cmd.room)] = nil
   return ok, why
+end
+
+--! Edit a built room: {room}. The room closes, everybody inside leaves, and
+--! once it is empty (Room:enterEditMode) its editor opens on every peer and
+--! its player edits it like a room being furnished.
+function handlers.room_edit(world, cmd)
+  local room = world.rooms[tonumber(cmd.room)]
+  local hospital = world.hospitals[cmd.hospital or 1]
+  if not room or not hospital then return false, "no such room" end
+  if room.hospital ~= hospital then return false, "not ours" end
+  if not room.built or room.crashed or not room.is_active then return false, "room cannot be edited now" end
+  if room.mp_edit or (world.mp_furnishing and world.mp_furnishing[room.id]) then
+    return false, "room is already being edited"
+  end
+  room.mp_edit = {peer = cmd.peer}
+  room:tryToEdit() -- opens the editor at once if nobody is inside
+  return true
+end
+
+--! Pick up an object of a room being furnished or edited: {room, object}.
+function handlers.room_pickup(world, cmd)
+  local entry = furnishing(world, cmd)
+  if not entry then return false, "room is not being furnished" end
+  local obj = world:getEntityById(tonumber(cmd.object))
+  if not obj or not class.is(obj, Object) then return false, "not in this room" end
+  return corsixth.require("mp_room_builder").pickUp(world, entry, obj)
+end
+
+--! Buy objects for, or sell unplaced objects from, a room being furnished
+--! or edited: {room, buy = "id:qty,...", sell = "id:qty,..."}.
+function handlers.room_buy(world, cmd)
+  local entry = furnishing(world, cmd)
+  if not entry then return false, "room is not being furnished" end
+  local builder = corsixth.require("mp_room_builder")
+  return builder.buy(world, entry, builder.decodeCounts(cmd.buy), builder.decodeCounts(cmd.sell))
+end
+
+--! Take the walls of a room being furnished or edited down, to draw it again
+--! elsewhere or in another size (or to remove it): {room}.
+function handlers.room_unbuild(world, cmd)
+  local entry = furnishing(world, cmd)
+  if not entry then return false, "room is not being furnished" end
+  local builder = corsixth.require("mp_room_builder")
+  local ok, why = builder.unbuild(world, entry)
+  if ok then builder.startRedraw(world, entry) end
+  return ok, why
+end
+
+--! Build a room whose walls are down again: {room, x, y, w, h, door_x,
+--! door_y, door_wall, windows}. People in the way are asked to leave and
+--! the command is retried, as for build_room.
+function handlers.room_rebuild(world, cmd)
+  local entry = furnishing(world, cmd)
+  if not entry then return false, "room is not being furnished" end
+  local builder = corsixth.require("mp_room_builder")
+  local ok, why = builder.rebuild(world, entry, cmd)
+  if why == "people in the area" then
+    builder.clearArea(world, cmd.x, cmd.y, cmd.w, cmd.h)
+    return false, "retry"
+  end
+  local session = TheApp.mp_session
+  if session then session:showRemoteBlueprint(cmd.peer, nil) end
+  builder.releaseArea(world, cmd.x, cmd.y, cmd.w, cmd.h)
+  if ok then
+    builder.showAgain(world, entry)
+  else
+    builder.startRedraw(world, entry, cmd)
+  end
+  return ok, why
+end
+
+function handlers.room_rebuild_giveup(world, cmd)
+  local builder = corsixth.require("mp_room_builder")
+  builder.releaseArea(world, cmd.x, cmd.y, cmd.w, cmd.h)
+  local session = TheApp.mp_session
+  if session then session:showRemoteBlueprint(cmd.peer, nil) end
+  local entry = furnishing(world, cmd)
+  if entry then builder.startRedraw(world, entry, cmd) end
+  return false, "not a player command"
+end
+
+--! Remove a room whose walls are down (half its cost back if it was paid
+--! for): {room}.
+function handlers.room_delete(world, cmd)
+  local entry = furnishing(world, cmd)
+  if not entry then return false, "room is not being furnished" end
+  local builder = corsixth.require("mp_room_builder")
+  builder.hide(world, entry)
+  local ok, why = builder.delete(world, entry)
+  builder.releaseUI(world.ui, entry.dlg)
+  if ok then
+    world.mp_furnishing[tonumber(cmd.room)] = nil
+  else
+    builder.startRedraw(world, entry)
+  end
+  return ok, why
+end
+
+--! A room of a player who left: {room, left}. A room being furnished or
+--! edited is finished (what is missing placed automatically; removed if that
+--! fails or its walls are down); a room still emptying for an edit opens
+--! again.
+function handlers.room_takeover(world, cmd)
+  local id = tonumber(cmd.room)
+  local left = tonumber(cmd.left)
+  local builder = corsixth.require("mp_room_builder")
+  local entry = world.mp_furnishing and world.mp_furnishing[id]
+  if entry then
+    if entry.peer ~= left then return false, "not that player's room" end
+    builder.hide(world, entry)
+    local done
+    if not entry.unbuilt then done = builder.finish(world, entry, true) end
+    if not done then
+      if entry.unbuilt then builder.delete(world, entry) else builder.abort(world, entry) end
+    end
+    builder.releaseUI(world.ui, entry.dlg)
+    world.mp_furnishing[id] = nil
+    return true
+  end
+  local room = world.rooms[id]
+  if room and room.mp_edit and room.mp_edit.peer == left then
+    room.mp_edit = nil
+    if not room.is_active then world:markRoomAsBuilt(room) end
+    return true
+  end
+  return false, "nothing to take over"
 end
 
 function handlers.build_room_giveup(world, cmd)

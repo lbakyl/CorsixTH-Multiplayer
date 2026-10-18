@@ -175,6 +175,21 @@ end
 
 function UIFurnishCorridor:confirm()
   self.ui:tutorialStep(1, 3, 4)
+  if self.edit_dialog and self.edit_dialog.mp_room_id and MultiplayerSession.actionsAreCommands() then
+    -- Multiplayer: every peer buys (and sells) for the room (room_buy).
+    local buy, sell = {}, {}
+    for _, o in ipairs(self.objects) do
+      if o.qty > o.start_qty then buy[o.object.id] = o.qty - o.start_qty end
+      if o.qty < o.start_qty then sell[o.object.id] = o.start_qty - o.qty end
+    end
+    local builder = corsixth.require("mp_room_builder")
+    if next(buy) or next(sell) then
+      TheApp.mp_session:issue({kind = "room_buy", room = self.edit_dialog.mp_room_id,
+          buy = builder.encodeCounts(buy), sell = builder.encodeCounts(sell)})
+    end
+    self:close()
+    return
+  end
 
   local to_purchase = {}
   local to_sell = {}
