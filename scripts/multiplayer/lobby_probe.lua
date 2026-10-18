@@ -46,6 +46,9 @@
 --                       quit                            close the connection and stop
 --                       cheat                           change money locally only (must desync)
 --   MP_DRAW_EVERY     draw a frame every N ticks (0 = never)
+--   MP_SHOT_DIR       if set, save screenshots (PNG) of the lobby views and of
+--                     moments in the game there, named <player>-<what>.png;
+--                     the UI script action shot:<what> takes one more
 --   MP_LUA_CPATH, MP_LUA_PATH  where to find LuaSocket
 local args = {...}
 local unpack_args = table.unpack or unpack
@@ -62,6 +65,7 @@ local target = tonumber(os.getenv("MP_STEPS") or "1500")
 local fast = (os.getenv("MP_FAST") or "1") == "1"
 local draw_every = tonumber(os.getenv("MP_DRAW_EVERY") or "0")
 local coop = os.getenv("MP_COOP") == "1"
+local shot_dir = os.getenv("MP_SHOT_DIR")
 
 local function log(msg)
   io.stdout:write("[" .. name .. "] " .. msg .. "\n")
@@ -99,12 +103,39 @@ local function lobby_window()
   return TheApp.ui:getWindow(UIMultiplayer)
 end
 
+local shots_taken = {}
+--! Draw a frame and save it as <shot_dir>/<name>-<what>.png (once per what).
+local function shot(what)
+  if not shot_dir or shots_taken[what] then return end
+  shots_taken[what] = true
+  -- In the game, close information popups so the map is visible.
+  if TheApp.world then
+    for i = #TheApp.ui.windows, 1, -1 do
+      local win = TheApp.ui.windows[i]
+      if class.is(win, UIInformation) then win:close() end
+    end
+  end
+  TheApp:drawFrame()
+  local path = shot_dir .. "/" .. name .. "-" .. what .. ".png"
+  local ok, err = TheApp.video:takeScreenshot(path)
+  log(ok and ("SHOT " .. path) or ("SHOT FAILED " .. tostring(err)))
+end
+
+--! Centre the game view on a map tile.
+local function look_at(tx, ty)
+  local ui = TheApp.ui
+  local x, y = TheApp.map:WorldToScreen(tx, ty)
+  ui:scrollMapTo(x, y)
+end
+
 local function run_lobby()
   local menu = assert(TheApp.ui:getWindow(UIMainMenu), "no main menu")
+  shot("main-menu")
   menu:buttonMultiplayer()
   local w = assert(lobby_window(), "no multiplayer window")
   w.address_box:setText(server)
   w.name_box:setText(name)
+  shot("lobby-connect")
   w:buttonConnect()
   local lobby = assert(TheApp.mp_lobby, "not connected: " .. tostring(w.status_text))
   log("connected as " .. lobby.build)
@@ -115,6 +146,7 @@ local function run_lobby()
     w.room_name_box:setText(room)
     w.password_box:setText(password)
     if coop then w:buttonMode() end -- "A hospital each"
+    shot("lobby-create")
     w:buttonCreate()
     wait_for("own room", function() return lobby.state == "in_room" end)
     log("created room " .. room)
@@ -126,6 +158,7 @@ local function run_lobby()
       end
       return n >= want_players and ready and lobby.summary ~= nil
     end, 60)
+    shot("lobby-room-host")
     log(string.format("lobby: %d players, recommended speed %s, delay %s, one way %s ms",
         want_players, lobby.summary.speed, lobby.summary.delay, lobby.summary.one_way))
     for peer, p in pairs(lobby.players) do log(string.format("  player %d %s rtt %s ms", peer, p.name, p.rtt)) end
@@ -145,6 +178,7 @@ local function run_lobby()
       return false
     end, 30)
     w = lobby_window()
+    shot("lobby-rooms")
     w:selectRoom(index, true)
     w.password_box:setText(join_password)
     w:buttonJoin()
@@ -156,6 +190,8 @@ local function run_lobby()
     log("joined room " .. room .. " as player " .. lobby.room.peer)
     wait_for("ready button", function() return lobby_window() and lobby_window().view == "room" end)
     lobby_window():buttonReady(true)
+    wait_for("lobby update", function() return lobby.summary ~= nil end, 10)
+    shot("lobby-room-joined")
     wait_for("game start", function() return lobby.state == "in_game" end, 60)
   end
   return lobby
@@ -204,6 +240,8 @@ local function run()
   end
   session.applying = false
   if fast then world:setSpeed("And then some more") end
+  look_at(desk_x, desk_y)
+  shot("game-start")
 
   local done = {}
   local ticks = 0
@@ -222,6 +260,8 @@ local function run()
       local key = string.format("%d:%s:%d,%d", peer, tostring(r.room), r.x, r.y)
       if peer ~= session.peer_id and not seen_blueprints[key] then
         seen_blueprints[key] = true
+        look_at(r.x + math.floor(r.w / 2), r.y + math.floor(r.h / 2))
+        shot("reserved-outline")
         log(string.format("saw reserved area of player %d: %s at %d,%d size %dx%d (step %d)",
             peer, tostring(r.room), r.x, r.y, r.w, r.h, session.step))
       end
@@ -269,6 +309,7 @@ local function run()
         elseif a == "givemoney" then
           local trade = UIMultiplayerTrade(world.ui)
           world.ui:addWindow(trade)
+          shot("trade-window")
           log(string.format("UI: sent $%s to %s at step %d", entry.arg, trade.target.name, session.step))
           trade:sendMoney(tonumber(entry.arg))
           trade:close()
@@ -333,6 +374,15 @@ local function run()
         elseif a == "emergency" then
           session:issue({kind = "probe_emergency", target = tonumber(entry.arg) or 1})
           log("UI: asked for an emergency at step " .. session.step)
+        elseif a == "shot" then
+          shot(entry.arg)
+        elseif a == "lookroom" then
+          -- Centre the view on this hospital's newest room.
+          local best
+          for _, r in pairs(world.rooms) do
+            if r.built and r.hospital == world.ui.hospital and (not best or r.id > best.id) then best = r end
+          end
+          if best then look_at(best.x + math.floor(best.width / 2), best.y + math.floor(best.height / 2)) end
         elseif a == "vip" then
           session:issue({kind = "probe_vip", target = tonumber(entry.arg) or 1})
           log("UI: asked for a VIP fax at step " .. session.step)
@@ -344,6 +394,7 @@ local function run()
           end
           if icon then
             if not icon.fax then icon:openMessage() end
+            shot("fax-" .. ftype)
             log(string.format("UI: clicked choice %s of %s fax #%s at step %d", n, ftype,
                 tostring(icon.mp_id), session.step))
             icon.fax:buttonChoice(tonumber(n))
