@@ -17,6 +17,8 @@ local function hospital_of(world) return builder.hospital or world.hospitals[1] 
 local function rect_is_free(world, x, y, w, h)
   local hospital = hospital_of(world)
   local th = world.map.th
+  local mw, mh = th:size()
+  if x - 1 < 1 or y - 1 < 1 or x + w > mw or y + h > mh then return false end
   for tx = x - 1, x + w do
     for ty = y - 1, y + h do
       if not hospital:isInHospital(tx, ty) or world:getRoom(tx, ty) then return false end
@@ -51,6 +53,18 @@ end
 --!  must not advance game time).
 --!return room on success, or nil and an error message.
 function builder.build_room(world, room_id, x, y, w, h, door, no_wait)
+  -- The room editor works for ui.hospital; build for the helpers' hospital
+  -- (multiplayer co-op setup builds in every player's hospital).
+  local ui = world.ui
+  local saved = ui.hospital
+  ui.hospital = hospital_of(world)
+  local results = {pcall(builder._build_room, world, room_id, x, y, w, h, door, no_wait)}
+  ui.hospital = saved
+  if not results[1] then error(results[2], 0) end
+  return results[2], results[3], results[4]
+end
+
+function builder._build_room(world, room_id, x, y, w, h, door, no_wait)
   local ui = world.ui
   local room_type = TheApp.rooms[room_id]
   if not room_type then return nil, "unknown room type " .. room_id end
@@ -181,6 +195,27 @@ end
 --! same sequence as Hospital:initStaff() for level-provided staff.
 function builder.hire(world, class, x, y, skill)
   local hospital = hospital_of(world)
+  -- If the tile is not corridor floor of the hospital (e.g. on a co-op map),
+  -- use the nearest one that is, in a fixed search order.
+  local th = world.map.th
+  local function usable(tx, ty)
+    local mw, mh = th:size()
+    return tx >= 1 and ty >= 1 and tx <= mw and ty <= mh and hospital:isInHospital(tx, ty) and
+        not world:getRoom(tx, ty) and th:getCellFlags(tx, ty).passable
+  end
+  if not usable(x, y) then
+    local found = false
+    for r = 1, 20 do
+      for dy = -r, r do
+        for dx = -r, r do
+          if not found and math.max(math.abs(dx), math.abs(dy)) == r and usable(x + dx, y + dy) then
+            x, y, found = x + dx, y + dy, true
+          end
+        end
+      end
+      if found then break end
+    end
+  end
   local profile = StaffProfile(world, class, _S.staff_class[class:lower()])
   if class == "Doctor" then
     profile:initDoctor(0, 0, 0, nil, nil, skill or 0.5)
@@ -211,7 +246,12 @@ function builder.setup_scenario(world, scenario, keep_closed)
     for _, spec in ipairs({{"gp", 5, 5}, {"pharmacy", 4, 4}, {"general_diag", 5, 5},
         {"staff_room", 5, 5}, {"toilets", 4, 4}}) do
       local x, y = builder.find_free_rect(world, desk_x, desk_y, spec[2], spec[3], 40)
-      assert(builder.build_room(world, spec[1], x, y, spec[2], spec[3]), "building " .. spec[1])
+      if x or not keep_closed then
+        assert(builder.build_room(world, spec[1], x, y, spec[2], spec[3]), "building " .. spec[1])
+      else
+        -- Co-op maps have smaller plots; leave out a room that does not fit.
+        print("probe setup: no space for " .. spec[1] .. " in " .. tostring(hospital.name))
+      end
     end
     for i, class in ipairs({"Doctor", "Doctor", "Doctor", "Nurse", "Nurse", "Handyman", "Handyman"}) do
       builder.hire(world, class, desk_x + i, desk_y + 3)

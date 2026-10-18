@@ -4,7 +4,7 @@ Start here if you are picking up this fork. This page is the map: the current
 state, how to build and test, where things are, and what we learned the hard
 way. The other files in this folder are detailed reports from each step.
 
-Last updated: 2026-10-18, branch `mp/windows-s0`.
+Last updated: 2026-10-18, branch `mp/coop-full`.
 
 ## 1. Goal and approach
 
@@ -45,10 +45,10 @@ data, saves from it, or logs that contain it.**
 | Relay/lobby server | `mp_server/`; rooms, passwords, build check, ping, pacing, start, relay, fingerprint check, leave handling; 19 pytest tests |
 | In-game lobby | Main menu → Multiplayer: server address, name, room list, create (shared / a hospital each, level, players), password, ready, start |
 | Shared speed and pause | Any player's speed or pause applies to everybody, capped at the room's ping-based maximum |
-| Player actions as commands | Corridor objects, hiring, rooms (draw outline/door/windows), opening the hospital early, fax answers (emergency, VIP, epidemic, ...), co-op money and staff transfers |
+| Player actions as commands | Corridor objects, hiring, rooms (draw outline/door/windows), opening the hospital early, fax answers, hospital settings (loans, prices, research, policies, plots, heating, handymen, queues), actions on one patient/staff/machine/rat, co-op money and staff transfers |
 | Room outlines | While someone draws a room the others see its floor in blue (reserved); the finished room appears for everyone at once |
-| Co-op | Original two- to four-player maps (tested with two); a hospital each; trade window in the Multiplayer menu |
-| Blocked in multiplayer | Editing/moving existing rooms and objects, picking up staff, firing, pay-rise answers (resolved by policy), load game, restart, the wage-increase menu setting |
+| Co-op | Original two- to four-player maps (tested with two); a hospital each, kept apart (rooms, staff, patients, heating, research, events, goals); trade window in the Multiplayer menu. Design and open points: `coop-architecture.md` |
+| Blocked in multiplayer | Editing/moving existing rooms and objects, picking up staff, firing, pay-rise answers (resolved by policy), load game, restart (menu and hotkeys), cheats and debug tools, pushing patients over, the wage-increase menu setting. Epidemics are off in co-op |
 | Windows | CI artifact includes LuaSocket. **S0 passed**: Windows (MSVC) and Linux (GCC), both Lua 5.5, identical for 3 game years; shared and co-op games between a Windows and a Linux player IN SYNC (`cross-platform.md`) |
 | Real network | LAN only (Windows desktop ↔ Linux VM); not over the internet yet |
 | Linux CI | Fails in the static-analysis step on upstream's own `CMakeLists.txt` formatting (gersemi); not caused by this fork's changes |
@@ -67,6 +67,7 @@ agents must not open PRs, so the owner opens them).
 | `mp/coop-hospitals` | Co-op: a hospital each, money/staff transfers |
 | `mp/windows-s0` | LuaSocket in the Windows build; same definition order on every platform; S0 tests |
 | `mp/server-docker` | Server container, compose file, image workflow (ghcr.io), VPS guide |
+| `mp/coop-full` | Full co-op: settings and entity actions as commands, hospitals kept apart, per-player events, heating, awards, goals |
 
 Working rule: small commits, push work-in-progress, one branch per step,
 never push directly to `mp/dev` or `master`.
@@ -102,7 +103,7 @@ Tests and tools (`scripts/multiplayer/` unless noted):
 |---|---|
 | `CorsixTH/Luatest/spec/mp_session_spec.lua`, `mp_lobby_spec.lua` | Unit tests |
 | `mp_server/tests/` | Server tests (pytest) |
-| `run_lobby_probe.sh` | **Main integration test.** A local server and pairs of real games going through the main menu and lobby window. 8 checks, ~2 min |
+| `run_lobby_probe.sh` | **Main integration test.** A local server (or `MP_EXTERNAL_SERVER`) and pairs of real games going through the main menu and lobby window. 9 checks, ~3 min |
 | `run_ingame_probe.sh` | Two games connected directly (no server). 5 checks |
 | `run_sync_probe.sh` | Harness-level determinism checks. 7 checks |
 | `run_sp_regression.sh` | Single player, two builds, 3 game years, fingerprints must match |
@@ -200,6 +201,13 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
     loaded in `lfs.dir()` order (ext4 hash order, NTFS name order) and picked
     by index, so Windows and Linux differed from the first patient on. A
     multiplayer game sorts them by id (`MultiplayerLobby.useCanonicalOrder`).
+22. **UI windows can hide simulation.** The annual report paid its awards
+    when the player closed it, and closing it ran the win check; both
+    happened at a different moment on every machine. Look for game changes
+    in window `close()` and `onTick()` code.
+23. **The room editor's placement checks are not enough for automatic
+    furnishing**: a desk could wall off the cabinet, and the GP then crashed
+    looking for it. The builder checks that every use tile stays reachable.
 
 ## 8. Next steps
 
