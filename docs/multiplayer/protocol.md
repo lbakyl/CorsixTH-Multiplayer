@@ -23,18 +23,18 @@ The server compares the fingerprints of all players for each step and sends
 | Message | When | Fields |
 |---|---|---|
 | `HELLO` | first line | `proto` (1), `build` (game build id, must match the room's), `name` |
-| `LIST` | lobby | — |
+| `LIST` | lobby | (none) |
 | `CREATE` | lobby | `room`, `password` (empty = open), `max` (2–4), `mode` (`shared` = one hospital for everybody, `coop` = one hospital each), `level` (1–12), `difficulty` (`easy`/`full`/`hard`), `speed_control` (`any`/`owner`) |
 | `JOIN` | lobby | `room`, `password` |
 | `READY` | in a room | `ready` |
-| `START` | room owner | — |
-| `LEAVE` | in a room | — |
+| `START` | room owner | (none) |
+| `LEAVE` | in a room | (none) |
 | `CHAT` | in a room | `text` |
 | `SPEED` | in game | `speed`: `Pause` or a speed name up to the room's `max_speed` |
 | `SHOW` | in game | cosmetic, outside the lockstep: `kind=blueprint room x y w h` (a room outline being drawn; `w=0` clears it) |
 | `PONG` | reply to `PING` | `id` |
 | `PING` | optional | `id` (server answers `PONG id=`) |
-| `QUIT` | any time | — |
+| `QUIT` | any time | (none) |
 
 ## Server to client
 

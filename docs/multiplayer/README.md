@@ -4,7 +4,7 @@ Start here if you are picking up this fork. This page is the map: the current
 state, how to build and test, where things are, and what we learned the hard
 way. The other files in this folder are detailed reports from each step.
 
-Last updated: 2026-10-18, branch `mp/coop-hospitals`.
+Last updated: 2026-10-18, branch `mp/windows-s0`.
 
 ## 1. Goal and approach
 
@@ -49,8 +49,8 @@ data, saves from it, or logs that contain it.**
 | Room outlines | While someone draws a room the others see its floor in blue (reserved); the finished room appears for everyone at once |
 | Co-op | Original two- to four-player maps (tested with two); a hospital each; trade window in the Multiplayer menu |
 | Blocked in multiplayer | Editing/moving existing rooms and objects, picking up staff, firing, pay-rise answers (resolved by policy), load game, restart, the wage-increase menu setting |
-| Windows | CI builds the fork (artifact on every push). Windows-vs-Linux determinism (S0) and LuaSocket in the Windows build: **not done** |
-| Real network | Only tested over loopback on one Linux VM |
+| Windows | CI artifact includes LuaSocket. **S0 passed**: Windows (MSVC) and Linux (GCC), both Lua 5.5, identical for 3 game years; shared and co-op games between a Windows and a Linux player IN SYNC (`cross-platform.md`) |
+| Real network | LAN only (Windows desktop ↔ Linux VM); not over the internet yet |
 | Linux CI | Fails in the static-analysis step on upstream's own `CMakeLists.txt` formatting (gersemi); not caused by this fork's changes |
 
 ## 3. Branches
@@ -65,6 +65,7 @@ agents must not open PRs, so the owner opens them).
 | `mp/relay-server` | Relay/lobby server; lobby client, Multiplayer menu and window; shared pause/speed fixes |
 | `mp/room-blueprints` | Rooms as commands with reserved outlines; fax decisions as commands |
 | `mp/coop-hospitals` | Co-op: a hospital each, money/staff transfers |
+| `mp/windows-s0` | LuaSocket in the Windows build; same definition order on every platform; S0 tests |
 
 Working rule: small commits, push work-in-progress, one branch per step,
 never push directly to `mp/dev` or `master`.
@@ -105,6 +106,9 @@ Tests and tools (`scripts/multiplayer/` unless noted):
 | `run_sync_probe.sh` | Harness-level determinism checks. 7 checks |
 | `run_sp_regression.sh` | Single player, two builds, 3 game years, fingerprints must match |
 | `setup_debian13.sh` | Build environment for Debian 13 |
+| `setup_lua55_linux.sh` | Lua 5.5 build on Linux (to play with Windows builds) |
+| `run_s0_fingerprints.sh`, `compare_fingerprints.py` | Cross-platform determinism check |
+| `run_lobby_player.sh` | One scripted player against any server (tests across machines) |
 | `lobby_probe.lua`, `ingame_probe.lua`, `probe_builder.lua` | Scripted players |
 
 ## 5. Lockstep in one paragraph
@@ -190,12 +194,15 @@ Running the server: `python3 -m corsixth_mp --port 47800` in `mp_server/`
 20. **Test timing is not game timing.** Several probe failures were the test
     acting at a step the paused peer never reached; schedule actions on
     conditions, not only on step numbers.
+21. **Directory listing order is platform state.** Game definitions are
+    loaded in `lfs.dir()` order (ext4 hash order, NTFS name order) and picked
+    by index, so Windows and Linux differed from the first patient on. A
+    multiplayer game sorts them by id (`MultiplayerLobby.useCanonicalOrder`).
 
 ## 8. Next steps
 
-1. **S0: Windows vs Linux determinism.** Add LuaSocket to the Windows build
-   (vcpkg port `luasocket`), run the lobby probe between a Windows and a
-   Linux client.
+1. **Internet test**: the server on the VPS, two Windows clients (S7);
+   real latency for the pacing.
 2. **S3/S4: headless referee and desync recovery**: the server runs one game
    per room, saves regularly; on desync everyone reloads its save.
 3. **Docker image and compose for the VPS** (S7); server Dockerfile exists.

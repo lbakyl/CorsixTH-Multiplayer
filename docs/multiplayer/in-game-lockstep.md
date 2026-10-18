@@ -6,15 +6,15 @@ is started by a script (`scripts/multiplayer/ingame_probe.lua`).
 
 ## Pieces
 
-- `CorsixTH/Lua/mp_session.lua` — `MultiplayerSession`: command queue,
+- `CorsixTH/Lua/mp_session.lua` (`MultiplayerSession`): command queue,
   lockstep rule, fingerprint exchange, desync detection, command handlers,
   player notices. Stored as `TheApp.mp_session`, never on the World, so it is
   not written into save games.
-- `CorsixTH/Lua/mp_transport.lua` — `MultiplayerTransport`: line-based TCP
+- `CorsixTH/Lua/mp_transport.lua` (`MultiplayerTransport`): line-based TCP
   over LuaSocket. Connecting blocks with a timeout; afterwards sending and
   receiving never block the game. LuaSocket is optional; without it
   multiplayer cannot be started.
-- `World:onTick` — game time now advances through `World:_advanceHours`.
+- `World:onTick`: game time now advances through `World:_advanceHours`.
   Single player calls it exactly as before. In multiplayer each game hour is
   one *step*, run only if the session allows it; otherwise the remaining
   hours of that tick wait and the UI keeps running.
