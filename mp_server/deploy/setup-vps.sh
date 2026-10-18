@@ -119,7 +119,9 @@ if [[ "$status" != healthy ]]; then
 fi
 docker exec corsixth-mp-server python -m corsixth_mp.health | sed 's/^/   /'
 
-addresses=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.' | head -3 | tr '\n' ' ')
+# IPv4 addresses of real interfaces (not Docker's bridges).
+addresses=$(ip -4 -o addr show scope global 2>/dev/null |
+  awk '$2 !~ /^(docker|br-|veth)/ {split($4, a, "/"); print a[1]}' | head -3 | tr '\n' ' ')
 say "Done. The server is running."
 echo "   Players connect with: <this VPS's public IP>:${PORT}"
 echo "   Addresses of this machine: ${addresses:-unknown} (behind NAT the public IP may differ)"

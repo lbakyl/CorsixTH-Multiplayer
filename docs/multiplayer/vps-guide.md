@@ -8,6 +8,23 @@ The server is small: it never runs the game, only relays messages between the
 players and keeps the rooms. It needs **no Theme Hospital data** and no
 CorsixTH game code.
 
+## Quick start
+
+On a fresh Debian or Ubuntu VPS, as root:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/lbakyl/CorsixTH-Multiplayer/mp/vps-setup/mp_server/deploy/setup-vps.sh
+sudo bash setup-vps.sh --motd "Welcome"            # add --ufw to set up the firewall too
+```
+
+It does sections 2 to 6 below: installs Docker (from Docker's repository) if
+needed, optionally configures `ufw` (keeping every SSH port open), writes
+`/opt/corsixth-mp/compose.yaml` and `.env`, starts the server and waits for
+its health check. Run it again to update. Options: `--port`, `--tag`,
+`--ref`, `--motd`, `--ufw`, `--dir` (see `--help`). Tested on the Debian 13
+dev VM, and its Docker installation in fresh Debian 12, Debian 13 and Ubuntu
+24.04 containers. The `--ufw` option has not been tested yet.
+
 ## 1. What you need
 
 - A Linux VPS with a public IPv4 address. 1 vCPU and 512 MB RAM are plenty
