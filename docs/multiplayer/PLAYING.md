@@ -64,7 +64,8 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   remove the room. If you leave the game meanwhile, the room is finished
   for you (or removed if its walls are down).
 - **Objects** in corridors can be bought, picked up, moved and sold.
-- **Staff:** hire, fire, answer pay rises, as usual.
+- **Staff:** hire, fire, answer pay rises, and pick up and move them (right
+  click, or the pick up button in their window), as usual.
 - **A hospital each (co-op):** each player runs their own hospital and can
   look at, but not act on, the others' patients, staff and machines. The
   **MULTIPLAYER** menu, **TRADE WITH OTHER PLAYERS** sends money, or a
@@ -98,7 +99,6 @@ standard server image).
 
 ## Not there yet
 
-- Picking up staff.
 - Epidemics in hospital-each games.
 - In-game chat, asking another player for money, competitive games.
 - Passwords and traffic are not encrypted.

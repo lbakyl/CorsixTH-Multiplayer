@@ -53,6 +53,11 @@ function UIPlaceStaff:UIPlaceStaff(ui, profile, x, y)
 end
 
 function UIPlaceStaff:close()
+  if self.mp_moving then
+    -- Multiplayer: nothing was picked up in the shared game.
+    Window.close(self)
+    return
+  end
   local employed_staff = self.staff
   local play_placement_sound = true
   if employed_staff then
@@ -152,7 +157,12 @@ function UIPlaceStaff:onMouseUp(button, x, y)
     elseif button == "left" then
       self:onMouseMove(x, y)
       if self:_isValidStaffPlacement() then
-        if self.staff then
+        if self.mp_moving then
+          -- Multiplayer: every peer moves them when the command runs.
+          TheApp.mp_session:issue({kind = "move_staff", staff = self.mp_moving.mp_id,
+              x = self.tile_x, y = self.tile_y})
+          self.ui:playSound("plac_st2.wav")
+        elseif self.staff then
           self.staff:setTile(self.tile_x, self.tile_y)
         elseif TheApp.mp_session then
           -- Multiplayer: every peer hires and places this person when the

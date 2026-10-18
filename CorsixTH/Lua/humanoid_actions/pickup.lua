@@ -56,7 +56,7 @@ local action_pickup_interrupt = permanent"action_pickup_interrupt"( function(act
     humanoid:onPlaceInCorridor()
   end
   humanoid:finishAction()
-  action.ui:setDefaultCursor(nil)
+  if not action.mp_place then action.ui:setDefaultCursor(nil) end
 end)
 
 local action_pickup_dont_interrupt = permanent"action_pickup_dont_interrupt"( function(action)
@@ -90,6 +90,17 @@ local function action_pickup_start(action, humanoid)
     action.on_interrupt = action_pickup_dont_interrupt
   else
     action.on_interrupt = action_pickup_interrupt
+  end
+  if action.mp_place then
+    -- Multiplayer (move_staff): the player chose the tile already; put the
+    -- staff member down there at once, as UIPlaceStaff does (onMouseUp and
+    -- close), on every peer alike.
+    humanoid:setTile(action.mp_place[1], action.mp_place[2])
+    humanoid.pickup = false
+    humanoid.staffroom_needed = nil
+    humanoid.going_to_staffroom = nil
+    humanoid:setNextAction(MeanderAction())
+    return
   end
   local ui = action.ui
   action.window = UIPlaceStaff(ui, humanoid, ui.cursor_x, ui.cursor_y)

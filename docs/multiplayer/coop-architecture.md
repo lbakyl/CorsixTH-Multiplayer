@@ -89,11 +89,13 @@ for that, the rules new code must follow, and what is still missing.
 - **Epidemics** stay disabled in co-op (`hospital.epidemics_disabled`):
   the epidemic countdown and the vaccination cursor still live in windows.
   Move the countdown to the simulation like the emergency one.
-- **Picking up staff**: blocked; it needs a command with explicit
-  positions, like the ones done on `mp/coop-gaps`: firing (`fire_staff`),
-  pay rise answers (`pay_rise`), the queue window (`queue_move`,
-  `queue_redirect`) and moving and selling corridor objects (`move_object`,
-  `sell_object`).
+- **Staff and objects** are commands with explicit positions: firing
+  (`fire_staff`), pay rise answers (`pay_rise`), the queue window
+  (`queue_move`, `queue_redirect`), moving and selling corridor objects
+  (`move_object`, `sell_object`) and moving staff (`move_staff`: the player
+  chooses the tile in a placement window on their machine only; every peer
+  then picks them up and puts them down at once, PickupAction with
+  `mp_place`).
 - **Rooms** are commands throughout (`mp_room_builder.lua`): building
   (`build_room`, with `furnish=1` furnished by hand: `room_object`,
   `room_pickup`, `room_buy`, then `room_finish`), editing a built room

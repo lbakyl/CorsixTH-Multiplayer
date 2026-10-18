@@ -34,7 +34,8 @@
 #      player, a bench picked up and put down elsewhere, another sold, a GP's
 #      office furnished by hand (one command per object, then confirmed),
 #      toilets drawn and cancelled while furnishing -> IN SYNC; no door or
-#      window markers left on the floor (windows on every wall)
+#      window markers left on the floor (windows on every wall); a doctor
+#      picked up (right click) and put into a room, there on both games
 #  12. room editing: a GP's office built and furnished by hand, then edited
 #      while patients are about (picked up, placed, bought, moved, confirmed)
 #      and removed; every edit command ok, IN SYNC, no markers left
@@ -159,10 +160,10 @@ run_probe paul MP_ROLE=join MP_ROOM=events MP_STEPS=1600 MP_DRAW_EVERY=3   MP_UI
 # rise window, one accepted and one declined; a nurse fired; queues
 # reordered by dragging in the queue window.
 run_probe wade MP_ROLE=host MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
-  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench;950:overlay" & pids+=($!)
+  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench;860:movestaff:Doctor;866:whereis:Doctor;950:overlay" & pids+=($!)
 sleep 1
 run_probe yara MP_ROLE=join MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
-  MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront;500:furnishroom:gp:5:5;750:cancelroom:toilets:4:4;900:uistate;950:overlay" & pids+=($!)
+  MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront;500:furnishroom:gp:5:5;750:cancelroom:toilets:4:4;866:whereis:Doctor;900:uistate;950:overlay" & pids+=($!)
 # Room editing: ed builds a GP's office, then edits it while patients are
 # about (pick up, place, buy, move, confirm) and later removes it; flo watches.
 run_probe ed MP_ROLE=host MP_ROOM=edit MP_STEPS=1400 MP_SCENARIO=busy \
@@ -344,7 +345,14 @@ clicks10 = bool(states10) and 'world hit test on, edit_room false' in states10[-
 # every wall; south and east ones once left blue tiles on the corridor).
 marks10 = [m.group(1) for m in (re.search(r'UI: overlay at step \d+: (\d+) marks', t) for t in (w_, y_)) if m]
 clean10 = marks10 == ['0', '0']
-ok10 = clean10 and clicks10 and (result('wade').startswith('IN SYNC through step 1000') and result('yara').startswith('IN SYNC')
+# wade moved a doctor into a room (right click, then a click there): both
+# games have them in that room at the same tile a few hours later.
+moving10 = re.search(r'UI: moving Doctor #(\d+) from \S+ to (\d+),(\d+) in (\S+)', w_)
+where_w = re.search(r'UI: Doctor #(\d+) at step 866 is at (\S+) in (\S+)', w_)
+where_y = re.search(r'UI: Doctor #(\d+) at step 866 is at (\S+) in (\S+)', y_)
+moved10 = bool(moving10 and where_w and where_y and where_w.groups() == where_y.groups()
+               and where_w.group(1) == moving10.group(1) and where_w.group(3) == moving10.group(4))
+ok10 = moved10 and 'move_staff' in kinds10 and clean10 and clicks10 and (result('wade').startswith('IN SYNC through step 1000') and result('yara').startswith('IN SYNC')
         and cw == applied('yara') and kinds10.count('pay_rise') == 2 and kinds10.count('probe_raise') == 2
         and 'fire_staff' in kinds10 and kinds10.count('queue_move') >= 1 and 'probe_patients' in kinds10
         and 'move_object' in kinds10 and 'sell_object' in kinds10
@@ -352,7 +360,7 @@ ok10 = clean10 and clicks10 and (result('wade').startswith('IN SYNC through step
         and rooms10 == re.search(r'rooms built: (.*)', y_).group(1)
         and drawn10.get('gp', '-') in rooms10.split() and drawn10.get('toilets', '-') not in rooms10.split()
         and 'accepted the pay rise' in y_ and 'declined the pay rise' in y_)
-print(f"10. Staff and queues:       {result('wade')}; commands {len(okw)}/{len(cw)} ok, identical: {cw == applied('yara')}; {' '.join(kinds10)}; rooms {rooms10 or 'none'}; clicks after furnishing: {clicks10}; markers left: {'/'.join(marks10) or '-'}")
+print(f"10. Staff and queues:       {result('wade')}; commands {len(okw)}/{len(cw)} ok, identical: {cw == applied('yara')}; {' '.join(kinds10)}; rooms {rooms10 or 'none'}; clicks after furnishing: {clicks10}; markers left: {'/'.join(marks10) or '-'}; staff moved: {moved10} {where_w.group(2, 3) if where_w else '-'}")
 fail |= not ok10
 
 ed, fl = log('ed'), log('flo')

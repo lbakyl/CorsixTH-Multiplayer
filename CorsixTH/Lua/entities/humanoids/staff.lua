@@ -455,7 +455,24 @@ end
 
 -- Function to set pickup action on staff. Pickup action can be deferred.
 function Staff:setPickup(ui, window_to_close)
-  if MultiplayerSession.blockUnsupported(ui) then return end -- moving staff
+  if MultiplayerSession.actionsAreCommands() then
+    -- Multiplayer: only this player's machine shows where they would go;
+    -- the move is a command (move_staff) once a tile is chosen.
+    if self.hospital ~= ui.hospital then
+      MultiplayerSession.refuseOthers({ui = ui})
+      return
+    end
+    if self.pickup or self.fired or self.mp_in_transit then
+      ui:playSound("wrong2.wav")
+      return
+    end
+    if window_to_close then window_to_close:close() end
+    local window = UIPlaceStaff(ui, self, ui.cursor_x, ui.cursor_y)
+    window.mp_moving = self
+    ui:addWindow(window)
+    ui:playSound("pickup.wav")
+    return
+  end
   if not self.pickup then -- check if we already added pickup Action in actions queue
     self.pickup = true
     local pickup_action = PickupAction(ui)

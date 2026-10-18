@@ -398,6 +398,8 @@ MultiplayerSession.rejection_texts = {
                  ["someone is in the way"] = "Could not place the object there: someone was in the way.",
                  ["it would block the room"] = "Not there: it would block the way to another object."},
   room_finish = {["objects missing"] = "The room still needs some of its objects."},
+  move_staff = {["invalid position"] = "They cannot be placed there.",
+                ["cannot move them now"] = "That member of staff cannot be moved now."},
   room_edit = {["room cannot be edited now"] = "That room cannot be edited now.",
                ["room is already being edited"] = "That room is already being edited."},
   room_buy = {["cannot buy that"] = "That object is not available for this room."},
@@ -1233,6 +1235,23 @@ local function entity_of(world, id, klass)
   if entity and (not klass or class.is(entity, klass)) then return entity end
 end
 MultiplayerSession.entityOf = entity_of
+
+--! Pick up a member of staff and put them down elsewhere: {staff, x, y}.
+--! The tile must be one single player's placement window accepts.
+function handlers.move_staff(world, cmd)
+  local staff = entity_of(world, cmd.staff, Staff)
+  if not staff or not ours(world, cmd, staff) then return false, "not our staff" end
+  if staff.fired or staff.pickup or not staff.tile_x then return false, "cannot move them now" end
+  local x, y = tonumber(cmd.x), tonumber(cmd.y)
+  local check = {world = world, tile_x = x, tile_y = y, ui = {hospital = staff.hospital},
+      profile = staff.profile, allow_in_rooms = not staff.profile:isType("Receptionist")}
+  if not x or not UIPlaceStaff._isValidStaffPlacement(check) then return false, "invalid position" end
+  staff.pickup = true
+  local action = PickupAction(world.ui)
+  action.mp_place = {x, y}
+  staff:setNextAction(action, true)
+  return true
+end
 
 --! Which plot a handyman looks after: {staff, parcel} (0 = all).
 function handlers.handyman_parcel(world, cmd)

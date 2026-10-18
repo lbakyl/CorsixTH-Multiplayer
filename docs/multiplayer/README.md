@@ -311,9 +311,8 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
    player, level goals per player, per-hospital heating, loans, patient
    referrals, renting rooms, selling research; hide other players' adviser
    messages.
-5. **Picking up** staff as a command (rooms are done: building, furnishing,
-   editing, moving and removing, lesson 34).
-6. **Encryption** (S8): passwords travel in clear text now.
+5. **Encryption** (S8): passwords travel in clear text now. (Every player
+   action is a command now: rooms, lesson 34; moving staff, `move_staff`.)
 
 ## 9. Open questions
 

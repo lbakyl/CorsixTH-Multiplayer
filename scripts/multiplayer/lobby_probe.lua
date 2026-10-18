@@ -552,6 +552,56 @@ local function run()
           else
             log("UI: no " .. entry.arg .. " to pick up")
           end
+        elseif a == "movestaff" or a == "whereis" then
+          -- movestaff: right-click the first member of staff of that class,
+          -- then click a free tile in one of this hospital's rooms (as a
+          -- person does). whereis: log where they are and in which room.
+          local st
+          for _, s2 in ipairs(world.ui.hospital.staff) do
+            if not st and s2.humanoid_class == entry.arg and not s2.fired and s2.tile_x then st = s2 end
+          end
+          if not st then
+            log("UI: no " .. entry.arg .. " to move")
+          elseif a == "whereis" then
+            local in_room = st:getRoom()
+            log(string.format("UI: %s #%s at step %d is at %d,%d in %s", entry.arg, tostring(st.mp_id), session.step,
+                st.tile_x, st.tile_y, in_room and (in_room.room_info.id .. "#" .. in_room.id) or "the_corridor"))
+          else
+            builder.mouse_click(world.ui, st.tile_x, st.tile_y, "right")
+            local win = world.ui:getWindow(UIPlaceStaff)
+            if not win then
+              -- (A walking sprite is not always on its tile: click them directly.)
+              log("UI: the right click missed the " .. entry.arg .. "; clicking them directly")
+              st:onClick(world.ui, "right")
+              win = world.ui:getWindow(UIPlaceStaff)
+            end
+            local dest
+            for _, rm in pairs(world.rooms) do
+              if not dest and rm.hospital == world.ui.hospital and rm.built and not rm.crashed and
+                  rm ~= st:getRoom() then
+                for ty = rm.y + 1, rm.y + rm.height - 2 do
+                  for tx = rm.x + 1, rm.x + rm.width - 2 do
+                    if not dest and win then
+                      win.tile_x, win.tile_y = tx, ty
+                      if win:_isValidStaffPlacement() and not world:getObject(tx, ty) then
+                        dest = {tx, ty, rm}
+                      end
+                    end
+                  end
+                end
+              end
+            end
+            if not (win and dest) then
+              log("UI: nowhere to move the " .. entry.arg)
+              if win then win:close() end
+            else
+              log(string.format("UI: moving %s #%s from %d,%d to %d,%d in %s#%d", entry.arg, tostring(st.mp_id),
+                  st.tile_x, st.tile_y, dest[1], dest[2], dest[3].room_info.id, dest[3].id))
+              -- A click there in the placement window (as hiring does).
+              builder.click_tile(world.ui, win, "left", dest[1], dest[2])
+              if world.ui:getWindow(UIPlaceStaff) then log("UI: the placement window did not take the click") end
+            end
+          end
         elseif a == "players" then
           -- MULTIPLAYER > PLAYERS: open the window and log its rows.
           local win = UIMultiplayerPlayers(world.ui)
