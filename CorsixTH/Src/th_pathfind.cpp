@@ -116,7 +116,10 @@ void abstract_pathfinder::record_neighbour_if_passable(
     pNeighbour->guess = guess_distance(pNeighbour);
     parent->dirty_node_list[parent->dirty_node_count++] = pNeighbour;
     parent->push_to_open_heap(pNeighbour);
-  } else if (pNode->cost + 1 < pNeighbour->cost) {
+  } else if (pNode->cost + neighbour_cost < pNeighbour->cost) {
+    // Compare with the real cost of this step: with "+ 1", a tile to avoid
+    // could look cheaper by another way and be promoted after it had left
+    // the open heap (an exception that ended the game).
     pNeighbour->prev = pNode;
     pNeighbour->cost = pNode->cost + neighbour_cost;
     pNeighbour->distance = pNode->distance + 1;
@@ -161,6 +164,7 @@ bool basic_pathfinder::find_path(const level_map* pMap, int iStartX,
   path_node* pTarget = &parent->nodes.at(iEndY * iWidth + iEndX);
 
   while (true) {
+    pNode->visited = true;
     if (pNode == pTarget) {
       parent->destination = pTarget;
       return true;

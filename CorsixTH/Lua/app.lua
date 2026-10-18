@@ -1241,6 +1241,11 @@ function App:errorHandler(last_dispatch_type, st)
     self.world:gameLog(st)
     self.world:dumpGameLog()
   end
+  if self.mp_session then
+    -- The other players' games will wait for this one: say why in the
+    -- server log.
+    pcall(self.mp_session.reportError, self.mp_session, last_dispatch_type .. " handler", st)
+  end
   if self.world and last_dispatch_type == "timer" and self.world.current_tick_entity then
     -- Disconnecting the tick handler is quite a drastic measure, so give
     -- the option of just disconnecting the offending entity and attempting
@@ -1293,6 +1298,7 @@ function App:onTick(...)
     local session = self.mp_session
     -- Rejoining: no world yet to read the network, so read it here.
     if session and not self.world then session:poll() end
+    if session and self.world then session:checkStall(self.world) end
     if session and session.lobby and (session.load_data or
         (session.save_at and session.step >= session.save_at) or
         (session.local_save and session.step >= session.local_save.at)) then
@@ -1301,7 +1307,19 @@ function App:onTick(...)
     if self.world then
       self.world:onTick(...)
     end
-    self.ui:onTick(...)
+    if session then
+      -- In multiplayer an error in the screen's own tick (sounds, adviser,
+      -- scrolling) must not stop this game, and with it everybody's: the
+      -- tick handler would be disconnected. Report it and carry on.
+      local ok, err = xpcall(self.ui.onTick, debug.traceback, self.ui, ...)
+      if not ok and session:reportError("screen tick", err) and self.world then
+        self.world:gameLog("Error in the screen tick (multiplayer, carrying on): ")
+        self.world:gameLog(err)
+        self.world:dumpGameLog()
+      end
+    else
+      self.ui:onTick(...)
+    end
   end
   return true -- tick events always result in a repaint
 end

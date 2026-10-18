@@ -57,16 +57,29 @@ function MultiplayerTransport.host(address, port, timeout)
   return MultiplayerTransport(conn)
 end
 
---! Connect to a host, retrying until the timeout.
+--! Connect to a host, retrying until the timeout (in seconds). Each attempt
+--! waits at most for the time left: a plain socket.connect would wait for
+--! the operating system to give up (20 seconds and more on Windows) when
+--! nothing answers at that address.
 function MultiplayerTransport.join(address, port, timeout)
   assert(MultiplayerTransport.available(), "LuaSocket is not available")
   local deadline = socket.gettime() + (timeout or 60)
   local conn, err
   repeat
-    conn, err = socket.connect(address, port)
-    if not conn then socket.sleep(0.2) end
+    local left = deadline - socket.gettime()
+    if left <= 0 then break end
+    local tcp = socket.tcp()
+    tcp:settimeout(math.min(left, 5))
+    local ok, e = tcp:connect(address, port)
+    if ok then
+      conn = tcp
+    else
+      tcp:close()
+      err = e
+      if socket.gettime() < deadline then socket.sleep(0.2) end
+    end
   until conn or socket.gettime() > deadline
-  if not conn then return nil, err end
+  if not conn then return nil, err or "timeout" end
   return MultiplayerTransport(conn)
 end
 

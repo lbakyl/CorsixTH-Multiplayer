@@ -463,6 +463,56 @@ function MultiplayerSession:_reportDesync(step, why, peer, own, other)
   end
 end
 
+--! A Lua error in this game: note it in the console log and the server's
+--! (once per message), so that a game that stops can be explained.
+--! Returns true the first time a message is seen.
+--!param where (string) What was running, e.g. "timer handler".
+--!param trace (string) The error and its stack trace.
+function MultiplayerSession:reportError(where, trace)
+  trace = tostring(trace)
+  local first = trace:match("[^\n]*")
+  self.reported_errors = self.reported_errors or {}
+  if self.reported_errors[first] then return end
+  self.reported_errors[first] = true
+  local text = string.format("ERROR at step %d in the %s: %s", self.step, where, trace)
+  self.log(text)
+  if self.send_diagnostics then self.send_diagnostics(self.step, text) end
+  return true
+end
+
+--! Called every tick (App:onTick). If this game has not run a step for 15
+--! seconds and it is not a pause everybody chose, tell the server why (it
+--! logs the note): a player's game that stops for no visible reason can
+--! then be explained from the server log. Once per stop.
+function MultiplayerSession:checkStall(world)
+  local now = self.clock()
+  if self.step ~= self.stall_step then
+    self.stall_step, self.stall_since, self.stall_reported = self.step, now, false
+    return
+  end
+  if self.observer or self.stall_reported or not self.send_diagnostics or not world or not self.stall_since then return end
+  if now - self.stall_since < 15000 then return end
+  if world:isCurrentSpeed("Pause") and world:isGameUserPaused() and not world:isMustPauseActive() then
+    return -- paused on purpose (shared pause)
+  end
+  self.stall_reported = true
+  local windows = {}
+  for _, window in ipairs(world.ui and world.ui.windows or {}) do
+    windows[#windows + 1] = (class.type(window) or "?") .. (window:mustPause() and "(pauses)" or "")
+  end
+  local waiting = {}
+  for p, s in pairs(self.peer_step) do waiting[#waiting + 1] = p .. ":" .. s end
+  table.sort(waiting)
+  local text = string.format("STALL at step %d for %ds: speed %s, hours/tick %s, must pause %s, " ..
+      "user paused %s, held %s, loading %s, save at %s, local save %s, peers %s, windows %s",
+      self.step, math.floor((now - self.stall_since) / 1000), tostring(world:getCurrentSpeed()),
+      tostring(world.hours_per_tick), tostring(world:isMustPauseActive()), tostring(world:isGameUserPaused()),
+      tostring(self.held), tostring(self.load_data ~= nil), tostring(self.save_at),
+      tostring(self.local_save and self.local_save.at), table.concat(waiting, ","), table.concat(windows, ","))
+  self.log(text)
+  self.send_diagnostics(self.step, text)
+end
+
 --! A description of the game state for comparing two games after a desync:
 --! date, money, rooms, and every entity (id, kind, tile) in entity order.
 function MultiplayerSession.diagnostics(world)

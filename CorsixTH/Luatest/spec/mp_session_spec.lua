@@ -217,6 +217,46 @@ describe("MultiplayerSession notices", function()
     assert.truthy(notes[#notes]:find("out of sync"))
   end)
 
+  it("reports a game that stops for no visible reason once, not a shared pause", function()
+    local now = {0}
+    local sent = {}
+    local a = pair_with_clock(now)
+    a.send_diagnostics = function(step, text) sent[#sent + 1] = text end
+    local speed, user_paused = "Normal", false
+    local world = {hours_per_tick = 1, ui = {windows = {}},
+      isCurrentSpeed = function(_, s) return s == speed end,
+      getCurrentSpeed = function() return speed end,
+      isGameUserPaused = function() return user_paused end,
+      isMustPauseActive = function() return false end}
+    a:checkStall(world)
+    now[1] = 14000
+    a:checkStall(world)
+    assert.equal(0, #sent)
+    now[1] = 16000
+    a:checkStall(world)
+    a:checkStall(world)
+    assert.equal(1, #sent)
+    assert.truthy(sent[1]:find("^STALL at step 0 for 16s: speed Normal"))
+    -- Running again, then a pause everybody chose: nothing to report.
+    a:beforeStep() a:afterStep()
+    a:checkStall(world)
+    speed, user_paused = "Pause", true
+    now[1] = 60000
+    a:checkStall(world)
+    assert.equal(1, #sent)
+  end)
+
+  it("reports each Lua error once", function()
+    local sent = {}
+    local a = pair_with_clock({0})
+    a.send_diagnostics = function(step, text) sent[#sent + 1] = text end
+    assert.is_true(a:reportError("screen tick", "audio.lua:410: oops\nstack traceback: ..."))
+    assert.is_nil(a:reportError("screen tick", "audio.lua:410: oops\nstack traceback: elsewhere"))
+    assert.is_true(a:reportError("timer handler", "world.lua:1: other"))
+    assert.equal(2, #sent)
+    assert.truthy(sent[1]:find("^ERROR at step 0 in the screen tick: audio.lua:410: oops"))
+  end)
+
   it("tells only the player who asked when their action is turned down", function()
     local notes = {a = {}, b = {}}
     local ta, tb = linked_transports()

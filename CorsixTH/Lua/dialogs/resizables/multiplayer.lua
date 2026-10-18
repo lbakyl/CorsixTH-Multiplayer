@@ -89,6 +89,7 @@ end
 --! Replace this window by a fresh one for the current lobby state.
 function UIMultiplayer:rebuild(status)
   local ui = self.ui
+  self.rebuilding = true
   self:close()
   ui:addWindow(UIMultiplayer(ui, status))
 end
@@ -142,7 +143,9 @@ function UIMultiplayer:buttonConnect()
   local S = _S.multiplayer_window
   local address, name = self.address_box.text, self.name_box.text
   self:setStatus(S.connecting:format(address))
-  local lobby, err = MultiplayerLobby.connect(address, name, 5)
+  TheApp:drawFrame() -- show "Connecting..." before waiting for the server
+  -- At most 10 seconds for a server that does not answer (a wrong address).
+  local lobby, err = MultiplayerLobby.connect(address, name, 10)
   if not lobby then
     self:setStatus(err)
     return
@@ -361,4 +364,9 @@ end
 
 function UIMultiplayer:close()
   UIResizable.close(self)
+  -- This window took the main menu's place; give it back (not when a game
+  -- has just started and replaced the whole screen).
+  if not self.rebuilding and not TheApp.world and not (self.lobby and self.lobby.state == "in_game") then
+    self.ui:addWindow(UIMainMenu(self.ui))
+  end
 end

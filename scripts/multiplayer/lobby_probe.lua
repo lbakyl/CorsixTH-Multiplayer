@@ -159,6 +159,10 @@ local function run_lobby()
   local menu = assert(TheApp.ui:getWindow(UIMainMenu), "no main menu")
   shot("main-menu")
   menu:buttonMultiplayer()
+  -- Closing the lobby window brings the main menu back.
+  assert(lobby_window(), "no multiplayer window"):close()
+  menu = assert(TheApp.ui:getWindow(UIMainMenu), "no main menu after closing the lobby window")
+  menu:buttonMultiplayer()
   local w = assert(lobby_window(), "no multiplayer window")
   w.address_box:setText(server)
   w.name_box:setText(name)
@@ -580,6 +584,12 @@ local function run()
           log("UI: left a stale room editor in the UI at step " .. session.step)
           world.ui.edit_room = {stale = true}
           world.ui:setWorldHitTest({id = -1})
+        elseif a == "uierror" then
+          -- An error in the screen's own tick (as the announcer once had
+          -- without a sound file): this game must carry on and say so.
+          log("UI: an error in the screen tick at step " .. session.step)
+          local ui = world.ui
+          ui.onTick = function() ui.onTick = nil; error("probe: an error in the screen tick") end
         elseif a == "mpsave" then
           -- File > Save: every player's game saves at the same hour.
           log("UI: File > Save at step " .. session.step)

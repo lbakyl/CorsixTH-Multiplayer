@@ -95,6 +95,8 @@ standard server image).
 ## Reporting a problem
 
 Please tell the fork's owner (an issue on the fork is fine): the server
-address, the room name, roughly when it happened, and what you were doing.
-After an out-of-sync, the server's log contains both games' state, which
-helps a lot.
+address, the room name, roughly when it happened, and what you were doing,
+and attach the newest file from the game's `Logs` folder (in
+`%APPDATA%\CorsixTH`, or next to `CorsixTH.exe` if `config.txt` is there).
+After an out-of-sync, a game error or a game that stopped, the server's log
+also says what happened, which helps a lot.

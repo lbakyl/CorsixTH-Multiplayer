@@ -34,7 +34,8 @@
 #      toilets drawn and cancelled while furnishing -> IN SYNC
 #  11. save and continue: a co-op game saved with File > Save, continued from
 #      the lobby by the same players (other host, own hospitals by name),
-#      loaded state identical to the saved one -> IN SYNC, commands after it
+#      loaded state identical to the saved one -> IN SYNC, commands after it;
+#      an error in one game's screen tick is reported and that game carries on
 # With MP_REFEREE=1 the local server also runs its headless referee for every
 # room, and four more checks: 12. the referee agrees with the players in every
 # room except 'cheat' (that one desyncs before the referee is there); 13, 14.
@@ -160,7 +161,7 @@ run_probe yara MP_ROLE=join MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
 # hosting this time (each gets their own hospital back by name).
 (
   run_probe sara MP_ROLE=host MP_ROOM=savegame MP_COOP=1 MP_STEPS=400 \
-    MP_UI_SCRIPT="20:openhospital;60:buy:bench;80:hire:Doctor;300:mpsave" & a=$!
+    MP_UI_SCRIPT="20:openhospital;60:buy:bench;80:hire:Doctor;120:uierror;300:mpsave" & a=$!
   sleep 1
   run_probe tom MP_ROLE=join MP_ROOM=savegame MP_STEPS=400 \
     MP_UI_SCRIPT="30:openhospital;90:hire:Nurse;290:staleui" & b=$!
@@ -350,7 +351,11 @@ clicks_ok = 'world hit test on, edit_room false' in t2
 ok11 = (same_save and same_load and seats and clicks_ok and result('tom-2').startswith('IN SYNC through step 700')
         and result('sara-2').startswith('IN SYNC through step 700') and applied('tom-2') == applied('sara-2')
         and kinds11 == ['hire', 'place_object'])
-print(f"11. Save and continue:      saved at step {saved_t.group(2) if saved_t else '-'} on both: {same_save}; "
+# sara's screen tick failed once at step 120: her game carried on, and the
+# server log has the error.
+ui_error = bool(re.search(r"room 'savegame': state of 'sara' .*ERROR at step 1[2-3]\d in the screen tick: .*probe: an error in the screen tick", server))
+ok11 = ok11 and ui_error
+print(f"11. Save and continue:      saved at step {saved_t.group(2) if saved_t else '-'} on both: {same_save}; error reported: {ui_error}; "
       f"continued from it: {same_load}; own hospitals: {seats}; clicks after load: {clicks_ok}; {result('tom-2')} / {result('sara-2')}; "
       f"commands after it: {' '.join(kinds11)}")
 fail |= not ok11

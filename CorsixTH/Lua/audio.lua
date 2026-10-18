@@ -401,6 +401,9 @@ function Audio:isPlaying(sound)
 end
 
 function Audio:cacheSoundFilenamesAssociatedWithName(name)
+  -- Without a sound archive (no SOUND/DATA file) there is nothing to find,
+  -- and nothing to cache for when one is loaded.
+  if not self.sound_archive then return {} end
   local list = wilcard_cache[name]
   if not list then
     local filename

@@ -115,6 +115,7 @@ Tests and tools (`scripts/multiplayer/` unless noted):
 |---|---|
 | `CorsixTH/Luatest/spec/mp_session_spec.lua`, `mp_lobby_spec.lua` | Unit tests |
 | `mp_server/tests/` | Server tests (pytest) |
+| `CorsixTH/CppTest/` | C++ unit tests (Catch2, configure with `-DENABLE_UNIT_TESTS=ON`, run `UnitTests`), including the pathfinder test |
 | `run_lobby_probe.sh` | **Main integration test.** A local server (or `MP_EXTERNAL_SERVER`) and pairs of real games going through the main menu and lobby window. 11 checks, ~5 min; `MP_REFEREE=1` adds the referee and 4 checks (referee agrees, repair in shared and co-op games, rejoin) |
 | `run_ingame_probe.sh` | Two games connected directly (no server). 5 checks |
 | `run_sync_probe.sh` | Harness-level determinism checks. 7 checks |
@@ -254,6 +255,22 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
     looked like a sacking, other players' patients that could be sent home.
     `run_lobby_player.sh` with `MP_SCENARIO=none` and `MP_UI_COMMANDS` puts
     a scripted player into a person's game and lets you direct it live.
+31. **One game's Lua error stops everybody.** CorsixTH disconnects the tick
+    handler after an error in it, so that game freezes (the menu bar still
+    works) and the others wait for it. A player's game froze after building
+    a psychiatric ward: the announcer looked up a random sound variant
+    without a sound file (`audio.lua`, a game data folder without
+    `Sound-0.dat`; upstream bug). Now the screen's own tick runs under
+    `xpcall` in multiplayer, and every error and every stop longer than 15
+    seconds goes to the server log (`ERROR at step`, `STALL at step`). The
+    game's own `Logs` folder had the answer; ask testers for it.
+32. **The pathfinder's open heap** (upstream bug): a node's cost was
+    compared with `+ 1` but updated with the real step cost (128 into a
+    tile to avoid), so a node that had left the heap could be promoted and
+    the game ended with "Invalid open_idx on node". Both games of a probe
+    died at the same tick while a room was drawn over people. Fixed in
+    `th_pathfind.cpp`; `CppTest/test_th_pathfind.cpp` checks path costs on
+    random maps against a plain search.
 
 ## 8. Next steps
 
