@@ -314,6 +314,15 @@ end
 -- entry = {dlg, peer, hospital, x, y, w, h, placed}).
 --------------------------------------------------------------------------------
 
+--! Is `dlg` one of the UI's open windows? (Window:removeWindow does not
+--! clear a window's parent, so that is no answer.)
+local function is_shown(ui, dlg)
+  for _, window in ipairs(ui and ui.windows or {}) do
+    if window == dlg then return true end
+  end
+  return false
+end
+
 --! Show the room editor of a room being furnished to its player (only on
 --! that player's machine). False if another room editor is open there.
 function builder.show(world, entry)
@@ -321,7 +330,7 @@ function builder.show(world, entry)
   if not ui or (ui.edit_room and ui.edit_room ~= entry.dlg) then return false end
   local dlg = entry.dlg
   dlg.mp_room_id = entry.dlg.room.id
-  if not dlg.parent then ui:addWindow(dlg) end
+  if not is_shown(ui, dlg) then ui:addWindow(dlg) end
   ui.edit_room = dlg
   ui:setWorldHitTest(dlg.room)
   -- Buying more objects and picking up placed ones are not commands yet.
@@ -334,7 +343,7 @@ end
 --! where it never was). The room itself is unchanged.
 function builder.hide(world, entry)
   local dlg = entry.dlg
-  if dlg.parent then dlg.parent:removeWindow(dlg) end
+  if is_shown(world.ui, dlg) then world.ui:removeWindow(dlg) end
   builder.releaseUI(world.ui, dlg)
 end
 
@@ -343,7 +352,7 @@ end
 --! A save made in that state would otherwise keep a player from clicking
 --! anybody outside that room.
 function builder.releaseUI(ui, dlg)
-  if not ui or (dlg and dlg.parent) then return end
+  if not ui or (dlg and is_shown(ui, dlg)) then return end
   local room = dlg and dlg.room
   if dlg and ui.edit_room == dlg then ui.edit_room = false end
   if ui.do_world_hit_test ~= true and (not dlg or ui.do_world_hit_test == room) then
@@ -383,7 +392,7 @@ function builder.placeObject(world, entry, cmd)
     if not object_type.orientations[cmd.orientation] then return false, "unknown orientation" end
     local cell_x, cell_y, orientation = dlg.object_cell_x, dlg.object_cell_y, dlg.object_orientation
     local function restore()
-      if not dlg.parent then
+      if not is_shown(world.ui, dlg) then
         -- Not shown on this machine: no blueprint on the map.
         dlg:clearBlueprint()
         dlg.object_cell_x, dlg.object_cell_y = nil, nil

@@ -154,7 +154,7 @@ run_probe wade MP_ROLE=host MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
   MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench" & pids+=($!)
 sleep 1
 run_probe yara MP_ROLE=join MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
-  MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront;500:furnishroom:gp:5:5;750:cancelroom:toilets:4:4" & pids+=($!)
+  MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront;500:furnishroom:gp:5:5;750:cancelroom:toilets:4:4;900:uistate" & pids+=($!)
 # Save and continue: a co-op game saves at step 300 (File > Save) and ends;
 # then the same two players continue it from the lobby, the other one
 # hosting this time (each gets their own hospital back by name).
@@ -316,7 +316,10 @@ rooms10 = m10.group(1) if m10 else ''
 # Where yara drew the furnished GP's office and the cancelled toilets.
 drawn10 = {k: f"{k}@{x},{yy}" for k, x, yy in re.findall(r'UI: drew (\w+) at (\d+),(\d+)', y_)}
 
-ok10 = (result('wade').startswith('IN SYNC through step 1000') and result('yara').startswith('IN SYNC')
+# After furnishing by hand and cancelling, clicks reach the whole map again.
+states10 = [l for l in y_.splitlines() if 'UI: state at step' in l]
+clicks10 = bool(states10) and 'world hit test on, edit_room false' in states10[-1]
+ok10 = clicks10 and (result('wade').startswith('IN SYNC through step 1000') and result('yara').startswith('IN SYNC')
         and cw == applied('yara') and kinds10.count('pay_rise') == 2 and kinds10.count('probe_raise') == 2
         and 'fire_staff' in kinds10 and kinds10.count('queue_move') >= 1 and 'probe_patients' in kinds10
         and 'move_object' in kinds10 and 'sell_object' in kinds10
@@ -324,7 +327,7 @@ ok10 = (result('wade').startswith('IN SYNC through step 1000') and result('yara'
         and rooms10 == re.search(r'rooms built: (.*)', y_).group(1)
         and drawn10.get('gp', '-') in rooms10.split() and drawn10.get('toilets', '-') not in rooms10.split()
         and 'accepted the pay rise' in y_ and 'declined the pay rise' in y_)
-print(f"10. Staff and queues:       {result('wade')}; commands {len(okw)}/{len(cw)} ok, identical: {cw == applied('yara')}; {' '.join(kinds10)}; rooms {rooms10 or 'none'}")
+print(f"10. Staff and queues:       {result('wade')}; commands {len(okw)}/{len(cw)} ok, identical: {cw == applied('yara')}; {' '.join(kinds10)}; rooms {rooms10 or 'none'}; clicks after furnishing: {clicks10}")
 fail |= not ok10
 
 sa, to, t2, s2 = log('sara'), log('tom'), log('tom-2'), log('sara-2')
