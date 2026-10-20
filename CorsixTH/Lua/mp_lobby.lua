@@ -343,7 +343,8 @@ function MultiplayerLobby:_writeLocalSave(session, kind)
   local label = kind == "autosave" and (room .. " autosave") or
       string.format("%s y%d-%02d-%02d", room, date:year(), date:monthOfYear(), date:dayOfMonth())
   local path = dir .. label .. ".sav"
-  TheApp:save(path)
+  -- (Staff this player is moving are only hidden on this screen.)
+  session:withHiddenShown(TheApp.save, TheApp, path)
   local p = self.start_params or {}
   local hospitals, n = {}, world.mp_coop and world.mp_coop.players or 1
   for i = 1, n do

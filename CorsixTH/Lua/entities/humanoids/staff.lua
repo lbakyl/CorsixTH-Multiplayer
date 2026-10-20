@@ -467,6 +467,10 @@ function Staff:setPickup(ui, window_to_close)
       return
     end
     if window_to_close then window_to_close:close() end
+    -- They vanish from this player's screen at once, as in single player
+    -- (only the picture: the shared game has them where they were until
+    -- move_staff runs; see MultiplayerSession:hideLocally).
+    TheApp.mp_session:hideLocally(self)
     local window = UIPlaceStaff(ui, self, ui.cursor_x, ui.cursor_y)
     window.mp_moving = self
     ui:addWindow(window)

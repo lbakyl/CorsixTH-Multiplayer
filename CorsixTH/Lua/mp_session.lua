@@ -1236,10 +1236,45 @@ local function entity_of(world, id, klass)
 end
 MultiplayerSession.entityOf = entity_of
 
+--! Picture only (this machine): hide a member of staff this player picked
+--! up, until move_staff runs or the move is cancelled. Nothing in the game
+--! reads whether a person is visible; saves show them (lobby _writeLocalSave).
+function MultiplayerSession:hideLocally(staff)
+  self.hidden_staff = self.hidden_staff or {}
+  if staff.th and not self.hidden_staff[staff] then
+    self.hidden_staff[staff] = true
+    staff.th:makeInvisible()
+  end
+end
+
+function MultiplayerSession:showLocally(staff)
+  if self.hidden_staff and self.hidden_staff[staff] then
+    self.hidden_staff[staff] = nil
+    if staff.th then staff.th:makeVisible() end
+  end
+end
+
+--! Run fn with every locally hidden member of staff shown (for a save).
+function MultiplayerSession:withHiddenShown(fn, ...)
+  local hidden = {}
+  for staff in pairs(self.hidden_staff or {}) do
+    hidden[#hidden + 1] = staff
+    staff.th:makeVisible()
+  end
+  local results = {pcall(fn, ...)}
+  for _, staff in ipairs(hidden) do staff.th:makeInvisible() end
+  if not results[1] then error(results[2], 0) end
+  return (table.unpack or unpack)(results, 2)
+end
+
 --! Pick up a member of staff and put them down elsewhere: {staff, x, y}.
 --! The tile must be one single player's placement window accepts.
 function handlers.move_staff(world, cmd)
   local staff = entity_of(world, cmd.staff, Staff)
+  -- The player who moves them hid them on their screen; whatever happens
+  -- now, the game decides where they are seen (the pick up shows them).
+  local session = TheApp and TheApp.mp_session
+  if staff and session then session:showLocally(staff) end
   if not staff or not ours(world, cmd, staff) then return false, "not our staff" end
   if staff.fired or staff.pickup or not staff.tile_x then return false, "cannot move them now" end
   local x, y = tonumber(cmd.x), tonumber(cmd.y)

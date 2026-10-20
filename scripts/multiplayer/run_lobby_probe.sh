@@ -347,11 +347,13 @@ marks10 = [m.group(1) for m in (re.search(r'UI: overlay at step \d+: (\d+) marks
 clean10 = marks10 == ['0', '0']
 # wade moved a doctor into a room (right click, then a click there): both
 # games have them in that room at the same tile a few hours later.
-moving10 = re.search(r'UI: moving Doctor #(\d+) from \S+ to (\d+),(\d+) in (\S+)', w_)
-where_w = re.search(r'UI: Doctor #(\d+) at step 866 is at (\S+) in (\S+)', w_)
-where_y = re.search(r'UI: Doctor #(\d+) at step 866 is at (\S+) in (\S+)', y_)
+moving10 = re.search(r'UI: moving Doctor #(\d+) from \S+ to (\d+),(\d+) in (\S+) \(picked up: hidden (\w+)\)', w_)
+where_w = re.search(r'UI: Doctor #(\d+) at step 866 is at (\S+) in (\S+), visible (\w+)', w_)
+where_y = re.search(r'UI: Doctor #(\d+) at step 866 is at (\S+) in (\S+), visible (\w+)', y_)
 moved10 = bool(moving10 and where_w and where_y and where_w.groups() == where_y.groups()
-               and where_w.group(1) == moving10.group(1) and where_w.group(3) == moving10.group(4))
+               and where_w.group(1) == moving10.group(1) and where_w.group(3) == moving10.group(4)
+               # gone from the mover's screen at once, seen again where they landed
+               and moving10.group(5) == 'true' and where_w.group(4) == 'true')
 ok10 = moved10 and 'move_staff' in kinds10 and clean10 and clicks10 and (result('wade').startswith('IN SYNC through step 1000') and result('yara').startswith('IN SYNC')
         and cw == applied('yara') and kinds10.count('pay_rise') == 2 and kinds10.count('probe_raise') == 2
         and 'fire_staff' in kinds10 and kinds10.count('queue_move') >= 1 and 'probe_patients' in kinds10

@@ -54,7 +54,9 @@ end
 
 function UIPlaceStaff:close()
   if self.mp_moving then
-    -- Multiplayer: nothing was picked up in the shared game.
+    -- Multiplayer: nothing was picked up in the shared game. Not placed:
+    -- show them again where they are (placed: once move_staff has run).
+    if not self.mp_sent and TheApp.mp_session then TheApp.mp_session:showLocally(self.mp_moving) end
     Window.close(self)
     return
   end
@@ -161,6 +163,7 @@ function UIPlaceStaff:onMouseUp(button, x, y)
           -- Multiplayer: every peer moves them when the command runs.
           TheApp.mp_session:issue({kind = "move_staff", staff = self.mp_moving.mp_id,
               x = self.tile_x, y = self.tile_y})
+          self.mp_sent = true
           self.ui:playSound("plac_st2.wav")
         elseif self.staff then
           self.staff:setTile(self.tile_x, self.tile_y)

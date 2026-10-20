@@ -564,8 +564,9 @@ local function run()
             log("UI: no " .. entry.arg .. " to move")
           elseif a == "whereis" then
             local in_room = st:getRoom()
-            log(string.format("UI: %s #%s at step %d is at %d,%d in %s", entry.arg, tostring(st.mp_id), session.step,
-                st.tile_x, st.tile_y, in_room and (in_room.room_info.id .. "#" .. in_room.id) or "the_corridor"))
+            log(string.format("UI: %s #%s at step %d is at %d,%d in %s, visible %s", entry.arg, tostring(st.mp_id),
+                session.step, st.tile_x, st.tile_y, in_room and (in_room.room_info.id .. "#" .. in_room.id) or "the_corridor",
+                tostring(st.th:isVisible())))
           else
             builder.mouse_click(world.ui, st.tile_x, st.tile_y, "right")
             local win = world.ui:getWindow(UIPlaceStaff)
@@ -595,8 +596,9 @@ local function run()
               log("UI: nowhere to move the " .. entry.arg)
               if win then win:close() end
             else
-              log(string.format("UI: moving %s #%s from %d,%d to %d,%d in %s#%d", entry.arg, tostring(st.mp_id),
-                  st.tile_x, st.tile_y, dest[1], dest[2], dest[3].room_info.id, dest[3].id))
+              log(string.format("UI: moving %s #%s from %d,%d to %d,%d in %s#%d (picked up: hidden %s)", entry.arg,
+                  tostring(st.mp_id), st.tile_x, st.tile_y, dest[1], dest[2], dest[3].room_info.id, dest[3].id,
+                  tostring(not st.th:isVisible())))
               -- A click there in the placement window (as hiring does).
               builder.click_tile(world.ui, win, "left", dest[1], dest[2])
               if world.ui:getWindow(UIPlaceStaff) then log("UI: the placement window did not take the click") end
