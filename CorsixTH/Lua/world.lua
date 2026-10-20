@@ -652,11 +652,22 @@ end
 function World:setPlotOwner(parcel, owner)
   self.map:setPlotOwner(parcel, owner)
   if owner ~= 0 and self.delayed_map_objects then
+    -- In a fixed order (tile, then object): pairs() order differs between
+    -- processes, and in multiplayer the order of the new objects is part of
+    -- the shared game (the doors of a plot once came out in another order
+    -- on each player's machine).
+    local due = {}
     for info, p in pairs(self.delayed_map_objects) do
-      if p == parcel then
-        self:newObject(unpack(info))
-        self.delayed_map_objects[info] = nil
-      end
+      if p == parcel then due[#due + 1] = info end
+    end
+    table.sort(due, function(a, b)
+      if a[3] ~= b[3] then return a[3] < b[3] end
+      if a[2] ~= b[2] then return a[2] < b[2] end
+      return tostring(a[1]) < tostring(b[1])
+    end)
+    for _, info in ipairs(due) do
+      self:newObject(unpack(info))
+      self.delayed_map_objects[info] = nil
     end
   end
   self.map.th:updateShadows()

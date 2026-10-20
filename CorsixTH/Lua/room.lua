@@ -616,7 +616,7 @@ function Room:onHumanoidLeave(humanoid)
     -- Make patients leave the room (except wards) if there are no longer enough staff
     if not self:testStaffCriteria(self:getRequiredStaffCriteria()) or self:getStaffMember() == nil then
       local call_for_new_staff = self.door.queue:patientSize() > 0
-      for room_humanoid in pairs(self.humanoids) do
+      for _, room_humanoid in ipairs(self:humanoidsInOrder()) do
         if class.is(room_humanoid, Patient) and self:shouldHavePatientReenter(room_humanoid) then
           call_for_new_staff = true
           if self.room_info.id ~= "ward" then
@@ -1030,6 +1030,17 @@ function Room:deactivate()
   self.hospital:removeRatholesAroundRoom(self)
 end
 
+--! The people in the room in a fixed order (entity id). pairs() over
+--! self.humanoids gives another order in every process; where each person
+--! is sent (back into a queue) depends on the order, and in multiplayer it
+--! must be the same on every player's machine.
+function Room:humanoidsInOrder()
+  local list = {}
+  for humanoid in pairs(self.humanoids) do list[#list + 1] = humanoid end
+  table.sort(list, function(a, b) return (a.mp_id or 0) < (b.mp_id or 0) end)
+  return list
+end
+
 function Room:tryToEdit()
   self:deactivate()
   local people_in_room = 0
@@ -1038,7 +1049,7 @@ function Room:tryToEdit()
   if self.door.user and self.door.user:getCurrentAction().is_entering then
     people_in_room = 1
   end
-  for humanoid, _ in pairs(self.humanoids) do
+  for _, humanoid in ipairs(self:humanoidsInOrder()) do
     if not humanoid:isLeaving() then
       if class.is(humanoid, Patient) then
         self:makeHumanoidLeave(humanoid)

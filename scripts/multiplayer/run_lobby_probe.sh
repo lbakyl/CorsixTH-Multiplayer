@@ -149,10 +149,10 @@ run_probe kate MP_ROLE=host MP_ROOM=fax MP_STEPS=1300 MP_UI_SCRIPT="100:vip;400:
 sleep 1
 run_probe liam MP_ROLE=join MP_ROOM=fax MP_STEPS=1300 MP_DRAW_EVERY=2   MP_UI_SCRIPT="160:answerfax:personality:2" & pids+=($!)
 run_probe mira MP_ROLE=host MP_ROOM=coop MP_COOP=1 MP_STEPS=1200 \
-  MP_UI_SCRIPT="20:openhospital;60:buy:bench;80:hire:Doctor;200:givemoney:5000;250:loan;260:priceup;270:research:cure;280:heatup;400:bonus:Doctor;410:raise:Doctor" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;60:buy:bench;80:hire:Doctor;200:givemoney:5000;250:loan;260:priceup;270:research:cure;280:heatup;400:bonus:Doctor;410:raise:Doctor;500:buyplot" & pids+=($!)
 sleep 1
 run_probe nico MP_ROLE=join MP_ROOM=coop MP_STEPS=1200 MP_DRAW_EVERY=3 \
-  MP_UI_SCRIPT="30:openhospital;60:buy:plant;90:hire:Nurse;300:sendstaff:Nurse;350:loan;360:heatup;370:heatup;600:sendhome" & pids+=($!)
+  MP_UI_SCRIPT="30:openhospital;60:buy:plant;90:hire:Nurse;300:sendstaff:Nurse;350:loan;360:heatup;370:heatup;520:buyplot:other;600:sendhome" & pids+=($!)
 run_probe olga MP_ROLE=host MP_ROOM=events MP_COOP=1 MP_STEPS=1600   MP_UI_SCRIPT="20:openhospital;100:emergency:2;400:vip:2" & pids+=($!)
 sleep 1
 run_probe paul MP_ROLE=join MP_ROOM=events MP_STEPS=1600 MP_DRAW_EVERY=3   MP_UI_SCRIPT="30:openhospital;130:answerfax:emergency:1;430:answerfax:personality:1" & pids+=($!)
@@ -305,14 +305,20 @@ fail |= not ok7
 m, n = log('mira'), log('nico')
 cm = applied('mira')
 kinds = [re.search(r'#\d+ (\w+) ->', x).group(1) for x in cm]
-ok_all = all(x.endswith('-> ok') for x in cm)
+# nico's try to buy a plot on mira's side is refused; everything else is ok.
+other8 = [x for x in cm if "buy_plot -> rejected: another player's side" in x]
+ok_all = len(other8) == 1 and all(x.endswith('-> ok') for x in cm if x not in other8)
+# mira buys a plot with entrance doors on it: they are made in the same
+# order on both machines (pairs order once differed).
+plot8 = re.search(r'UI: buying plot (\d+) \(\$\d+, (\d+) objects', m)
 ok8 = (result('mira').startswith('IN SYNC') and result('nico').startswith('IN SYNC') and cm == applied('nico')
        and ok_all and sorted(kinds) == sorted(['open_hospital', 'open_hospital', 'place_object', 'place_object',
                                                'hire', 'hire', 'give_money', 'send_staff', 'loan', 'loan',
                                                'set_price', 'research_frac', 'set_heat', 'set_heat', 'set_heat',
-                                               'staff_bonus', 'raise_wage', 'send_home'])
+                                               'staff_bonus', 'raise_wage', 'send_home', 'buy_plot', 'buy_plot'])
+       and plot8 is not None and int(plot8.group(2)) > 0
        and 'co-op: 2 hospitals' in m)
-print(f"8. Co-op, a hospital each:  {result('mira')}; commands {len(cm)} all ok: {ok_all}; identical: {cm == applied('nico')}")
+print(f"8. Co-op, a hospital each:  {result('mira')}; commands {len(cm)} all ok: {ok_all}; identical: {cm == applied('nico')}; plot bought: {plot8.group(1, 2) if plot8 else '-'}")
 for line in re.findall(r'hospital \d (?:[A-Z]+:|settings:).*', m)[-4:]:
     print("   " + line)
 fail |= not ok8

@@ -552,6 +552,31 @@ local function run()
           else
             log("UI: no " .. entry.arg .. " to pick up")
           end
+        elseif a == "buyplot" then
+          -- Town map: buy the plot this hospital can buy that has the most
+          -- objects waiting on it (entrance doors), as a click there does.
+          -- buyplot:other tries one on another player's side (refused).
+          local th, hospital = world.map.th, world.ui.hospital
+          local me = world:getHospitalIndex(hospital)
+          local best, best_n
+          for plot = 1, th:getPlotCount() do
+            local side = world.mp_coop and MultiplayerSession.plotSide(world, plot)
+            local wanted = not side or (entry.arg == "other") == (side ~= me)
+            if wanted and th:isParcelPurchasable(plot, hospital:getPlayerIndex()) then
+              local n = 0
+              for _, p2 in pairs(world.delayed_map_objects or {}) do
+                if p2 == plot then n = n + 1 end
+              end
+              if not best or n > best_n then best, best_n = plot, n end
+            end
+          end
+          if best then
+            log(string.format("UI: buying plot %d ($%d, %d objects waiting on it) at step %d", best,
+                world.map:getParcelPrice(best), best_n, session.step))
+            TheApp.mp_session:issue({kind = "buy_plot", plot = best})
+          else
+            log("UI: no plot to buy")
+          end
         elseif a == "movestaff" or a == "whereis" then
           -- movestaff: right-click the first member of staff of that class,
           -- then click a free tile in one of this hospital's rooms (as a

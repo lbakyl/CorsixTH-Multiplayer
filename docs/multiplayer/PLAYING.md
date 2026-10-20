@@ -70,7 +70,8 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   look at, but not act on, the others' patients, staff and machines. The
   **MULTIPLAYER** menu, **TRADE WITH OTHER PLAYERS** sends money, or a
   member of staff, who then walks over to the other hospital (it takes a few
-  game days). Faxes, emergencies and VIP visits come to the hospital they
+  game days). Land: you can buy the plots on your side of the map (nearest
+  to your hospital), not the other players'. Faxes, emergencies and VIP visits come to the hospital they
   are for.
 - **Players:** the **MULTIPLAYER** menu, **PLAYERS** lists everybody in the
   game: their ping (average of the last 10 seconds), whether they are still

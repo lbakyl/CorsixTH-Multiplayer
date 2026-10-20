@@ -398,6 +398,8 @@ MultiplayerSession.rejection_texts = {
                  ["someone is in the way"] = "Could not place the object there: someone was in the way.",
                  ["it would block the room"] = "Not there: it would block the way to another object."},
   room_finish = {["objects missing"] = "The room still needs some of its objects."},
+  buy_plot = {["another player's side"] = "That land is on another player's side of the map.",
+              ["cannot buy this plot"] = "That land cannot be bought now."},
   move_staff = {["invalid position"] = "They cannot be placed there.",
                 ["cannot move them now"] = "That member of staff cannot be moved now."},
   room_edit = {["room cannot be edited now"] = "That room cannot be edited now.",
@@ -1195,10 +1197,57 @@ function handlers.set_policy(world, cmd)
   return true
 end
 
---! Buy a plot of land: {plot}.
+--! Co-op: whose side of the map a plot is on (hospital index): the player
+--! whose own land is nearest (centre to centre), the lower index on a tie.
+--! Worked out once, from the land owned the first time it is asked (the
+--! start of the game), and kept in the world (saved).
+function MultiplayerSession.plotSide(world, plot)
+  if not world.mp_plot_side then
+    local th = world.map.th
+    local w, h = th:size()
+    local plots, own = {}, {}
+    local function add(t, k, x, y)
+      local c = t[k] or {0, 0, 0}
+      c[1], c[2], c[3] = c[1] + x, c[2] + y, c[3] + 1
+      t[k] = c
+    end
+    for y = 1, h do
+      for x = 1, w do
+        local p = th:getCellFlags(x, y).parcelId
+        if p and p ~= 0 then
+          add(plots, p, x, y)
+          local owner = th:getPlotOwner(p)
+          if owner ~= 0 then add(own, owner, x, y) end
+        end
+      end
+    end
+    local side = {}
+    for p, c in pairs(plots) do
+      local px, py = c[1] / c[3], c[2] / c[3]
+      local best, best_d
+      for player = 1, 4 do
+        local o = own[player]
+        if o then
+          local dx, dy = o[1] / o[3] - px, o[2] / o[3] - py
+          local d = dx * dx + dy * dy
+          if not best or d < best_d then best, best_d = player, d end
+        end
+      end
+      side[p] = best
+    end
+    world.mp_plot_side = side
+  end
+  return world.mp_plot_side[plot]
+end
+
+--! Buy a plot of land: {plot}. In co-op only plots on the buyer's side.
 function handlers.buy_plot(world, cmd)
   local hospital = hospital_of(world, cmd)
   if not hospital then return false, "no such hospital" end
+  if world.mp_coop then
+    local side = MultiplayerSession.plotSide(world, tonumber(cmd.plot))
+    if side and side ~= world:getHospitalIndex(hospital) then return false, "another player's side" end
+  end
   local ui = world.ui
   -- purchasePlot gives cost advice through the UI; only to that player.
   local adviser = ui and ui.adviser

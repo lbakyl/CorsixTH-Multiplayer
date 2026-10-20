@@ -297,6 +297,15 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
     builds before room editing the same click ran the single player edit
     code on one peer only, a likely cause of the step-1772 desync. The
     probe now moves the mouse and clicks (builder.mouse_click).
+36. **pairs() order again (lesson 2), in upstream code.** Buying a plot made
+    its waiting objects (entrance doors) in pairs() order: another order on
+    each machine, so the entity lists differed (a player's live game
+    desynced; the probe reproduced it 2 times in 3). Fixed in
+    World:setPlotOwner; a scan for pairs() loops that hand out actions found
+    two more over a room's people (Room:tryToEdit, and patients sent out
+    when a room loses its staff), now in entity id order
+    (Room:humanoidsInOrder). Co-op plots also have a side now
+    (MultiplayerSession.plotSide): only the nearest player may buy one.
 
 ## 8. Next steps
 
