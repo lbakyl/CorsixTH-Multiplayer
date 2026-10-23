@@ -736,6 +736,11 @@ function UIPlaceObjects:setBlueprintCell(x, y)
   end
 
   local real_obj = self.objects[self.active_index]
+  if not real_obj then
+    -- No object chosen in the list (e.g. after picking up): no blueprint.
+    self.object_footprint = {}
+    return
+  end
   local object = real_obj.object
   local object_footprint = object.orientations[self.object_orientation].footprint
   local map = self.map.th

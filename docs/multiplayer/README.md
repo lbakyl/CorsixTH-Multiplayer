@@ -315,7 +315,10 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
     fails is set aside inside the tick, alike in every game, the error goes
     to the server log, a shared save switches it on again, and an
     out-of-sync shows a window. gp.lua looks again from where the doctor
-    gets up.
+    gets up. The same test found a player's mouse dead for the rest of the
+    game: an error in the mouse movement handler (the furniture preview
+    with no object chosen) disconnected it. In multiplayer only the timer
+    handler is disconnected now; the others only touch the screen.
 
 ## 8. Next steps
 

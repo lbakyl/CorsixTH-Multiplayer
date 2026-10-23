@@ -1245,6 +1245,12 @@ function App:errorHandler(last_dispatch_type, st)
     -- The other players' games will wait for this one: say why in the
     -- server log.
     pcall(self.mp_session.reportError, self.mp_session, last_dispatch_type .. " handler", st)
+    if last_dispatch_type ~= "timer" then
+      -- Multiplayer: mouse, keyboard and drawing only touch this player's
+      -- screen (game changes are commands). Disconnecting the handler
+      -- would leave the mouse dead for the rest of the game; keep it.
+      return
+    end
   end
   if self.world and last_dispatch_type == "timer" and self.world.current_tick_entity then
     -- Disconnecting the tick handler is quite a drastic measure, so give

@@ -552,6 +552,13 @@ local function run()
           else
             log("UI: no " .. entry.arg .. " to pick up")
           end
+        elseif a == "inputerror" then
+          -- An error in the mouse movement handler, as the game reports it
+          -- (App:errorHandler): in multiplayer the handler stays connected.
+          local had_handler = TheApp.eventHandlers.motion ~= nil
+          TheApp:errorHandler("motion", "probe: an error in the motion handler")
+          log(string.format("UI: motion handler after an error at step %d: %s (before %s)", session.step,
+              TheApp.eventHandlers.motion ~= nil and "connected" or "disconnected", tostring(had_handler)))
         elseif a == "breakstaff" then
           -- A broken tick for the first member of staff of a class, in every
           -- game (test command probe_break): the game sets them aside alike.
