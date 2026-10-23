@@ -207,6 +207,19 @@ describe("MultiplayerSession notices", function()
     assert.truthy(notes[1]:find("Waiting"))
   end)
 
+  it("says whom the game waits for, and why", function()
+    local now = {0}
+    local a, notes = pair_with_clock(now)
+    a.peer_name = function(p) return p == 2 and "iris" or nil end
+    a.busy = {[2] = "UIFax"}
+    a:beforeStep() a:afterStep()
+    assert.is_false(a:canStep())
+    now[1] = 2000
+    assert.is_false(a:canStep())
+    assert.equal("Waiting for iris: a fax is open.", notes[#notes])
+    assert.equal("Waiting for the other player...", MultiplayerSession.waitingText({}, 2))
+  end)
+
   it("tells the player about a desync", function()
     local now = {0}
     local a, notes, inbox = pair_with_clock(now)

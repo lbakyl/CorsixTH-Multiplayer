@@ -1124,6 +1124,9 @@ end
 function UI:_onAddWindow(window)
   if self.app.world and window:mustPause() then
     self.app.world:mustPauseWindowAdd()
+    -- Multiplayer: the others wait for this game now; tell them why.
+    local session = self.app.mp_session
+    if session then session:showBusy(class.type(window) or "window") end
   end
 end
 
@@ -1133,6 +1136,8 @@ end
 function UI:_onRemoveWindow(window)
   if self.app.world and window:mustPause() then
     self.app.world:mustPauseWindowRemoved()
+    local session = self.app.mp_session
+    if session and not self:anyMustPauseWindowOpen() then session:showBusy(nil) end
   end
 end
 

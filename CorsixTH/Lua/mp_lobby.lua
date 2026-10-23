@@ -528,6 +528,11 @@ end
 function MultiplayerLobby:_onSHOW(f)
   local session = TheApp and TheApp.mp_session
   if not (session and session.lobby == self) then return end
+  if f.kind == "busy" then
+    session.busy = session.busy or {}
+    session.busy[tonumber(f.peer)] = f.what ~= "" and f.what or nil
+    return
+  end
   if f.kind == "blueprint" then
     session:showRemoteBlueprint(tonumber(f.peer), {room = f.room, x = tonumber(f.x) or 0,
         y = tonumber(f.y) or 0, w = tonumber(f.w) or 0, h = tonumber(f.h) or 0})
@@ -825,6 +830,7 @@ function MultiplayerLobby:_beginGame(f)
     delay = tonumber(f.delay) or 2,
     log = function(msg) lobby.log("multiplayer: " .. msg) end,
     notify = function(msg)
+      lobby.log("multiplayer: notice: " .. tostring(msg))
       local ui = TheApp.ui -- a desync repair loads another world and UI
       if TheApp.world and ui and ui.adviser then
         ui.adviser:say({text = msg, priority = 10})
@@ -835,6 +841,7 @@ function MultiplayerLobby:_beginGame(f)
     -- players never wait for it.
     observer = self.is_referee,
     send_cosmetic = function(fields) lobby:send("SHOW", fields) end,
+    peer_name = function(p) local pl = lobby.players and lobby.players[p] return pl and pl.name end,
     send_diagnostics = function(step, text)
       for i = 1, #text, 3000 do
         lobby:send("DIAG", {step = step, part = math.floor(i / 3000) + 1, text = text:sub(i, i + 2999)})

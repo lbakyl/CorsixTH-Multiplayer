@@ -319,6 +319,13 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
     game: an error in the mouse movement handler (the furniture preview
     with no object chosen) disconnected it. In multiplayer only the timer
     handler is disconnected now; the others only touch the screen.
+38. **Test the timers too.** The session's clock was rawget(_G, "SDL"),
+    but SDL is a module, not a global: the clock was always 0, so the
+    "Waiting for the other player" notice and the stall reports never came,
+    and unit tests passed because they bring their own clock. Found when a
+    player's fax paused the game and the other player thought it froze.
+    The waiting game now turns blue and names the player and the open
+    window (a busy notice, SHOW kind=busy).
 
 ## 8. Next steps
 

@@ -288,6 +288,7 @@ local function run()
   local waiting_rejoin -- restarts seen when the "waitrejoin" pause began
   local furnishing -- state of a room being furnished by hand (furnishroom)
   local editing -- state of a room being edited (editroom)
+  local holding -- a window that pauses this game, open for some seconds (holdpause)
   while session.step < target and (expect_repair or not session.desync) and not quit do
     local before = session.step
     tick()
@@ -329,6 +330,11 @@ local function run()
     end
     if furnishing and builder.furnish_tick(world, furnishing, log) then furnishing = nil end
     if editing and not furnishing and builder.edit_tick(world, editing, log) then editing = nil end
+    if holding and socket.gettime() >= holding.until_time then
+      log(string.format("UI: closed the question at step %d", session.step))
+      holding.win:close()
+      holding = nil
+    end
     -- In a person's game: once everybody else has left, leave too, so the
     -- room closes instead of running on with nobody watching.
     if scenario == "none" and not quit and #session.peers <= 1 then
@@ -556,6 +562,13 @@ local function run()
         elseif a == "discover" then
           -- Test command: the room becomes available (as research would).
           session:issue({kind = "probe_discover", room = entry.arg})
+        elseif a == "holdpause" then
+          -- A window that pauses this game (a question, like a fax would),
+          -- left open for <arg> seconds: the other players wait.
+          local win = UIConfirmDialog(world.ui, true, "Probe: a question", function() end)
+          world.ui:addWindow(win)
+          holding = {win = win, until_time = socket.gettime() + (tonumber(entry.arg) or 3)}
+          log(string.format("UI: opened a question at step %d", session.step))
         elseif a == "inputerror" then
           -- An error in the mouse movement handler, as the game reports it
           -- (App:errorHandler): in multiplayer the handler stays connected.

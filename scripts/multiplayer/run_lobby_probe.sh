@@ -127,7 +127,7 @@ EOF
 # wait for the server).
 pids=()
 run_probe alice MP_ROLE=host MP_ROOM=ward MP_STEPS=1500 \
-  MP_UI_SCRIPT="30:buy:bench;60:hire:Doctor;200:pause;600:breakstaff:Doctor;620:ticks:Doctor;650:inputerror;700:speed:Slower" & pids+=($!)
+  MP_UI_SCRIPT="30:buy:bench;60:hire:Doctor;200:pause;600:breakstaff:Doctor;620:ticks:Doctor;650:inputerror;700:speed:Slower;900:holdpause:3" & pids+=($!)
 sleep 1
 run_probe bob MP_ROLE=join MP_ROOM=ward MP_STEPS=1500 MP_DRAW_EVERY=3 \
   MP_UI_SCRIPT="40:buy:plant;90:hire:Nurse;190:unpause:150;620:ticks:Doctor" & pids+=($!)
@@ -249,13 +249,16 @@ ok_cmds = [x for x in applied('alice') if x.endswith('-> ok')]
 # At step 600 the doctor's tick breaks in all games (probe_break, as a bug would): all
 # set him aside alike, stay in sync, and tell the server.
 # An error in alice's mouse handler leaves it connected (her mouse goes on).
+# alice keeps a question open (it pauses her game): bob's game turns blue
+# and says whom it waits for, and why.
+wait1 = re.search(r'waiting for peer 1 at step \d+: the screen turns blue', log('bob')) is not None and 'notice: Waiting for alice: a question is open.' in log('bob')
 input1 = 'UI: motion handler after an error at step 650: connected (before true)' in log('alice')
 stopped1 = all(re.search(r'UI: Doctor #\d+ ticks false at step 620', log(p)) for p in ('alice', 'bob'))
 reported1 = all(re.search(rf"room 'ward': state of '{p}' .*ERROR at step 6\d\d in the tick of Doctor", server) for p in ('alice', 'bob'))
 ok1 = (result('alice').startswith('IN SYNC') and result('bob').startswith('IN SYNC')
        and applied('alice') == applied('bob') and len(ok_cmds) == 5
-       and paused_both and unpaused and slower_both and stopped1 and reported1 and input1)
-print(f"1. Two players via server:  {result('alice')}; commands applied {len(ok_cmds)}/5, identical: {applied('alice') == applied('bob')}; broken doctor set aside on both: {stopped1}, reported: {reported1}; mouse after an error: {input1}")
+       and paused_both and unpaused and slower_both and stopped1 and reported1 and input1 and wait1)
+print(f"1. Two players via server:  {result('alice')}; commands applied {len(ok_cmds)}/5, identical: {applied('alice') == applied('bob')}; broken doctor set aside on both: {stopped1}, reported: {reported1}; mouse after an error: {input1}; waiting shown: {wait1}")
 print(f"   {lobby.group(0) if lobby else 'no lobby line'}")
 print(f"   shared pause on both: {paused_both}; unpaused by the other player: {unpaused}; shared speed change: {slower_both}")
 fail |= not ok1

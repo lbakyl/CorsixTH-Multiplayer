@@ -115,13 +115,15 @@ function MultiplayerSession:MultiplayerSession(params)
   self.fingerprint = params.fingerprint or MultiplayerSession.defaultFingerprint
   self.log = params.log or function() end
   self.notify = params.notify or function() end
-  local sdl = rawget(_G, "SDL")
-  self.clock = params.clock or (sdl and sdl.getTicks) or function() return 0 end
+  -- Milliseconds. (SDL is a module, not a global: rawget(_G, "SDL") was
+  -- always nil, the clock always 0, and the waiting notice never came.)
+  self.clock = params.clock or MultiplayerSession.defaultClock()
   self.wait_started = nil -- clock time when the current stall began
   self.wait_notified = false
   self.control = params.control
   self.request_speed = params.request_speed
   self.send_cosmetic = params.send_cosmetic
+  self.peer_name = params.peer_name
   self.send_diagnostics = params.send_diagnostics
   self.observer = params.observer
   self.held = false         -- stopped by the server while it repairs a desync
@@ -259,24 +261,63 @@ function MultiplayerSession:canStep()
     return false
   end
   local needed = self.step + 1 - self.delay + 1
-  for _, step in pairs(self.peer_step) do
-    if step < needed then
-      self.stats.stalls = self.stats.stalls + 1
-      -- Tell the player once per longer stall (the other player may have
-      -- paused, or their computer is slower). Cosmetic only.
-      local now = self.clock()
-      if not self.wait_started then
-        self.wait_started = now
-      elseif not self.wait_notified and now - self.wait_started > 1500 then
-        self.wait_notified = true
-        self.notify("Waiting for the other player...")
+  local waiting_for
+  for p, step in pairs(self.peer_step) do
+    if step < needed and (not waiting_for or p < waiting_for) then waiting_for = p end
+  end
+  if waiting_for then
+    self.stats.stalls = self.stats.stalls + 1
+    -- Picture only: after a moment the screen turns blue like a pause, and
+    -- the player is told whom the game waits for (and why, if that player
+    -- has a message open that pauses their game, see showBusy).
+    local now = self.clock()
+    if not self.wait_started then
+      self.wait_started = now
+    else
+      if not self.wait_tinted and now - self.wait_started > 700 then
+        self.wait_tinted = true
+        self.log(string.format("waiting for peer %d at step %d: the screen turns blue", waiting_for, self.step))
+        local video = rawget(_G, "TheApp") and TheApp.video
+        if video then video:setBlueFilterActive(true) end
       end
-      return false
+      if not self.wait_notified and now - self.wait_started > 1500 then
+        self.wait_notified = true
+        self.notify(self:waitingText(waiting_for))
+      end
     end
+    return false
   end
   self.wait_started = nil
   self.wait_notified = false
+  if self.wait_tinted then
+    self.wait_tinted = false
+    if self.world and self.world.updateScreenBlueFilter then self.world:updateScreenBlueFilter() end
+  end
   return true
+end
+
+-- What the open pause window of another player is, in words.
+local busy_words = {
+  UIFax = "a fax", UIStaffRise = "a pay rise request", UIAnnualReport = "the annual report",
+  UIConfirmDialog = "a question",
+}
+
+--! "Waiting for <name>..." (with the reason if that player has a window
+--! open that pauses their game).
+function MultiplayerSession:waitingText(peer)
+  local name = self.peer_name and self.peer_name(peer) or nil
+  local who = name and ("Waiting for " .. name) or "Waiting for the other player"
+  local busy = self.busy and self.busy[peer]
+  if busy then return who .. ": " .. (busy_words[busy] or "a message") .. " is open." end
+  return who .. "..."
+end
+
+--! This player's game opened (what = window class) or closed (nil) a window
+--! that pauses it (fax, pay rise, ...): the others are told why they wait.
+function MultiplayerSession:showBusy(what)
+  if what == self.busy_shown then return end
+  self.busy_shown = what
+  if self.send_cosmetic then self.send_cosmetic({kind = "busy", what = what or ""}) end
 end
 
 --! Start again from `step` in `world`, freshly loaded from the save every peer
@@ -535,6 +576,18 @@ function MultiplayerSession:reportError(where, trace)
   self.log(text)
   if self.send_diagnostics then self.send_diagnostics(self.step, text) end
   return true
+end
+
+--! The real time in milliseconds: SDL's ticks in the game, LuaSocket's time
+--! elsewhere (the server's referee loads the game too), else always 0.
+function MultiplayerSession.defaultClock()
+  local ok, sdl = pcall(require, "sdl")
+  if ok and type(sdl) == "table" and sdl.getTicks then return sdl.getTicks end
+  local ok2, socket = pcall(require, "socket")
+  if ok2 and type(socket) == "table" and socket.gettime then
+    return function() return math.floor(socket.gettime() * 1000) end
+  end
+  return function() return 0 end
 end
 
 --! Called every tick (App:onTick). If this game has not run a step for 15
