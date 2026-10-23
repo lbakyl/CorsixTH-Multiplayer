@@ -488,12 +488,35 @@ function MultiplayerSession:_reportDesync(step, why, peer, own, other)
   self.desync = {step = step, reason = why, peer = peer, own = own, other = other}
   self.log(string.format("DESYNC at step %d with peer %s: %s", step, tostring(peer), why))
   self.notify(string.format("Multiplayer games are out of sync (step %d). Please restart the game.", step))
+  -- Hard to miss: from now on every player plays a different game.
+  local ui = TheApp and TheApp.world and TheApp.ui
+  if ui and self.world and not self.observer then
+    pcall(function()
+      self.world:setSpeed("Pause")
+      ui:addWindow(UIInformation(ui, {
+        "The players' games are no longer the same (out of sync since game hour " .. step .. ").",
+        "Whatever happens from now on is different for every player.",
+        "Please all leave the game, then the host continues it from the last save:",
+        "Multiplayer, create a room with Continue (the monthly autosave or your last File > Save).",
+      }))
+    end)
+  end
   if own then self.log("  local: " .. own) end
   if other then self.log("  peer:  " .. tostring(other)) end
   -- For finding the cause: this game's state goes to the server's log.
   if self.send_diagnostics and self.world then
     local ok, text = pcall(MultiplayerSession.diagnostics, self.world)
     if ok then self.send_diagnostics(self.step, text) end
+  end
+end
+
+--! An entity's tick failed (World:_advanceHours): it was set aside in every
+--! game alike. Tell the server, and the player once.
+function MultiplayerSession:reportEntityError(entity, trace)
+  local what = tostring(entity.humanoid_class or (entity.object_type and entity.object_type.id) or "entity")
+  if self:reportError("tick of " .. what .. " #" .. tostring(entity.mp_id), trace) then
+    self.notify("After a game error a " .. what .. " stopped working. Save and continue the game " ..
+        "(File > Save, then Continue in the lobby) to have them work again.")
   end
 end
 

@@ -1101,10 +1101,23 @@ function World:_advanceHours(hours, tick_earthquake)
         self:spawnPatient()
       end
     end
+    local session = TheApp and TheApp.mp_session
     for _, entity in ipairs(self.entities) do
       if entity.ticks and not entity.to_destroy then
         self.current_tick_entity = entity
-        entity:tick()
+        if session then
+          -- Multiplayer: an error in one entity's tick happens at the same
+          -- point in every player's game. Set the entity aside here, alike
+          -- everywhere, and finish the hour. (Stopping the game and then
+          -- "Attempt recovery" on each machine put the games out of step.)
+          local ok, err = xpcall(entity.tick, debug.traceback, entity)
+          if not ok then
+            entity.ticks = false
+            session:reportEntityError(entity, err)
+          end
+        else
+          entity:tick()
+        end
       end
     end
     self.current_tick_entity = nil

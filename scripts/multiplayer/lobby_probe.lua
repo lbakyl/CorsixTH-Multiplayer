@@ -552,6 +552,86 @@ local function run()
           else
             log("UI: no " .. entry.arg .. " to pick up")
           end
+        elseif a == "breakstaff" then
+          -- A broken tick for the first member of staff of a class, in every
+          -- game (test command probe_break): the game sets them aside alike.
+          log(string.format("UI: breaking the tick of the first %s at step %d", entry.arg, session.step))
+          session:issue({kind = "probe_break", class = entry.arg})
+        elseif a == "ticks" then
+          for _, st in ipairs(world.ui.hospital.staff) do
+            if st.humanoid_class == entry.arg then
+              log(string.format("UI: %s #%s ticks %s at step %d", entry.arg, tostring(st.mp_id), tostring(st.ticks), session.step))
+            end
+          end
+        elseif a == "roomdump" then
+          -- Every room of a type (entry.arg): its objects, and what a member
+          -- of staff at the desk would find (findObjectNear, as gp.lua does).
+          for _, rm in pairs(world.rooms) do
+            if rm.room_info.id == entry.arg then
+              local objs = {}
+              for o in pairs(rm.objects) do
+                objs[#objs + 1] = string.format("%s@%d,%d/%s", o.object_type.id, o.tile_x or -1, o.tile_y or -1,
+                    tostring(o.direction))
+              end
+              table.sort(objs)
+              local staff = rm:getStaffMember()
+              local found = "-"
+              for o in pairs(rm.objects) do
+                if o.object_type.id == "cabinet" and staff then
+                  local orient = o.object_type.orientations[o.direction]
+                  local ux, uy = o.tile_x, o.tile_y
+                  for _, t in ipairs(orient.footprint) do
+                    if t.only_passable then ux, uy = o.tile_x + t[1], o.tile_y + t[2] end
+                  end
+                  local d = world:getPathDistance(staff.tile_x, staff.tile_y, ux, uy)
+                  log(string.format("UI: cabinet use tile %d,%d, path from the doctor: %s; tiles: %s", ux, uy,
+                      tostring(d), (function()
+                        local t = {}
+                        for yy = rm.y, rm.y + rm.height - 1 do
+                          local row = {}
+                          for xx = rm.x, rm.x + rm.width - 1 do
+                            local f = world.map.th:getCellFlags(xx, yy)
+                            row[#row + 1] = (f.passable and "." or "#") .. (f.travelNorth and "" or "^")
+                          end
+                          t[#t + 1] = table.concat(row, "")
+                        end
+                        return table.concat(t, " | ")
+                      end)()))
+                end
+              end
+              local ex, ey = rm:getEntranceXY(true)
+              log(string.format("UI: door %d,%d %s, entrance inside %d,%d", rm.door.tile_x, rm.door.tile_y,
+                  tostring(rm.door.direction), ex, ey))
+              for o in pairs(rm.objects) do
+                local orient = o.object_type.orientations[o.direction]
+                if orient and o ~= rm.door then
+                  local fp = {}
+                  for _, t in ipairs(orient.footprint) do
+                    fp[#fp + 1] = string.format("%d,%d%s%s%s", o.tile_x + t[1], o.tile_y + t[2],
+                        t.only_passable and "p" or "", t.complete_cell and "c" or "", t.only_side and "s" or "")
+                  end
+                  local up = orient.use_position
+                  local ux, uy = up and type(up) == "table" and o.tile_x + up[1], up and type(up) == "table" and o.tile_y + up[2]
+                  log(string.format("UI: %s at %d,%d %s: footprint %s; use %s,%s; path from entrance %s",
+                      o.object_type.id, o.tile_x, o.tile_y, o.direction, table.concat(fp, " "), tostring(ux), tostring(uy),
+                      ux and tostring(world:getPathDistance(ex, ey, ux, uy)) or "-"))
+                end
+              end
+              if staff then
+                local obj, ox, oy = world:findObjectNear(staff, "cabinet")
+                found = obj and string.format("cabinet use tile %d,%d", ox, oy) or "NO CABINET FOUND"
+              end
+              log(string.format("UI: room %s#%d at %d,%d %dx%d built %s active %s: %s; staff %s at %s,%s ticks %s; %s",
+                  entry.arg, rm.id, rm.x, rm.y, rm.width, rm.height, tostring(rm.built), tostring(rm.is_active),
+                  table.concat(objs, " "), staff and tostring(staff.mp_id) or "-", staff and tostring(staff.tile_x) or "-",
+                  staff and tostring(staff.tile_y) or "-", staff and tostring(staff.ticks) or "-", found))
+            end
+          end
+          for _, st in ipairs(world.ui.hospital.staff) do
+            if st.ticks == false then
+              log(string.format("UI: frozen %s #%s at %d,%d", st.humanoid_class, tostring(st.mp_id), st.tile_x or -1, st.tile_y or -1))
+            end
+          end
         elseif a == "buyplot" then
           -- Town map: buy the plot this hospital can buy that has the most
           -- objects waiting on it (entrance doors), as a click there does.

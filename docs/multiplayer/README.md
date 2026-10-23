@@ -306,6 +306,16 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
     when a room loses its staff), now in entity id order
     (Room:humanoidsInOrder). Co-op plots also have a side now
     (MultiplayerSession.plotSide): only the nearest player may buy one.
+37. **A game error must not be recovered by hand.** A doctor's tick failed
+    in a 3-player test (gp.lua looked for the cabinet from the doctor's seat
+    at the desk, closed in by the chair, and walked to nil). CorsixTH then
+    stops the game and offers "Attempt recovery"; each player recovered at
+    another moment, the games went out of step, and the out-of-sync notice
+    was lost among the dialogs. Now in multiplayer an entity whose tick
+    fails is set aside inside the tick, alike in every game, the error goes
+    to the server log, a shared save switches it on again, and an
+    out-of-sync shows a window. gp.lua looks again from where the doctor
+    gets up.
 
 ## 8. Next steps
 

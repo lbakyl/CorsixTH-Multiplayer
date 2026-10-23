@@ -735,6 +735,18 @@ end
 --! (each player's, in co-op). Returns this player's desk tile.
 --! Test-only commands, registered on every peer.
 function builder.register_handlers()
+  -- The first member of staff of `class` gets a tick that fails (as a bug in
+  -- the game would make it), in every game, the referee's too; the value
+  -- survives a save.
+  MultiplayerSession.default_handlers.probe_break = function(w, cmd)
+    for _, st in ipairs(w.hospitals[cmd.hospital or 1].staff) do
+      if st.humanoid_class == cmd.class then
+        st.num_animation_ticks = "broken by the probe"
+        return true
+      end
+    end
+    return false, "no such staff"
+  end
   -- A VIP asks to visit.
   MultiplayerSession.default_handlers.probe_vip = function(w, cmd)
     w.hospitals[cmd.target or 1]:createVip()

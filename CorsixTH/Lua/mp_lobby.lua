@@ -653,6 +653,16 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
   room_builder.sanitizeUI(app.ui)
   local cleared = room_builder.clearStaleMarkers(world)
   if cleared > 0 then self.log("multiplayer: cleared " .. cleared .. " stale door/window markers") end
+  -- "Attempt recovery" after an error switches the person it happened to
+  -- off for good (entity.ticks = false). Every peer loads the same save, so
+  -- every peer switches them on again here.
+  for _, entity in ipairs(world.entities) do
+    if entity.ticks == false and class.is(entity, Humanoid) then
+      entity.ticks = true
+      self.log(string.format("multiplayer: %s #%s moves again (it was stopped after an error)",
+          tostring(entity.humanoid_class), tostring(entity.mp_id)))
+    end
+  end
   -- Rooms this player was furnishing by hand: their editors again.
   for _, entry in pairs(world.mp_furnishing or {}) do
     if entry.peer == session.peer_id and not self.is_referee then

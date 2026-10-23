@@ -50,12 +50,35 @@ function GPRoom:GPRoom(...)
   self:Room(...)
 end
 
+--! The tile the doctor stands on after getting up from the desk, or nil.
+function GPRoom:_deskStandTile()
+  for obj in pairs(self.objects) do
+    if obj.object_type.id == "desk" and obj.tile_x then
+      local orientation = obj.object_type.orientations[obj.direction]
+      local pos = orientation and (orientation.finish_use_position or orientation.use_position)
+      if type(pos) == "table" then
+        return {tile_x = obj.tile_x + pos[1], tile_y = obj.tile_y + pos[2]}
+      end
+    end
+  end
+end
+
 function GPRoom:doStaffUseCycle(humanoid)
   local obj, ox, oy = self.world:findObjectNear(humanoid, "cabinet")
-  humanoid:walkTo(ox, oy)
-  humanoid:queueAction(UseObjectAction(obj))
+  if not obj then
+    -- Seated at the desk, the doctor can have no free tile next to them (a
+    -- chair right beside the desk): look from where they get up instead.
+    -- (A walk to nowhere stopped the game here.)
+    local stand = self:_deskStandTile()
+    if stand then obj, ox, oy = self.world:findObjectNear(stand, "cabinet") end
+  end
+  if obj then
+    humanoid:walkTo(ox, oy)
+    humanoid:queueAction(UseObjectAction(obj))
+  end
 
   obj, ox, oy = self.world:findObjectNear(humanoid, "desk")
+  if not obj then return end -- (no desk to go back to: the room is being changed)
   humanoid:queueAction(WalkAction(ox, oy))
 
   -- A skilled doctor requires less time at the desk to diagnose the patient

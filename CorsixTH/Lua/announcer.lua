@@ -238,6 +238,12 @@ end
 function Announcer:_play(entry)
   self.playing = true
   local name = self.app.audio:resolveFilenameWildcard(entry.name)
+  if name:find("*", 1, true) then
+    -- No sound file to pick a variant from (game data without SOUND/DATA):
+    -- nothing to say, and no subtitle exists for the wildcard name.
+    self:_onPlayed(entry)
+    return
+  end
   self.app.audio:playSound(name, nil, true, function () self:_onPlayed(entry) end, entry.played_callback_delay)
   self.app.ui.subtitles:queueSubtitle(name)
   self.ticks_since_last_announcement = 0

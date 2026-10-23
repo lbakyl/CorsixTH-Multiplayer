@@ -6,7 +6,8 @@
 # join a password-protected room, get ready and start. Checks:
 #   1. two players: room, ping and pacing in the lobby, game start, actions
 #      from both (buy, hire), a pause by one player that both get, an
-#      unpause by the other, a speed change -> IN SYNC
+#      unpause by the other, a speed change, a doctor whose tick breaks in
+#      both games (set aside alike, reported) -> IN SYNC
 #   2. wrong password -> refused
 #   3. one player changes money locally only -> DESYNC (found by the game
 #      and by the server)
@@ -126,10 +127,10 @@ EOF
 # wait for the server).
 pids=()
 run_probe alice MP_ROLE=host MP_ROOM=ward MP_STEPS=1500 \
-  MP_UI_SCRIPT="30:buy:bench;60:hire:Doctor;200:pause;700:speed:Slower" & pids+=($!)
+  MP_UI_SCRIPT="30:buy:bench;60:hire:Doctor;200:pause;600:breakstaff:Doctor;620:ticks:Doctor;700:speed:Slower" & pids+=($!)
 sleep 1
 run_probe bob MP_ROLE=join MP_ROOM=ward MP_STEPS=1500 MP_DRAW_EVERY=3 \
-  MP_UI_SCRIPT="40:buy:plant;90:hire:Nurse;190:unpause:150" & pids+=($!)
+  MP_UI_SCRIPT="40:buy:plant;90:hire:Nurse;190:unpause:150;620:ticks:Doctor" & pids+=($!)
 sleep 1
 run_probe mallory MP_ROLE=join MP_ROOM=ward MP_JOIN_PASSWORD=guess & pids+=($!)
 run_probe carol MP_ROLE=host MP_ROOM=cheat MP_STEPS=400 & pids+=($!)
@@ -240,10 +241,14 @@ paused_both = 'speed is now Pause' in a and 'speed is now Pause' in b
 unpaused = bool(re.search(r'\[bob\] UI: pressed P at step \d+ \(paused\)', b))
 slower_both = 'speed is now Slower' in a and 'speed is now Slower' in b
 ok_cmds = [x for x in applied('alice') if x.endswith('-> ok')]
+# At step 600 the doctor's tick breaks in all games (probe_break, as a bug would): all
+# set him aside alike, stay in sync, and tell the server.
+stopped1 = all(re.search(r'UI: Doctor #\d+ ticks false at step 620', log(p)) for p in ('alice', 'bob'))
+reported1 = all(re.search(rf"room 'ward': state of '{p}' .*ERROR at step 6\d\d in the tick of Doctor", server) for p in ('alice', 'bob'))
 ok1 = (result('alice').startswith('IN SYNC') and result('bob').startswith('IN SYNC')
-       and applied('alice') == applied('bob') and len(ok_cmds) == 4
-       and paused_both and unpaused and slower_both)
-print(f"1. Two players via server:  {result('alice')}; commands applied {len(ok_cmds)}/4, identical: {applied('alice') == applied('bob')}")
+       and applied('alice') == applied('bob') and len(ok_cmds) == 5
+       and paused_both and unpaused and slower_both and stopped1 and reported1)
+print(f"1. Two players via server:  {result('alice')}; commands applied {len(ok_cmds)}/5, identical: {applied('alice') == applied('bob')}; broken doctor set aside on both: {stopped1}, reported: {reported1}")
 print(f"   {lobby.group(0) if lobby else 'no lobby line'}")
 print(f"   shared pause on both: {paused_both}; unpaused by the other player: {unpaused}; shared speed change: {slower_both}")
 fail |= not ok1
@@ -262,9 +267,10 @@ told = re.search(r'multiplayer: peer 2 left after step \d+', e) is not None
 alone = re.search(r'steps=800 .* peers=1', e) is not None
 # MULTIPLAYER > PLAYERS before and after frank quits.
 lists4 = re.findall(r'UI: players at step \d+: (.*)', e)
-listed = (len(lists4) == 2 and re.search(r'erin\|[^|]*\|\d+ ms\|you', lists4[0]) is not None
+listed = (len(lists4) == 2 and re.search(r'erin\|[^|]*\|[^|]*\|you', lists4[0]) is not None
           and re.search(r'frank\|[^|]*\|[^|]*\|playing', lists4[0]) is not None  # (no ping yet: frank's game lasts a second)
-          and 'frank|' in lists4[1] and '|-|left the game|' in lists4[1])
+          and 'frank|' in lists4[1] and '|-|left the game|' in lists4[1]
+          and re.search(r'erin\|[^|]*\|\d+ ms\|you', lists4[1]) is not None)
 # frank left while furnishing a room by hand: erin's game takes it over.
 taken4 = re.search(r'room_takeover -> ok', e) is not None
 ok4 = told and alone and listed and taken4 and result('erin').startswith('IN SYNC through step 800')
