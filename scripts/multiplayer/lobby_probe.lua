@@ -178,6 +178,7 @@ local function run_lobby()
     w.room_name_box:setText(room)
     w.password_box:setText(password)
     if coop then w:buttonMode() end -- "A hospital each"
+    for _ = 2, tonumber(os.getenv("MP_LEVEL") or 1) do w:buttonLevel() end
     if os.getenv("MP_CONTINUE") then
       local save = w:selectContinue(os.getenv("MP_CONTINUE"))
       log("continuing saved game " .. tostring(save and save.label))
@@ -552,6 +553,9 @@ local function run()
           else
             log("UI: no " .. entry.arg .. " to pick up")
           end
+        elseif a == "discover" then
+          -- Test command: the room becomes available (as research would).
+          session:issue({kind = "probe_discover", room = entry.arg})
         elseif a == "inputerror" then
           -- An error in the mouse movement handler, as the game reports it
           -- (App:errorHandler): in multiplayer the handler stays connected.

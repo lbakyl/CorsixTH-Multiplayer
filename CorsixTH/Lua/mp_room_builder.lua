@@ -488,11 +488,22 @@ function builder.placeObject(world, entry, cmd)
         dlg.object_cell_x, dlg.object_cell_y = nil, nil
         return
       end
-      -- This player's editor goes on following their mouse from where it was.
-      if dlg.objects[dlg.active_index] then
-        if orientation then dlg:setOrientation(orientation) end
+      -- This player's editor goes on following their mouse from where it was
+      -- (picture only: an error here must not change the command's result,
+      -- which is the same on every peer). The chosen object may have
+      -- changed: keep the facing only if it has one like it.
+      pcall(function()
+        local entry_now = dlg.objects[dlg.active_index]
+        if not entry_now then return end
+        if orientation and entry_now.object.orientations[orientation] then
+          dlg:setOrientation(orientation)
+        else
+          local keep = dlg.active_index
+          dlg.active_index = 0
+          dlg:setActiveIndex(keep)
+        end
         if cell_x then dlg:setBlueprintCell(cell_x, cell_y) end
-      end
+      end)
     end
     dlg:setActiveIndex(index)
     dlg:setOrientation(cmd.orientation)

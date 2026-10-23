@@ -735,6 +735,17 @@ end
 --! (each player's, in co-op). Returns this player's desk tile.
 --! Test-only commands, registered on every peer.
 function builder.register_handlers()
+  -- A room type becomes available to build, as finished research makes it.
+  MultiplayerSession.default_handlers.probe_discover = function(w, cmd)
+    local hospital = w.hospitals[cmd.hospital or 1]
+    local room_type = TheApp.rooms[cmd.room]
+    local discovery = room_type and hospital.room_discoveries[room_type.id]
+    if not discovery or not hospital.research.research_progress[room_type] then
+      return false, "not on this level"
+    end
+    discovery.is_discovered = true
+    return true
+  end
   -- The first member of staff of `class` gets a tick that fails (as a bug in
   -- the game would make it), in every game, the referee's too; the value
   -- survives a save.

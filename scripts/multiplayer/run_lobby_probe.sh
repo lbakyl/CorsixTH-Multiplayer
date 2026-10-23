@@ -37,7 +37,7 @@
 #      toilets drawn and cancelled while furnishing -> IN SYNC; no door or
 #      window markers left on the floor (windows on every wall); a doctor
 #      picked up (right click) and put into a room, there on both games
-#  12. room editing: a GP's office built and furnished by hand, then edited
+#  12. room editing (and a cardiogram room furnished by hand on level 2): a GP's office built and furnished by hand, then edited
 #      while patients are about (picked up, placed, bought, moved, confirmed)
 #      and removed; every edit command ok, IN SYNC, no markers left
 #  11. save and continue: a co-op game saved with File > Save, continued from
@@ -84,7 +84,7 @@ else
     export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
     export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/referee"
     export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
-    export MP_REFEREE_PROBE_SCENARIO="crowd=busy;staff=busy;edit=busy" # the probes' own start, see below
+    export MP_REFEREE_PROBE_SCENARIO="crowd=busy;staff=busy;edit=busy;cardio=none" # the probes' own start, see below
   fi
   PYTHONPATH="$source_dir/mp_server" python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
     --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
@@ -171,6 +171,11 @@ run_probe ed MP_ROLE=host MP_ROOM=edit MP_STEPS=1400 MP_SCENARIO=busy \
   MP_UI_SCRIPT="100:furnishroom:gp:5:5;500:editroom:gp:pickup:cabinet+place+buy:first+place+buy:radiator+place+move:1:0+place+done;950:overlay;1000:editroom:gp:delete;1300:overlay;1310:uistate" & pids+=($!)
 sleep 1
 run_probe flo MP_ROLE=join MP_ROOM=edit MP_STEPS=1400 MP_SCENARIO=busy MP_UI_SCRIPT="1350:overlay" & pids+=($!)
+# Level 2, a cardiogram room furnished by hand: the cardio faces east, the
+# screen cannot (the editor once kept the facing and failed on one machine).
+run_probe jan MP_ROLE=host MP_ROOM=cardio MP_LEVEL=2 MP_STEPS=700 MP_SCENARIO=none   MP_UI_SCRIPT="20:openhospital;40:buy:reception_desk;60:discover:cardiogram;80:furnishroom:cardiogram:5:5" & pids+=($!)
+sleep 1
+run_probe abi MP_ROLE=join MP_ROOM=cardio MP_STEPS=700 MP_SCENARIO=none & pids+=($!)
 # Save and continue: a co-op game saves at step 300 (File > Save) and ends;
 # then the same two players continue it from the lobby, the other one
 # hosting this time (each gets their own hospital back by name).
@@ -396,7 +401,11 @@ moved12 = re.search(r'UI: edit: room now at (\d+),(\d+) \(was (\d+),(\d+)\)', ed
 marks12 = re.findall(r'UI: overlay at step \d+: (\d+) marks', ed + fl)
 rooms12 = re.search(r'rooms built: (.*)', ed)
 clicks12 = 'world hit test on, edit_room false' in ''.join(l for l in ed.splitlines() if 'UI: state at step' in l)
-ok12 = (result('ed').startswith('IN SYNC through step 1400') and result('flo').startswith('IN SYNC through step 1400')
+# The cardiogram room: same command results on both machines, room done.
+cardio12 = (applied('jan') == applied('abi') and 'furnished room' in log('jan')
+            and result('jan').startswith('IN SYNC') and result('abi').startswith('IN SYNC')
+            and not [x for x in applied('jan') if '-> rejected: error' in x])
+ok12 = cardio12 and (result('ed').startswith('IN SYNC through step 1400') and result('flo').startswith('IN SYNC through step 1400')
         and ce == applied('flo') and all(k in kinds12 for k in want12) and not bad12
         and len(steps12) == 10 and radiator_puts12 >= 1 and radiator12 == 0 and not failed12 and moved12 is not None and moved12.group(1, 2) != moved12.group(3, 4)
         and marks12 == ['0', '0', '0'] and clicks12
@@ -404,7 +413,7 @@ ok12 = (result('ed').startswith('IN SYNC through step 1400') and result('flo').s
         and f"gp@{moved12.group(1)},{moved12.group(2)}" not in rooms12.group(1).split())  # the edited room, removed
 print(f"12. Room editing:           {result('ed')} / {result('flo')}; steps ok {len(steps12) - len(failed12)}/10; radiator refused {radiator12} of {radiator_puts12} {' '.join(failed12)}; "
       f"moved {moved12.group(3, 4) if moved12 else '-'} -> {moved12.group(1, 2) if moved12 else '-'}; commands {' '.join(kinds12)}; "
-      f"refused {len(bad12)}; markers {'/'.join(marks12)}; clicks {clicks12}; rooms at the end {rooms12.group(1) if rooms12 else '-'}")
+      f"refused {len(bad12)}; markers {'/'.join(marks12)}; clicks {clicks12}; rooms at the end {rooms12.group(1) if rooms12 else '-'}; cardiogram room by hand: {cardio12}")
 fail |= not ok12
 
 sa, to, t2, s2 = log('sara'), log('tom'), log('tom-2'), log('sara-2')
@@ -437,7 +446,7 @@ print(f"11. Save and continue:      saved at step {saved_t.group(2) if saved_t e
 fail |= not ok11
 
 if with_referee:
-    rooms = ['ward', 'leave', 'build', 'crowd', 'fax', 'coop', 'events', 'staff', 'edit']
+    rooms = ['ward', 'leave', 'build', 'crowd', 'fax', 'coop', 'events', 'staff', 'edit', 'cardio']
     connected = [r for r in rooms if f"room '{r}': referee connected" in server]
     differ = re.findall(r"room '(\w+)': the players differ from the referee", server)
     confirmed = dict(re.findall(r"room '(\w+)': referee confirmed steps through (\d+)", server))

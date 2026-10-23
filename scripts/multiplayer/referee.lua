@@ -60,7 +60,11 @@ local function run()
       if r == room then probe_scenario = sc end
     end
     local builder = assert(loadfile(source_dir .. "/scripts/multiplayer/probe_builder.lua"))()
-    builder.start_game(TheApp.world, TheApp.mp_session, probe_scenario, log)
+    if probe_scenario == "none" then
+      builder.register_handlers() -- (as lobby_probe.lua does: no setup, test commands only)
+    else
+      builder.start_game(TheApp.world, TheApp.mp_session, probe_scenario, log)
+    end
     log("probe setup: " .. probe_scenario)
   end
 

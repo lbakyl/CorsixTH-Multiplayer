@@ -737,9 +737,24 @@ function UIPlaceObjects:setBlueprintCell(x, y)
 
   local real_obj = self.objects[self.active_index]
   if not real_obj then
-    -- No object chosen in the list (e.g. after picking up): no blueprint.
-    self.object_footprint = {}
-    return
+    -- The chosen entry is gone from the list (multiplayer: the list changes
+    -- when a command runs): choose the first one again.
+    self.active_index = 0
+    self:setActiveIndex(1)
+    self.object_cell_x, self.object_cell_y = x, y
+    real_obj = self.objects[self.active_index]
+    if not real_obj then
+      self.object_footprint = {}
+      return
+    end
+  end
+  if not real_obj.object.orientations[self.object_orientation] then
+    -- A facing this object cannot have (kept from another object): choose
+    -- its first one again, as selecting it does.
+    local keep = self.active_index
+    self.active_index = 0
+    self:setActiveIndex(keep)
+    self.object_cell_x, self.object_cell_y = x, y
   end
   local object = real_obj.object
   local object_footprint = object.orientations[self.object_orientation].footprint
