@@ -581,3 +581,39 @@ describe("world.lua co-op staff transfers: ", function()
   end)
 end)
 
+describe("world.lua co-op patients: ", function()
+  local function makeWorld(open, attempts)
+    local hospitals = {}
+    for i, is_open in ipairs(open) do
+      hospitals[i] = {opened = is_open, spawn_attempts = attempts or 0}
+    end
+    return setmetatable({hospitals = hospitals, mp_coop = {players = #open}}, {__index = World})
+  end
+
+  it("a patient whose turn is at a closed hospital goes to the next open one", function()
+    local world = makeWorld({false, false, true})
+    -- Turn of hospital 1 (closed), then 2 (closed), then 3 (open).
+    assert.are.equal(world.hospitals[3], world:_coopPatientHospital())
+    world.hospitals[1].spawn_attempts = 1
+    assert.are.equal(world.hospitals[3], world:_coopPatientHospital())
+    world.hospitals[1].spawn_attempts = 2
+    assert.are.equal(world.hospitals[3], world:_coopPatientHospital())
+  end)
+
+  it("the next open hospital after the closed one, in hospital order", function()
+    local world = makeWorld({true, false, true})
+    world.hospitals[1].spawn_attempts = 1 -- turn of hospital 2 (closed)
+    assert.are.equal(world.hospitals[3], world:_coopPatientHospital())
+    world = makeWorld({true, true, false})
+    world.hospitals[1].spawn_attempts = 2 -- turn of hospital 3 (closed): round to 1
+    assert.are.equal(world.hospitals[1], world:_coopPatientHospital())
+  end)
+
+  it("open hospitals keep their own turns, and nobody comes while all are closed", function()
+    local world = makeWorld({true, true, true})
+    world.hospitals[2].spawn_attempts = 1
+    assert.are.equal(world.hospitals[2], world:_coopPatientHospital())
+    assert.is_nil(makeWorld({false, false}):_coopPatientHospital())
+  end)
+end)
+

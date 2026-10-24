@@ -469,12 +469,30 @@ end
 --! Spawn a patient from a spawn point for the given hospital.
 --!param hospital (Hospital) Hospital that the new patient should visit.
 --!return (Patient entity) The spawned patient, or 'nil' if no patient spawned.
+--! Multiplayer co-op: the hospital a new patient goes to. Patients are
+--! shared out in turn; one whose turn falls on a hospital that is not open
+--! yet goes to the next open one instead of being lost (a player who opened
+--! early is not left without patients while the others have not).
+--!return a hospital, or nil if none is open
+function World:_coopPatientHospital()
+  local chosen = self:chooseHospitalForPatient(nil)
+  if not chosen or chosen.opened then return chosen end
+  local players = self.mp_coop.players
+  local start = self:getHospitalIndex(chosen) or 1
+  for step = 1, players do
+    local hospital = self.hospitals[(start - 1 + step) % players + 1]
+    if hospital and hospital.opened then return hospital end
+  end
+  return nil
+end
+
 function World:spawnPatient(hospital)
   local disease
   if self.mp_coop then
     -- Multiplayer co-op: the patient's hospital decides which diseases are
     -- possible (its discoveries, its number of visitors).
-    hospital = hospital or self:chooseHospitalForPatient(nil)
+    hospital = hospital or self:_coopPatientHospital()
+    if not hospital then return end
     disease = self:getNewPatientDisease(hospital)
   else
     disease = self:getNewPatientDisease()
