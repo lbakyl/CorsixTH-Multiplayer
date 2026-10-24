@@ -599,9 +599,10 @@ local function run()
           -- Open the first fax of a type and leave it open (in multiplayer
           -- the game goes on meanwhile; answerfax answers it later).
           local icon
-          for _, i in ipairs(world.ui.bottom_panel:allMessageIcons()) do
-            if not icon and i.type == entry.arg and (not world.mp_coop or i.hospital == world.ui.hospital) then
-              icon = i
+          for _, candidate in ipairs(world.ui.bottom_panel:allMessageIcons()) do
+            if not icon and candidate.type == entry.arg and
+                (not world.mp_coop or candidate.hospital == world.ui.hospital) then
+              icon = candidate
             end
           end
           if icon and not icon.fax then icon:openMessage() end
@@ -664,10 +665,10 @@ local function run()
           local hospital = world.ui.hospital
           local first = {gp = 1, pharmacy = 2, general_diag = 3, ward = 4, psych = 5, staff_room = 6, toilets = 7}
           local ids = {}
-          for _, room in ipairs(TheApp.rooms) do
-            local discovery = hospital.room_discoveries[room.id]
-            if discovery and discovery.is_discovered and hospital.research.research_progress[room] then
-              ids[#ids + 1] = room
+          for _, room_type in ipairs(TheApp.rooms) do
+            local discovery = hospital.room_discoveries[room_type.id]
+            if discovery and discovery.is_discovered and hospital.research.research_progress[room_type] then
+              ids[#ids + 1] = room_type
             end
           end
           table.sort(ids, function(r1, r2)
@@ -676,11 +677,11 @@ local function run()
             return r1.id < r2.id
           end)
           local gap, names = tonumber(entry.arg) or 100, {}
-          for k, room in ipairs(ids) do
-            local size = math.min(7, math.max(5, (room.minimum_size or 4) + 1))
+          for k, room_type in ipairs(ids) do
+            local size = math.min(7, math.max(5, (room_type.minimum_size or 4) + 1))
             ui_script[#ui_script + 1] = {hour = session.step + k * gap, action = "furnishroom",
-                arg = string.format("%s:%d:%d", room.id, size, size)}
-            names[#names + 1] = room.id
+                arg = string.format("%s:%d:%d", room_type.id, size, size)}
+            names[#names + 1] = room_type.id
           end
           log(string.format("UI: building every room at step %d: %s", session.step, table.concat(names, ",")))
         elseif a == "furnishroom" or a == "cancelroom" then
