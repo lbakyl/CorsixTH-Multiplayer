@@ -756,6 +756,18 @@ function GameUI:onMouseUp(code, x, y)
             self:setCursor(self.waiting_cursor)
             self.edit_room = room
             room:tryToEdit()
+          elseif MultiplayerSession.actionsAreCommands() then
+            -- Multiplayer: a destroyed room can always be cleared away and
+            -- built again (whatever this player's own option says): for the
+            -- removal cost, then the room editor opens on the same spot.
+            local room_cost = room:calculateRemovalCost()
+            self:setEditRoom(false)
+            self:addWindow(UIConfirmDialog(self, false,
+                _S.multiplayer_window.rebuild_destroyed_room:format(room_cost),
+                --[[persistable:mp_rebuild_destroyed_room_confirm_dialog]] function()
+                  TheApp.mp_session:issue({kind = "remove_crashed_room", room = room.id, rebuild = 1,
+                      hospital = room.world:getHospitalIndex(self.hospital)})
+                end))
           else
             if self.app.config.remove_destroyed_rooms then
               local room_cost = room:calculateRemovalCost()
