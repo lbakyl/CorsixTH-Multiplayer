@@ -34,7 +34,7 @@ require("rooms/gp")
 
 describe("GP's office: ", function()
   local function newRoom(found)
-    local room = setmetatable({objects = {}}, {__index = GPRoom})
+    local room = setmetatable({objects = {}}, {__index = _G["GPRoom"]})
     room.world = {findObjectNear = function(_, _, name) return table.unpack(found[name] or {}) end}
     local leave = {name = "leave"}
     room.createLeaveAction = function() return leave end
