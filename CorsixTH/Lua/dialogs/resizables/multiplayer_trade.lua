@@ -38,8 +38,10 @@ local WIDTH = 380
 local STAFF_ROWS = 8
 local AMOUNTS = {1000, 5000, 20000}
 
-function UIMultiplayerTrade:UIMultiplayerTrade(ui, target)
-  local height = 120 + STAFF_ROWS * 25 + 70
+--!param target (Hospital) optional: the player to trade with
+--!param staff (Staff) optional: this member of staff selected
+function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
+  local height = 120 + STAFF_ROWS * 25 + 36 + 70
   self:UIResizable(ui, WIDTH, height, col.bg)
   self.esc_closes = true
   self.resizable = false
@@ -69,30 +71,42 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target)
         :makeButton(0, 0, w, 30, nil, function() self:sendMoney(amount) end)
   end
 
-  -- Staff of this player's hospital
+  -- Staff of this player's hospital, a page of STAFF_ROWS at a time
   self.staff_list = {}
-  for i, staff in ipairs(self.hospital.staff) do
-    if not staff.fired and #self.staff_list < STAFF_ROWS then
-      self.staff_list[#self.staff_list + 1] = {staff = staff, index = i}
+  self.page = 1
+  for i, member in ipairs(self.hospital.staff) do
+    if not member.fired then
+      -- Names are localised strings; concatenating keeps them displayable.
+      local profession = _S.staff_class[member.humanoid_class:lower()] or member.humanoid_class
+      local entry = {staff = member, index = i,
+          label = member.profile:getFullName() .. "  (" .. profession .. ", $" .. member.profile.wage .. ")"}
+      self.staff_list[#self.staff_list + 1] = entry
+      if member == staff then
+        self.selected = entry
+        self.page = math.ceil(#self.staff_list / STAFF_ROWS)
+      end
     end
   end
   if #self.staff_list == 0 then
     self:addBevelPanel(20, 85, WIDTH - 40, 25, col.caption):setLabel(S.trade_no_staff).lowered = true
   end
-  for row, entry in ipairs(self.staff_list) do
-    local staff = entry.staff
-    -- Names are localised strings; concatenating keeps them displayable.
-    local profession = _S.staff_class[staff.humanoid_class:lower()] or staff.humanoid_class
-    local text = staff.profile:getFullName() .. "  (" .. profession .. ", $" .. staff.profile.wage .. ")"
-    self.staff_list[row].label = text
-    self.staff_list[row].button = self:addBevelPanel(20, 80 + (row - 1) * 25, WIDTH - 40, 23,
-        col.setting, nil, nil, nil, col.setting_active):setLabel(text)
-        :makeToggleButton(0, 0, WIDTH - 40, 23, nil, function(window, state, btn)
-          window:selectStaff(row, state, btn)
-        end)
+  self.rows = {}
+  for row = 1, STAFF_ROWS do
+    self.rows[row] = self:addBevelPanel(20, 80 + (row - 1) * 25, WIDTH - 40, 23,
+        col.setting, nil, nil, nil, col.setting_active)
+        :makeToggleButton(0, 0, WIDTH - 40, 23, nil, function(window, state) window:selectStaff(row, state) end)
   end
-
   local y = 85 + STAFF_ROWS * 25
+  -- (The game's font has no arrows or slashes: words instead.)
+  self.page_panel = self:addBevelPanel(20, y, WIDTH - 180, 28, col.caption)
+  self.page_panel.lowered = true
+  self:addBevelPanel(WIDTH - 150, y, 60, 28, col.button):setLabel(S.research_previous)
+      :makeButton(0, 0, 60, 28, nil, function(window) window:turnPage(-1) end)
+  self:addBevelPanel(WIDTH - 80, y, 60, 28, col.button):setLabel(S.research_next)
+      :makeButton(0, 0, 60, 28, nil, function(window) window:turnPage(1) end)
+  self:_showPage()
+
+  y = y + 36
   self:addBevelPanel(20, y, 180, 30, col.button):setLabel(S.trade_send_staff)
       :makeButton(0, 0, 180, 30, nil, self.sendStaff)
   self:addBevelPanel(210, y, WIDTH - 230, 30, col.button):setLabel(S.trade_next_player)
@@ -126,11 +140,34 @@ function UIMultiplayerTrade:sendMoney(amount)
   self:setStatus(_S.multiplayer_window.trade_sent)
 end
 
-function UIMultiplayerTrade:selectStaff(row, state, btn)
-  for _, b in ipairs(self.buttons) do
-    if b ~= btn and b.is_toggle then b:setToggleState(false) end
+function UIMultiplayerTrade:_pages()
+  return math.max(1, math.ceil(#self.staff_list / STAFF_ROWS))
+end
+
+--! Show the staff of the current page; the selected one toggled on, the
+--! ones already offered greyed out.
+function UIMultiplayerTrade:_showPage()
+  local first = (self.page - 1) * STAFF_ROWS
+  for row, button in ipairs(self.rows) do
+    local entry = self.staff_list[first + row]
+    local label = entry and entry.label or ""
+    if entry and entry.offered then label = label .. "  " .. _S.multiplayer_window.trade_on_the_way end
+    button:setLabel(label)
+    button:enable(entry ~= nil and not entry.offered)
+    button:setToggleState(entry ~= nil and entry == self.selected)
   end
-  self.selected = state and self.staff_list[row] or nil
+  self.page_panel:setLabel(_S.multiplayer_window.research_page:format(self.page, self:_pages()))
+end
+
+function UIMultiplayerTrade:turnPage(delta)
+  self.page = math.min(self:_pages(), math.max(1, self.page + delta))
+  self:_showPage()
+end
+
+function UIMultiplayerTrade:selectStaff(row, state)
+  local entry = self.staff_list[(self.page - 1) * STAFF_ROWS + row]
+  self.selected = state and entry or nil
+  self:_showPage()
 end
 
 function UIMultiplayerTrade:sendStaff()
@@ -146,18 +183,23 @@ function UIMultiplayerTrade:sendStaff()
       index = self.selected.index, key = MultiplayerSession.staffKey(staff)})
   self:setStatus(_S.multiplayer_window.trade_offered)
   -- They are on their way: they cannot be sent again from this window.
-  local entry = self.selected
-  if entry.button then
-    entry.button:setToggleState(false)
-    entry.button:enable(false)
-    entry.button:setLabel(entry.label .. "  " .. _S.multiplayer_window.trade_on_the_way)
-  end
+  self.selected.offered = true
   self.selected = nil
+  self:_showPage()
 end
 
 function UIMultiplayerTrade:nextPlayer()
   local ui = self.ui
   local target = self:_nextTarget(self.target)
+  local staff = self.selected and self.selected.staff
   self:close()
-  ui:addWindow(UIMultiplayerTrade(ui, target))
+  ui:addWindow(UIMultiplayerTrade(ui, target, staff))
+end
+
+--! Open the window (co-op only), optionally with a member of staff selected.
+function UIMultiplayerTrade.open(ui, staff)
+  if not (TheApp.mp_session and ui.app.world and ui.app.world.mp_coop) then return end
+  local window = ui:getWindow(UIMultiplayerTrade)
+  if window then window:close() end
+  ui:addWindow(UIMultiplayerTrade(ui, nil, staff))
 end
