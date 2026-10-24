@@ -161,9 +161,9 @@ run_probe paul MP_ROLE=join MP_ROOM=events MP_STEPS=1600 MP_DRAW_EVERY=3   MP_UI
 # 2 covers it up, marks the infected for vaccination, the countdown runs in
 # the simulation on both machines, the inspector's result fax comes (early
 # when the cover-up ends early: an infected patient left, or none are left).
-run_probe ella MP_ROLE=host MP_ROOM=epi MP_COOP=1 MP_SCENARIO=busy MP_STEPS=6500   MP_UI_SCRIPT="20:openhospital" & pids+=($!)
+run_probe ella MP_ROLE=host MP_ROOM=epi MP_COOP=1 MP_SCENARIO=busy MP_STEPS=7500   MP_UI_SCRIPT="20:openhospital" & pids+=($!)
 sleep 1
-run_probe finn MP_ROLE=join MP_ROOM=epi MP_SCENARIO=busy MP_STEPS=6500   MP_UI_SCRIPT="30:openhospital;300:epidemic;320:answerfax:epidemy:2:wait;400:vaccinate;600:answerfax:report:1:wait" & pids+=($!)
+run_probe finn MP_ROLE=join MP_ROOM=epi MP_SCENARIO=busy MP_STEPS=7500   MP_UI_SCRIPT="30:openhospital;300:epidemic;320:answerfax:epidemy:2:wait;400:vaccinate;600:answerfax:report:1:wait" & pids+=($!)
 
 # Offers (co-op): patients referred from the patient window and from a
 # "no treatment" fax, a nurse offered; offers accepted and declined in the
@@ -420,7 +420,7 @@ fail |= not okres
 el, fl = log('ella'), log('finn')
 ce = applied('ella')
 kinds_e = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in ce if x.endswith('-> ok'))
-oke = (result('ella').startswith('IN SYNC through step 6500') and result('finn').startswith('IN SYNC through step 6500')
+oke = (result('ella').startswith('IN SYNC through step 7500') and result('finn').startswith('IN SYNC through step 7500')
        and ce == applied('finn') and 'probe_epidemic' in kinds_e and 'mark_vaccinate' in kinds_e
        and kinds_e.count('fax_choice') >= 2 and 'clicked choice 1 of report fax' in fl)
 print(f"18. Co-op epidemic:         {result('finn')}; cover up, vaccination, result fax: {oke}; commands {' '.join(kinds_e)}")
