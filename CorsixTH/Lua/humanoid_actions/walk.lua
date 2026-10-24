@@ -183,6 +183,15 @@ local action_walk_tick; action_walk_tick = permanent"action_walk_tick"( function
   local path_x = action.path_x
   local path_y = action.path_y
   local path_index = action.path_index
+  if action.name ~= "walk" or not path_x or not path_index then
+    -- This step belongs to a walk that is no longer the current action (it
+    -- was replaced, say while a room was rebuilt around a handyman): start
+    -- the current action afresh instead of following a path it does not
+    -- have (that stopped the person for good after the error).
+    humanoid:setTimer(nil, nil)
+    humanoid:startAction()
+    return
+  end
   local check_doors = not not humanoid.door_anims
   local x1, y1 = path_x[path_index  ], path_y[path_index  ]
   local x2, y2 = path_x[path_index+1], path_y[path_index+1]
