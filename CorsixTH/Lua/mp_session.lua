@@ -757,16 +757,45 @@ local function tile_free_for_object(world, hospital, x, y, tile)
   return flags.buildable and flags.passable and not world:getObject(x, y)
 end
 
---! Buy and place a new corridor object: {object, x, y, orientation}.
+--! Could `object_type` be placed at x, y facing `orientation` for `hospital`?
+--! The object editor's own check (a hidden editor, gone again at once): it
+--! knows what the simple tile test does not, such as a radiator against a
+--! wall or an object put into a room.
+local function placement_allowed(world, hospital, object_type, x, y, orientation)
+  local ui = world.ui
+  if not ui then return false end
+  local config = TheApp.config
+  local saved_hospital, saved_blocking = ui.hospital, config.blocking_off_areas
+  ui.hospital, config.blocking_off_areas = hospital, 2 -- (the default rule on every peer)
+  local ok, result = pcall(function()
+    local dlg = UIPlaceObjects(ui, {{object = object_type, qty = 1}})
+    dlg:setOrientation(orientation)
+    dlg:setBlueprintCell(x, y)
+    local good = dlg.object_blueprint_good
+    dlg:clearBlueprint()
+    Window.close(dlg) -- (not UIPlaceObjects.close: it refunds an object not placed)
+    return good
+  end)
+  ui.hospital, config.blocking_off_areas = saved_hospital, saved_blocking
+  if not ok then error(result, 0) end
+  return result
+end
+
+--! Buy and place a new corridor object: {object, x, y, orientation}. It may
+--! go into a room (a radiator or a plant), as in single player.
 function handlers.place_object(world, cmd)
   local hospital = world.hospitals[cmd.hospital or 1]
   local object_type = world.object_types[cmd.object]
   local orientation = object_type and object_type.orientations[cmd.orientation]
   if not orientation then return false, "unknown object or orientation" end
   for _, t in ipairs(orientation.footprint) do
-    if not tile_free_for_object(world, hospital, cmd.x + t[1], cmd.y + t[2], t) then
+    if not world:isOnMap(cmd.x + t[1], cmd.y + t[2]) or
+        not hospital:isInHospital(cmd.x + t[1], cmd.y + t[2]) then
       return false, "tile not free"
     end
+  end
+  if not placement_allowed(world, hospital, object_type, cmd.x, cmd.y, cmd.orientation) then
+    return false, "tile not free"
   end
   if world:anyHumanoidObscuringArea(cmd.x, cmd.y) then
     return false, "someone is in the way"
@@ -775,7 +804,9 @@ function handlers.place_object(world, cmd)
   local msg = _S.transactions.buy_object .. ": " .. object_type.name
   hospital:spendMoney(cost, msg, cost)
   world:prepareFootprintTilesForBuild(orientation.footprint, cmd.x, cmd.y)
-  world:newObject(cmd.object, cmd.x, cmd.y, cmd.orientation)
+  local obj = world:newObject(cmd.object, cmd.x, cmd.y, cmd.orientation)
+  local room = world:getRoom(cmd.x, cmd.y)
+  if room then room.objects[obj] = true end
   if cmd.object == "reception_desk" then
     hospital:buildReceptionDesksCache()
   end
