@@ -103,11 +103,17 @@ cp -a "$lmods/." "$pkg/lua/"
 cp "$src/LICENSE.txt" "$pkg/" 2>/dev/null || true
 
 # Libraries: everything the program and the Lua modules load, except what a
-# desktop always has (the AppImage idea of an exclude list).
-exclude='^(linux-vdso|ld-linux|libc|libm|libdl|libpthread|librt|libresolv|libutil|libstdc\+\+|libgcc_s|libGL|libGLX|libGLdispatch|libOpenGL|libEGL|libdrm|libgbm|libX|libxcb|libxkbcommon|libwayland|libdecor|libasound|libpulse|libpipewire|libjack|libdbus|libsystemd|libudev|libglib|libgobject|libgmodule|libgio|libpcre|libffi|libz\.|libexpat|libfontconfig|libfreetype|libharfbuzz|libuuid|libselinux|libmount|libblkid|libcap|libgpg-error|libgcrypt|liblzma|liblz4|libzstd|libbz2|libtinfo|libreadline|libbsd|libmd)\b'
+# desktop always has (the AppImage idea of an exclude list). A bundled
+# libstdc++ or graphics library would break on newer systems.
+system_lib() {
+  case "$1" in
+    linux-vdso* | ld-linux* | libc.so* | libm.so* | libdl.so* | libpthread* | librt.so* | libresolv* |     libutil* | libstdc++* | libgcc_s* | libgomp* | libatomic* | libGL* | libOpenGL* | libEGL* |     libdrm* | libgbm* | libX* | libxcb* | libxkbcommon* | libwayland* | libdecor* | libasound* |     libpulse* | libpipewire* | libjack* | libdbus* | libsystemd* | libudev* | libapparmor* |     libasyncns* | libglib* | libgobject* | libgmodule* | libgio* | libpcre* | libffi* | libz.so* |     libexpat* | libfontconfig* | libfreetype* | libharfbuzz* | libuuid* | libselinux* | libmount* |     libblkid* | libcap* | libgpg-error* | libgcrypt* | liblzma* | liblz4* | libzstd* | libbz2* |     libtinfo* | libreadline* | libbsd* | libmd.so*) return 0 ;;
+  esac
+  return 1
+}
 copy_deps() {
   ldd "$1" | awk '/=> \// {print $1, $3}' | while read -r name path; do
-    if ! [[ $name =~ $exclude ]] && [[ ! -e "$pkg/lib/$name" ]]; then
+    if ! system_lib "$name" && [[ ! -e "$pkg/lib/$name" ]]; then
       cp -L "$path" "$pkg/lib/$name"
       copy_deps "$path"
     fi
