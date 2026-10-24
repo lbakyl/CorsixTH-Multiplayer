@@ -1448,7 +1448,7 @@ local function research_names(items)
   local names = {}
   for i, item in ipairs(items) do
     if i > 6 then
-      names[#names + 1] = _S.multiplayer_window.research_and_more:format(#items - 6)
+      names[#names + 1] = plain(_S.multiplayer_window.research_and_more:format(#items - 6))
       break
     end
     names[#names + 1] = plain(item.name)
