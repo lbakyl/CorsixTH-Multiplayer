@@ -524,3 +524,60 @@ describe("world.lua: ", function()
     assert.is_false(world:isNearRat(-57, 2000))
   end)
 end)
+
+describe("world.lua co-op staff transfers: ", function()
+  -- A member of staff sent to another player's hospital in the middle of
+  -- something that must happen first (an operation).
+  local function makeTransfer()
+    local operation = {name = "use_object", must_happen = true}
+    local walk = {name = "walk", must_happen = true}
+    local idle = {name = "idle"}
+    local new_hospital = {staff = {}, notifyOfStaffChange = function() end, name = "IRIS"}
+    local staff = {
+      action_queue = {operation, walk, idle},
+      mp_in_transit = {to = 2, x = 5, y = 6},
+      mp_transfer_walk = walk,
+      tile_x = 1, tile_y = 1, mp_id = 28,
+      profile = {getFullName = function() return "P. ANDERS" end},
+    }
+    function staff:getCurrentAction() return self.action_queue[1] end
+    function staff:setTile(x, y) self.tile_x, self.tile_y = x, y end
+    function staff:setHospital(h) self.hospital = h end
+    function staff:onPlaceInCorridor() end
+    local world = setmetatable({mp_transfers = {staff}, hospitals = {{}, new_hospital}, app = {}},
+        {__index = World})
+    return world, staff, new_hospital, walk, idle
+  end
+
+  local saved
+  before_each(function()
+    saved = {MultiplayerSession = _G.MultiplayerSession, _S = _G._S}
+    _G.MultiplayerSession = {tellPlayer = function() end}
+    _G._S = {multiplayer_window = {staff_arrived_note = "%s"}}
+  end)
+  after_each(function()
+    _G.MultiplayerSession, _G._S = saved.MultiplayerSession, saved._S
+  end)
+
+  it("someone still operating has not arrived yet", function()
+    local world, staff, new_hospital = makeTransfer()
+    world:_tickCoopTransfers()
+    assert.is_not_nil(staff.mp_in_transit)
+    assert.are.same({}, new_hospital.staff)
+    assert.are.same({staff}, world.mp_transfers)
+  end)
+
+  it("they arrive once their walk over is done", function()
+    local world, staff, new_hospital, _, idle = makeTransfer()
+    table.remove(staff.action_queue, 1) -- the operation is over: walking now
+    world:_tickCoopTransfers()
+    assert.is_not_nil(staff.mp_in_transit)
+    staff.action_queue = {idle} -- the walk is over
+    world:_tickCoopTransfers()
+    assert.is_nil(staff.mp_in_transit)
+    assert.are.same({staff}, new_hospital.staff)
+    assert.are.equal(new_hospital, staff.hospital)
+    assert.are.equal(5, staff.tile_x)
+  end)
+end)
+
