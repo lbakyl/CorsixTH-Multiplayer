@@ -106,6 +106,10 @@ local commands_file = os.getenv("MP_UI_COMMANDS")
 -- Game hours to wait between the steps of furnishing a room (for a person
 -- watching; default none).
 local furnish_pace = tonumber(os.getenv("MP_FURNISH_PACE") or "")
+-- MP_HOVER=1: while furnishing a room by hand, move the object picture over
+-- the room every tick, as a player's mouse does (other objects, facings).
+local hover = os.getenv("MP_HOVER") == "1"
+local hover_n = 0
 local commands_seen = 0
 if commands_file then
   -- Only lines added from now on count.
@@ -356,6 +360,31 @@ local function run()
       world:setUserSpeed("Max speed")
     end
     if furnishing and builder.furnish_tick(world, furnishing, log) then furnishing = nil end
+    local editor = hover and world.ui.edit_room
+    if editor and class.is(editor, UIEditRoom) and editor.phase == "objects" and #editor.objects > 0 then
+      local rect = editor.blueprint_rect
+      local keep_index, keep_orientation = editor.active_index, editor.object_orientation
+      local keep_x, keep_y = editor.object_cell_x, editor.object_cell_y
+      for _ = 1, 6 do
+        hover_n = hover_n + 1
+        local index = hover_n % #editor.objects + 1
+        editor:setActiveIndex(index)
+        local object = editor.objects[index] and editor.objects[index].object
+        local facings = {}
+        for name in pairs(object and object.orientations or {}) do facings[#facings + 1] = name end
+        table.sort(facings)
+        if #facings > 0 then editor:setOrientation(facings[hover_n % #facings + 1]) end
+        local tx = rect.x + (hover_n * 7) % math.max(1, rect.w)
+        local ty = rect.y + (hover_n * 3) % math.max(1, rect.h)
+        editor:setBlueprintCell(tx, ty)
+      end
+      if editor.objects[keep_index] then editor:setActiveIndex(keep_index) end
+      if keep_orientation and editor.objects[editor.active_index] and
+          editor.objects[editor.active_index].object.orientations[keep_orientation] then
+        editor:setOrientation(keep_orientation)
+      end
+      editor:setBlueprintCell(keep_x, keep_y)
+    end
     if os.getenv("MP_DEBUG_TRANSFERS") and session.step % 100 == 0 and session.step ~= last_transfer_log then
       last_transfer_log = session.step
       for _, e in ipairs(world.mp_transfers or {}) do
