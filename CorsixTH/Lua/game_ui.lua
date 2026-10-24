@@ -750,12 +750,18 @@ function GameUI:onMouseUp(code, x, y)
             self.edit_room = room
             room:tryToEdit()
           else
-            if self.app.config.remove_destroyed_rooms and not MultiplayerSession.blockUnsupported(self) then
+            if self.app.config.remove_destroyed_rooms then
               local room_cost = room:calculateRemovalCost()
               self:setEditRoom(false)
               -- show confirmation dialog for removing the room
               self:addWindow(UIConfirmDialog(self, false, _S.confirmation.remove_destroyed_room:format(room_cost),
               --[[persistable:remove_destroyed_room_confirm_dialog]]function()
+                if MultiplayerSession.actionsAreCommands() then
+                  -- Multiplayer: every peer clears it when the command runs.
+                  TheApp.mp_session:issue({kind = "remove_crashed_room", room = room.id,
+                      hospital = room.world:getHospitalIndex(self.hospital)})
+                  return
+                end
                 local world = room.world
                 UIEditRoom:removeRoom(false, room, world)
                 world:resetSideObjects()

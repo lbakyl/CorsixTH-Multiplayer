@@ -69,8 +69,10 @@ for that, the rules new code must follow, and what is still missing.
 | Area | Before | Now |
 |---|---|---|
 | Hospital settings | Windows changed them on one machine | Commands: `loan`, `set_price`, `concentrate_research`, `research_frac`, `set_policy`, `buy_plot`, `set_heat`, `handyman_parcel`, `handyman_prio`, `queue_size` |
-| Actions on one entity | Applied locally | Commands by entity id: `send_home`, `guess_cure`, `to_reception`, `staff_bonus`, `raise_wage`, `call_handyman`, `replace_machine`, `shoot_rat`, `mark_vaccinate` |
-| Cheats, debug, load/restart hotkeys, pushing patients, crashed-room removal | Worked locally | Blocked in multiplayer |
+| Actions on one entity | Applied locally | Commands by entity id: `send_home`, `guess_cure`, `to_reception`, `staff_bonus`, `raise_wage`, `call_handyman`, `replace_machine`, `shoot_rat` (own hospital's rats only), `mark_vaccinate`, `remove_crashed_room` (with the single player "remove destroyed rooms" option on) |
+| Sending staff, referring patients | Staff moved at once | Offers the other player accepts: `offer_staff`, `offer_patient` (purple icon; see below) |
+| Epidemics | Off in co-op | Cover-up countdown in the simulation (`World:_tickCoopOpenings`), the watch only shows it to the owner |
+| Cheats, debug, load/restart hotkeys, pushing patients | Worked locally | Blocked in multiplayer |
 | Rooms used by people | Any hospital's | Own hospital's only |
 | Staff called to rooms, receptionists | Any hospital's | Own hospital's only |
 | Patients | To closed hospitals too; disease from hospital 1; 1/N each | Only open hospitals; disease from their hospital; N times as many |
@@ -86,9 +88,18 @@ for that, the rules new code must follow, and what is still missing.
 
 ## 4. Still missing
 
-- **Epidemics** stay disabled in co-op (`hospital.epidemics_disabled`):
-  the epidemic countdown and the vaccination cursor still live in windows.
-  Move the countdown to the simulation like the emergency one.
+- **Offers** (`mp_session.lua`, `dialogs/resizables/multiplayer_offer.lua`):
+  sending a member of staff (trade window) or referring a patient (purple
+  icon in the patient window, or "Refer to another hospital" on the "no
+  treatment" and "no diagnosis" faxes) creates a message of type
+  `mp_offer` on every peer, shown only to the receiving player as a purple
+  icon. Its window shows the person; Accept and Decline are `fax_choice`
+  commands, and 20 game days without an answer decline it (the VIP fax
+  waits as long, but its default is yes). An accepted person walks over at
+  the "transit" speed and joins the other hospital on arrival
+  (`World:_tickCoopTransfers`). With more than one other player, the
+  sender chooses the hospital. Emergency, infected and in-room patients
+  cannot be referred.
 - **Staff and objects** are commands with explicit positions: firing
   (`fire_staff`), pay rise answers (`pay_rise`), the queue window
   (`queue_move`, `queue_redirect`), moving and selling corridor objects
@@ -106,8 +117,8 @@ for that, the rules new code must follow, and what is still missing.
   the single player editor code on it; only its player's machine shows it.
   A player who leaves hands their rooms over (`room_takeover`: finished, or
   removed if their walls are down).
-- **Trades beyond money and staff**: loans between players, patient
-  referrals, renting rooms, selling research.
+- **Trades beyond money, staff and patients**: loans between players,
+  renting rooms, selling or sharing research.
 - **Competitive mode**: a winner, and approval votes for speed and pause.
 - **Loading** a multiplayer save from the game's Load menu (stays blocked;
   saved games are continued from the lobby, see `protocol.md`). Rejoining

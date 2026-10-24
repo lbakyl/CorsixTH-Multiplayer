@@ -1217,13 +1217,14 @@ end
 -- hospital. The offer is a message (type "mp_offer", the purple icon) that
 -- exists on every peer and is shown only to the receiving player; answering
 -- it is a fax_choice command (1 = accept, 2 = decline), and it declines
--- itself after MultiplayerSession.OFFER_HOURS game hours (the message
+-- itself after MultiplayerSession.OFFER_DAYS game days (the message
 -- timeout runs in game hours on every peer, UIBottomPanel:onWorldTick).
 -- While it is open, the person stays where they are and cannot be offered
 -- again (entity.mp_offer = the message number).
 --------------------------------------------------------------------------------
 
-MultiplayerSession.OFFER_HOURS = 500 -- ten game days
+-- Like the VIP fax: 20 game days (its default is yes; an offer's is no).
+MultiplayerSession.OFFER_DAYS = 20
 
 local function display_name(entity)
   local S = _S.multiplayer_window
@@ -1251,7 +1252,7 @@ local function create_offer(world, kind, from, to, entity)
     mp_offer = {kind = kind, from = world:getHospitalIndex(from), to = world:getHospitalIndex(to),
         entity = entity.mp_id, name = name},
   }
-  panel:queueMessage("mp_offer", message, nil, MultiplayerSession.OFFER_HOURS, 2, nil, to)
+  panel:queueMessage("mp_offer", message, nil, Date.hoursPerDay() * MultiplayerSession.OFFER_DAYS, 2, nil, to)
   entity.mp_offer = world.next_message_id
   MultiplayerSession.tellPlayer(world, from, S.offer_sent_note:format(name, to.name))
   return true
@@ -1779,7 +1780,31 @@ end
 function handlers.shoot_rat(world, cmd)
   local rat = entity_of(world, cmd.rat, Rat)
   if not rat or rat.shot then return false, "no such rat" end
+  -- Co-op: rats in another player's hospital are theirs to shoot.
+  if not ours(world, cmd, rat) then return false, "not ours" end
   rat:shoot()
+  return true
+end
+
+--! Clear away a room destroyed by an exploding machine (the single player
+--! "remove destroyed rooms" option; the player who asks has it on): {room}.
+function handlers.remove_crashed_room(world, cmd)
+  local room = world.rooms[tonumber(cmd.room)]
+  if not room or not room.crashed then return false, "no such room" end
+  local hospital = hospital_of(world, cmd)
+  if room.hospital ~= hospital then return false, "not ours" end
+  local cost = room:calculateRemovalCost()
+  -- Soot can only be removed with the option on (Litter:remove); it must
+  -- not depend on each player's own setting.
+  local config = TheApp.config
+  local saved = config.remove_destroyed_rooms
+  config.remove_destroyed_rooms = true
+  local ok, err = pcall(UIEditRoom.removeRoom, UIEditRoom, false, room, world)
+  config.remove_destroyed_rooms = saved
+  if not ok then error(err, 0) end
+  world:resetSideObjects()
+  world.rooms[room.id] = nil
+  hospital:spendMoney(cost, _S.transactions.remove_room)
   return true
 end
 

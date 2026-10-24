@@ -466,6 +466,44 @@ local function run()
           else
             log("UI: no patient to refer")
           end
+        elseif a == "crash" then
+          session:issue({kind = "probe_crash", room = entry.arg})
+        elseif a == "removecrashed" then
+          -- With the "remove destroyed rooms" option: click the room with the
+          -- edit cursor and confirm.
+          local found
+          for _, room in pairs(world.rooms) do
+            if room.crashed and room.hospital == world.ui.hospital and (not found or room.id < found.id) then
+              found = room
+            end
+          end
+          if found then
+            TheApp.config.remove_destroyed_rooms = true
+            log(string.format("UI: removing crashed room #%d (%s) at step %d", found.id, found.room_info.id, session.step))
+            session:issue({kind = "remove_crashed_room", room = found.id})
+          else
+            log("UI: no crashed room")
+          end
+        elseif a == "epidemic" then
+          session:issue({kind = "probe_epidemic"})
+        elseif a == "vaccinate" then
+          -- Mark every infected patient of this hospital for vaccination, as
+          -- clicks in vaccination mode do (retried until the cover up runs).
+          local epidemic = world.ui.hospital.epidemic
+          if (not epidemic or not epidemic.coverup_selected) and (entry.retries or 0) < 60 then
+            entry.retries = (entry.retries or 0) + 1
+            entry.hour = entry.hour + 100
+            done[i] = nil
+          elseif epidemic then
+            local n = 0
+            for _, p in ipairs(epidemic.infected_patients) do
+              if not p.marked_for_vaccination and not p.vaccinated then
+                session:issue({kind = "mark_vaccinate", patient = p.mp_id})
+                n = n + 1
+              end
+            end
+            log(string.format("UI: marked %d infected patients for vaccination at step %d", n, session.step))
+          end
         elseif a == "notreatfax" then
           session:issue({kind = "probe_notreat"})
         elseif a == "sendstaff" then
@@ -542,12 +580,20 @@ local function run()
           session:issue({kind = "probe_vip", target = tonumber(entry.arg) or 1})
           log("UI: asked for a VIP fax at step " .. session.step)
         elseif a == "answerfax" then
-          local ftype, n = entry.arg:match("^(%a+):(%d+)$")
+          -- answerfax:<type>:<n>[:wait]: with "wait", look again every 100
+          -- hours until the fax comes. Only this player's faxes (co-op).
+          local ftype, n, wait = entry.arg:match("^(%a+):(%d+):?(%a*)$")
           local icon
           for _, i in ipairs(world.ui.bottom_panel:allMessageIcons()) do
-            if i.type == ftype then icon = i break end
+            if not icon and i.type == ftype and (not world.mp_coop or i.hospital == world.ui.hospital) then
+              icon = i
+            end
           end
-          if icon then
+          if not icon and wait == "wait" and (entry.retries or 0) < 80 and entry.hour < target - 100 then
+            entry.retries = (entry.retries or 0) + 1
+            entry.hour = entry.hour + 100
+            done[i] = nil
+          elseif icon then
             if not icon.fax then icon:openMessage() end
             shot("fax-" .. ftype)
             log(string.format("UI: clicked choice %s of %s fax #%s at step %d", n, ftype,

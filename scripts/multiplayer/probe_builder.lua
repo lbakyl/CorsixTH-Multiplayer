@@ -768,6 +768,31 @@ function builder.register_handlers()
     local err = w.hospitals[cmd.target or 1]:createEmergency()
     return err == nil, err
   end
+  -- The first room of type `room` in this hospital is destroyed, as by an
+  -- exploding machine (to test clearing it away).
+  MultiplayerSession.default_handlers.probe_crash = function(w, cmd)
+    local h = w.hospitals[cmd.hospital or 1]
+    for _, room in pairs(w.rooms) do
+      if room.hospital == h and room.room_info.id == cmd.room and not room.crashed then
+        room:crashRoom()
+        return true
+      end
+    end
+    return false, "no such room"
+  end
+  -- An epidemic in this hospital: a contagious patient, and every infected
+  -- patient diagnosed so that it is revealed at once (the epidemic fax).
+  MultiplayerSession.default_handlers.probe_epidemic = function(w, cmd)
+    local h = w.hospitals[cmd.hospital or 1]
+    local ok, why = h:spawnContagiousPatient()
+    if ok == false then return false, why end
+    for _, ep in ipairs(h.future_epidemics_pool or {}) do
+      for _, p in ipairs(ep.infected_patients) do
+        if not p.diagnosed then p:setDiagnosed() end
+      end
+    end
+    return true
+  end
   -- The "no treatment yet" fax for this hospital's first patient in a
   -- corridor (to answer it with "refer to another hospital").
   MultiplayerSession.default_handlers.probe_notreat = function(w, cmd)

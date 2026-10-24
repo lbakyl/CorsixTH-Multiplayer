@@ -135,8 +135,9 @@ function UIWatch:onCountdownEnd()
     -- Multiplayer co-op: World:_tickCoopOpenings resolves it.
     if not self.ui.app.world.mp_coop then self.hospital:resolveEmergency() end
   elseif self.count_type == "epidemic" then
+    -- Multiplayer co-op: World:_tickCoopOpenings ends it, on every peer.
     local epidemic = self.hospital.epidemic
-    if epidemic then
+    if epidemic and not self.ui.app.world.mp_coop then
       epidemic:coverUpTimeIsUp()
     end
   elseif self.count_type == "initial_opening" then

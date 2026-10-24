@@ -220,20 +220,42 @@ function Epidemic:revealEpidemic()
   self:announceStartOfEpidemic()
 end
 
+--[[ Is this epidemic's hospital the one this machine's player runs? (Always
+in single player; in multiplayer co-op only for its own player.) ]]
+function Epidemic:_isLocal()
+  return not self.world.mp_coop or self.hospital == self.world.ui.hospital
+end
+
+--[[ Adviser speech about this epidemic, to the hospital's player only. ]]
+function Epidemic:_say(speech)
+  if self.hospital.say then
+    self.hospital:say(speech)
+  else
+    self.world.ui.adviser:say(speech)
+  end
+end
+
+--[[ Plays one of `announcements` for this hospital's player. The sound is
+chosen on every multiplayer peer alike (it uses the game's random numbers). ]]
+function Epidemic:_announce(announcements)
+  local sound = announcements[math.random(1, #announcements)]
+  if self.hospital:isPlayerHospital() and self:_isLocal() then
+    self.world.ui:playAnnouncement(sound, AnnouncementPriority.Critical)
+  end
+end
+
 --[[ Plays the announcement for the start of the epidemic ]]
 function Epidemic:announceStartOfEpidemic()
-  local announcements = {"EPID001.wav", "EPID002.wav", "EPID003.wav", "EPID004.wav"}
   if self.hospital:isPlayerHospital() then
-    self.world.ui:playAnnouncement(announcements[math.random(1, #announcements)], AnnouncementPriority.Critical)
+    self:_announce({"EPID001.wav", "EPID002.wav", "EPID003.wav", "EPID004.wav"})
   end
 end
 
 
 --[[ Plays the announcement for the end of the epidemic ]]
 function Epidemic:announceEndOfEpidemic()
-  local announcements = {"EPID005.wav", "EPID006.wav", "EPID007.wav", "EPID008.wav"}
   if self.hospital:isPlayerHospital() then
-    self.world.ui:playAnnouncement(announcements[math.random(1, #announcements)], AnnouncementPriority.Critical)
+    self:_announce({"EPID005.wav", "EPID006.wav", "EPID007.wav", "EPID008.wav"})
   end
 end
 
@@ -394,9 +416,22 @@ end
 --[[ When the player chooses to begin the cover up over declaring from the
  initial fax (@see sendInitialFax) ]]
 function Epidemic:startCoverUp()
-  self.timer = UIWatch(self.world.ui, "epidemic", self.hospital)
+  if self.world.mp_coop then
+    -- Multiplayer co-op: the countdown runs in the simulation on every peer
+    -- (World:_tickCoopOpenings); the watch only shows it, to the hospital's
+    -- player (watches share one place on the screen, which differs between
+    -- players).
+    self.timer = World.newCountdown(100)
+    self.mp_countdown = true
+    if self:_isLocal() then
+      self.watch = UIWatch(self.world.ui, "epidemic", self.hospital)
+      self.world.ui:addWindow(self.watch)
+    end
+  else
+    self.timer = UIWatch(self.world.ui, "epidemic", self.hospital)
+    self.world.ui:addWindow(self.timer)
+  end
   self.countdown_intervals = self.timer.open_timer
-  self.world.ui:addWindow(self.timer)
   -- last chance clean up as entities might have ticked and changed state
   self:checkPatientsForRemoval()
   self.coverup_selected = true
@@ -407,13 +442,25 @@ function Epidemic:startCoverUp()
   end
 end
 
+--[[ Stop the cover up countdown (the watch, or in multiplayer co-op the
+countdown in the simulation and the watch showing it). ]]
+function Epidemic:_closeTimer()
+  if self.watch then
+    self.watch:close()
+    self.watch = nil
+  end
+  if self.timer then
+    if self.timer.close then self.timer:close() else self.timer.closed = true end
+  end
+end
+
 --[[ Ends the cover up epidemic stage ]]
 function Epidemic:finishCoverUp()
   if not self.inspector then
     self:spawnInspector()
   end
 
-  self.timer:close()
+  self:_closeTimer()
 
   -- Turn vaccination mode off if enabled
   self:turnOffVaccinationMode()
@@ -543,13 +590,13 @@ end
 --[[ Send the results of the cover up to the player - will be a
 success/compensation or fail/fines + reputation hit]]
 function Epidemic:sendResultFax()
-  self.world.ui.bottom_panel:queueMessage("report", self.cover_up_result_fax, nil, 24*20, 1)
+  self.world.ui.bottom_panel:queueMessage("report", self.cover_up_result_fax, nil, 24*20, 1, nil, self.hospital)
   self:announceEndOfEpidemic()
 end
 
 --[[ Spawns the inspector who will walk to the reception desk. ]]
 function Epidemic:spawnInspector()
-  self.world.ui.adviser:say(_A.information.epidemic_health_inspector)
+  self:_say(_A.information.epidemic_health_inspector)
   local inspector = self.world:newEntity("Inspector", 2, 2)
   self.inspector = inspector
   inspector:setType("Inspector")
@@ -700,14 +747,14 @@ function Epidemic:showAppropriateAdviceMessages()
     if not self.has_said_hurry_up and self:countInfectedPatients() > 0 and
         -- If only 1/4 of the countdown_intervals remaining on the timer
         self.timer.open_timer == math.floor(self.countdown_intervals * 1 / 4) then
-      self.world.ui.adviser:say(_A.epidemic.hurry_up)
+      self:_say(_A.epidemic.hurry_up)
       self.has_said_hurry_up = true
 
     -- Wait until at least 1/4 of the countdown_intervals has expired before giving
     -- this warning so it doesn't happen straight away
     elseif self.timer.open_timer <= math.floor(self.countdown_intervals * 3 / 4) and
         not self.has_said_serious and self:countInfectedPatients() > 10 then
-      self.world.ui.adviser:say(_A.epidemic.serious_warning)
+      self:_say(_A.epidemic.serious_warning)
       self.has_said_serious = true
     end
   end
@@ -738,9 +785,7 @@ function Epidemic:cancelEpidemic()
   -- Turn vaccination mode off if enabled
   self:turnOffVaccinationMode()
   -- Remove epidemic timer
-  if self.timer ~= nil then
-    self.timer:close()
-  end
+  self:_closeTimer()
   -- Send inspector home if spawned
   if self.inspector ~= nil then
     self.inspector:goHome()

@@ -121,8 +121,6 @@ function World:World(app, free_build_mode)
       -- way as the watch window (dialogs/watch.lua), which only one peer has.
       local rate = math.floor((100 * Date.hoursPerDay()) / 13)
       hospital.mp_opening = {tick_rate = rate, tick_timer = rate, open_timer = 12}
-      -- Epidemic countdown windows are per peer; not supported in co-op yet.
-      hospital.epidemics_disabled = true
       self.hospitals[i] = hospital
     end
   else
@@ -1207,7 +1205,7 @@ local function tick_countdown(c)
 end
 
 --! Multiplayer co-op: one game hour of every hospital's countdowns (opening,
---! emergency). The watch window exists only for the local player; these run
+--! emergency, epidemic cover up). The watch window exists only for the local player; these run
 --! on every peer.
 --! Multiplayer co-op: members of staff sent to another player's hospital
 --! (send_staff) join it once they have walked there; if they could not get
@@ -1261,6 +1259,13 @@ function World:_tickCoopOpenings()
     if e and tick_countdown(e) then
       hospital.mp_emergency_timer = nil
       if hospital.emergency then hospital:resolveEmergency() end
+    end
+    -- An epidemic cover up (Epidemic:startCoverUp).
+    local epidemic = hospital.epidemic
+    if epidemic and epidemic.mp_countdown and epidemic.timer and not epidemic.timer.closed and
+        tick_countdown(epidemic.timer) then
+      epidemic.mp_countdown = nil
+      epidemic:coverUpTimeIsUp()
     end
     local c = hospital.mp_opening
     if c and hospital.opened then

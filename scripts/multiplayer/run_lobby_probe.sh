@@ -84,7 +84,7 @@ else
     export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
     export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/referee"
     export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
-    export MP_REFEREE_PROBE_SCENARIO="crowd=busy;staff=busy;edit=busy;cardio=none" # the probes' own start, see below
+    export MP_REFEREE_PROBE_SCENARIO="crowd=busy;staff=busy;edit=busy;cardio=none;epi=busy" # the probes' own start, see below
   fi
   PYTHONPATH="$source_dir/mp_server" python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
     --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
@@ -157,6 +157,13 @@ run_probe nico MP_ROLE=join MP_ROOM=coop MP_STEPS=1200 MP_DRAW_EVERY=3 \
 run_probe olga MP_ROLE=host MP_ROOM=events MP_COOP=1 MP_STEPS=1600   MP_UI_SCRIPT="20:openhospital;100:emergency:2;400:vip:2" & pids+=($!)
 sleep 1
 run_probe paul MP_ROLE=join MP_ROOM=events MP_STEPS=1600 MP_DRAW_EVERY=3   MP_UI_SCRIPT="30:openhospital;130:answerfax:emergency:1;430:answerfax:personality:1" & pids+=($!)
+# Epidemic (co-op): one starts in player 2's hospital (test command); player
+# 2 covers it up, marks the infected for vaccination, the countdown runs in
+# the simulation on both machines, the inspector's result fax comes.
+run_probe ella MP_ROLE=host MP_ROOM=epi MP_COOP=1 MP_SCENARIO=busy MP_STEPS=6500   MP_UI_SCRIPT="20:openhospital" & pids+=($!)
+sleep 1
+run_probe finn MP_ROLE=join MP_ROOM=epi MP_SCENARIO=busy MP_STEPS=6500   MP_UI_SCRIPT="30:openhospital;300:epidemic;320:answerfax:epidemy:2:wait;400:vaccinate;5300:answerfax:report:1:wait" & pids+=($!)
+
 # Offers (co-op): patients referred from the patient window and from a
 # "no treatment" fax, a nurse offered; offers accepted and declined in the
 # purple offer window.
@@ -374,6 +381,15 @@ print(f"17. Offers and referrals:   {result('xavi')}; offers {kinds_x.count('off
       f"{kinds_x.count('offer_staff')} staff; arrived: {arrived_p} patients, {arrived_s} staff; identical: {cx == applied('yuki')}")
 fail |= not okr
 
+el, fl = log('ella'), log('finn')
+ce = applied('ella')
+kinds_e = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in ce if x.endswith('-> ok'))
+oke = (result('ella').startswith('IN SYNC through step 6500') and result('finn').startswith('IN SYNC through step 6500')
+       and ce == applied('finn') and 'probe_epidemic' in kinds_e and 'mark_vaccinate' in kinds_e
+       and kinds_e.count('fax_choice') >= 2 and 'clicked choice 1 of report fax' in fl)
+print(f"18. Co-op epidemic:         {result('finn')}; cover up, vaccination, result fax: {oke}; commands {' '.join(kinds_e)}")
+fail |= not oke
+
 w_, y_ = log('wade'), log('yara')
 cw = applied('wade')
 okw = [x for x in cw if x.endswith('-> ok')]
@@ -476,7 +492,7 @@ print(f"11. Save and continue:      saved at step {saved_t.group(2) if saved_t e
 fail |= not ok11
 
 if with_referee:
-    rooms = ['ward', 'leave', 'build', 'crowd', 'fax', 'coop', 'events', 'staff', 'edit', 'cardio', 'refer']
+    rooms = ['ward', 'leave', 'build', 'crowd', 'fax', 'coop', 'events', 'staff', 'edit', 'cardio', 'refer', 'epi']
     connected = [r for r in rooms if f"room '{r}': referee connected" in server]
     differ = re.findall(r"room '(\w+)': the players differ from the referee", server)
     confirmed = dict(re.findall(r"room '(\w+)': referee confirmed steps through (\d+)", server))

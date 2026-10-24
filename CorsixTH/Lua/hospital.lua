@@ -1252,7 +1252,15 @@ function Hospital:manageEpidemics()
   @param future_epidemic (Epidemic) the epidemic to attempt to reveal
   @return true if can be revealed false otherwise (boolean) ]]
   local function can_be_revealed(epidemic)
-    return not self.world.ui:getWindow(UIWatch) and
+    -- No other countdown under way (multiplayer co-op: this hospital's, from
+    -- the simulation; the watch windows differ between players).
+    local busy
+    if self.world.mp_coop then
+      busy = self.mp_opening or self.mp_emergency_timer or self.emergency
+    else
+      busy = self.world.ui:getWindow(UIWatch)
+    end
+    return not busy and
     not self.epidemic and epidemic.ready_to_reveal
   end
 

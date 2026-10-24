@@ -98,10 +98,24 @@ function UIPatient:UIPatient(ui, patient)
   local world = ui.app.world
   if TheApp.mp_session and world.mp_coop and world.mp_coop.players > 1 and
       patient.hospital == ui.hospital and not self.mp_view_only then
-    self.height = self.height + 30
-    self:addBevelPanel(20, 312, 150, 26, {red = 150, green = 76, blue = 206})
-        :setLabel(_S.multiplayer_window.refer_button)
-        :makeButton(0, 0, 150, 26, nil, self.referPatient)
+    -- A purple icon (like the offer icon) in the free place between the
+    -- close button and the queue button.
+    local icon = self:addColourPanel(147, 49, 24, 28, 48, 16, 74)
+    icon.custom_draw = --[[persistable:patient_refer_icon_draw]] function(panel, canvas, x, y)
+      local s = TheApp.gfx:getUIScale()
+      local ix, iy = x + panel.x * s, y + panel.y * s
+      canvas:drawRect(canvas:mapRGB(48, 16, 74), ix, iy, 24 * s, 28 * s)
+      canvas:drawRect(canvas:mapRGB(150, 76, 206), ix + 2 * s, iy + 2 * s, 20 * s, 24 * s)
+      local light = canvas:mapRGB(246, 238, 255)
+      canvas:drawRect(light, ix + 6 * s, iy + 5 * s, 5 * s, 5 * s)   -- head
+      canvas:drawRect(light, ix + 4 * s, iy + 11 * s, 9 * s, 6 * s)  -- shoulders
+      canvas:drawRect(light, ix + 5 * s, iy + 17 * s, 7 * s, 4 * s)  -- body
+      local arrow = canvas:mapRGB(255, 214, 90)                       -- "to another hospital"
+      canvas:drawRect(arrow, ix + 14 * s, iy + 13 * s, 5 * s, 2 * s)
+      canvas:drawRect(arrow, ix + 17 * s, iy + 11 * s, 2 * s, 6 * s)
+      canvas:drawRect(arrow, ix + 19 * s, iy + 12 * s, 1 * s, 4 * s)
+    end
+    icon:makeButton(0, 0, 24, 28, nil, self.referPatient)
         :setTooltip(_S.tooltip.multiplayer_window.refer_button)
   end
 end
