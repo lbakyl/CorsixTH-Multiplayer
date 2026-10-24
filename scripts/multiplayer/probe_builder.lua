@@ -310,9 +310,22 @@ function builder.ui_hire(world, desk_x, desk_y, class, log)
   local ui = world.ui
   local dlg = UIHireStaff(ui)
   ui:addWindow(dlg)
+  -- "Doctor:surgeon": the first doctor with that skill (surgeon,
+  -- psychiatrist, researcher, junior, consultant), else the first one.
+  local skill
+  class, skill = class:match("^(%a+):?(%a*)$")
   dlg:setCategory(class)
   local pool = world.available_staff[class]
   assert(pool and #pool > 0, "nobody to hire in " .. class)
+  if skill ~= "" then
+    for i, profile in ipairs(pool) do
+      if profile["is_" .. skill] == 1 then
+        dlg.current_index = i
+        break
+      end
+    end
+    class = class .. " (" .. skill .. (pool[dlg.current_index]["is_" .. skill] == 1 and "" or ": none, so any") .. ")"
+  end
   local name = tostring(pool[dlg.current_index]:getFullName()):gsub("^.*:", "")
   dlg.mouse_up_x, dlg.mouse_up_y = 0, 0 -- where the click happened
   dlg:hire() -- opens UIPlaceStaff
@@ -456,6 +469,12 @@ function builder.furnish_tick(world, state, log)
   -- A person watching: wait state.pace game hours between objects.
   local step = TheApp.mp_session and TheApp.mp_session.step or 0
   if state.not_before and step < state.not_before then return false end
+  -- A room that was refused (no money, say) never opens its editor.
+  state.since = state.since or step
+  if not state.started and step > state.since + 200 then
+    log("UI: furnishing: the room was not built")
+    return true
+  end
   if not (dlg and dlg.mp_room_id) then
     state.waited = (state.waited or 0) + 1
     if state.started and state.waited > 400 then log("UI: furnishing: editor gone") return true end

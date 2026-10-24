@@ -17,7 +17,7 @@
 --   MP_STEPS          game hours to play                 (default 1500)
 --   MP_FAST           1: run at the fastest local speed (test only, default 1)
 --   MP_UI_SCRIPT      ";"-separated "hour:action[:arg]":
---                       buy:<object>, hire:<class>      as in ingame_probe.lua
+--                       buy:<object>, hire:<class>      as in ingame_probe.lua; hire:Doctor:surgeon for a skill
 --                       room:<id>:<w>:<h>[:window]      draw a room in the room editor
 --                       crowdroom:<id>:<w>:<h>          draw it where somebody stands
 --                       vip[:<hospital>]                make a VIP visit fax appear for
@@ -29,6 +29,7 @@
 --                       openhospital                    click the opening watch's button
 --                       edge:top|right                  scroll to that edge of the map, screenshot
 --                       key:<name>                      press a key (return, escape, ...)
+--                       furnishall:<gap>                every room this hospital can build, by hand
 --                       givemoney:<amount>              co-op trade window: send money
 --                       sendstaff:<class>               co-op trade window: send the first
 --                                                       member of staff of that class
@@ -625,6 +626,35 @@ local function run()
         elseif a == "quit" then
           log("UI: quitting at step " .. session.step)
           quit = true
+        elseif (a == "furnishroom" or a == "cancelroom") and furnishing then
+          -- One room at a time: wait until the last one is furnished.
+          done[i] = false
+          entry.hour = session.step + 20
+        elseif a == "furnishall" then
+          -- Every room this hospital can build, one after the other (most
+          -- needed first), each furnished by hand. Argument: steps between.
+          local hospital = world.ui.hospital
+          local first = {gp = 1, pharmacy = 2, general_diag = 3, ward = 4, psych = 5, staff_room = 6, toilets = 7}
+          local ids = {}
+          for _, room in ipairs(TheApp.rooms) do
+            local discovery = hospital.room_discoveries[room.id]
+            if discovery and discovery.is_discovered and hospital.research.research_progress[room] then
+              ids[#ids + 1] = room
+            end
+          end
+          table.sort(ids, function(r1, r2)
+            local f1, f2 = first[r1.id] or 99, first[r2.id] or 99
+            if f1 ~= f2 then return f1 < f2 end
+            return r1.id < r2.id
+          end)
+          local gap, names = tonumber(entry.arg) or 100, {}
+          for k, room in ipairs(ids) do
+            local size = math.min(7, math.max(5, (room.minimum_size or 4) + 1))
+            ui_script[#ui_script + 1] = {hour = session.step + k * gap, action = "furnishroom",
+                arg = string.format("%s:%d:%d", room.id, size, size)}
+            names[#names + 1] = room.id
+          end
+          log(string.format("UI: building every room at step %d: %s", session.step, table.concat(names, ",")))
         elseif a == "furnishroom" or a == "cancelroom" then
           -- Draw a room, then place its furniture by hand (or cancel then).
           local id, rw, rh = entry.arg:match("^([%w_]+):(%d+):(%d+)$")
