@@ -502,9 +502,10 @@ local function run()
           -- confirm "clear it away and build it again" (whatever the remove
           -- option says); then (rebuildfinish) the editor that opens.
           local found
-          for _, room in pairs(world.rooms) do
-            if room.crashed and room.hospital == world.ui.hospital and (not found or room.id < found.id) then
-              found = room
+          for _, candidate in pairs(world.rooms) do
+            if candidate.crashed and candidate.hospital == world.ui.hospital and
+                (not found or candidate.id < found.id) then
+              found = candidate
             end
           end
           if found then
