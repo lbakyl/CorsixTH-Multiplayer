@@ -8,6 +8,10 @@ The server is small: it never runs the game, only relays messages between the
 players and keeps the rooms. It needs **no Theme Hospital data** and no
 CorsixTH game code.
 
+With the headless referee (desync repair and rejoin), the server does run a
+copy of each game and needs the game data: that setup is a different one,
+`mp_server/deploy/setup-referee-host.sh` (see `referee.md`).
+
 ## Quick start
 
 On a fresh Debian or Ubuntu VPS, as root:

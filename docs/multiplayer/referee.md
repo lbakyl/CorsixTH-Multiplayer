@@ -49,8 +49,22 @@ The server log shows `headless referee enabled`, then for each game
 confirmed steps through N`. The referee's own log is
 `<workdir>/<room>-<id>/referee.log`.
 
-The Docker image does not contain the referee yet: it would need a Linux
-build of CorsixTH in the image and the game data on a read-only volume.
+On a VPS, `mp_server/deploy/setup-referee-host.sh` sets it all up in one
+command: the server as a systemd service (instead of the Docker container),
+the Linux package of a test release as the referee, the server code from the
+same commit, and your game data readable only by the service account:
+
+```
+sudo bash setup-referee-host.sh --release mp-test-<commit> --data /path/to/themehos
+```
+
+Run it again with each new release (without `--data`): the referee must run
+the same build as the players, or the server starts no referee for their
+games (it logs "referee build ... differs") and a desync ends the game as
+before. Restarting drops the players, so check that nobody is playing. The
+game binary needs some desktop libraries (sound, X11, Wayland) to start even
+though the referee shows nothing; the script installs them. The Docker image
+has no referee.
 
 ## How it works
 

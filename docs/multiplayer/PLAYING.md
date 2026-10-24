@@ -113,8 +113,9 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 The game says so ("Multiplayer games are out of sync"). This should not
 happen; if it does, please report it (below). Then continue from the last
 save or autosave. Servers that run the headless referee repair this
-automatically and let a player who dropped out rejoin (not yet in the
-standard server image).
+automatically (everybody loads the server's copy of the game and plays on)
+and let a player who dropped out rejoin: join the same room again under the
+same name. The test server runs the referee for the current test release.
 
 ## Not there yet
 
