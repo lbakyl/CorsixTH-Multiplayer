@@ -30,6 +30,8 @@
 --                       edge:top|right                  scroll to that edge of the map, screenshot
 --                       key:<name>                      press a key (return, escape, ...)
 --                       furnishall:<gap>                every room this hospital can build, by hand
+--                       openfax:<type>                  open the first fax of a type, leave it open
+--                       staffsend                       staff management: send the first doctor
 --                       givemoney:<amount>              co-op trade window: send money
 --                       sendstaff:<class>               co-op trade window: send the first
 --                                                       member of staff of that class
@@ -579,6 +581,32 @@ local function run()
             if r.built and r.hospital == world.ui.hospital and (not best or r.id > best.id) then best = r end
           end
           if best then look_at(best.x + math.floor(best.width / 2), best.y + math.floor(best.height / 2)) end
+        elseif a == "staffsend" then
+          -- Staff management: select the first doctor, press "send to another
+          -- player", screenshot the trade window it opens, close both.
+          local manage = UIStaffManagement(world.ui)
+          world.ui:addWindow(manage)
+          manage:selectIndex(1)
+          manage:sendToPlayer()
+          local trade = world.ui:getWindow(UIMultiplayerTrade)
+          shot("staffsend")
+          log(string.format("UI: staff management sent %s to the trade window, selected there: %s",
+              tostring(manage.staff_members.Doctor[1].profile:getFullName()):gsub("^.*:", ""),
+              trade and trade.selected and tostring(trade.selected.staff.profile:getFullName()):gsub("^.*:", "") or "-"))
+          if trade then trade:close() end
+          manage:close()
+        elseif a == "openfax" then
+          -- Open the first fax of a type and leave it open (in multiplayer
+          -- the game goes on meanwhile; answerfax answers it later).
+          local icon
+          for _, i in ipairs(world.ui.bottom_panel:allMessageIcons()) do
+            if not icon and i.type == entry.arg and (not world.mp_coop or i.hospital == world.ui.hospital) then
+              icon = i
+            end
+          end
+          if icon and not icon.fax then icon:openMessage() end
+          log(string.format("UI: %s fax %s at step %d (game speed %s)", entry.arg,
+              icon and "opened" or "not found", session.step, tostring(world:getCurrentSpeed())))
         elseif a == "vip" then
           session:issue({kind = "probe_vip", target = tonumber(entry.arg) or 1})
           log("UI: asked for a VIP fax at step " .. session.step)
@@ -1108,9 +1136,14 @@ local function run()
           shot("edge-" .. entry.arg)
         elseif a == "screen" then
           -- Open a window by its class name, take a screenshot, close it.
-          local window = _G[entry.arg](world.ui)
+          -- "<class>:<page>" turns to that page first; a list of staff shows
+          -- its first member selected.
+          local name_, page = entry.arg:match("^([%w_]+):?(%d*)$")
+          local window = _G[name_](world.ui)
           world.ui:addWindow(window)
-          shot("screen-" .. entry.arg)
+          if page ~= "" and window.turnPage then window:turnPage(tonumber(page) - 1) end
+          if window.selectIndex then window:selectIndex(1) end
+          shot("screen-" .. name_ .. page)
           window:close()
         elseif a == "researchboard" then
           -- The research blackboard, with "Share research" next to the total.
