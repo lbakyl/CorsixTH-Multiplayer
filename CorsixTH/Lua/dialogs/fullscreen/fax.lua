@@ -89,9 +89,11 @@ function UIFax:UIFax(ui, icon)
   self:addPanel(0, 326, 382):makeButton(0, 0, 44, 11, 13, button("#"))
 end
 
--- Faxes pause the game
+-- Faxes pause the game. Not in multiplayer: there a pause on one computer
+-- stops everybody's game. The fax's message keeps its timer instead, and
+-- when it runs out the default answer is taken (on every computer alike).
 function UIFax:mustPause()
-  return true
+  return not TheApp.mp_session
 end
 
 function UIFax:updateChoices()
