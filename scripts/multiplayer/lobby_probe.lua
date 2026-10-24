@@ -28,6 +28,7 @@
 --                                                       click choice <n> in the fax window
 --                       openhospital                    click the opening watch's button
 --                       edge:top|right                  scroll to that edge of the map, screenshot
+--                       key:<name>                      press a key (return, escape, ...)
 --                       givemoney:<amount>              co-op trade window: send money
 --                       sendstaff:<class>               co-op trade window: send the first
 --                                                       member of staff of that class
@@ -1059,6 +1060,12 @@ local function run()
           else
             log("UI: no money request to answer")
           end
+        elseif a == "key" then
+          -- Press a key, as a player would (say Enter or Escape while
+          -- somebody else furnishes a room).
+          world.ui:onKeyDown(entry.arg, {})
+          world.ui:onKeyUp(entry.arg, {})
+          log(string.format("UI: pressed %s at step %d", entry.arg, session.step))
         elseif a == "edge" then
           -- Scroll as far as the camera goes towards the top corner of the
           -- map ("top") or the right one ("right"), and take a screenshot.
