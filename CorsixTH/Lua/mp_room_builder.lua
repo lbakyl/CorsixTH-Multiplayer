@@ -171,14 +171,17 @@ local function keeps_room_usable(room, rect, placed, object_type, tx, ty, o)
   local candidate = {footprint = {}}
   local own = {}
   for _, t in ipairs(orientation.footprint) do
+    own[key(tx + t[1], ty + t[2])] = true
     -- (A wall object, such as a radiator, leaves its tile walkable.)
     if not t.only_passable and not t.only_side then
       candidate.footprint[#candidate.footprint + 1] = {tx + t[1], ty + t[2]}
-      own[key(tx + t[1], ty + t[2])] = true
     end
   end
-  -- (A wall object, such as an extinguisher, is used from its own tile.)
-  if orientation.use_position and
+  -- Only an object the room needs must be usable itself (single player lets
+  -- a plant stand where nobody can water it); a use tile on the object's own
+  -- footprint (a radiator, an extinguisher) never counts.
+  local needed = room.room_info.objects_needed and room.room_info.objects_needed[object_type.id]
+  if needed and type(orientation.use_position) == "table" and
       not own[key(tx + orientation.use_position[1], ty + orientation.use_position[2])] then
     candidate.use_x = tx + orientation.use_position[1]
     candidate.use_y = ty + orientation.use_position[2]
@@ -239,11 +242,12 @@ function builder.roomItems(room)
         end
       end
       local ux, uy
-      if orientation.use_position then
+      local needed = room.room_info.objects_needed and room.room_info.objects_needed[obj.object_type.id]
+      if needed and type(orientation.use_position) == "table" then
         ux, uy = obj.tile_x + orientation.use_position[1], obj.tile_y + orientation.use_position[2]
       end
-      for _, xy in ipairs(item.footprint) do
-        if xy[1] == ux and xy[2] == uy then ux = nil end -- used from its own tile
+      for _, t in ipairs(orientation.footprint) do
+        if obj.tile_x + t[1] == ux and obj.tile_y + t[2] == uy then ux = nil end -- used from its own tile
       end
       item.use_x, item.use_y = ux, ux and uy
       items[#items + 1] = item

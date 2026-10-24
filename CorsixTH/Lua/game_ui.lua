@@ -725,11 +725,20 @@ function GameUI:onMouseUp(code, x, y)
       -- clicks then go to it, not to choosing a room.)
       if button == "left" then -- Take the clicked one.
         local room = self.app.world:getRoom(self:ScreenToWorld(x, y))
-        if room then
+        local session = TheApp.mp_session
+        local entry = room and self.app.world.mp_furnishing and self.app.world.mp_furnishing[room.id]
+        if entry and session and entry.peer == session.peer_id and not session.observer then
+          -- Multiplayer: a room this player is still furnishing or editing:
+          -- open its editor again (it may have been closed by something
+          -- else), instead of starting a new edit.
+          self:setCursor(self.default_cursor)
+          self.edit_room = false
+          local builder = corsixth.require("mp_room_builder")
+          if entry.unbuilt then builder.startRedraw(self.app.world, entry) else builder.show(self.app.world, entry) end
+        elseif room then
           if not room.crashed and MultiplayerSession.actionsAreCommands() then
             -- Multiplayer: every peer empties the room; its editor opens
             -- for this player once nobody is inside (room_edit).
-            local session = TheApp.mp_session
             session:issue({kind = "room_edit", room = room.id,
                 hospital = self.app.world:getHospitalIndex(self.hospital)})
             self:setEditRoom(false)

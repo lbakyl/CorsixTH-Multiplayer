@@ -289,6 +289,7 @@ local function run()
   local furnishing -- state of a room being furnished by hand (furnishroom)
   local editing -- state of a room being edited (editroom)
   local holding -- a window that pauses this game, open for some seconds (holdpause)
+  local monkey -- random clicks all over the screen, like a small child (monkey)
   while session.step < target and (expect_repair or not session.desync) and not quit do
     local before = session.step
     tick()
@@ -330,6 +331,26 @@ local function run()
     end
     if furnishing and builder.furnish_tick(world, furnishing, log) then furnishing = nil end
     if editing and not furnishing and builder.edit_tick(world, editing, log) then editing = nil end
+    if monkey and ticks % 3 == 0 then
+      -- Its own random numbers (the game's must not change): a fixed seed.
+      monkey.state = (monkey.state * 1103515245 + 12345) % 2147483648
+      local r = monkey.state
+      local sw, sh = TheApp.video:getRenderSize()
+      local sx, sy = r % sw, math.floor(r / sw) % sh
+      local button = (math.floor(r / 7) % 4 == 0) and 3 or 1
+      local ok, err = pcall(function()
+        world.ui:onMouseMove(sx, sy, 0, 0)
+        world.ui:onMouseDown(button, sx, sy)
+        world.ui:onMouseUp(button, sx, sy)
+      end)
+      monkey.n = monkey.n + 1
+      if not ok then log("UI: monkey click error: " .. tostring(err)) end
+      if monkey.n >= monkey.total then
+        log(string.format("UI: monkey done after %d clicks at step %d; windows: %s", monkey.n, session.step,
+            (function() local t = {} for _, w in ipairs(world.ui.windows) do t[#t + 1] = class.type(w) or "?" end return table.concat(t, ",") end)()))
+        monkey = nil
+      end
+    end
     if holding and socket.gettime() >= holding.until_time then
       log(string.format("UI: closed the question at step %d", session.step))
       holding.win:close()
@@ -562,6 +583,45 @@ local function run()
         elseif a == "discover" then
           -- Test command: the room becomes available (as research would).
           session:issue({kind = "probe_discover", room = entry.arg})
+        elseif a == "losteditor" or a == "reopen" then
+          -- losteditor: this player's room editor closes without a command
+          -- (as something else could close it); reopen: the edit room tool
+          -- and a click on that room open it again.
+          local own_entry
+          for _, e in pairs(world.mp_furnishing or {}) do
+            if e.peer == session.peer_id then own_entry = e end
+          end
+          local builder2 = corsixth.require("mp_room_builder")
+          if not own_entry then
+            log("UI: no room editor of this player")
+          elseif a == "losteditor" then
+            builder2.hide(world, own_entry)
+            log(string.format("UI: the editor of %s#%d closed at step %d", own_entry.dlg.room.room_info.id,
+                own_entry.dlg.room.id, session.step))
+          else
+            local rm = own_entry.dlg.room
+            world.ui:setEditRoom(true)
+            builder.mouse_click(world.ui, rm.x + 1, rm.y + 1)
+            log(string.format("UI: reopened the editor of %s#%d at step %d: shown %s", rm.room_info.id, rm.id,
+                session.step, tostring(world.ui.edit_room == own_entry.dlg)))
+          end
+        elseif a == "openshop" then
+          -- The corridor shop window (buying a drinks machine), left open.
+          world.ui:addWindow(UIFurnishCorridor(world.ui))
+          log(string.format("UI: opened the corridor shop at step %d", session.step))
+        elseif a == "holdobject" then
+          -- holdobject:<object>:<x>:<y> bought in the corridor shop and held
+          -- (not placed) with its preview at that tile, as while choosing a spot.
+          local id, hx, hy = entry.arg:match("^([%w_]+):(%d+):(%d+)$")
+          local place = UIPlaceObjects(world.ui, {{object = TheApp.objects[id], qty = 1}})
+          world.ui:addWindow(place)
+          place:setBlueprintCell(tonumber(hx), tonumber(hy))
+          log(string.format("UI: holding a %s at %s,%s at step %d", id, hx, hy, session.step))
+        elseif a == "monkey" then
+          -- monkey:<clicks>:<seed> random left and right clicks anywhere.
+          local n, seed = entry.arg:match("^(%d+):?(%d*)$")
+          monkey = {total = tonumber(n) or 500, n = 0, state = tonumber(seed) or 1}
+          log(string.format("UI: monkey starts (%d clicks, seed %s) at step %d", monkey.total, tostring(seed), session.step))
         elseif a == "holdpause" then
           -- A window that pauses this game (a question, like a fax would),
           -- left open for <arg> seconds: the other players wait.

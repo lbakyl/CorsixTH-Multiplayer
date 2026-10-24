@@ -444,7 +444,8 @@ MultiplayerSession.rejection_texts = {
   move_staff = {["invalid position"] = "They cannot be placed there.",
                 ["cannot move them now"] = "That member of staff cannot be moved now."},
   room_edit = {["room cannot be edited now"] = "That room cannot be edited now.",
-               ["room is already being edited"] = "That room is already being edited."},
+               ["room is already being edited"] = "That room is already being edited.",
+               ["another player's work"] = "Another player is building or editing that room."},
   room_buy = {["cannot buy that"] = "That object is not available for this room."},
   room_rebuild = {["gave up"] = "The room could not be built there: people did not leave the area.",
                   ["invalid room outline"] = "The room does not fit there.",
@@ -923,7 +924,12 @@ function handlers.room_finish(world, cmd)
   if not entry then return false, "room is not being furnished" end
   local builder = corsixth.require("mp_room_builder")
   local room, why = builder.finish(world, entry, tonumber(cmd.auto) == 1)
-  if not room then return false, why end
+  if not room then
+    -- Its player's editor closed when they confirmed: open it again, or the
+    -- room would stay half built with no way back into it.
+    builder.showAgain(world, entry)
+    return false, why
+  end
   builder.hide(world, entry)
   builder.releaseUI(world.ui, entry.dlg)
   world.mp_furnishing[tonumber(cmd.room)] = nil
@@ -950,10 +956,12 @@ function handlers.room_edit(world, cmd)
   local hospital = world.hospitals[cmd.hospital or 1]
   if not room or not hospital then return false, "no such room" end
   if room.hospital ~= hospital then return false, "not ours" end
-  if not room.built or room.crashed or not room.is_active then return false, "room cannot be edited now" end
-  if room.mp_edit or (world.mp_furnishing and world.mp_furnishing[room.id]) then
+  local entry = world.mp_furnishing and world.mp_furnishing[room.id]
+  if room.mp_edit or entry then
+    if (entry and entry.peer or room.mp_edit.peer) ~= cmd.peer then return false, "another player's work" end
     return false, "room is already being edited"
   end
+  if not room.built or room.crashed or not room.is_active then return false, "room cannot be edited now" end
   room.mp_edit = {peer = cmd.peer}
   room:tryToEdit() -- opens the editor at once if nobody is inside
   return true
@@ -984,7 +992,7 @@ function handlers.room_unbuild(world, cmd)
   if not entry then return false, "room is not being furnished" end
   local builder = corsixth.require("mp_room_builder")
   local ok, why = builder.unbuild(world, entry)
-  if ok then builder.startRedraw(world, entry) end
+  if ok then builder.startRedraw(world, entry) else builder.showAgain(world, entry) end
   return ok, why
 end
 

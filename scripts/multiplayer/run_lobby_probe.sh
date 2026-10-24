@@ -173,7 +173,8 @@ sleep 1
 run_probe flo MP_ROLE=join MP_ROOM=edit MP_STEPS=1400 MP_SCENARIO=busy MP_UI_SCRIPT="1350:overlay" & pids+=($!)
 # Level 2, a cardiogram room furnished by hand: the cardio faces east, the
 # screen cannot (the editor once kept the facing and failed on one machine).
-run_probe jan MP_ROLE=host MP_ROOM=cardio MP_LEVEL=2 MP_STEPS=700 MP_SCENARIO=none   MP_UI_SCRIPT="20:openhospital;40:buy:reception_desk;60:discover:cardiogram;80:furnishroom:cardiogram:5:5" & pids+=($!)
+run_probe jan MP_ROLE=host MP_ROOM=cardio MP_LEVEL=2 MP_STEPS=700 MP_SCENARIO=none   MP_FURNISH_PACE=10 \
+  MP_UI_SCRIPT="20:openhospital;40:buy:reception_desk;60:discover:cardiogram;80:furnishroom:cardiogram:5:5;85:losteditor;110:reopen" & pids+=($!)
 sleep 1
 run_probe abi MP_ROLE=join MP_ROOM=cardio MP_STEPS=700 MP_SCENARIO=none & pids+=($!)
 # Save and continue: a co-op game saves at step 300 (File > Save) and ends;
@@ -405,7 +406,11 @@ marks12 = re.findall(r'UI: overlay at step \d+: (\d+) marks', ed + fl)
 rooms12 = re.search(r'rooms built: (.*)', ed)
 clicks12 = 'world hit test on, edit_room false' in ''.join(l for l in ed.splitlines() if 'UI: state at step' in l)
 # The cardiogram room: same command results on both machines, room done.
+# (jan's editor closes on its own while furnishing; the edit room tool on
+# the room opens it again, and the room gets finished.)
 cardio12 = (applied('jan') == applied('abi') and 'furnished room' in log('jan')
+            and re.search(r'UI: reopened the editor of cardiogram#\d+ at step \d+: shown true', log('jan')) is not None
+            and 'cardiogram@' in (re.search(r'rooms built: (.*)', log('abi')) or [None, ''])[1]
             and result('jan').startswith('IN SYNC') and result('abi').startswith('IN SYNC')
             and not [x for x in applied('jan') if '-> rejected: error' in x])
 ok12 = cardio12 and (result('ed').startswith('IN SYNC through step 1400') and result('flo').startswith('IN SYNC through step 1400')
