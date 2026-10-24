@@ -7,8 +7,8 @@ It is a test version: expect rough edges, and please report what you find.
 
 ## What you need
 
-- **Windows** (the builds below are for Windows; Linux players can build it
-  themselves, see `README.md` in this folder).
+- **Windows or Linux** (64-bit). Windows and Linux players can play
+  together.
 - **Your own Theme Hospital game data** (GOG, EA or the original CD). It is
   not included and must never be shared.
 - **The multiplayer build of this fork**, the same one as everybody you play
@@ -26,10 +26,17 @@ It is a test version: expect rough edges, and please report what you find.
 3. Use **English** as the game language for now: everybody in a game needs
    the same language.
 
+**Linux** (x86_64; Linux Mint 22, Ubuntu 24.04 or newer): download the
+`...-linux-x86_64.tar.gz` of the same release, unpack it
+(`tar xzf CorsixTH-Multiplayer-*-linux-x86_64.tar.gz`) and start
+`CorsixTH-Multiplayer/CorsixTH-Multiplayer.sh`. Settings and saves stay in
+that folder. It brings its own libraries; the usual desktop ones (graphics,
+sound) come from your system.
+
 Everybody in a game must use the same test build, and the server must run the
 matching version (each release names its server image). Builds of newer
-commits are also on the fork's **Actions** tab (Windows workflow, a run on
-`master`, Artifacts, CorsixTH; this needs a GitHub account).
+commits are also on the fork's **Actions** tab (a run of the Windows or the
+Linux package workflow on `master`, Artifacts; this needs a GitHub account).
 
 ## Play
 
