@@ -659,6 +659,48 @@ function MultiplayerLobby:serviceSaves(session)
   end
 end
 
+--! Multiplayer co-op, after loading a shared save: the countdown watches on
+--! the screen are the ones of the computer that saved it (the referee's),
+--! for its player's hospital. Close the other hospitals' watches and show
+--! this player's own countdowns (opening, emergency, epidemic cover up), at
+--! the time the game's own countdowns are at.
+function MultiplayerLobby.showOwnWatches(world, ui)
+  local mine = ui.hospital
+  local shown = {}
+  for i = #(ui.windows or {}), 1, -1 do
+    local window = ui.windows[i]
+    if class.is(window, UIWatch) then
+      if window.hospital == mine and not shown[window.count_type] then
+        shown[window.count_type] = window
+      else
+        window:close()
+      end
+    end
+  end
+  local epidemic = mine.epidemic
+  local wanted = {
+    initial_opening = not mine.opened and mine.mp_opening or nil,
+    emergency = mine.mp_emergency_timer,
+    epidemic = epidemic and epidemic.mp_countdown and epidemic.timer and
+        not epidemic.timer.closed and epidemic.timer or nil,
+  }
+  for _, kind in ipairs({"initial_opening", "emergency", "epidemic"}) do
+    local countdown, window = wanted[kind], shown[kind]
+    if countdown then
+      if not window then
+        window = UIWatch(ui, kind, mine)
+        ui:addWindow(window)
+      end
+      window.tick_rate = countdown.tick_rate
+      window.tick_timer, window.open_timer = countdown.tick_timer, countdown.open_timer
+    elseif window then
+      window:close()
+      window = nil
+    end
+    if kind == "epidemic" and epidemic then epidemic.watch = window end
+  end
+end
+
 function MultiplayerLobby:_loadShared(session, step, data, peers)
   local app = TheApp
   local persist = require("persist")
@@ -671,8 +713,9 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
   if world.mp_coop then
     world.mp_local_index = session.hospital_index
     app.ui.hospital = world:getUIHospital()
-    -- (and this player's messages, not the referee's)
+    -- (and this player's messages and countdowns, not the referee's)
     if app.ui.bottom_panel then app.ui.bottom_panel:showOwnMessages() end
+    MultiplayerLobby.showOwnWatches(world, app.ui)
   end
   -- A continued or rejoined game's first game UI (no-op for the same menu bar).
   self:_addMultiplayerMenu(app.ui, world.mp_coop ~= nil)

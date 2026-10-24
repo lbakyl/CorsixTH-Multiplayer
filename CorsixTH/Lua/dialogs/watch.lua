@@ -119,6 +119,9 @@ function UIWatch:buttonEndCountdown()
   -- it at the same step.
   local session = TheApp.mp_session
   if session and self.count_type == "initial_opening" then
+    -- Only this player's own hospital (a countdown of another one, which
+    -- should not be on this screen, opened that player's hospital instead).
+    if self.hospital ~= self.ui.hospital then return end
     local index = 1
     for i, h in ipairs(self.ui.app.world.hospitals) do
       if h == self.hospital then index = i end
