@@ -256,6 +256,35 @@ function builder.roomItems(room)
   return items
 end
 
+--! A room editor's keys (Enter confirms, Escape undoes, and so on) belong
+--! to the UI from the moment it is made, shown or not; a window gives them
+--! back only when it closes. A hidden editor (another player's room, or
+--! ours while it waits) must not take them: Enter would finish that room on
+--! this machine only, and charge this player for it. So they are held on the
+--! editor (dlg.mp_held_keys) while it is hidden, and given back when shown.
+local function hold_keys(ui, dlg)
+  if not ui or not ui.key_handlers or dlg.mp_held_keys then return end
+  local held = {}
+  for key, list in pairs(ui.key_handlers) do
+    for i = #list, 1, -1 do
+      if list[i].window == dlg then held[#held + 1] = {key = key, handler = table.remove(list, i)} end
+    end
+    if #list == 0 then ui.key_handlers[key] = nil end
+  end
+  dlg.mp_held_keys = held
+end
+
+local function give_keys(ui, dlg)
+  local held = dlg.mp_held_keys
+  if not ui or not held then return end
+  dlg.mp_held_keys = nil
+  for i = #held, 1, -1 do
+    local list = ui.key_handlers[held[i].key] or {}
+    ui.key_handlers[held[i].key] = list
+    list[#list + 1] = held[i].handler
+  end
+end
+
 local function try_build(world, hospital, cmd)
   local ui = world.ui
   local room_type = TheApp.rooms[cmd.room]
@@ -306,6 +335,7 @@ local function try_build(world, hospital, cmd)
     -- a blueprint on the map until its player's machine shows it.
     dlg:clearBlueprint()
     dlg.object_cell_x, dlg.object_cell_y = nil, nil
+    hold_keys(ui, dlg)
     return room, nil, dlg
   end
   local ok, why = builder.autoFurnish(dlg, room, cmd, {})
@@ -422,6 +452,7 @@ function builder.show(world, entry)
   if not ui or (ui.edit_room and ui.edit_room ~= entry.dlg) then return false end
   local dlg = entry.dlg
   dlg.mp_room_id = entry.dlg.room.id
+  give_keys(ui, dlg)
   if not is_shown(ui, dlg) then ui:addWindow(dlg) end
   ui.edit_room = dlg
   ui:setWorldHitTest(dlg.room)
@@ -438,6 +469,7 @@ end
 function builder.hide(world, entry)
   local dlg = entry.dlg
   if is_shown(world.ui, dlg) then world.ui:removeWindow(dlg) end
+  hold_keys(world.ui, dlg)
   builder.releaseUI(world.ui, dlg)
 end
 
@@ -565,6 +597,7 @@ local function quiet(world, dlg)
   if not is_shown(world.ui, dlg) then
     dlg:clearBlueprint()
     dlg.object_cell_x, dlg.object_cell_y = nil, nil
+    hold_keys(world.ui, dlg)
   end
 end
 
