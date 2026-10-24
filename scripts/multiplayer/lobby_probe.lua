@@ -1004,12 +1004,12 @@ local function run()
             for _, handler in ipairs(world.ui.key_handlers["return"] or {}) do
               holders[#holders + 1] = class.type(handler.window) or tostring(handler.window)
             end
-            local lobby, others = session.lobby, {}
-            for _, p in ipairs(lobby and lobby.game_players or {}) do
-              if p.peer ~= session.peer_id and p.connected then others[#others + 1] = p end
+            local in_game, others = session.lobby, {}
+            for _, player in ipairs(in_game and in_game.game_players or {}) do
+              if player.peer ~= session.peer_id and player.connected then others[#others + 1] = player end
             end
             local to = others[tonumber(tabs)]
-            if lobby then lobby:send("CHAT", {text = text, to = to and to.peer}) end
+            if in_game then in_game:send("CHAT", {text = text, to = to and to.peer}) end
             log(string.format("UI: no chat input opened (Enter held by %s); sent %q to %s at step %d",
                 table.concat(holders, ","), text, to and to.name or "all", session.step))
           end
