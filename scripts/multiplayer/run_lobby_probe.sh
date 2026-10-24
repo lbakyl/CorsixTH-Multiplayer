@@ -231,11 +231,13 @@ if [[ "${MP_REFEREE:-0}" == 1 ]]; then
   sleep 1
   run_probe rosa MP_ROLE=join MP_ROOM=fix MP_STEPS=1000 MP_EXPECT_REPAIR=1 \
     MP_UI_SCRIPT="300:cheat;520:hire:Nurse" & pids+=($!)
+  # (Each has a VIP fax waiting when the game is repaired: after loading the
+  # referee's save, each shows only their own.)
   run_probe sam MP_ROLE=host MP_ROOM=fixcoop MP_COOP=1 MP_STEPS=1000 MP_EXPECT_REPAIR=1 \
-    MP_UI_SCRIPT="20:openhospital;400:cheat;500:buy:bench" & pids+=($!)
+    MP_UI_SCRIPT="20:openhospital;300:vip:1;400:cheat;500:buy:bench" & pids+=($!)
   sleep 1
   run_probe tess MP_ROLE=join MP_ROOM=fixcoop MP_STEPS=1000 MP_EXPECT_REPAIR=1 \
-    MP_UI_SCRIPT="30:openhospital;520:hire:Nurse" & pids+=($!)
+    MP_UI_SCRIPT="30:openhospital;310:vip:2;520:hire:Nurse" & pids+=($!)
   # Rejoin: a player quits (as after a crash) and joins the running game
   # again under the same name, in a new game process.
   # The host pauses after the other one quits, until the rejoin is done.
@@ -548,8 +550,16 @@ if with_referee:
               and result(join).startswith('IN SYNC through step 1000')
               and int(confirmed_after(room)) >= 900)
         where = f"at step {fixed.group(1)}, save {int(fixed.group(2)) // 1024} KiB" if fixed else "not repaired"
+        own = ''
+        if room == 'fixcoop':
+            # After the repair each player's bar shows their own VIP fax only.
+            shown = [re.search(r'REPAIRED: .*messages shown: (.*)', x) for x in (hl, jl)]
+            shown = [m.group(1).split(',') if m else [] for m in shown]
+            own_ok = shown[0] == ['personality@1'] and shown[1] == ['personality@2']
+            own = f"; own messages only: {own_ok} {shown}"
+            ok = ok and own_ok
         print(f"{14 + n}. Desync repair ({room}):{' ' * (8 - len(room))}{result(host)} / {result(join)}; "
-              f"{where}; commands after it ok on both: {same and later}")
+              f"{where}; commands after it ok on both: {same and later}{own}")
         fail |= not ok
 
     u, v = log('uma'), log('vera-back')

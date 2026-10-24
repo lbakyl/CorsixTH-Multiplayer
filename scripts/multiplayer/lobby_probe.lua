@@ -306,7 +306,14 @@ local function run()
       world = TheApp.world
       if world.mp_coop then builder.hospital = world.ui.hospital end
       if fast then world:setSpeed("And then some more") end
-      log(string.format("REPAIRED: loaded the shared save at step %d (repair %d)", session.step, repairs))
+      -- The message icons on this player's bar (type@hospital).
+      local shown = {}
+      for _, icon in ipairs(world.ui.bottom_panel and world.ui.bottom_panel.message_windows or {}) do
+        shown[#shown + 1] = string.format("%s@%s", tostring(icon.type),
+            tostring(icon.hospital and world:getHospitalIndex(icon.hospital)))
+      end
+      log(string.format("REPAIRED: loaded the shared save at step %d (repair %d); messages shown: %s",
+          session.step, repairs, table.concat(shown, ",")))
     end
     if TheApp.world ~= world then log("LEVEL ENDED at step " .. session.step) break end
     for peer, r in pairs(session.remote_blueprints) do
