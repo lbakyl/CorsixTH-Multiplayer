@@ -671,6 +671,8 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
   if world.mp_coop then
     world.mp_local_index = session.hospital_index
     app.ui.hospital = world:getUIHospital()
+    -- (and this player's messages, not the referee's)
+    if app.ui.bottom_panel then app.ui.bottom_panel:showOwnMessages() end
   end
   -- A continued or rejoined game's first game UI (no-op for the same menu bar).
   self:_addMultiplayerMenu(app.ui, world.mp_coop ~= nil)

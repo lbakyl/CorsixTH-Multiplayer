@@ -539,6 +539,35 @@ function UIBottomPanel:forgetQueuedIcon(icon)
   end
 end
 
+--! Multiplayer co-op, after loading a shared save: the icons on the bar
+--! are the ones of the computer that saved it (the referee's), whose player
+--! may be another one. Put the other players' messages back in the queue,
+--! hidden, and show this player's own. Every message is kept as it was (its
+--! timer too), so the game itself does not change.
+function UIBottomPanel:showOwnMessages()
+  if not self.world.mp_coop then return end
+  local mine = self.ui.hospital
+  local shown = {}
+  for _, icon in ipairs(self.message_windows) do
+    if icon.hospital == mine then
+      shown[#shown + 1] = icon
+    else
+      self:removeWindow(icon)
+      icon.parent = nil -- queued (see onWorldTick)
+      self.message_queue[#self.message_queue + 1] = {type = icon.type, message = icon.message,
+          owner = icon.owner, mp_id = icon.mp_id, hospital = icon.hospital, drawer_icon = icon}
+    end
+  end
+  table.sort(self.message_queue, function(a, b) return (a.mp_id or 0) < (b.mp_id or 0) end)
+  self.message_windows = shown
+  for i, icon in ipairs(shown) do icon:setXLimit(1 + (i - 1) * FACTORY_ICON_WIDTH) end
+  local index = self:_findMessageToShow()
+  while index do
+    self:_showMessageIcon(index)
+    index = self:_findMessageToShow()
+  end
+end
+
 function UIBottomPanel:onWorldTick()
   Window.onWorldTick(self)
   -- Multiplayer: the queue is shown on screen ticks, which differ between
