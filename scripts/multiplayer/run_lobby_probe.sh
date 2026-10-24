@@ -44,6 +44,10 @@
 #      the lobby by the same players (other host, own hospitals by name),
 #      loaded state identical to the saved one -> IN SYNC, commands after it;
 #      an error in one game's screen tick is reported and that game carries on
+#  20. a destroyed room cleared away and built again ("clear it away and
+#      build it again", with the remove option off): the room editor opens
+#      on the old outline and the room is built there again -> IN SYNC, the
+#      same rooms on both
 # With MP_REFEREE=1 the local server also runs its headless referee for every
 # room, and four more checks: 13. the referee agrees with the players in every
 # room except 'cheat' (that one desyncs before the referee is there); 14, 15.
@@ -84,7 +88,7 @@ else
     export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
     export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/referee"
     export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
-    export MP_REFEREE_PROBE_SCENARIO="crowd=busy;staff=busy;edit=busy;cardio=none;epi=busy" # the probes' own start, see below
+    export MP_REFEREE_PROBE_SCENARIO="crowd=busy;staff=busy;edit=busy;cardio=none;epi=busy;wreck=none" # the probes' own start, see below
   fi
   PYTHONPATH="$source_dir/mp_server" python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
     --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
@@ -205,6 +209,14 @@ run_probe jan MP_ROLE=host MP_ROOM=cardio MP_LEVEL=2 MP_STEPS=700 MP_SCENARIO=no
   MP_UI_SCRIPT="20:openhospital;40:buy:reception_desk;60:discover:cardiogram;80:furnishroom:cardiogram:5:5;85:losteditor;110:reopen" & pids+=($!)
 sleep 1
 run_probe abi MP_ROLE=join MP_ROOM=cardio MP_STEPS=700 MP_SCENARIO=none & pids+=($!)
+# A destroyed room cleared away and built again: a GP's office is destroyed
+# (test command), its player confirms "clear it away and build it again"
+# with the remove option off, the room editor opens on the old outline and
+# the office is built there again.
+run_probe nell MP_ROLE=host MP_ROOM=wreck MP_STEPS=700 MP_SCENARIO=none \
+  MP_UI_SCRIPT="20:openhospital;40:buy:reception_desk;60:room:gp:5:5;300:crash:gp;330:rebuildcrashed" & pids+=($!)
+sleep 1
+run_probe otto MP_ROLE=join MP_ROOM=wreck MP_STEPS=700 MP_SCENARIO=none & pids+=($!)
 # Save and continue: a co-op game saves at step 300 (File > Save) and ends;
 # then the same two players continue it from the lobby, the other one
 # hosting this time (each gets their own hospital back by name).
@@ -425,6 +437,19 @@ oke = (result('ella').startswith('IN SYNC through step 7500') and result('finn')
        and kinds_e.count('fax_choice') >= 2 and 'clicked choice 1 of report fax' in fl)
 print(f"18. Co-op epidemic:         {result('finn')}; cover up, vaccination, result fax: {oke}; commands {' '.join(kinds_e)}")
 fail |= not oke
+
+nl, ol = log('nell'), log('otto')
+first_gp = re.search(r'UI: drew gp at (\d+),(\d+) size', nl)
+built_n, built_o = (re.search(r'rooms built: (.*)', x) for x in (nl, ol))
+built_n, built_o = (m.group(1) if m else '-' for m in (built_n, built_o))
+same_spot = first_gp is not None and built_n == f"gp@{first_gp.group(1)},{first_gp.group(2)}"
+removed = any('remove_crashed_room -> ok' in x for x in applied('nell'))
+ok20 = (result('nell').startswith('IN SYNC through step 700') and result('otto').startswith('IN SYNC through step 700')
+        and applied('nell') == applied('otto') and 'probe_crash' in ' '.join(applied('nell')) and removed
+        and 'on the old outline: true' in nl and same_spot and built_n == built_o)
+print(f"20. Destroyed room rebuilt: {result('nell')}; cleared away: {removed}; editor on the old outline: "
+      f"{'on the old outline: true' in nl}; built again on the same spot, on both: {same_spot and built_n == built_o} ({built_n})")
+fail |= not ok20
 
 w_, y_ = log('wade'), log('yara')
 cw = applied('wade')

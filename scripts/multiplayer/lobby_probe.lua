@@ -32,6 +32,7 @@
 --                       furnishall:<gap>                every room this hospital can build, by hand
 --                       openfax:<type>                  open the first fax of a type, leave it open
 --                       staffsend                       staff management: send the first doctor
+--                       rebuildcrashed                  clear a destroyed room away and build it again
 --                       givemoney:<amount>              co-op trade window: send money
 --                       sendstaff:<class>               co-op trade window: send the first
 --                                                       member of staff of that class
@@ -496,6 +497,37 @@ local function run()
           else
             log("UI: no crashed room")
           end
+        elseif a == "rebuildcrashed" then
+          -- Multiplayer: click a destroyed room with the edit cursor and
+          -- confirm "clear it away and build it again" (whatever the remove
+          -- option says); then (rebuildfinish) the editor that opens.
+          local found
+          for _, room in pairs(world.rooms) do
+            if room.crashed and room.hospital == world.ui.hospital and (not found or room.id < found.id) then
+              found = room
+            end
+          end
+          if found then
+            TheApp.config.remove_destroyed_rooms = false
+            log(string.format("UI: rebuilding crashed room #%d (%s) at step %d", found.id, found.room_info.id, session.step))
+            session:issue({kind = "remove_crashed_room", room = found.id, rebuild = 1,
+                hospital = world:getHospitalIndex(world.ui.hospital)})
+            ui_script[#ui_script + 1] = {hour = session.step + 20, action = "rebuildfinish",
+                arg = string.format("%s:%d:%d:%d:%d", found.room_info.id, found.x, found.y, found.width, found.height)}
+          else
+            log("UI: no crashed room")
+          end
+        elseif a == "rebuildfinish" then
+          -- The editor opened on the old outline: build the room there again.
+          local id, x, y, w, h = entry.arg:match("^([%w_]+):(%d+):(%d+):(%d+):(%d+)$")
+          x, y, w, h = tonumber(x), tonumber(y), tonumber(w), tonumber(h)
+          local dlg = world.ui:getWindow(UIEditRoom)
+          local rect = dlg and dlg.blueprint_rect
+          log(string.format("UI: rebuild editor %s; %s on the old outline: %s", dlg and "opened" or "missing",
+              dlg and dlg.room_type.id or "-",
+              tostring(rect ~= nil and rect.x == x and rect.y == y and rect.w == w and rect.h == h)))
+          if dlg then dlg:close() end
+          builder.ui_room(world, desk_x, desk_y, id, w, h, false, log, {x, y})
         elseif a == "epidemic" then
           session:issue({kind = "probe_epidemic"})
         elseif a == "vaccinate" then
