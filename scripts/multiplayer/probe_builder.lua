@@ -306,6 +306,56 @@ function builder.ui_buy(world, desk_x, desk_y, object_id, log)
   if ui:getWindow(UIPlaceObjects) then ui:getWindow(UIPlaceObjects):close() end
 end
 
+--! Buy an object in the corridor shop and put it into one of this
+--! hospital's rooms of type `room_id` (a radiator in a working room, say):
+--! the first tile and facing (fixed order) that the placement window shows
+--! as allowed, then a click there. Returns the tile, or nil.
+function builder.ui_buy_into_room(world, object_id, room_id, log)
+  local ui = world.ui
+  local room
+  for _, r in pairs(world.rooms) do
+    if r.room_info.id == room_id and r.hospital == ui.hospital and r.is_active and
+        (not room or r.id < room.id) then
+      room = r
+    end
+  end
+  if not room then log("UI: no " .. room_id .. " to put a " .. object_id .. " into") return end
+  local shop = UIFurnishCorridor(ui)
+  ui:addWindow(shop)
+  for _, o in ipairs(shop.objects) do
+    if o.object.id == object_id then o.qty = o.qty + 1 end
+  end
+  shop:confirm()
+  local place = ui:getWindow(UIPlaceObjects)
+  if not place then log("UI: no placement window") return end
+  local facings = {}
+  for name in pairs(place.objects[1].object.orientations) do facings[#facings + 1] = name end
+  table.sort(facings)
+  local fx, fy
+  for ty = room.y, room.y + room.height - 1 do
+    for tx = room.x, room.x + room.width - 1 do
+      for _, facing in ipairs(facings) do
+        if not fx and not world:anyHumanoidObscuringArea(tx, ty) then
+          place:setOrientation(facing)
+          place:setBlueprintCell(tx, ty)
+          if place.object_blueprint_good then fx, fy = tx, ty end
+        end
+      end
+    end
+  end
+  if not fx then
+    log(string.format("UI: no place for a %s in %s #%d", object_id, room_id, room.id))
+    place:close()
+    return
+  end
+  place.object_cell_x, place.object_cell_y = fx, fy
+  place:onMouseUp("left", 100000, 100000) -- a click outside the window
+  log(string.format("UI: put a %s into %s #%d at %d,%d facing %s", object_id, room_id, room.id,
+      fx, fy, tostring(place.object_orientation)))
+  if ui:getWindow(UIPlaceObjects) then ui:getWindow(UIPlaceObjects):close() end
+  return fx, fy
+end
+
 function builder.ui_hire(world, desk_x, desk_y, class, log)
   local ui = world.ui
   local dlg = UIHireStaff(ui)

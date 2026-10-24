@@ -214,7 +214,7 @@ run_probe abi MP_ROLE=join MP_ROOM=cardio MP_STEPS=700 MP_SCENARIO=none & pids+=
 # with the remove option off, the room editor opens on the old outline and
 # the office is built there again.
 run_probe nell MP_ROLE=host MP_ROOM=wreck MP_STEPS=700 MP_SCENARIO=none \
-  MP_UI_SCRIPT="20:openhospital;40:buy:reception_desk;60:room:gp:5:5;300:crash:gp;330:rebuildcrashed" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;40:buy:reception_desk;60:room:gp:5:5;300:crash:gp;330:rebuildcrashed;500:buyinroom:radiator:gp" & pids+=($!)
 sleep 1
 run_probe otto MP_ROLE=join MP_ROOM=wreck MP_STEPS=700 MP_SCENARIO=none & pids+=($!)
 # Save and continue: a co-op game saves at step 300 (File > Save) and ends;
@@ -448,11 +448,15 @@ built_n, built_o = (re.search(r'rooms built: (.*)', x) for x in (nl, ol))
 built_n, built_o = (m.group(1) if m else '-' for m in (built_n, built_o))
 same_spot = first_gp is not None and built_n == f"gp@{first_gp.group(1)},{first_gp.group(2)}"
 removed = any('remove_crashed_room -> ok' in x for x in applied('nell'))
+# (Then a radiator bought in the corridor shop goes into the working office.)
+radiator = re.search(r'UI: put a radiator into gp #\d+ at (\d+),(\d+)', nl)
+placed_in = radiator is not None and sum(1 for x in applied('nell') if 'place_object -> ok' in x) == 2
 ok20 = (result('nell').startswith('IN SYNC through step 700') and result('otto').startswith('IN SYNC through step 700')
         and applied('nell') == applied('otto') and 'probe_crash' in ' '.join(applied('nell')) and removed
-        and 'on the old outline: true' in nl and same_spot and built_n == built_o)
+        and 'on the old outline: true' in nl and same_spot and built_n == built_o and placed_in)
 print(f"20. Destroyed room rebuilt: {result('nell')}; cleared away: {removed}; editor on the old outline: "
-      f"{'on the old outline: true' in nl}; built again on the same spot, on both: {same_spot and built_n == built_o} ({built_n})")
+      f"{'on the old outline: true' in nl}; built again on the same spot, on both: {same_spot and built_n == built_o} ({built_n}); "
+      f"radiator put into it: {placed_in}")
 fail |= not ok20
 
 w_, y_ = log('wade'), log('yara')

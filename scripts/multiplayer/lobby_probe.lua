@@ -33,6 +33,7 @@
 --                       openfax:<type>                  open the first fax of a type, leave it open
 --                       staffsend                       staff management: send the first doctor
 --                       rebuildcrashed                  clear a destroyed room away and build it again
+--                       buyinroom:<object>:<room>       buy an object, put it into such a room
 --                       givemoney:<amount>              co-op trade window: send money
 --                       sendstaff:<class>               co-op trade window: send the first
 --                                                       member of staff of that class
@@ -538,6 +539,10 @@ local function run()
           else
             log("UI: no crashed room")
           end
+        elseif a == "buyinroom" then
+          -- Corridor shop: buy an object and put it into a room ("<object>:<room>").
+          local object_id, room_id = entry.arg:match("^([%w_]+):([%w_]+)$")
+          builder.ui_buy_into_room(world, object_id, room_id, log)
         elseif a == "rebuildcrashed" then
           -- Multiplayer: click a destroyed room with the edit cursor and
           -- confirm "clear it away and build it again" (whatever the remove
