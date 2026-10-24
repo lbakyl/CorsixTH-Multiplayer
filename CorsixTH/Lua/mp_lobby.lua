@@ -735,6 +735,10 @@ function MultiplayerLobby:_addMultiplayerMenu(ui, coop)
       local current = TheApp.ui
       current:addWindow(UIMultiplayerTrade(current))
     end)
+    -- (Also on the research blackboard; this way needs no research room.)
+    menu:appendItem(_S.multiplayer_window.menu_research, function()
+      UIMultiplayerResearch.open(TheApp.ui)
+    end)
   end
   ui.menu_bar:addMenu(_S.multiplayer_window.menu_caption, menu)
 end

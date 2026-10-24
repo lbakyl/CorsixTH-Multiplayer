@@ -63,6 +63,14 @@ function UIResearch:UIResearch(ui)
   self.adjust_buttons = {}
   self:updateCategories()
 
+  -- Multiplayer co-op: "Share research", left of the total on the blackboard.
+  if TheApp.mp_session and ui.app.world.mp_coop then
+    self.share_button = self:addPanel(0, 165, 282)
+        :makeButton(0, 0, 175, 28, nil, self.shareResearch)
+        :setTooltip(_S.tooltip.multiplayer_window.share_research)
+    self.share_button.panel_for_sprite.custom_draw = --[[persistable:research_share_button_draw]] function() end
+  end
+
   self.waterclk = 0
   self.ratclk = 0
   self.waterpanel= self:addPanel(5, 2, 312)
@@ -242,6 +250,14 @@ function UIResearch:draw(canvas, x, y)
   end
 
   num_font:draw(canvas, research.total, x + 270 * s, y + 288 * s, 300 * s, 0)
+  if self.share_button then
+    lbl_font:draw(canvas, _S.multiplayer_window.share_research, x + 170 * s, y + 288 * s)
+  end
+end
+
+--! Multiplayer co-op: offer research to another player.
+function UIResearch:shareResearch()
+  UIMultiplayerResearch.open(self.ui)
 end
 
 function UIResearch:close()

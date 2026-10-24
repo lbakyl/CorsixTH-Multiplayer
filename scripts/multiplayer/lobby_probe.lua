@@ -978,6 +978,46 @@ local function run()
           end
         elseif a == "patients" then
           session:issue({kind = "probe_patients", n = tonumber(entry.arg)})
+        elseif a == "learn" then
+          session:issue({kind = "probe_learn"})
+        elseif a == "researchboard" then
+          -- The research blackboard, with "Share research" next to the total.
+          local board = UIResearch(world.ui)
+          world.ui:addWindow(board)
+          shot("research-board")
+          board:close()
+        elseif a == "shareresearch" then
+          -- MULTIPLAYER > SHARE RESEARCH: everything, at a price, Offer.
+          UIMultiplayerResearch.open(world.ui)
+          local w = world.ui:getWindow(UIMultiplayerResearch)
+          if w and w.items then
+            w:toggleAll(true)
+            w:setPrice(tonumber(entry.arg) or 0)
+            shot("research-window")
+            local names = {}
+            for _, item in ipairs(w.items) do names[#names + 1] = item.key end
+            log(string.format("UI: offered research %s for $%d at step %d", table.concat(names, ","),
+                w.price, session.step))
+            w:offer()
+            w:close()
+          else
+            log("UI: no research window")
+          end
+        elseif a == "answerresearch" then
+          local icon
+          for _, candidate in ipairs(world.ui.bottom_panel:allMessageIcons()) do
+            if not icon and candidate.type == "mp_research" then icon = candidate end
+          end
+          if icon then
+            shot("research-icon")
+            if not icon.fax then icon:openMessage() end
+            shot("research-fax")
+            log(string.format("UI: %s the research offer at step %d", entry.arg == "accept" and
+                "accepted" or "declined", session.step))
+            icon.fax:buttonChoice(entry.arg == "accept" and 1 or 2)
+          else
+            log("UI: no research offer to answer")
+          end
         elseif a == "askraise" then
           session:issue({kind = "probe_raise", class = entry.arg})
         elseif a == "answerraise" then
@@ -1104,6 +1144,22 @@ local function run()
     table.sort(classes)
     log(string.format("hospital %d %s: balance %s, open %s, staff %s", i, h.name, tostring(h.balance),
         tostring(h.opened), table.concat(classes, ",")))
+    if h.research then
+      -- What it knows (to compare between players): equipment, drugs.
+      local known, drugs = {}, {}
+      for _, o in ipairs(TheApp.objects) do
+        local progress = o.thob and h.research.research_progress[o]
+        if progress and progress.discovered and o.research_category then known[#known + 1] = o.id end
+      end
+      local ids = {}
+      for id, entry in pairs(h.disease_casebook) do if entry.drug then ids[#ids + 1] = id end end
+      table.sort(ids)
+      for _, id in ipairs(ids) do
+        drugs[#drugs + 1] = id .. "=" .. h.disease_casebook[id].cure_effectiveness
+      end
+      log(string.format("hospital %d research: %s; drugs %s", i, table.concat(known, ","),
+          table.concat(drugs, ",")))
+    end
     if h.research and h.heating then
       log(string.format("hospital %d settings: loan %s, heat %s, cure research %s%%", i,
           tostring(h.loan), tostring(h.heating.radiator_heat),

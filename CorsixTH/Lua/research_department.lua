@@ -34,6 +34,38 @@ class "ResearchDepartment"
 ---@type ResearchDepartment
 local ResearchDepartment = _G["ResearchDepartment"]
 
+--! A stable name for a table key, the same on every computer.
+local function stable_key(k)
+  if type(k) == "table" then
+    if k.mp_id then return "e:" .. k.mp_id end
+    if k.thob then return "o:" .. tostring(k.id) end
+    if k.id then return "r:" .. tostring(k.id) end
+    if k.disease and k.disease.id then return "d:" .. tostring(k.disease.id) end
+    return "z"
+  end
+  return (type(k) == "number" and "n:" or "s:") .. tostring(k)
+end
+
+--! pairs(), but in multiplayer in a fixed order: research picks "the first"
+--! or "the last" of several things, and pairs() order over tables keyed by
+--! objects or names differs between computers (single player is unchanged).
+local function research_pairs(t)
+  if not (TheApp and TheApp.mp_session) then return pairs(t) end
+  local keys, names = {}, {}
+  for k in pairs(t) do
+    keys[#keys + 1] = k
+    names[k] = stable_key(k)
+  end
+  table.sort(keys, function(x, y) return names[x] < names[y] end)
+  local i = 0
+  return function()
+    i = i + 1
+    local k = keys[i]
+    if k ~= nil then return k, t[k] end
+  end
+end
+ResearchDepartment.orderedPairs = research_pairs
+
 function ResearchDepartment:ResearchDepartment(hospital)
   self.hospital = hospital
   self.world = hospital.world
@@ -75,7 +107,7 @@ function ResearchDepartment:initResearch()
     end
   end
   -- Now add drug research
-  for _, disease in pairs(hospital.disease_casebook) do
+  for _, disease in research_pairs(hospital.disease_casebook) do
     if disease.drug then
       self.research_progress[disease] = {
         points = 0,
@@ -101,7 +133,7 @@ function ResearchDepartment:initResearch()
     specialisation = {frac = 20, points = 0, current = drain},
   }
   local sum = 0
-  for _, cat in pairs(policy) do
+  for _, cat in research_pairs(policy) do
     sum = sum + cat.frac
   end
   if sum == 20 then
@@ -111,7 +143,7 @@ function ResearchDepartment:initResearch()
   else
     -- If some category is already done, put the free points in another one.
     if sum < 100 then
-      for _, tab in pairs(policy) do
+      for _, tab in research_pairs(policy) do
         if tab.frac > 0 then
           tab.frac = tab.frac + 100 - sum
           sum = 100
@@ -129,7 +161,7 @@ function ResearchDepartment:initResearch()
 end
 
 function ResearchDepartment:checkAutomaticDiscovery(month)
-  for object, progress in pairs(self.research_progress) do
+  for object, progress in research_pairs(self.research_progress) do
     -- Only check objects
     if object.default_strength then
       local avail_at = self.world.map.level_config.objects[object.thob].WhenAvail
@@ -146,7 +178,7 @@ function ResearchDepartment:setResearchConcentration()
   if self.research_policy.specialisation.current ~= self.drain then
     return
   end
-  for _, disease in pairs(casebook) do
+  for _, disease in research_pairs(casebook) do
     if disease.discovered and self.hospital:canConcentrateResearch(disease.disease.id) then
       self:concentrateResearch(disease.disease.id)
       return
@@ -231,7 +263,7 @@ function ResearchDepartment:nextResearch(category)
   local found_one = false
   if category == "drugs" then
     local worst_effect = 100
-    for _, disease in pairs(hospital.disease_casebook) do
+    for _, disease in research_pairs(hospital.disease_casebook) do
       if disease.cure_effectiveness < worst_effect then
         found_one = true
         if disease.discovered then
@@ -244,7 +276,7 @@ function ResearchDepartment:nextResearch(category)
     -- Find the object which needs improvements the most.
     local max_strength = self.world.map.level_config.gbv.MaxObjectStrength
     local min_strength = max_strength
-    for object, progress in pairs(self.research_progress) do
+    for object, progress in research_pairs(self.research_progress) do
       if object.default_strength then
         -- Don't improve those that already have the max strength
         if progress.start_strength < max_strength then
@@ -258,7 +290,7 @@ function ResearchDepartment:nextResearch(category)
       end
     end
   else
-    for object, progress in pairs(self.research_progress) do
+    for object, progress in research_pairs(self.research_progress) do
       if object.research_category == category and not progress.discovered then
         self.research_policy[category].current = object
       end
@@ -337,7 +369,7 @@ function ResearchDepartment:addResearchPointsForAutopsy(target_room_id)
     return
   end
   -- Find an object within this room that needs research points.
-  for object, _ in pairs(room_discovery.room.objects_needed) do
+  for object, _ in research_pairs(room_discovery.room.objects_needed) do
     local research = self.research_progress[TheApp.objects[object]]
     if research and not research.discovered then
       local required = self:getResearchRequired(TheApp.objects[object])
@@ -370,7 +402,7 @@ function ResearchDepartment:addResearchPoints(points)
   -- Divide the points into the different categories and check if
   -- it is time to discover something
   local areas = self.research_policy
-  for _, info in pairs(areas) do
+  for _, info in research_pairs(areas) do
     -- Don't touch the value "total".
     if type(info) == "table" then
       -- Some categories may be finished
@@ -490,7 +522,7 @@ function ResearchDepartment:improveMachine(machine)
     research_info.cost = research_info.cost - decrease
     -- Now find rooms where this object is used and lower the build_cost for them.
     for _, room in ipairs(self.world.available_rooms) do
-      for obj, no in pairs(room.objects_needed) do
+      for obj, no in research_pairs(room.objects_needed) do
         if TheApp.objects[obj] == machine then
           local progress = self.research_progress[room]
           progress.build_cost = progress.build_cost - decrease * no
@@ -531,9 +563,9 @@ hospital rooms.
 !param machine_id The machine ID for determining matches.
 --]]
 function ResearchDepartment:updateMachinesDynamicInfo(machine_id)
-  for _, room in pairs(self.world.rooms) do
+  for _, room in research_pairs(self.world.rooms) do
     if room.hospital == self.hospital then
-      for obj, _ in pairs(room.objects) do
+      for obj, _ in research_pairs(room.objects) do
         if obj.object_type.id == machine_id then
           obj:updateDynamicInfo()
           break
@@ -553,11 +585,11 @@ function ResearchDepartment:discoverObject(object, automatic)
   self.research_progress[object].discovered = true
 
   -- Go through all rooms to see if another one can be made available.
-  for _, room_disc in pairs(self.hospital.room_discoveries) do
+  for _, room_disc in research_pairs(self.hospital.room_discoveries) do
     if not room_disc.is_discovered then
       local room = room_disc.room
       local unveil_room = true
-      for needed, _ in pairs(room.objects_needed) do
+      for needed, _ in research_pairs(room.objects_needed) do
         local obj = self.research_progress[TheApp.objects[needed]]
         if obj and not obj.discovered then
           unveil_room = false
@@ -578,7 +610,7 @@ function ResearchDepartment:discoverObject(object, automatic)
         -- If we're not researching any improvement right now, and the newest discovery was
         -- a machine that requires an improvement, switch the current policy.
         if (not current_improvement_research or current_improvement_research.dummy) then
-          for research_object, progress in pairs(self.research_progress) do
+          for research_object, progress in research_pairs(self.research_progress) do
             if research_object.default_strength then
               -- Don't improve those that already have the max strength
               if progress.start_strength < max_strength then
@@ -625,7 +657,7 @@ what should it be?
 function ResearchDepartment:researchCost()
   local acc_cost = self.hospital.acc_research_cost
   local fraction = 0
-  for _, tab in pairs(self.research_policy) do
+  for _, tab in research_pairs(self.research_policy) do
     -- Don't pay for categories where nothing is really researched at the moment.
     if type(tab) == "table" then
       if tab.current and not tab.current.dummy then
@@ -635,11 +667,11 @@ function ResearchDepartment:researchCost()
   end
   -- Find out how many doctors are currently doing research
   local doctors = 0
-  for _, room in pairs(self.world.rooms) do
+  for _, room in research_pairs(self.world.rooms) do
     -- Multiplayer co-op: only this hospital's research rooms.
     if room.room_info.id == "research" and
         (not self.world.mp_coop or room.hospital == self.hospital) then
-      for _, _ in pairs(room.staff_member_set) do
+      for _, _ in research_pairs(room.staff_member_set) do
         doctors = doctors + 1
       end
     end
@@ -666,7 +698,7 @@ function ResearchDepartment:concentrateResearch(disease_id)
     -- Make specialisation a dummy again
     self.research_policy.specialisation.current = self.drain
   else
-    for key, disease in pairs(self.hospital.disease_casebook) do
+    for key, disease in research_pairs(self.hospital.disease_casebook) do
       -- Set flag on previously concentrated disease
       if disease.concentrate_research then
         self.hospital.disease_casebook[key].concentrate_research = nil
@@ -692,8 +724,8 @@ function ResearchDepartment:concentrateResearch(disease_id)
     end
     local object
     -- TODO: Can these loops be improved upon?
-    for obj, _ in pairs(self.world.available_rooms[room].objects_needed) do
-      for research, _ in pairs(self.research_progress) do
+    for obj, _ in research_pairs(self.world.available_rooms[room].objects_needed) do
+      for research, _ in research_pairs(self.research_progress) do
         if research.id == obj and research.thob then
           object = research
           break

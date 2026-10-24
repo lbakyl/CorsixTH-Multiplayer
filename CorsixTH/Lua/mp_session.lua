@@ -1325,11 +1325,206 @@ function MultiplayerSession.transferPatient(world, from, to, patient)
   return true
 end
 
+--------------------------------------------------------------------------------
+-- Co-op research sharing: one hospital offers knowledge it has and another
+-- lacks (equipment discoveries, drug improvements, machine improvements),
+-- for free or for a price ($0 to $20,000). The offer is a message of type
+-- "mp_research" (an icon with a flask), answered in the fax window like the
+-- other offers; on acceptance the receiver pays and gets whatever of it they
+-- still lack then. The sender keeps their research: knowledge is copied.
+--------------------------------------------------------------------------------
+
+MultiplayerSession.RESEARCH_MAX_PRICE = 20000
+
+--! The text of a game string (names are translatable string objects).
+local function plain(text)
+  if type(text) ~= "userdata" then return tostring(text) end
+  return (require("TH").stringProxy._unwrap(text))
+end
+MultiplayerSession.RESEARCH_PRICE_STEP = 500
+
+--! Item keys: "e:<object id>" equipment discovery, "d:<disease id>" drug
+--! improvement, "m:<object id>" machine improvement.
+local function research_item(from, to, key)
+  local kind, id = tostring(key):match("^(%a):([%w_]+)$")
+  local S = _S.multiplayer_window
+  if kind == "e" or kind == "m" then
+    local object = TheApp.objects[id]
+    local have = object and from.research.research_progress[object]
+    local lack = object and to.research.research_progress[object]
+    if not (have and lack and object.thob) then return nil end
+    if kind == "e" and have.discovered and not lack.discovered then
+      return {key = key, kind = kind, object = object, name = plain(object.name)}
+    end
+    if kind == "m" and object.default_strength and have.discovered and
+        ((have.strength_imp or 0) > (lack.strength_imp or 0) or (have.cost_imp or 0) > (lack.cost_imp or 0)) then
+      return {key = key, kind = kind, object = object, name = S.research_item_machine:format(plain(object.name))}
+    end
+  elseif kind == "d" then
+    local have, lack = from.disease_casebook[id], to.disease_casebook[id]
+    if have and lack and have.drug and (have.cure_effectiveness > lack.cure_effectiveness or
+        have.drug_cost < lack.drug_cost) then
+      return {key = key, kind = kind, disease = id, name = S.research_item_drug:format(plain(have.disease.name))}
+    end
+  end
+  return nil
+end
+
+--! Everything `from` could share with `to` now, in a fixed order.
+function MultiplayerSession.shareableResearch(from, to)
+  local keys = {}
+  for _, object in ipairs(TheApp.objects) do
+    if object.thob then
+      keys[#keys + 1] = "e:" .. object.id
+      keys[#keys + 1] = "m:" .. object.id
+    end
+  end
+  local diseases = {}
+  for id in pairs(from.disease_casebook) do diseases[#diseases + 1] = id end
+  table.sort(diseases)
+  for _, id in ipairs(diseases) do keys[#keys + 1] = "d:" .. id end
+  local items = {}
+  for _, key in ipairs(keys) do
+    local item = research_item(from, to, key)
+    if item then items[#items + 1] = item end
+  end
+  return items
+end
+
+--! The items of a ";"-separated key list that `from` can still give `to`.
+local function research_items_of(from, to, keys)
+  local items, seen = {}, {}
+  for key in tostring(keys or ""):gmatch("[^;]+") do
+    if not seen[key] then
+      seen[key] = true
+      local item = research_item(from, to, key)
+      if item then items[#items + 1] = item end
+    end
+  end
+  return items
+end
+
+--! Give `to` one item of `from`'s research.
+local function apply_research(world, from, to, item)
+  local research = to.research
+  if item.kind == "e" then
+    research:discoverObject(item.object)
+  elseif item.kind == "m" then
+    local have, lack = from.research.research_progress[item.object], research.research_progress[item.object]
+    if (have.strength_imp or 0) > (lack.strength_imp or 0) then
+      lack.start_strength = math.max(lack.start_strength or 0, have.start_strength or 0)
+      lack.strength_imp = have.strength_imp
+    end
+    if (have.cost_imp or 0) > (lack.cost_imp or 0) and have.cost and lack.cost then
+      local decrease = lack.cost - have.cost
+      lack.cost, lack.cost_imp = have.cost, have.cost_imp
+      -- Rooms needing this machine get cheaper by as much, as in improveMachine.
+      for _, room in ipairs(world.available_rooms) do
+        local no = room.objects_needed[item.object.id]
+        local progress = research.research_progress[room]
+        if no and progress and progress.build_cost then
+          progress.build_cost = progress.build_cost - decrease * no
+        end
+      end
+    end
+    if research.research_policy.improvements.current == item.object then
+      research:nextResearch("improvements")
+    end
+  elseif item.kind == "d" then
+    local have, lack = from.disease_casebook[item.disease], to.disease_casebook[item.disease]
+    lack.cure_effectiveness = math.max(lack.cure_effectiveness, have.cure_effectiveness)
+    lack.drug_cost = math.min(lack.drug_cost, have.drug_cost)
+    if research.research_policy.drugs.current == lack then research:nextResearch("drugs") end
+  end
+end
+
+--! A short list of item names for a fax ("A, B and 3 more").
+local function research_names(items)
+  local names = {}
+  for i, item in ipairs(items) do
+    if i > 6 then
+      names[#names + 1] = _S.multiplayer_window.research_and_more:format(#items - 6)
+      break
+    end
+    names[#names + 1] = plain(item.name)
+  end
+  return table.concat(names, ", ")
+end
+
+--! Offer research to another player: {to, items (";"-separated keys), price}.
+function handlers.offer_research(world, cmd)
+  local S = _S.multiplayer_window
+  local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
+  if not from or not to or from == to then return false, "no such hospital" end
+  local price = math.floor(tonumber(cmd.price) or -1)
+  if price < 0 or price > MultiplayerSession.RESEARCH_MAX_PRICE then return false, "invalid price" end
+  local items = research_items_of(from, to, cmd.items)
+  if #items == 0 then return false, "nothing to share" end
+  local panel = world.ui and world.ui.bottom_panel
+  if not panel then return false, "no message panel" end
+  local keys = {}
+  for i, item in ipairs(items) do keys[i] = item.key end
+  local names = research_names(items)
+  local message = {
+    {text = S.research_offer_line:format(from.name)},
+    {text = names},
+    {text = price > 0 and S.research_price_line:format(price) or S.research_free_line},
+    choices = {
+      {text = price > 0 and S.research_accept_price:format(price) or S.research_accept, choice = "mp_offer_accept"},
+      {text = S.research_decline, choice = "mp_offer_decline"},
+    },
+    mp_offer = {kind = "research", from = world:getHospitalIndex(from), to = world:getHospitalIndex(to),
+        items = table.concat(keys, ";"), price = price, name = names},
+  }
+  panel:queueMessage("mp_research", message, nil, Date.hoursPerDay() * MultiplayerSession.OFFER_DAYS, 2, nil, to)
+  MultiplayerSession.tellPlayer(world, from, S.research_sent_note:format(to.name))
+  return true
+end
+
+--! A research offer was answered: on acceptance the receiver pays and gets
+--! what it still lacks of it.
+local function resolve_research(world, offer, from, to, accept)
+  local S = _S.multiplayer_window
+  if not accept then
+    MultiplayerSession.tellPlayer(world, from, S.research_declined_note:format(to.name))
+    return
+  end
+  local items = research_items_of(from, to, offer.items)
+  local price = offer.price or 0
+  local outcome
+  if #items == 0 then
+    outcome = "known"
+    MultiplayerSession.tellPlayer(world, to, S.research_known_note)
+    MultiplayerSession.tellPlayer(world, from, S.research_known_sender_note:format(to.name))
+  elseif price > 0 and to.balance < price then
+    outcome = "no money"
+    MultiplayerSession.tellPlayer(world, to, S.research_no_money_note:format(price))
+    MultiplayerSession.tellPlayer(world, from, S.research_no_money_sender_note:format(to.name))
+  else
+    if price > 0 then
+      to:spendMoney(price, S.research_bought_transaction:format(from.name))
+      from:receiveMoney(price, S.research_sold_transaction:format(to.name))
+    end
+    for _, item in ipairs(items) do apply_research(world, from, to, item) end
+    outcome = #items .. " items for $" .. price
+    MultiplayerSession.tellPlayer(world, to, S.research_received_note:format(research_names(items)))
+    MultiplayerSession.tellPlayer(world, from, S.research_accepted_note:format(to.name, price))
+  end
+  local session = world.app.mp_session
+  if session then
+    session.log(string.format("research offer to hospital %d accepted: %s", offer.to, outcome))
+  end
+end
+
 --! An offer was answered (or timed out): on every peer, at the same step.
 --!param offer (table) the message's mp_offer
 function MultiplayerSession.resolveOffer(world, offer, accept)
   local S = _S.multiplayer_window
   local from, to = world.hospitals[offer.from], world.hospitals[offer.to]
+  if offer.kind == "research" then
+    if from and to then resolve_research(world, offer, from, to, accept) end
+    return
+  end
   local entity = world:getEntityById(offer.entity)
   if entity and entity.mp_offer then entity.mp_offer = nil end
   if not (from and to) then return end

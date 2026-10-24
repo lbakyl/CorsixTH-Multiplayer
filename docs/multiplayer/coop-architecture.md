@@ -117,8 +117,17 @@ for that, the rules new code must follow, and what is still missing.
   the single player editor code on it; only its player's machine shows it.
   A player who leaves hands their rooms over (`room_takeover`: finished, or
   removed if their walls are down).
-- **Trades beyond money, staff and patients**: loans between players,
-  renting rooms, selling or sharing research.
+- **Trades beyond money, staff, patients and research**: loans between
+  players, renting rooms.
+- **Research sharing** (done on `mp/research-sharing`): `offer_research`
+  {to, items, price} offers equipment discoveries (`e:<object>`), drug
+  improvements (`d:<disease>`) and machine improvements (`m:<object>`) that
+  the receiver lacks, for $0 to $20,000. It is a message of type
+  `mp_research` (purple icon with a flask) answered in the fax window
+  (`fax_choice`); on acceptance the receiver pays and gets what it still
+  lacks then (`MultiplayerSession.resolveOffer`). In multiplayer the
+  research code visits its tables in a fixed order (`research_pairs`),
+  since it picks "the first" or "the last" of several targets.
 - **Competitive mode**: a winner, and approval votes for speed and pause.
 - **Loading** a multiplayer save from the game's Load menu (stays blocked;
   saved games are continued from the lobby, see `protocol.md`). Rejoining

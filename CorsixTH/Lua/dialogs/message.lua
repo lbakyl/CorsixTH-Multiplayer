@@ -61,7 +61,7 @@ function UIMessage:UIMessage(ui, x, stop_x, onClose, type, message, owner, timeo
   self.type = type
 
   local types = { emergency = 43, epidemy = 45, strike = 47, personality = 49, information = 51, disease = 53, report = 55,
-                  mp_offer = 51 } -- multiplayer co-op offer: drawn below, not a sprite
+                  mp_offer = 51, mp_research = 51 } -- multiplayer co-op offers: drawn below, not sprites
   local kind = types[type]
 
   self.can_dismiss = self.type ~= "strike" and #self.message.choices == 1
@@ -83,6 +83,25 @@ function UIMessage:UIMessage(ui, x, stop_x, onClose, type, message, owner, timeo
       canvas:drawRect(light, ix + 12 * s, iy + 5 * s, 6 * s, 6 * s)   -- head
       canvas:drawRect(light, ix + 9 * s, iy + 12 * s, 12 * s, 7 * s)  -- shoulders
       canvas:drawRect(light, ix + 11 * s, iy + 19 * s, 8 * s, 4 * s)  -- body
+      canvas:drawRect(canvas:mapRGB(255, 214, 90), ix + 22 * s, iy + 4 * s, 4 * s, 4 * s) -- "new"
+    end
+  elseif type == "mp_research" then
+    -- Research offered by another player: the same purple box with a
+    -- laboratory flask on it (neck, bulb and green liquid).
+    self.button.panel_for_sprite.custom_draw = --[[persistable:mp_research_icon_draw]] function(panel, canvas, px, py)
+      local s = TheApp.gfx:getUIScale()
+      local ix, iy = px + panel.x * s, py + panel.y * s
+      local open = panel.window.button and panel.window.button.toggled
+      canvas:drawRect(canvas:mapRGB(48, 16, 74), ix, iy, 30 * s, 28 * s)
+      canvas:drawRect(open and canvas:mapRGB(100, 46, 146) or canvas:mapRGB(150, 76, 206),
+          ix + 2 * s, iy + 2 * s, 26 * s, 24 * s)
+      local glass = canvas:mapRGB(246, 238, 255)
+      local liquid = canvas:mapRGB(110, 230, 140)
+      canvas:drawRect(glass, ix + 11 * s, iy + 4 * s, 8 * s, 2 * s)    -- rim
+      canvas:drawRect(glass, ix + 13 * s, iy + 6 * s, 4 * s, 6 * s)    -- neck
+      canvas:drawRect(glass, ix + 9 * s, iy + 12 * s, 12 * s, 3 * s)   -- shoulders
+      canvas:drawRect(glass, ix + 7 * s, iy + 15 * s, 16 * s, 8 * s)   -- bulb
+      canvas:drawRect(liquid, ix + 9 * s, iy + 17 * s, 12 * s, 5 * s)  -- liquid
       canvas:drawRect(canvas:mapRGB(255, 214, 90), ix + 22 * s, iy + 4 * s, 4 * s, 4 * s) -- "new"
     end
   end

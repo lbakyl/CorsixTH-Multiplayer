@@ -75,11 +75,22 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   click, or the pick up button in their window), as usual.
 - **A hospital each (co-op):** each player runs their own hospital and can
   look at, but not act on, the others' patients, staff and machines. The
-  **MULTIPLAYER** menu, **TRADE WITH OTHER PLAYERS** sends money, or a
-  member of staff, who then walks over to the other hospital (it takes a few
-  game days). Land: you can buy the plots on your side of the map (nearest
+  **MULTIPLAYER** menu, **TRADE WITH OTHER PLAYERS** sends money, or offers
+  a member of staff; patients are offered with the purple **Refer** icon in
+  the patient window or the "refer" answer on a "no treatment" fax. The
+  other player gets a purple icon at the bottom and accepts or declines;
+  an accepted person walks over (it takes a few game days). Land: you can buy the plots on your side of the map (nearest
   to your hospital), not the other players'. Faxes, emergencies and VIP visits come to the hospital they
   are for.
+- **Sharing research (co-op):** **Share research** on the research
+  blackboard (left of the total), or **MULTIPLAYER**, **SHARE RESEARCH**
+  (no research room needed). Pick what to share (equipment you have found,
+  better drugs, improved machines; only what the other hospital lacks) or
+  **All**, set a price on the bar ($0 to $20,000 in $500 steps) and
+  **Offer**. The other player gets a purple icon with a flask: a fax lists
+  the research and the price, and they accept or reject it. On acceptance
+  they pay you and get what they still lack; you keep your research. No
+  answer within 20 game days counts as a rejection.
 - **Players:** the **MULTIPLAYER** menu, **PLAYERS** lists everybody in the
   game: their ping (average of the last 10 seconds), whether they are still
   connected (or have not answered for a while, or are behind), and their
@@ -107,7 +118,6 @@ standard server image).
 
 ## Not there yet
 
-- Epidemics in hospital-each games.
 - In-game chat, asking another player for money, competitive games.
 - Passwords and traffic are not encrypted.
 

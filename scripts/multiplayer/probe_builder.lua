@@ -826,6 +826,28 @@ function builder.register_handlers()
   end
   -- A member of staff of `class` asks for a pay rise (like Staff:requestRaise,
   -- without the dice).
+  -- This hospital discovers the first equipment (by id) it has not found
+  -- yet, and its first drug gets 10% more effective: research to share.
+  MultiplayerSession.default_handlers.probe_learn = function(w, cmd)
+    local h = w.hospitals[cmd.hospital or 1]
+    local object
+    for _, o in ipairs(TheApp.objects) do
+      local progress = o.thob and h.research.research_progress[o]
+      if not object and progress and not progress.discovered and o.research_category then object = o end
+    end
+    if not object then return false, "nothing left to discover" end
+    h.research:discoverObject(object)
+    local ids = {}
+    for id, entry in pairs(h.disease_casebook) do
+      if entry.drug and entry.cure_effectiveness < 100 then ids[#ids + 1] = id end
+    end
+    table.sort(ids)
+    if ids[1] then
+      local entry = h.disease_casebook[ids[1]]
+      entry.cure_effectiveness = math.min(100, entry.cure_effectiveness + 10)
+    end
+    return true
+  end
   MultiplayerSession.default_handlers.probe_raise = function(w, cmd)
     local h = w.hospitals[cmd.hospital or 1]
     for _, s in ipairs(h.staff) do
