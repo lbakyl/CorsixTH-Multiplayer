@@ -159,10 +159,11 @@ sleep 1
 run_probe paul MP_ROLE=join MP_ROOM=events MP_STEPS=1600 MP_DRAW_EVERY=3   MP_UI_SCRIPT="30:openhospital;130:answerfax:emergency:1;430:answerfax:personality:1" & pids+=($!)
 # Epidemic (co-op): one starts in player 2's hospital (test command); player
 # 2 covers it up, marks the infected for vaccination, the countdown runs in
-# the simulation on both machines, the inspector's result fax comes.
+# the simulation on both machines, the inspector's result fax comes (early
+# when the cover-up ends early: an infected patient left, or none are left).
 run_probe ella MP_ROLE=host MP_ROOM=epi MP_COOP=1 MP_SCENARIO=busy MP_STEPS=6500   MP_UI_SCRIPT="20:openhospital" & pids+=($!)
 sleep 1
-run_probe finn MP_ROLE=join MP_ROOM=epi MP_SCENARIO=busy MP_STEPS=6500   MP_UI_SCRIPT="30:openhospital;300:epidemic;320:answerfax:epidemy:2:wait;400:vaccinate;5300:answerfax:report:1:wait" & pids+=($!)
+run_probe finn MP_ROLE=join MP_ROOM=epi MP_SCENARIO=busy MP_STEPS=6500   MP_UI_SCRIPT="30:openhospital;300:epidemic;320:answerfax:epidemy:2:wait;400:vaccinate;600:answerfax:report:1:wait" & pids+=($!)
 
 # Offers (co-op): patients referred from the patient window and from a
 # "no treatment" fax, a nurse offered; offers accepted and declined in the
