@@ -68,6 +68,13 @@ function UIBankManager:UIBankManager(ui)
   self.close_button = self.close_panel:makeButton(0, 0, 26, 26, 4, self.close):setTooltip(_S.tooltip.bank_manager.close)
 
   self:addPanel(0, 250, 390):makeButton(0, 0, 200, 50, 0, self.openTownMap):setTooltip(_S.tooltip.toolbar.town_map)
+  -- Multiplayer co-op: ask another player for money (above the left card).
+  if TheApp.mp_session and self.world.mp_coop then
+    self.ask_button = self:addPanel(0, 58, 52)
+        :makeButton(0, 0, 147, 24, nil, self.askForMoney)
+        :setTooltip(_S.tooltip.multiplayer_window.ask_money)
+    self.ask_button.panel_for_sprite.custom_draw = --[[persistable:bank_ask_button_draw]] function() end
+  end
   self:addPanel(0, 192, 265):makeButton(0, 0, 21, 21, 6, self.increaseLoan):setTooltip(_S.tooltip.bank_manager.borrow_5000)
   self:addPanel(0, 50, 265):makeButton(0, 0, 21, 21, 5, self.decreaseLoan):setTooltip(_S.tooltip.bank_manager.repay_5000)
 
@@ -106,6 +113,11 @@ function UIBankManager:UIBankManager(ui)
   self:makeTooltip(_S.tooltip.bank_manager.inflation_rate, 430, 308, 589, 331)
   self:makeTooltip(_S.tooltip.bank_manager.interest_rate, 430, 337, 589, 360)
   -- TODO: Add the graphs
+end
+
+--! Multiplayer co-op: ask another player for money.
+function UIBankManager:askForMoney()
+  UIMultiplayerAskMoney.open(self.ui)
 end
 
 function UIBankManager:afterLoad(old, new)
@@ -282,6 +294,15 @@ function UIBankManager:draw(canvas, x, y)
     canvas:scale(1, "bitmap")
     UIFullscreen.draw(self, canvas, x, y)
     x, y = self.x * s + x, self.y * s + y
+
+    if self.ask_button then
+      -- A box like the labels on the cards: light grey, dark edges.
+      local bx, by, bw, bh = x + 58 * s, y + 52 * s, 147 * s, 24 * s
+      canvas:drawRect(canvas:mapRGB(48, 40, 36), bx, by, bw, bh)
+      canvas:drawRect(canvas:mapRGB(236, 232, 228), bx + 1 * s, by + 1 * s, bw - 2 * s, bh - 2 * s)
+      canvas:drawRect(canvas:mapRGB(204, 198, 192), bx + 2 * s, by + 2 * s, bw - 3 * s, bh - 3 * s)
+      font:draw(canvas, _S.multiplayer_window.ask_money, bx, by + 6 * s, bw, 0)
+    end
 
     -- The left side
     font:draw(canvas, _S.bank_manager.hospital_value, x + 60 * s, y + 109 * s, 143 * s, 0)

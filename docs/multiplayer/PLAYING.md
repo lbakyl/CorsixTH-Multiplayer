@@ -91,6 +91,17 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   the research and the price, and they accept or reject it. On acceptance
   they pay you and get what they still lack; you keep your research. No
   answer within 20 game days counts as a rejection.
+- **Chat:** press **Enter** and type; **Tab** chooses who it is for (all
+  players, or one), and the game remembers it for next time; **Enter**
+  sends, **Escape** cancels. Messages show at the top left for a few
+  seconds; private ones in purple. (If a window is waiting for Enter, such
+  as an information box, Enter goes to it: close it first.) Players on an
+  older server get private lines as public ones.
+- **Asking for money (co-op):** the bank manager (click your balance at the
+  bottom), **Ask a player**: set the amount ($500 to $50,000) and **Ask**.
+  The other player gets a coin icon; its fax shows the amount and your
+  balance, and they pay or decline. No answer within 20 game days counts
+  as no.
 - **Players:** the **MULTIPLAYER** menu, **PLAYERS** lists everybody in the
   game: their ping (average of the last 10 seconds), whether they are still
   connected (or have not answered for a while, or are behind), and their
@@ -119,7 +130,7 @@ same name. The test server runs the referee for the current test release.
 
 ## Not there yet
 
-- In-game chat, asking another player for money, competitive games.
+- Competitive games.
 - Passwords and traffic are not encrypted.
 
 ## Reporting a problem

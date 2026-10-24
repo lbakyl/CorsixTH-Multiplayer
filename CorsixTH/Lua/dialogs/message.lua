@@ -61,7 +61,7 @@ function UIMessage:UIMessage(ui, x, stop_x, onClose, type, message, owner, timeo
   self.type = type
 
   local types = { emergency = 43, epidemy = 45, strike = 47, personality = 49, information = 51, disease = 53, report = 55,
-                  mp_offer = 51, mp_research = 51 } -- multiplayer co-op offers: drawn below, not sprites
+                  mp_offer = 51, mp_research = 51, mp_money = 51 } -- multiplayer co-op: drawn below
   local kind = types[type]
 
   self.can_dismiss = self.type ~= "strike" and #self.message.choices == 1
@@ -69,7 +69,7 @@ function UIMessage:UIMessage(ui, x, stop_x, onClose, type, message, owner, timeo
   self.button = self:addPanel(kind, 0, 0)
     :setTooltip(self.can_dismiss and _S.tooltip.message.button_dismiss or _S.tooltip.message.button) -- FIXME: tooltip doesn't work very well here
     :makeToggleButton(0, 0, 30, 28, kind + 1, self.openMessage, nil, self.dismissMessage)
-  if type == "mp_offer" or type == "mp_research" then
+  if type == "mp_offer" or type == "mp_research" or type == "mp_money" then
     -- Multiplayer co-op offers (a person, or research): a raised purple
     -- button like the game's own message icons (UIMessage.drawOfferIcon).
     self.button.panel_for_sprite.custom_draw = --[[persistable:mp_offer_icon_draw]] function(panel, canvas, px, py)
@@ -120,7 +120,20 @@ function UIMessage.drawOfferIcon(canvas, ix, iy, s, open, kind, sprites)
   rect(light, 8, 6, 2, 1)
   local white, tint = {243, 243, 243}, {214, 196, 240}
   local d = open and 1 or 0
-  if kind == "mp_research" then
+  if kind == "mp_money" then
+    -- A stack of gold coins, the top one with a dollar sign.
+    local gold, edge, glint = {246, 200, 64}, {170, 120, 20}, {255, 240, 160}
+    for i = 0, 3 do
+      local cy = 17 - i * 3
+      rect(edge, 9 + d, cy + 1 + d, 12, 3)
+      rect(gold, 9 + d, cy + d, 12, 2)
+      rect(glint, 10 + d, cy + d, 4, 1)
+    end
+    rect(edge, 10 + d, 5 + d, 10, 4)
+    rect(gold, 10 + d, 4 + d, 10, 4)
+    rect(edge, 14 + d, 4 + d, 2, 4) -- "$"
+    rect(glint, 11 + d, 4 + d, 3, 1)
+  elseif kind == "mp_research" then
     -- A flask: cork, neck, widening glass, green liquid with bubbles.
     rect({206, 158, 100}, 13 + d, 6 + d, 4, 2)
     rect({150, 106, 60}, 16 + d, 6 + d, 1, 2)

@@ -1013,6 +1013,44 @@ local function run()
           sample("mp_research", {mp_offer = {kind = "research", from = 1, to = 2, name = "sample"}})
         elseif a == "learn" then
           session:issue({kind = "probe_learn"})
+        elseif a == "askmoney" then
+          -- Bank manager, "Ask a player": the amount, Ask.
+          local bank = UIBankManager(world.ui)
+          world.ui:addWindow(bank)
+          shot("bank-manager")
+          bank:askForMoney()
+          local w = world.ui:getWindow(UIMultiplayerAskMoney)
+          if w then
+            w:setAmount(tonumber(entry.arg) or 5000)
+            shot("ask-window")
+            log(string.format("UI: asked for $%d at step %d", w.amount, session.step))
+            w:ask()
+            w:close()
+          else
+            log("UI: no ask window")
+          end
+          bank:close()
+        elseif a == "answermoney" then
+          local icon
+          for _, candidate in ipairs(world.ui.bottom_panel:allMessageIcons()) do
+            if not icon and candidate.type == "mp_money" then icon = candidate end
+          end
+          if icon then
+            shot("money-icon")
+            if not icon.fax then icon:openMessage() end
+            shot("money-fax")
+            log(string.format("UI: %s the money request at step %d", entry.arg == "pay" and "paid" or
+                "declined", session.step))
+            icon.fax:buttonChoice(entry.arg == "pay" and 1 or 2)
+          else
+            log("UI: no money request to answer")
+          end
+        elseif a == "screen" then
+          -- Open a window by its class name, take a screenshot, close it.
+          local window = _G[entry.arg](world.ui)
+          world.ui:addWindow(window)
+          shot("screen-" .. entry.arg)
+          window:close()
         elseif a == "researchboard" then
           -- The research blackboard, with "Share research" next to the total.
           local board = UIResearch(world.ui)

@@ -1481,6 +1481,65 @@ function handlers.offer_research(world, cmd)
   return true
 end
 
+--------------------------------------------------------------------------------
+-- Co-op money requests: one player asks another for money (bank manager,
+-- "Ask a player"). The request is a message of type "mp_money" (a coin
+-- icon) answered in the fax window like the offers; paying is up to the
+-- player asked, and checked again when they answer.
+--------------------------------------------------------------------------------
+
+MultiplayerSession.ASK_MIN, MultiplayerSession.ASK_MAX, MultiplayerSession.ASK_STEP = 500, 50000, 500
+
+--! Ask another player for money: {to, amount}.
+function handlers.ask_money(world, cmd)
+  local S = _S.multiplayer_window
+  local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
+  if not from or not to or from == to then return false, "no such hospital" end
+  local amount = math.floor(tonumber(cmd.amount) or 0)
+  if amount < MultiplayerSession.ASK_MIN or amount > MultiplayerSession.ASK_MAX then
+    return false, "invalid amount"
+  end
+  local panel = world.ui and world.ui.bottom_panel
+  if not panel then return false, "no message panel" end
+  local message = {
+    {text = S.ask_line:format(from.name, amount)},
+    {text = S.ask_balance_line:format(math.floor(from.balance))},
+    choices = {
+      {text = S.ask_pay:format(amount), choice = "mp_offer_accept"},
+      {text = S.ask_decline, choice = "mp_offer_decline"},
+    },
+    mp_offer = {kind = "money", from = world:getHospitalIndex(from), to = world:getHospitalIndex(to),
+        amount = amount, name = "$" .. amount},
+  }
+  panel:queueMessage("mp_money", message, nil, Date.hoursPerDay() * MultiplayerSession.OFFER_DAYS, 2, nil, to)
+  MultiplayerSession.tellPlayer(world, from, S.ask_sent_note:format(amount, to.name))
+  return true
+end
+
+--! A money request was answered: on "pay", the money moves if it is there.
+local function resolve_money(world, offer, from, to, accept)
+  local S = _S.multiplayer_window
+  local amount = offer.amount or 0
+  local outcome
+  if not accept then
+    outcome = "declined"
+    MultiplayerSession.tellPlayer(world, from, S.ask_declined_note:format(to.name, amount))
+  elseif to.balance < amount then
+    outcome = "no money"
+    MultiplayerSession.tellPlayer(world, to, S.ask_no_money_note:format(amount))
+    MultiplayerSession.tellPlayer(world, from, S.ask_no_money_asker_note:format(to.name))
+  else
+    outcome = "paid $" .. amount
+    to:spendMoney(amount, S.money_sent:format(from.name))
+    from:receiveMoney(amount, S.money_received:format(to.name))
+    MultiplayerSession.tellPlayer(world, from, S.money_received_note:format(to.name, amount))
+  end
+  local session = world.app.mp_session
+  if session then
+    session.log(string.format("money request of hospital %d to hospital %d: %s", offer.from, offer.to, outcome))
+  end
+end
+
 --! A research offer was answered: on acceptance the receiver pays and gets
 --! what it still lacks of it.
 local function resolve_research(world, offer, from, to, accept)
@@ -1523,6 +1582,10 @@ function MultiplayerSession.resolveOffer(world, offer, accept)
   local from, to = world.hospitals[offer.from], world.hospitals[offer.to]
   if offer.kind == "research" then
     if from and to then resolve_research(world, offer, from, to, accept) end
+    return
+  end
+  if offer.kind == "money" then
+    if from and to then resolve_money(world, offer, from, to, accept) end
     return
   end
   local entity = world:getEntityById(offer.entity)

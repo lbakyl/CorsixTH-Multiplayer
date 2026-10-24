@@ -30,7 +30,7 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 | `READY` | in a room | `ready` |
 | `START` | room owner | (none) |
 | `LEAVE` | in a room | (none) |
-| `CHAT` | in a room | `text` |
+| `CHAT` | in a room or game | `text`; optional `to` (a peer): only that player gets it |
 | `SPEED` | in game | `speed`: `Pause` or a speed name up to the room's `max_speed` |
 | `SHOW` | in game | cosmetic, outside the lockstep: `kind=blueprint room x y w h` (a room outline being drawn; `w=0` clears it) |
 | `DIAG` | after a desync | `step`, `part`, `text`: this game's state (money, rooms, every entity) for the server log, to compare the games |
@@ -60,7 +60,7 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 | `SAVE step` | referee only: save once at `step` (or later) |
 | `LOAD step parts peers`, `SAVEDATA d`, `LOADEND step` | the shared save (base64 in `parts` lines); load it and restart at `step` with `peers` |
 | `RESUME step` | play on |
-| `CHAT peer name text` | chat (`peer=0`: a server notice) |
+| `CHAT peer name text [to]` | chat (`peer=0`: a server notice); with `to`, a private line, sent to that player and back to the sender |
 | `PING id` | answer with `PONG id=` (every 2 seconds during a game) |
 | `PLAYERS n peerI nameI stateI rttI quietI stepI` | every 2 seconds during a game, for MULTIPLAYER > PLAYERS: each player (I = 1..n) with `state` `on` or `left`, the average round trip in ms over the last 10 seconds (`-1`: none), seconds since the server last heard from them, and their last reported step. Older clients ignore it |
 

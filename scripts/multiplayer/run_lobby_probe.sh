@@ -175,12 +175,14 @@ run_probe yuki MP_ROLE=join MP_ROOM=refer MP_STEPS=1100 \
 
 # Research sharing (co-op): the host's hospital discovers two things (test
 # command) and offers them for $5,000; the other player accepts in the fax.
-# Then one more, offered free, is declined.
+# Then one more, offered free, is declined. Also in-game chat (to all, then
+# Tab to the other player) and money requests from the bank manager ($7,500
+# paid, $2,000 declined).
 run_probe kim MP_ROLE=host MP_ROOM=research MP_COOP=1 MP_STEPS=900 \
-  MP_UI_SCRIPT="20:openhospital;100:learn;110:learn;150:shareresearch:5000;500:learn;540:shareresearch:0" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;100:learn;110:learn;150:shareresearch:5000;190:askmoney:7500;200:chat:0:hello everyone;230:chat:1:just for you;500:learn;540:shareresearch:0;600:askmoney:2000" & pids+=($!)
 sleep 1
 run_probe lea MP_ROLE=join MP_ROOM=research MP_STEPS=900 \
-  MP_UI_SCRIPT="30:openhospital;300:answerresearch:accept;700:answerresearch:decline" & pids+=($!)
+  MP_UI_SCRIPT="30:openhospital;250:answermoney:pay;300:answerresearch:accept;650:answermoney:decline;700:answerresearch:decline" & pids+=($!)
 
 # Staff and queues: pay rises asked (test command) and answered in the pay
 # rise window, one accepted and one declined; a nurse fired; queues
@@ -399,12 +401,17 @@ know_l = re.findall(r'hospital (\d) research: (.*)', ll)
 r1 = dict(know_k).get('1', '?').split(';')[0]
 r2 = dict(know_k).get('2', '?').split(';')[0]
 okres = (result('kim').startswith('IN SYNC through step 900') and result('lea').startswith('IN SYNC through step 900')
-         and ck == applied('lea') and kinds_k.count('offer_research') == 2 and kinds_k.count('fax_choice') == 2 and kinds_k.count('probe_learn') == 3
+         and ck == applied('lea') and kinds_k.count('offer_research') == 2 and kinds_k.count('fax_choice') == 4 and kinds_k.count('probe_learn') == 3 and kinds_k.count('ask_money') == 2
          and paid is not None and paid.group(1) == '2' and paid.group(2) == '5000'  # two discoveries (every drug is at 100% here)
-         and 'UI: declined the research offer' in ll and know_k == know_l and len(r1.split(',')) == len(r2.split(',')) + 1)
+         and 'UI: declined the research offer' in ll and know_k == know_l and len(r1.split(',')) == len(r2.split(',')) + 1
+         and 'chat seen: kim: hello everyone | kim (to you): just for you [private]' in ll
+         and 'money request of hospital 1 to hospital 2: paid $7500' in kl
+         and 'money request of hospital 1 to hospital 2: declined' in kl)
 print(f"19. Research sharing:       {result('kim')}; offers {kinds_k.count('offer_research')}, "
       f"accepted {paid.group(1) + ' items for $' + paid.group(2) if paid else 'no'}, one declined; "
-      f"same knowledge on both: {know_k == know_l}; hospital 1 knows {len(r1.split(','))}, hospital 2 {len(r2.split(','))}")
+      f"same knowledge on both: {know_k == know_l}; hospital 1 knows {len(r1.split(','))}, hospital 2 {len(r2.split(','))}; "
+      f"chat to all and private: {'kim (to you): just for you [private]' in ll}; money asked, paid and declined: "
+      f"{'paid $7500' in kl and 'hospital 2: declined' in kl}")
 fail |= not okres
 
 el, fl = log('ella'), log('finn')
