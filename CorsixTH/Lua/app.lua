@@ -508,7 +508,17 @@ function App:initSavegameDir()
   if lfs.attributes(self.savegame_dir, "mode") ~= "directory" then
     if not lfs.mkdir(self.savegame_dir) then
       print("Notice: Savegame directory does not exist and could not be created.")
-      return false
+      if self.savegame_dir == default_savegame_dir then
+        return false
+      end
+      -- (A config.txt copied from another computer names a folder that is
+      -- not here: save to the default folder instead of writing every save
+      -- to a temporary file.)
+      self.savegame_dir = default_savegame_dir
+      if lfs.attributes(self.savegame_dir, "mode") ~= "directory" and not lfs.mkdir(self.savegame_dir) then
+        return false
+      end
+      print("Notice: Saving to " .. self.savegame_dir .. " instead.")
     end
   end
   if self.savegame_dir:sub(-1, -1) ~= pathsep then
