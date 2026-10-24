@@ -1,0 +1,50 @@
+---
+name: Linux package
+
+permissions:
+  contents: read
+
+# A portable Linux x86_64 build for multiplayer testing, with Lua 5.5 like
+# the Windows builds (the multiplayer build id contains the Lua version).
+# Built on Ubuntu 24.04 so it runs there and on newer systems (Linux Mint 22
+# and later). See scripts/multiplayer/build_linux_package.sh.
+on:
+  push:
+    branches:
+      - master
+      - 'mp/linux-package'
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install build packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build pkg-config git curl patchelf \
+            libfreetype-dev libpng-dev zlib1g-dev libzstd-dev libfluidsynth-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev \
+            libxtst-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libegl1-mesa-dev \
+            libgles2-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev libwayland-dev \
+            wayland-protocols libdecor-0-dev libasound2-dev libpulse-dev libpipewire-0.3-dev
+      - name: Cache SDL3 and Lua 5.5
+        uses: actions/cache@v5
+        with:
+          path: build-linux-package/prefix
+          key: linux-package-prefix-${{ hashFiles('scripts/multiplayer/build_linux_package.sh') }}
+      - name: Build the package
+        run: bash scripts/multiplayer/build_linux_package.sh "$(git rev-parse --short=8 HEAD)"
+      - name: Smoke test (program starts and finds its libraries)
+        run: |
+          cd dist/CorsixTH-Multiplayer
+          ldd ./corsix-th | grep -i "not found" && exit 1 || true
+          for so in lua/*.so lua/*/*.so; do ldd "$so" | grep -i "not found" && exit 1 || true; done
+          ls -la
+      - name: Upload the package
+        uses: actions/upload-artifact@v7
+        with:
+          name: CorsixTH-linux
+          path: dist/*.tar.gz
+          if-no-files-found: error

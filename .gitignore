@@ -114,3 +114,7 @@ CorsixTH/corsix-th
 # Nix
 *.so
 /result*
+
+# Linux package (scripts/multiplayer/build_linux_package.sh)
+/build-linux-package/
+/dist/
