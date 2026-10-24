@@ -502,6 +502,9 @@ end
 function MultiplayerLobby:_attachChat(ui)
   if self.is_referee or not ui or ui:getWindow(UIMultiplayerChat) then return end
   ui:addWindow(UIMultiplayerChat(ui))
+  -- The game screen was made before the session: now it may scroll past the
+  -- map's edge (see GameUI:makeVisibleDiamond).
+  if ui.updateVisibleDiamond then ui:updateVisibleDiamond() end
 end
 
 function MultiplayerLobby:_onSTART(f)

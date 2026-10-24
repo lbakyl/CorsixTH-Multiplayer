@@ -192,12 +192,23 @@ function GameUI:makeVisibleDiamond(scr_w, scr_h)
   -- The visible diamond is the region which the top-left corner of the screen
   -- is limited to, and ensures that the map always covers all of the screen.
   -- Its vertices are at (x + w, y), (x - w, y), (x, y + h), (x, y - h).
+  -- In multiplayer a player's plot can be at the edge of the map, under the
+  -- windows that open at the sides: there the camera may go past the edge.
+  local margin = self.app.mp_session and math.max(scr_w / 2, scr_h) or 0
   return {
     x = - scr_w / 2,
     y = 16 * map_h - scr_h / 2,
-    w = 32 * map_h - scr_h - scr_w / 2,
-    h = 16 * map_h - scr_h / 2 - scr_w / 4,
+    w = 32 * map_h - scr_h - scr_w / 2 + margin,
+    h = 16 * map_h - scr_h / 2 - scr_w / 4 + margin / 2,
   }
+end
+
+--! Recalculate the scrolling bounds (for the screen size and zoom).
+function GameUI:updateVisibleDiamond()
+  local scr_w, scr_h = TheApp.video:getRenderSize()
+  local zoom = self:getEffectiveZoom()
+  self.visible_diamond = self:makeVisibleDiamond(scr_w / zoom, scr_h / zoom)
+  self:scrollMap(0, 0)
 end
 
 --! Calculate the minimum valid zoom value
@@ -279,11 +290,7 @@ function GameUI:onChangeResolution()
   if self.zoom_factor < minimum_zoom then
     self:setZoom(minimum_zoom, false)
   end
-  -- Recalculate scrolling bounds
-  local scr_w, scr_h = TheApp.video:getRenderSize()
-  local zoom = self:getEffectiveZoom()
-  self.visible_diamond = self:makeVisibleDiamond(scr_w / zoom, scr_h / zoom)
-  self:scrollMap(0, 0)
+  self:updateVisibleDiamond()
 
   UI.onChangeResolution(self)
 end
