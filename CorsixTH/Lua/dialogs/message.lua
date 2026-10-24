@@ -60,7 +60,8 @@ function UIMessage:UIMessage(ui, x, stop_x, onClose, type, message, owner, timeo
   self.panel_sprites = app.gfx:loadSpriteTable("Data", "Panel02V", true)
   self.type = type
 
-  local types = { emergency = 43, epidemy = 45, strike = 47, personality = 49, information = 51, disease = 53, report = 55 }
+  local types = { emergency = 43, epidemy = 45, strike = 47, personality = 49, information = 51, disease = 53, report = 55,
+                  mp_offer = 51 } -- multiplayer co-op offer: drawn below, not a sprite
   local kind = types[type]
 
   self.can_dismiss = self.type ~= "strike" and #self.message.choices == 1
@@ -68,6 +69,23 @@ function UIMessage:UIMessage(ui, x, stop_x, onClose, type, message, owner, timeo
   self.button = self:addPanel(kind, 0, 0)
     :setTooltip(self.can_dismiss and _S.tooltip.message.button_dismiss or _S.tooltip.message.button) -- FIXME: tooltip doesn't work very well here
     :makeToggleButton(0, 0, 30, 28, kind + 1, self.openMessage, nil, self.dismissMessage)
+  if type == "mp_offer" then
+    -- An offer from another player (a member of staff or a patient): a
+    -- purple box with a person on it, darker while its window is open.
+    self.button.panel_for_sprite.custom_draw = --[[persistable:mp_offer_icon_draw]] function(panel, canvas, px, py)
+      local s = TheApp.gfx:getUIScale()
+      local ix, iy = px + panel.x * s, py + panel.y * s
+      local open = panel.window.button and panel.window.button.toggled
+      canvas:drawRect(canvas:mapRGB(48, 16, 74), ix, iy, 30 * s, 28 * s)
+      canvas:drawRect(open and canvas:mapRGB(100, 46, 146) or canvas:mapRGB(150, 76, 206),
+          ix + 2 * s, iy + 2 * s, 26 * s, 24 * s)
+      local light = canvas:mapRGB(246, 238, 255)
+      canvas:drawRect(light, ix + 12 * s, iy + 5 * s, 6 * s, 6 * s)   -- head
+      canvas:drawRect(light, ix + 9 * s, iy + 12 * s, 12 * s, 7 * s)  -- shoulders
+      canvas:drawRect(light, ix + 11 * s, iy + 19 * s, 8 * s, 4 * s)  -- body
+      canvas:drawRect(canvas:mapRGB(255, 214, 90), ix + 22 * s, iy + 4 * s, 4 * s, 4 * s) -- "new"
+    end
+  end
   -- The emergency has a rotating siren
   if kind == 43 then
     self.rotator = {}
@@ -114,6 +132,15 @@ function UIMessage:openMessage()
     -- (In multiplayer the answer is a command: UIStaffRise:_issueAnswer.)
     self.ui:addWindow(UIStaffRise(self.ui, self.owner, self.message))
     self:removeMessage()
+  elseif self.type == "mp_offer" then
+    -- Multiplayer co-op: an offer from another player, in its own window.
+    if self.fax then
+      self.fax:close()
+    else
+      self.fax = UIMultiplayerOffer(self.ui, self)
+      self.ui:addWindow(self.fax)
+    end
+    self:adjustToggle()
   else
     if self.fax then
       self.fax:close()

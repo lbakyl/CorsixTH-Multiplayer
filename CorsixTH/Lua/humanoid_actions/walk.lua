@@ -121,6 +121,10 @@ local function action_walk_raw(humanoid, x1, y1, x2, y2, map, timer_fn)
   if humanoid.speed and humanoid.speed == "fast" then
     factor = 2
     quantity = 4
+  elseif humanoid.speed == "transit" then
+    -- Multiplayer co-op: walking over to another player's hospital.
+    factor = 4
+    quantity = 2
   end
 
   local anims = humanoid.walk_anims

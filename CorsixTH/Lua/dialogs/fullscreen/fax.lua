@@ -133,6 +133,18 @@ end
 --! The player clicked a choice. In multiplayer every peer applies it at the
 --! same step (fax_choice command); the fax closes here meanwhile.
 function UIFax:buttonChoice(choice_number)
+  local choices = self.message.choices
+  if choices and choices[choice_number] and choices[choice_number].choice == "mp_refer" then
+    -- Multiplayer co-op: refer the patient to another player (which one is
+    -- chosen first if there are several); the fax is answered "wait".
+    local wait
+    for i, c in ipairs(choices) do
+      if c.choice == "wait" then wait = i end
+    end
+    UIMultiplayerChooseHospital.start(self.ui, self.owner, {msg = self.icon.mp_id, wait = wait})
+    self:close()
+    return
+  end
   if MultiplayerSession.actionsAreCommands() and self.icon.mp_id then
     TheApp.mp_session:issue({kind = "fax_choice", msg = self.icon.mp_id, choice = choice_number})
     self:close()
@@ -157,6 +169,13 @@ function UIFax:choice(choice_number)
   -- The hospital the fax is for (multiplayer co-op: maybe not this player's).
   local hospital = self.icon.hospital or self.ui.hospital
   local owner = self.owner
+  -- Multiplayer co-op: an offer from another player answered (or timed out).
+  if choice == "mp_offer_accept" or choice == "mp_offer_decline" then
+    MultiplayerSession.resolveOffer(self.ui.app.world, self.message.mp_offer, choice == "mp_offer_accept")
+    self.icon:removeMessage()
+    self:close()
+    return
+  end
   if owner and owner.humanoid_class then
     local humanoid = owner
     -- A choice was made, the patient is no longer waiting for a decision

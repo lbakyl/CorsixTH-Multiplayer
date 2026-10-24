@@ -768,13 +768,30 @@ function builder.register_handlers()
     local err = w.hospitals[cmd.target or 1]:createEmergency()
     return err == nil, err
   end
+  -- The "no treatment yet" fax for this hospital's first patient in a
+  -- corridor (to answer it with "refer to another hospital").
+  MultiplayerSession.default_handlers.probe_notreat = function(w, cmd)
+    local h = w.hospitals[cmd.hospital or 1]
+    for _, p in ipairs(h.patients) do
+      if not p:getRoom() and not p.going_home and not p.mp_offer and not p.message_callback then
+        h:makeNoTreatmentRoomFax(p)
+        return true
+      end
+    end
+    return false, "no patient"
+  end
   -- `n` patients arrive at once next to the reception desk (to make a queue
   -- now; from the map edge they would walk for hundreds of hours).
   MultiplayerSession.default_handlers.probe_patients = function(w, cmd)
     local hospital = w.hospitals[cmd.hospital or 1]
     local desk = hospital:getReceptionDesks()[1]
     if not desk then return false, "no reception desk" end
+    -- The search must be about the command's hospital on every peer (in
+    -- co-op builder.hospital is each peer's own).
+    local saved = builder.hospital
+    builder.hospital = hospital
     local x, y = builder.find_free_rect(w, desk.tile_x, desk.tile_y + 3, 1, 1, 10)
+    builder.hospital = saved
     if not x then return false, "no room next to the desk" end
     for _ = 1, math.min(tonumber(cmd.n) or 1, 20) do
       local patient = w:spawnPatient(hospital)

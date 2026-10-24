@@ -934,6 +934,9 @@ end
 -- For example if thirst gets over a certain level (now: 0.7), the patient
 -- tries to find a drinks machine nearby.
 function Patient:tickDay()
+  -- Multiplayer co-op: walking to another hospital after a referral, they
+  -- belong to neither; nothing happens to them on the way.
+  if self.mp_in_transit then return end
   -- First of all it may happen that this patient is tired of waiting and goes home.
   if self.waiting then
     self:_dailyWaitChecks()

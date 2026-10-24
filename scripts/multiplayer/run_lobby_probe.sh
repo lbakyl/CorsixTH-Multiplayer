@@ -150,13 +150,22 @@ run_probe kate MP_ROLE=host MP_ROOM=fax MP_STEPS=1300 MP_UI_SCRIPT="100:vip;400:
 sleep 1
 run_probe liam MP_ROLE=join MP_ROOM=fax MP_STEPS=1300 MP_DRAW_EVERY=2   MP_UI_SCRIPT="160:answerfax:personality:2" & pids+=($!)
 run_probe mira MP_ROLE=host MP_ROOM=coop MP_COOP=1 MP_STEPS=1200 \
-  MP_UI_SCRIPT="20:openhospital;60:buy:bench;80:hire:Doctor;200:givemoney:5000;250:loan;260:priceup;270:research:cure;280:heatup;400:bonus:Doctor;410:raise:Doctor;500:buyplot" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;60:buy:bench;80:hire:Doctor;200:givemoney:5000;250:loan;260:priceup;270:research:cure;280:heatup;330:acceptoffer;400:bonus:Doctor;410:raise:Doctor;500:buyplot" & pids+=($!)
 sleep 1
 run_probe nico MP_ROLE=join MP_ROOM=coop MP_STEPS=1200 MP_DRAW_EVERY=3 \
   MP_UI_SCRIPT="30:openhospital;60:buy:plant;90:hire:Nurse;300:sendstaff:Nurse;350:loan;360:heatup;370:heatup;520:buyplot:other;600:sendhome" & pids+=($!)
 run_probe olga MP_ROLE=host MP_ROOM=events MP_COOP=1 MP_STEPS=1600   MP_UI_SCRIPT="20:openhospital;100:emergency:2;400:vip:2" & pids+=($!)
 sleep 1
 run_probe paul MP_ROLE=join MP_ROOM=events MP_STEPS=1600 MP_DRAW_EVERY=3   MP_UI_SCRIPT="30:openhospital;130:answerfax:emergency:1;430:answerfax:personality:1" & pids+=($!)
+# Offers (co-op): patients referred from the patient window and from a
+# "no treatment" fax, a nurse offered; offers accepted and declined in the
+# purple offer window.
+run_probe xavi MP_ROLE=host MP_ROOM=refer MP_COOP=1 MP_STEPS=1100 \
+  MP_UI_SCRIPT="20:openhospital;100:patients:4;140:referpatient;400:acceptoffer;620:declineoffer;780:acceptoffer" & pids+=($!)
+sleep 1
+run_probe yuki MP_ROLE=join MP_ROOM=refer MP_STEPS=1100 \
+  MP_UI_SCRIPT="30:openhospital;180:acceptoffer;200:hire:Nurse;300:sendstaff:Nurse;500:patients:3;540:referpatient;700:notreatfax;720:answerfax:information:4" & pids+=($!)
+
 # Staff and queues: pay rises asked (test command) and answered in the pay
 # rise window, one accepted and one declined; a nurse fired; queues
 # reordered by dragging in the queue window.
@@ -330,7 +339,7 @@ ok_all = len(other8) == 1 and all(x.endswith('-> ok') for x in cm if x not in ot
 plot8 = re.search(r'UI: buying plot (\d+) \(\$\d+, (\d+) objects', m)
 ok8 = (result('mira').startswith('IN SYNC') and result('nico').startswith('IN SYNC') and cm == applied('nico')
        and ok_all and sorted(kinds) == sorted(['open_hospital', 'open_hospital', 'place_object', 'place_object',
-                                               'hire', 'hire', 'give_money', 'send_staff', 'loan', 'loan',
+                                               'hire', 'hire', 'give_money', 'offer_staff', 'fax_choice', 'loan', 'loan',
                                                'set_price', 'research_frac', 'set_heat', 'set_heat', 'set_heat',
                                                'staff_bonus', 'raise_wage', 'send_home', 'buy_plot', 'buy_plot'])
        and plot8 is not None and int(plot8.group(2)) > 0
@@ -351,6 +360,19 @@ ok9 = (result('olga').startswith('IN SYNC') and result('paul').startswith('IN SY
 print(f"9. Co-op events, player 2:  {result('olga')}; emergency and VIP for hospital 2 accepted: {ok9}; commands {len(okc)}/{len(co)} ok")
 for x in co: print("   " + x)
 fail |= not ok9
+
+xl, yl = log('xavi'), log('yuki')
+cx = applied('xavi')
+okx = [x for x in cx if x.endswith('-> ok')]
+kinds_x = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in okx)
+arrived_p = len(re.findall(r'referred patient #\d+ arrived', xl))
+arrived_s = len(re.findall(r'transferred staff #\d+ arrived', xl))
+okr = (result('xavi').startswith('IN SYNC through step 1100') and result('yuki').startswith('IN SYNC')
+       and cx == applied('yuki') and kinds_x.count('offer_patient') == 3 and kinds_x.count('offer_staff') == 1
+       and 'UI: declined offer' in xl and arrived_p == 2 and arrived_s == 1)
+print(f"17. Offers and referrals:   {result('xavi')}; offers {kinds_x.count('offer_patient')} patients, "
+      f"{kinds_x.count('offer_staff')} staff; arrived: {arrived_p} patients, {arrived_s} staff; identical: {cx == applied('yuki')}")
+fail |= not okr
 
 w_, y_ = log('wade'), log('yara')
 cw = applied('wade')
@@ -454,7 +476,7 @@ print(f"11. Save and continue:      saved at step {saved_t.group(2) if saved_t e
 fail |= not ok11
 
 if with_referee:
-    rooms = ['ward', 'leave', 'build', 'crowd', 'fax', 'coop', 'events', 'staff', 'edit', 'cardio']
+    rooms = ['ward', 'leave', 'build', 'crowd', 'fax', 'coop', 'events', 'staff', 'edit', 'cardio', 'refer']
     connected = [r for r in rooms if f"room '{r}': referee connected" in server]
     differ = re.findall(r"room '(\w+)': the players differ from the referee", server)
     confirmed = dict(re.findall(r"room '(\w+)': referee confirmed steps through (\d+)", server))

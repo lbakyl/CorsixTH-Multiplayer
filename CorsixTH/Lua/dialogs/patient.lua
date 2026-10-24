@@ -94,6 +94,21 @@ function UIPatient:UIPatient(ui, patient)
   self:registerKeyHandlers()
   -- Co-op: another player's patient can be looked at, not sent anywhere.
   MultiplayerSession.viewOnly(self, patient.hospital, {self.viewQueue, self.viewDiseases})
+  -- Co-op: this player's patient can be referred to another player's hospital.
+  local world = ui.app.world
+  if TheApp.mp_session and world.mp_coop and world.mp_coop.players > 1 and
+      patient.hospital == ui.hospital and not self.mp_view_only then
+    self.height = self.height + 30
+    self:addBevelPanel(20, 312, 150, 26, {red = 150, green = 76, blue = 206})
+        :setLabel(_S.multiplayer_window.refer_button)
+        :makeButton(0, 0, 150, 26, nil, self.referPatient)
+        :setTooltip(_S.tooltip.multiplayer_window.refer_button)
+  end
+end
+
+--! Multiplayer co-op: offer this patient to another player's hospital.
+function UIPatient:referPatient()
+  UIMultiplayerChooseHospital.start(self.ui, self.patient)
 end
 
 function UIPatient:registerKeyHandlers()

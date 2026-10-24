@@ -287,6 +287,7 @@ local function run()
   local repairs = session.restarts or 0
   local waiting_rejoin -- restarts seen when the "waitrejoin" pause began
   local furnishing -- state of a room being furnished by hand (furnishroom)
+  local last_transfer_log
   local editing -- state of a room being edited (editroom)
   local holding -- a window that pauses this game, open for some seconds (holdpause)
   local monkey -- random clicks all over the screen, like a small child (monkey)
@@ -330,6 +331,16 @@ local function run()
       world:setUserSpeed("Max speed")
     end
     if furnishing and builder.furnish_tick(world, furnishing, log) then furnishing = nil end
+    if os.getenv("MP_DEBUG_TRANSFERS") and session.step % 100 == 0 and session.step ~= last_transfer_log then
+      last_transfer_log = session.step
+      for _, e in ipairs(world.mp_transfers or {}) do
+        local act = e:getCurrentAction()
+        local t = e.mp_in_transit
+        log(string.format("TRANSFER #%d %s at %s,%s action %s target %s,%s queue %d", e.mp_id, e.humanoid_class,
+            tostring(e.tile_x), tostring(e.tile_y), act and act.name or "-", t and t.x or "-", t and t.y or "-",
+            #e.action_queue))
+      end
+    end
     if editing and not furnishing and builder.edit_tick(world, editing, log) then editing = nil end
     if monkey and ticks % 3 == 0 then
       -- Its own random numbers (the game's must not change): a fixed seed.
@@ -420,6 +431,43 @@ local function run()
           log(string.format("UI: sent $%s to %s at step %d", entry.arg, trade.target.name, session.step))
           trade:sendMoney(tonumber(entry.arg))
           trade:close()
+        elseif a == "acceptoffer" or a == "declineoffer" then
+          -- Open the purple offer icon and answer it in its window.
+          local icon
+          for _, candidate in ipairs(world.ui.bottom_panel:allMessageIcons()) do
+            if not icon and candidate.type == "mp_offer" and candidate.hospital == world.ui.hospital then
+              icon = candidate
+            end
+          end
+          if icon then
+            if not icon.fax then icon:openMessage() end
+            shot("offer-" .. icon.message.mp_offer.kind)
+            local w = icon.fax
+            log(string.format("UI: %s offer of %s (%s) at step %d", a == "acceptoffer" and "accepted" or
+                "declined", (tostring(icon.message.mp_offer.name):gsub("^.*:", "")),
+                icon.message.mp_offer.kind, session.step))
+            if a == "acceptoffer" then w:accept() else w:decline() end
+          else
+            log("UI: no offer to answer")
+          end
+        elseif a == "referpatient" then
+          -- Open this hospital's first free patient's window and press Refer.
+          local patient
+          for _, p in ipairs(world.ui.hospital.patients) do
+            if not patient and MultiplayerSession.referable(p) and not p.mp_offer then patient = p end
+          end
+          if patient then
+            local w = UIPatient(world.ui, patient)
+            world.ui:addWindow(w)
+            shot("patient-refer")
+            log(string.format("UI: referred patient #%d at step %d", patient.mp_id, session.step))
+            w:referPatient()
+            w:close()
+          else
+            log("UI: no patient to refer")
+          end
+        elseif a == "notreatfax" then
+          session:issue({kind = "probe_notreat"})
         elseif a == "sendstaff" then
           local trade = UIMultiplayerTrade(world.ui)
           world.ui:addWindow(trade)

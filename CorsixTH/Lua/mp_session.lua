@@ -439,6 +439,12 @@ MultiplayerSession.rejection_texts = {
                  ["someone is in the way"] = "Could not place the object there: someone was in the way.",
                  ["it would block the room"] = "Not there: it would block the way to another object."},
   room_finish = {["objects missing"] = "The room still needs some of its objects."},
+  offer_staff = {["already offered"] = "That member of staff has already been offered."},
+  offer_patient = {["already offered"] = "That patient has already been referred.",
+                   ["the patient is in a room"] = "The patient is in a room now. Try again when they come out.",
+                   ["the patient is leaving"] = "The patient is leaving.",
+                   ["emergency patients stay"] = "Emergency patients cannot be referred.",
+                   ["infected patients stay"] = "Infected patients cannot be referred."},
   buy_plot = {["another player's side"] = "That land is on another player's side of the map.",
               ["cannot buy this plot"] = "That land cannot be bought now."},
   move_staff = {["invalid position"] = "They cannot be placed there.",
@@ -1160,6 +1166,13 @@ function handlers.send_staff(world, cmd)
   if not from or not to or from == to then return false, "no such hospital" end
   local staff = find_staff(from, cmd.index, cmd.key)
   if not staff then return false, "no such staff member" end
+  return MultiplayerSession.transferStaff(world, from, to, staff)
+end
+
+--! Move a member of staff from one player's hospital to another's: they walk
+--! over and start work there on arrival.
+--!return true, or false and a reason
+function MultiplayerSession.transferStaff(world, from, to, staff)
   local x, y = arrival_tile(world, to)
   if not x then return false, "no room at the other hospital" end
 
@@ -1178,7 +1191,7 @@ function handlers.send_staff(world, cmd)
   staff:setDynamicInfoText(_S.multiplayer_window.staff_on_the_way:format(to.name))
   -- A brisk walk: the way between two hospitals is long (normal speed
   -- again on arrival, Staff:onPlaceInCorridor).
-  staff.speed, staff.slow_animation = "fast", false
+  staff.speed, staff.slow_animation = "transit", false
   staff:setNextAction(WalkAction(x, y):setMustHappen(true))
   staff:queueAction(IdleAction())
   world.mp_transfers = world.mp_transfers or {}
@@ -1196,6 +1209,150 @@ function MultiplayerSession.tellPlayer(world, hospital, text)
   local ui = world.ui
   if ui and ui.adviser and ui.hospital == hospital then
     ui.adviser:say({text = text, priority = 10})
+  end
+end
+
+--------------------------------------------------------------------------------
+-- Co-op offers: a member of staff or a patient offered to another player's
+-- hospital. The offer is a message (type "mp_offer", the purple icon) that
+-- exists on every peer and is shown only to the receiving player; answering
+-- it is a fax_choice command (1 = accept, 2 = decline), and it declines
+-- itself after MultiplayerSession.OFFER_HOURS game hours (the message
+-- timeout runs in game hours on every peer, UIBottomPanel:onWorldTick).
+-- While it is open, the person stays where they are and cannot be offered
+-- again (entity.mp_offer = the message number).
+--------------------------------------------------------------------------------
+
+MultiplayerSession.OFFER_HOURS = 500 -- ten game days
+
+local function display_name(entity)
+  local S = _S.multiplayer_window
+  if entity.profile then return entity.profile:getFullName() end
+  if class.is(entity, Patient) then
+    if entity.diagnosed and entity.disease then return S.offer_patient_known:format(entity.disease.name) end
+    return S.offer_patient_unknown
+  end
+  return "?"
+end
+
+--! Create an offer of `entity` (staff or patient) from one hospital to another.
+local function create_offer(world, kind, from, to, entity)
+  local S = _S.multiplayer_window
+  local panel = world.ui and world.ui.bottom_panel
+  if not panel then return false, "no message panel" end
+  local name = display_name(entity)
+  local message = {
+    {text = (kind == "staff" and S.offer_staff_line or S.offer_patient_line):format(from.name)},
+    {text = name},
+    choices = {
+      {text = S.offer_accept, choice = "mp_offer_accept"},
+      {text = S.offer_decline, choice = "mp_offer_decline"},
+    },
+    mp_offer = {kind = kind, from = world:getHospitalIndex(from), to = world:getHospitalIndex(to),
+        entity = entity.mp_id, name = name},
+  }
+  panel:queueMessage("mp_offer", message, nil, MultiplayerSession.OFFER_HOURS, 2, nil, to)
+  entity.mp_offer = world.next_message_id
+  MultiplayerSession.tellPlayer(world, from, S.offer_sent_note:format(name, to.name))
+  return true
+end
+
+--! Offer a member of staff to another player: {to, index, key}. They join
+--! that hospital only if its player accepts (MultiplayerSession.resolveOffer).
+function handlers.offer_staff(world, cmd)
+  local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
+  if not from or not to or from == to then return false, "no such hospital" end
+  local staff = find_staff(from, cmd.index, cmd.key)
+  if not staff or staff.mp_in_transit then return false, "no such staff member" end
+  if staff.mp_offer then return false, "already offered" end
+  return create_offer(world, "staff", from, to, staff)
+end
+
+--! Can this patient be referred to another hospital? (They must be free to
+--! leave: not in a room, not leaving, not an emergency or infected patient.)
+local function referable(patient)
+  if patient.going_home or patient.going_to_die or patient.dead or patient.mp_in_transit then
+    return false, "the patient is leaving"
+  end
+  if patient.is_emergency then return false, "emergency patients stay" end
+  if patient.infected then return false, "infected patients stay" end
+  if patient:getRoom() then return false, "the patient is in a room" end
+  return true
+end
+MultiplayerSession.referable = referable
+
+--! Refer a patient to another player: {to, patient}. They go there only if
+--! its player accepts.
+function handlers.offer_patient(world, cmd)
+  local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
+  if not from or not to or from == to then return false, "no such hospital" end
+  local patient = world:getEntityById(tonumber(cmd.patient))
+  if not patient or not class.is(patient, Patient) or patient.hospital ~= from then
+    return false, "no such patient"
+  end
+  if patient.mp_offer then return false, "already offered" end
+  local ok, why = referable(patient)
+  if not ok then return false, why end
+  return create_offer(world, "patient", from, to, patient)
+end
+
+--! Move a referred patient to another hospital: they walk over and are that
+--! hospital's patient on arrival (World:_tickCoopTransfers).
+--!return true, or false and a reason
+function MultiplayerSession.transferPatient(world, from, to, patient)
+  local ok, why = referable(patient)
+  if not ok then return false, why end
+  local x, y = arrival_tile(world, to)
+  if not x then return false, "no room at the other hospital" end
+  local window = world.ui and world.ui:getWindow(UIPatient)
+  if window and window.patient == patient then window:close() end
+  -- Leave this hospital like going home, without the counts: no message,
+  -- no queue, no vaccination call, not this hospital's patient any more.
+  patient:unregisterCallbacks()
+  patient:setMood("patient_wait", "deactivate")
+  patient.waiting = nil
+  world.dispatcher:dropFromQueue(patient)
+  from:removePatient(patient)
+  from:updatePercentages()
+  patient.mp_in_transit = {to = world:getHospitalIndex(to), from = world:getHospitalIndex(from), x = x, y = y}
+  patient:setDynamicInfoText(_S.multiplayer_window.patient_on_the_way:format(to.name))
+  patient.speed = "transit" -- a long way (normal again on arrival)
+  patient:setNextAction(WalkAction(x, y):setMustHappen(true))
+  patient:queueAction(IdleAction())
+  world.mp_transfers = world.mp_transfers or {}
+  world.mp_transfers[#world.mp_transfers + 1] = patient
+  return true
+end
+
+--! An offer was answered (or timed out): on every peer, at the same step.
+--!param offer (table) the message's mp_offer
+function MultiplayerSession.resolveOffer(world, offer, accept)
+  local S = _S.multiplayer_window
+  local from, to = world.hospitals[offer.from], world.hospitals[offer.to]
+  local entity = world:getEntityById(offer.entity)
+  if entity and entity.mp_offer then entity.mp_offer = nil end
+  if not (from and to) then return end
+  if not accept then
+    MultiplayerSession.tellPlayer(world, from, S.offer_declined_note:format(to.name, offer.name))
+    return
+  end
+  local ok, why = false, "gone"
+  if entity and offer.kind == "staff" and class.is(entity, Staff) and entity.hospital == from and
+      not entity.fired and not entity.mp_in_transit then
+    ok, why = MultiplayerSession.transferStaff(world, from, to, entity)
+  elseif entity and offer.kind == "patient" and class.is(entity, Patient) and entity.hospital == from then
+    ok, why = MultiplayerSession.transferPatient(world, from, to, entity)
+  end
+  local session = world.app.mp_session
+  if session then
+    session.log(string.format("offer of %s #%s to hospital %d accepted: %s", offer.kind,
+        tostring(offer.entity), offer.to, ok and "on the way" or tostring(why)))
+  end
+  if ok then
+    MultiplayerSession.tellPlayer(world, from, S.offer_accepted_note:format(to.name, offer.name))
+  else
+    MultiplayerSession.tellPlayer(world, from, S.offer_gone_note:format(offer.name))
+    MultiplayerSession.tellPlayer(world, to, S.offer_gone_note:format(offer.name))
   end
 end
 

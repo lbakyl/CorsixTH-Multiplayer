@@ -1221,10 +1221,29 @@ function World:_tickCoopTransfers()
     local action = staff:getCurrentAction()
     if t and action and action.name == "walk" then
       walking[#walking + 1] = staff
+    elseif t and class.is(staff, Patient) then
+      -- A referred patient: now that hospital's patient (reception, or the
+      -- treatment room if already diagnosed).
+      local patient = staff
+      if patient.tile_x ~= t.x or patient.tile_y ~= t.y then patient:setTile(t.x, t.y) end
+      local to = self.hospitals[t.to]
+      patient.mp_in_transit = nil
+      patient.speed = "normal"
+      patient:setHospital(to)
+      if patient.diagnosed and patient.disease then
+        patient:setNextAction(SeekRoomAction(patient.disease.treatment_rooms[1]):enableTreatmentRoom())
+      end
+      patient:updateDynamicInfo()
+      local session = self.app.mp_session
+      if session then session.log("referred patient #" .. patient.mp_id .. " arrived at hospital " .. t.to) end
+      MultiplayerSession.tellPlayer(self, to, _S.multiplayer_window.patient_arrived_note:format(
+          self.hospitals[t.from] and self.hospitals[t.from].name or "?"))
     elseif t then
       if staff.tile_x ~= t.x or staff.tile_y ~= t.y then staff:setTile(t.x, t.y) end
       local to = self.hospitals[t.to]
       staff.mp_in_transit = nil
+      local session = self.app.mp_session
+      if session then session.log("transferred staff #" .. staff.mp_id .. " arrived at hospital " .. t.to) end
       to.staff[#to.staff + 1] = staff
       staff:setHospital(to)
       to:notifyOfStaffChange(staff)
