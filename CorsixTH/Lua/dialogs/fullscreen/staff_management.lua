@@ -57,6 +57,13 @@ function UIStaffManagement:UIStaffManagement(ui)
 
   -- Close button
   self:addPanel(0, 603, 443):makeButton(0, 0, 26, 26, 10, self.close):setTooltip(_S.tooltip.staff_list.close)
+  -- Multiplayer co-op: send the selected member of staff to another player
+  -- (above the close button; drawn in UIStaffManagement:draw).
+  if TheApp.mp_session and ui.app.world.mp_coop then
+    self.send_button = self:addPanel(0, 603, 410):makeButton(0, 0, 26, 26, nil, self.sendToPlayer)
+        :setTooltip(_S.tooltip.multiplayer_window.send_staff)
+    self.send_button.panel_for_sprite.custom_draw = --[[persistable:staff_send_button_draw]] function() end
+  end
 
   -- Top categories
   local --[[persistable:staff_management_category]] function category(name)
@@ -265,6 +272,50 @@ function UIStaffManagement:draw(canvas, x, y)
   UIFullscreen.draw(self, canvas, x, y)
   x, y = self.x * s + x, self.y * s + y
   local titles = self.title_font
+
+  if self.send_button then
+    -- A purple square like the offer icons, pressed in while held: a person
+    -- in a white coat with a gold arrow pointing away.
+    local function rect(c, rx, ry, w, h)
+      canvas:drawRect(canvas:mapRGB(c[1], c[2], c[3]), x + (603 + rx) * s, y + (410 + ry) * s, w * s, h * s)
+    end
+    local pressed = self.active == self.send_button
+    local light, dark = {206, 168, 246}, {54, 12, 84}
+    local ring, face, shine = {124, 60, 184}, {148, 78, 208}, {172, 112, 228}
+    if pressed then
+      light, dark = dark, {184, 142, 228}
+      ring, face, shine = {100, 46, 156}, {120, 58, 176}, {120, 58, 176}
+    end
+    rect(dark, 0, 0, 26, 26)
+    rect(light, 0, 0, 25, 1)
+    rect(light, 0, 0, 1, 25)
+    rect(ring, 1, 1, 24, 24)
+    rect(face, 2, 2, 22, 22)
+    rect(shine, 2, 2, 22, 3)
+    local white, tint = {243, 243, 243}, {214, 196, 240}
+    local gold, edge = {246, 200, 64}, {170, 120, 20}
+    local d = pressed and 1 or 0
+    rect(white, 6 + d, 3 + d, 6, 6) -- head, rounded
+    rect(tint, 11 + d, 4 + d, 1, 4)
+    rect(face, 6 + d, 3 + d, 1, 1)
+    rect(face, 11 + d, 3 + d, 1, 1)
+    rect(face, 6 + d, 8 + d, 1, 1)
+    rect(face, 11 + d, 8 + d, 1, 1)
+    rect(white, 3 + d, 10 + d, 12, 3) -- shoulders
+    rect(face, 3 + d, 10 + d, 1, 1)
+    rect(face, 14 + d, 10 + d, 1, 1)
+    rect(white, 4 + d, 13 + d, 10, 9) -- coat, arms at the sides
+    rect(tint, 13 + d, 11 + d, 1, 11)
+    rect(ring, 6 + d, 14 + d, 1, 7)
+    rect(ring, 11 + d, 14 + d, 1, 7)
+    rect(face, 8 + d, 10 + d, 2, 3) -- collar
+    rect(edge, 15 + d, 17 + d, 6, 2) -- arrow
+    rect(gold, 15 + d, 16 + d, 6, 2)
+    rect(gold, 20 + d, 13 + d, 1, 8)
+    rect(gold, 21 + d, 14 + d, 1, 6)
+    rect(gold, 22 + d, 15 + d, 1, 4)
+    rect(edge, 23 + d, 16 + d, 1, 2)
+  end
 
   -- Titles
   local ty = y + 31 * s
@@ -669,6 +720,17 @@ function UIStaffManagement:increaseSalary()
     end
   end
   self.ui:playSound("wrong2.wav")
+end
+
+--! Multiplayer co-op: offer the selected member of staff to another player
+--! (the trade window, with them selected).
+function UIStaffManagement:sendToPlayer()
+  local staff = self.selected_staff and self.staff_members[self.category][self.selected_staff]
+  if not staff then
+    self.ui:playSound("wrong2.wav")
+    return
+  end
+  UIMultiplayerTrade.open(self.ui, staff)
 end
 
 function UIStaffManagement:fire()

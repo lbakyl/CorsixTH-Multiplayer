@@ -555,6 +555,7 @@ tooltip.multiplayer_window = {
   refer_button = "Offer this patient to another player's hospital. They must accept.",
   share_research = "Offer research you have to another player's hospital, free or for a price. They must accept.",
   ask_money = "Ask another player for money. They decide whether to pay.",
+  send_staff = "Send this member of staff to another player's hospital. They must accept.",
   server = "Address of the multiplayer server, for example 192.168.1.10:47800",
   name = "The name other players see",
   connect = "Connect to the server and show its rooms",
