@@ -27,6 +27,7 @@
 --                       answerfax:<type>:<n>            open the first fax of <type> and
 --                                                       click choice <n> in the fax window
 --                       openhospital                    click the opening watch's button
+--                       edge:top|right                  scroll to that edge of the map, screenshot
 --                       givemoney:<amount>              co-op trade window: send money
 --                       sendstaff:<class>               co-op trade window: send the first
 --                                                       member of staff of that class
@@ -996,7 +997,20 @@ local function run()
             log(string.format("UI: chat %q to %s at step %d", text, input.target_panel.label, session.step))
             world.ui:onKeyDown("return", {})
           else
-            log("UI: no chat input opened")
+            -- Something else holds Enter (say which), so send the line as the
+            -- input would: <tabs> picks the n-th other player.
+            local holders = {}
+            for _, handler in ipairs(world.ui.key_handlers["return"] or {}) do
+              holders[#holders + 1] = class.type(handler.window) or tostring(handler.window)
+            end
+            local lobby, others = session.lobby, {}
+            for _, p in ipairs(lobby and lobby.game_players or {}) do
+              if p.peer ~= session.peer_id and p.connected then others[#others + 1] = p end
+            end
+            local to = others[tonumber(tabs)]
+            if lobby then lobby:send("CHAT", {text = text, to = to and to.peer}) end
+            log(string.format("UI: no chat input opened (Enter held by %s); sent %q to %s at step %d",
+                table.concat(holders, ","), text, to and to.name or "all", session.step))
           end
         elseif a == "iconsample" then
           -- Test only (changes this game's message list, so near the end):
@@ -1045,6 +1059,16 @@ local function run()
           else
             log("UI: no money request to answer")
           end
+        elseif a == "edge" then
+          -- Scroll as far as the camera goes towards the top corner of the
+          -- map ("top") or the right one ("right"), and take a screenshot.
+          local ui = world.ui
+          local dx, dy = 0, -100000
+          if entry.arg == "right" then dx, dy = 100000, 0 end
+          for _ = 1, 50 do ui:scrollMap(dx / 50, dy / 50) end
+          log(string.format("UI: camera at the %s edge: offset %d,%d (step %d)", entry.arg,
+              ui.screen_offset_x, ui.screen_offset_y, session.step))
+          shot("edge-" .. entry.arg)
         elseif a == "screen" then
           -- Open a window by its class name, take a screenshot, close it.
           local window = _G[entry.arg](world.ui)
