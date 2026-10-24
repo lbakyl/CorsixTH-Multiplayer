@@ -69,40 +69,16 @@ function UIMessage:UIMessage(ui, x, stop_x, onClose, type, message, owner, timeo
   self.button = self:addPanel(kind, 0, 0)
     :setTooltip(self.can_dismiss and _S.tooltip.message.button_dismiss or _S.tooltip.message.button) -- FIXME: tooltip doesn't work very well here
     :makeToggleButton(0, 0, 30, 28, kind + 1, self.openMessage, nil, self.dismissMessage)
-  if type == "mp_offer" then
-    -- An offer from another player (a member of staff or a patient): a
-    -- purple box with a person on it, darker while its window is open.
+  if type == "mp_offer" or type == "mp_research" then
+    -- Multiplayer co-op offers (a person, or research): a raised purple
+    -- button like the game's own message icons (UIMessage.drawOfferIcon).
     self.button.panel_for_sprite.custom_draw = --[[persistable:mp_offer_icon_draw]] function(panel, canvas, px, py)
       local s = TheApp.gfx:getUIScale()
-      local ix, iy = px + panel.x * s, py + panel.y * s
-      local open = panel.window.button and panel.window.button.toggled
-      canvas:drawRect(canvas:mapRGB(48, 16, 74), ix, iy, 30 * s, 28 * s)
-      canvas:drawRect(open and canvas:mapRGB(100, 46, 146) or canvas:mapRGB(150, 76, 206),
-          ix + 2 * s, iy + 2 * s, 26 * s, 24 * s)
-      local light = canvas:mapRGB(246, 238, 255)
-      canvas:drawRect(light, ix + 12 * s, iy + 5 * s, 6 * s, 6 * s)   -- head
-      canvas:drawRect(light, ix + 9 * s, iy + 12 * s, 12 * s, 7 * s)  -- shoulders
-      canvas:drawRect(light, ix + 11 * s, iy + 19 * s, 8 * s, 4 * s)  -- body
-      canvas:drawRect(canvas:mapRGB(255, 214, 90), ix + 22 * s, iy + 4 * s, 4 * s, 4 * s) -- "new"
-    end
-  elseif type == "mp_research" then
-    -- Research offered by another player: the same purple box with a
-    -- laboratory flask on it (neck, bulb and green liquid).
-    self.button.panel_for_sprite.custom_draw = --[[persistable:mp_research_icon_draw]] function(panel, canvas, px, py)
-      local s = TheApp.gfx:getUIScale()
-      local ix, iy = px + panel.x * s, py + panel.y * s
-      local open = panel.window.button and panel.window.button.toggled
-      canvas:drawRect(canvas:mapRGB(48, 16, 74), ix, iy, 30 * s, 28 * s)
-      canvas:drawRect(open and canvas:mapRGB(100, 46, 146) or canvas:mapRGB(150, 76, 206),
-          ix + 2 * s, iy + 2 * s, 26 * s, 24 * s)
-      local glass = canvas:mapRGB(246, 238, 255)
-      local liquid = canvas:mapRGB(110, 230, 140)
-      canvas:drawRect(glass, ix + 11 * s, iy + 4 * s, 8 * s, 2 * s)    -- rim
-      canvas:drawRect(glass, ix + 13 * s, iy + 6 * s, 4 * s, 6 * s)    -- neck
-      canvas:drawRect(glass, ix + 9 * s, iy + 12 * s, 12 * s, 3 * s)   -- shoulders
-      canvas:drawRect(glass, ix + 7 * s, iy + 15 * s, 16 * s, 8 * s)   -- bulb
-      canvas:drawRect(liquid, ix + 9 * s, iy + 17 * s, 12 * s, 5 * s)  -- liquid
-      canvas:drawRect(canvas:mapRGB(255, 214, 90), ix + 22 * s, iy + 4 * s, 4 * s, 4 * s) -- "new"
+      local window = panel.window
+      local open = window.button and window.button.toggled
+      -- (Through _G: a saved game keeps no reference to this file's locals.)
+      _G.UIMessage.drawOfferIcon(canvas, px + panel.x * s, py + panel.y * s, s, open, window.type,
+          window.panel_sprites)
     end
   end
   -- The emergency has a rotating siren
@@ -113,6 +89,64 @@ function UIMessage:UIMessage(ui, x, stop_x, onClose, type, message, owner, timeo
       self.rotator[i].visible = false
     end
     self.active = 57
+  end
+end
+
+--! Draw a multiplayer offer icon (30 x 28): the game's own message icon
+--! frame (the grey stand of the "?" icon), with its green square painted
+--! purple and bevelled, pressed in while the offer's window is open, and a
+--! white symbol on it: a person for staff and patient offers, a flask for
+--! research.
+--!param sprites the message's panel sprites (Panel02V)
+function UIMessage.drawOfferIcon(canvas, ix, iy, s, open, kind, sprites)
+  local function rect(c, x, y, w, h)
+    canvas:drawRect(canvas:mapRGB(c[1], c[2], c[3]), ix + x * s, iy + y * s, w * s, h * s)
+  end
+  sprites:draw(canvas, 51, ix, iy, { scaleFactor = s }) -- the frame
+  -- The square (18 x 18 at 6, 4): edges, ring and face; pressed in, the
+  -- light and dark edges swap and the face darkens.
+  local light, dark = {206, 168, 246}, {54, 12, 84}
+  local ring, face, shine = {124, 60, 184}, {148, 78, 208}, {172, 112, 228}
+  if open then
+    light, dark = dark, {184, 142, 228}
+    ring, face, shine = {100, 46, 156}, {120, 58, 176}, {120, 58, 176}
+  end
+  rect(dark, 6, 4, 18, 18)
+  rect(light, 6, 4, 17, 1)
+  rect(light, 6, 4, 1, 17)
+  rect(ring, 7, 5, 16, 16)
+  rect(face, 8, 6, 14, 14)
+  rect(shine, 8, 6, 14, 2)
+  rect(light, 8, 6, 2, 1)
+  local white, tint = {243, 243, 243}, {214, 196, 240}
+  local d = open and 1 or 0
+  if kind == "mp_research" then
+    -- A flask: cork, neck, widening glass, green liquid with bubbles.
+    rect({206, 158, 100}, 13 + d, 6 + d, 4, 2)
+    rect({150, 106, 60}, 16 + d, 6 + d, 1, 2)
+    rect(white, 13 + d, 8 + d, 4, 4)
+    rect(tint, 16 + d, 8 + d, 1, 4)
+    rect(white, 12 + d, 12 + d, 6, 2)
+    rect(white, 11 + d, 14 + d, 8, 2)
+    rect(white, 10 + d, 16 + d, 10, 3)
+    rect({120, 222, 150}, 11 + d, 15 + d, 8, 1)
+    rect({84, 196, 120}, 11 + d, 16 + d, 8, 2)
+    rect(tint, 10 + d, 18 + d, 10, 1)
+    rect(white, 16 + d, 16 + d, 1, 1) -- bubbles
+    rect(white, 13 + d, 17 + d, 1, 1)
+  else
+    -- A person in a white coat: head, shoulders, body, collar.
+    rect(white, 13 + d, 6 + d, 4, 4)
+    rect(tint, 16 + d, 7 + d, 1, 3)
+    rect(white, 10 + d, 11 + d, 10, 3)
+    rect(white, 11 + d, 14 + d, 8, 5)
+    rect(tint, 18 + d, 12 + d, 1, 6)
+    rect(face, 14 + d, 11 + d, 2, 2)
+    rect(tint, 11 + d, 18 + d, 7, 1)
+    rect(face, 13 + d, 6 + d, 1, 1) -- rounded head and shoulders
+    rect(face, 16 + d, 6 + d, 1, 1)
+    rect(face, 10 + d, 11 + d, 1, 1)
+    rect(face, 19 + d, 11 + d, 1, 1)
   end
 end
 

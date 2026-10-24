@@ -978,6 +978,19 @@ local function run()
           end
         elseif a == "patients" then
           session:issue({kind = "probe_patients", n = tonumber(entry.arg)})
+        elseif a == "iconsample" then
+          -- Test only (changes this game's message list, so near the end):
+          -- built-in message icons next to the offer icons, for a screenshot.
+          local panel, mine = world.ui.bottom_panel, world.ui.hospital
+          local function sample(kind, extra)
+            local message = {{text = "sample"}, choices = {{text = "ok", choice = "close"}}}
+            for k, v in pairs(extra or {}) do message[k] = v end
+            panel:queueMessage(kind, message, nil, nil, nil, nil, mine)
+          end
+          sample("information")
+          sample("personality")
+          sample("mp_offer", {mp_offer = {kind = "staff", from = 1, to = 2, name = "sample"}})
+          sample("mp_research", {mp_offer = {kind = "research", from = 1, to = 2, name = "sample"}})
         elseif a == "learn" then
           session:issue({kind = "probe_learn"})
         elseif a == "researchboard" then
