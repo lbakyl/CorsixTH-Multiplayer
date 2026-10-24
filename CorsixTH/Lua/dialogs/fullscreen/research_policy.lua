@@ -251,7 +251,14 @@ function UIResearch:draw(canvas, x, y)
 
   num_font:draw(canvas, research.total, x + 270 * s, y + 288 * s, 300 * s, 0)
   if self.share_button then
-    lbl_font:draw(canvas, _S.multiplayer_window.share_research, x + 170 * s, y + 288 * s)
+    -- A chalk frame around it, in the colour of the writing.
+    local chalk = canvas:mapRGB(236, 236, 236)
+    local fx, fy, fw, fh = x + 163 * s, y + 281 * s, 172 * s, 30 * s
+    canvas:drawRect(chalk, fx, fy, fw, 2 * s)
+    canvas:drawRect(chalk, fx, fy + fh - 2 * s, fw, 2 * s)
+    canvas:drawRect(chalk, fx, fy, 2 * s, fh)
+    canvas:drawRect(chalk, fx + fw - 2 * s, fy, 2 * s, fh)
+    lbl_font:draw(canvas, _S.multiplayer_window.share_research, x + 172 * s, y + 288 * s)
   end
 end
 
