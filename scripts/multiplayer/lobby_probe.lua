@@ -185,6 +185,10 @@ local function run_lobby()
     w.password_box:setText(password)
     if coop then w:buttonMode() end -- "A hospital each"
     for _ = 2, tonumber(os.getenv("MP_LEVEL") or 1) do w:buttonLevel() end
+    -- Room size: MP_PLAYERS (2 to 4).
+    for _ = 1, 3 do
+      if (w.new_max or 2) ~= math.max(2, math.min(4, want_players)) then w:buttonMax() end
+    end
     if os.getenv("MP_CONTINUE") then
       local save = w:selectContinue(os.getenv("MP_CONTINUE"))
       log("continuing saved game " .. tostring(save and save.label))
@@ -313,8 +317,16 @@ local function run()
         shown[#shown + 1] = string.format("%s@%s", tostring(icon.type),
             tostring(icon.hospital and world:getHospitalIndex(icon.hospital)))
       end
-      log(string.format("REPAIRED: loaded the shared save at step %d (repair %d); messages shown: %s",
-          session.step, repairs, table.concat(shown, ",")))
+      -- And the countdowns (watches) on the screen (type@hospital).
+      local watches = {}
+      for _, win in ipairs(world.ui.windows or {}) do
+        if class.is(win, UIWatch) then
+          watches[#watches + 1] = string.format("%s@%s", tostring(win.count_type),
+              tostring(win.hospital and world:getHospitalIndex(win.hospital)))
+        end
+      end
+      log(string.format("REPAIRED: loaded the shared save at step %d (repair %d); messages shown: %s; watches: %s",
+          session.step, repairs, table.concat(shown, ","), table.concat(watches, ",")))
     end
     if TheApp.world ~= world then log("LEVEL ENDED at step " .. session.step) break end
     for peer, r in pairs(session.remote_blueprints) do

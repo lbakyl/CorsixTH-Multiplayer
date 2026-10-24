@@ -245,12 +245,14 @@ if [[ "${MP_REFEREE:-0}" == 1 ]]; then
   run_probe rosa MP_ROLE=join MP_ROOM=fix MP_STEPS=1000 MP_EXPECT_REPAIR=1 \
     MP_UI_SCRIPT="300:cheat;520:hire:Nurse" & pids+=($!)
   # (Each has a VIP fax waiting when the game is repaired: after loading the
-  # referee's save, each shows only their own.)
+  # referee's save, each shows only their own. Player 2 opens their hospital
+  # only after the repair, with their own opening countdown, which the
+  # referee's save did not have on its screen.)
   run_probe sam MP_ROLE=host MP_ROOM=fixcoop MP_COOP=1 MP_STEPS=1000 MP_EXPECT_REPAIR=1 \
     MP_UI_SCRIPT="20:openhospital;300:vip:1;400:cheat;500:buy:bench" & pids+=($!)
   sleep 1
   run_probe tess MP_ROLE=join MP_ROOM=fixcoop MP_STEPS=1000 MP_EXPECT_REPAIR=1 \
-    MP_UI_SCRIPT="30:openhospital;310:vip:2;520:hire:Nurse" & pids+=($!)
+    MP_UI_SCRIPT="310:vip:2;450:openhospital;520:hire:Nurse" & pids+=($!)
   # Rejoin: a player quits (as after a crash) and joins the running game
   # again under the same name, in a new game process.
   # The host pauses after the other one quits, until the rejoin is done.
@@ -581,11 +583,17 @@ if with_referee:
         own = ''
         if room == 'fixcoop':
             # After the repair each player's bar shows their own VIP fax only.
-            shown = [re.search(r'REPAIRED: .*messages shown: (.*)', x) for x in (hl, jl)]
+            shown = [re.search(r'REPAIRED: .*messages shown: ([^;]*)', x) for x in (hl, jl)]
             shown = [m.group(1).split(',') if m else [] for m in shown]
             own_ok = shown[0] == ['personality@1'] and shown[1] == ['personality@2']
-            own = f"; own messages only: {own_ok} {shown}"
-            ok = ok and own_ok
+            # ... and their own countdowns: player 2's opening watch, opening
+            # player 2's hospital.
+            watches = [re.search(r'REPAIRED: .*watches: (.*)', x) for x in (hl, jl)]
+            watches = [m.group(1) if m else '?' for m in watches]
+            opened = re.search(r'hospital 2 TESS: .*open true', jl) is not None
+            watch_ok = watches == ['', 'initial_opening@2'] and opened
+            own = f"; own messages only: {own_ok} {shown}; own countdowns: {watch_ok} {watches}"
+            ok = ok and own_ok and watch_ok
         print(f"{14 + n}. Desync repair ({room}):{' ' * (8 - len(room))}{result(host)} / {result(join)}; "
               f"{where}; commands after it ok on both: {same and later}{own}")
         fail |= not ok
