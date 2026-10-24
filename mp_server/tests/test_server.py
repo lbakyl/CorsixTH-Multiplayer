@@ -537,3 +537,20 @@ def test_continue_a_saved_game(run):
             await c.expect("LOADEND")
             assert (await c.expect("RESUME"))["step"] == "300"
     run(body)
+
+
+def test_private_chat_reaches_only_the_addressee(run):
+    async def body(server, port):
+        a, b = await two_players_in_room(port)
+        c = await Client.connect(port, "Cleo")
+        server.rooms["r1"].max_players = 3
+        c.send(encode("JOIN", room="r1", password="pw"))
+        await c.expect("JOINED")
+        a.send(encode("CHAT", text="psst", to=2))
+        got = await b.expect("CHAT", text="psst")
+        assert got["to"] == "2" and got["name"] == "Alice"
+        assert (await a.expect("CHAT", text="psst"))["to"] == "2"  # the sender's copy
+        a.send(encode("CHAT", text="hello all"))
+        assert (await c.expect("CHAT", text="hello all")).get("to") is None
+        assert not any("psst" in line for line in c.inbox)
+    run(body)

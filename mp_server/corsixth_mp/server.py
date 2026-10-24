@@ -566,9 +566,19 @@ class Server:
             self._send_lobby(player.room)
 
     def _on_chat(self, player: Player, f: dict[str, str]) -> None:
-        if player.room:
-            player.room.broadcast(encode("CHAT", peer=player.peer, name=player.name,
-                                         text=f.get("text", "")[:200]))
+        room = player.room
+        if not room:
+            return
+        text = f.get("text", "")[:200]
+        to = f.get("to", "")
+        if to.isdigit() and int(to) in room.players:
+            # A private line: only that player, and the sender sees it sent.
+            line = encode("CHAT", peer=player.peer, name=player.name, text=text, to=int(to))
+            room.players[int(to)].send(line)
+            if int(to) != player.peer:
+                player.send(line)
+            return
+        room.broadcast(encode("CHAT", peer=player.peer, name=player.name, text=text))
 
     def _send_lobby(self, room: Room) -> None:
         if room.state != "lobby":

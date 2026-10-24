@@ -978,6 +978,26 @@ local function run()
           end
         elseif a == "patients" then
           session:issue({kind = "probe_patients", n = tonumber(entry.arg)})
+        elseif a == "chat" then
+          -- In-game chat with the real keys: Enter, the text, Tab <n> times
+          -- (who it is for), Enter. Argument: "<tabs>:<text>".
+          local tabs, text = entry.arg:match("^(%d+):(.*)$")
+          -- (Enter goes to an open information box first, like the level
+          -- briefing: a player closes it before chatting.)
+          for i = #world.ui.windows, 1, -1 do
+            if class.is(world.ui.windows[i], UIInformation) then world.ui.windows[i]:close() end
+          end
+          world.ui:onKeyDown("return", {})
+          local input = world.ui:getWindow(UIMultiplayerChatInput)
+          if input then
+            input.box:setText(text)
+            for _ = 1, tonumber(tabs) do world.ui:onKeyDown("tab", {}) end
+            shot("chat-input")
+            log(string.format("UI: chat %q to %s at step %d", text, input.target_panel.label, session.step))
+            world.ui:onKeyDown("return", {})
+          else
+            log("UI: no chat input opened")
+          end
         elseif a == "iconsample" then
           -- Test only (changes this game's message list, so near the end):
           -- built-in message icons next to the offer icons, for a screenshot.
@@ -1178,6 +1198,12 @@ local function run()
           tostring(h.loan), tostring(h.heating.radiator_heat),
           tostring(h.research.research_policy.cure and h.research.research_policy.cure.frac)))
     end
+  end
+  local chat = TheApp.ui:getWindow(UIMultiplayerChat)
+  if chat then
+    local seen = {}
+    for _, line in ipairs(chat.lines) do seen[#seen + 1] = line.text .. (line.private and " [private]" or "") end
+    log("chat seen: " .. table.concat(seen, " | "))
   end
   log(session.desync and ("RESULT: DESYNC at step " .. session.desync.step)
       or ("RESULT: IN SYNC through step " .. session.step))

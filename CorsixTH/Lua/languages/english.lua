@@ -462,6 +462,11 @@ multiplayer_window = {
   refer_button = "Refer patient",
   refer_choose = "Refer to which hospital?",
   refer_fax_choice = "Refer to another hospital",
+  -- In-game chat (Enter, Tab chooses who it is for)
+  chat_to_all = "To all:",
+  chat_to = "To %s:",
+  chat_private_in = "%s (to you): %s",
+  chat_private_out = "To %s: %s",
   -- Research sharing
   share_research = "Share research",
   research_caption = "Share research with %s",

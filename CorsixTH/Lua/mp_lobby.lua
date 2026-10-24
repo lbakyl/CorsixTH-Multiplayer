@@ -479,9 +479,29 @@ function MultiplayerLobby:_onCHAT(f)
   if #self.chat > 20 then table.remove(self.chat, 1) end
   local session = TheApp and TheApp.mp_session
   if session and session.lobby == self then
-    session.notify((f.name or "?") .. ": " .. (f.text or ""))
+    -- In the game: the chat lines at the top left (to = a private message).
+    local S = _S.multiplayer_window
+    local text, private = (f.name or "?") .. ": " .. (f.text or ""), f.to ~= nil
+    if private and tonumber(f.peer) == session.peer_id then
+      local to_name = "?"
+      for _, p in ipairs(self.game_players or {}) do
+        if p.peer == tonumber(f.to) then to_name = p.name end
+      end
+      text = S.chat_private_out:format(to_name, f.text or "")
+    elseif private then
+      text = S.chat_private_in:format(f.name or "?", f.text or "")
+    end
+    local window = TheApp.ui and TheApp.ui:getWindow(UIMultiplayerChat)
+    if window then window:add(text, private) else session.notify(text) end
   end
   self:_changed("chat", f)
+end
+
+--! The chat lines and input of a game (once per game UI; not on the
+--! server's referee).
+function MultiplayerLobby:_attachChat(ui)
+  if self.is_referee or not ui or ui:getWindow(UIMultiplayerChat) then return end
+  ui:addWindow(UIMultiplayerChat(ui))
 end
 
 function MultiplayerLobby:_onSTART(f)
@@ -651,6 +671,7 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
   end
   -- A continued or rejoined game's first game UI (no-op for the same menu bar).
   self:_addMultiplayerMenu(app.ui, world.mp_coop ~= nil)
+  self:_attachChat(app.ui)
   session:restartAt(world, step, peers)
   -- The saved UI may still point at a room editor that is not open here
   -- (clicks would then be limited to that room).
@@ -866,6 +887,7 @@ function MultiplayerLobby:_beginGame(f)
     return
   end
   self:_addMultiplayerMenu(world.ui, coop)
+  self:_attachChat(world.ui)
   world:applySharedSpeed(f.speed or "Normal")
   self.log(string.format("multiplayer: playing as %s of %s, seed %s, delay %s, max speed %s",
       f.peer, f.peers, f.seed, f.delay, tostring(f.max_speed)))
