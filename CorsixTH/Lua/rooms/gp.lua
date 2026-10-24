@@ -63,6 +63,9 @@ function GPRoom:_deskStandTile()
   end
 end
 
+-- (World:findObjectNear can return an object without a tile to use it from,
+-- when it cannot be reached from that side: the found object counts only
+-- with its tile.)
 function GPRoom:doStaffUseCycle(humanoid)
   local obj, ox, oy = self.world:findObjectNear(humanoid, "cabinet")
   if not obj then
@@ -72,13 +75,20 @@ function GPRoom:doStaffUseCycle(humanoid)
     local stand = self:_deskStandTile()
     if stand then obj, ox, oy = self.world:findObjectNear(stand, "cabinet") end
   end
-  if obj then
+  if obj and ox then
     humanoid:walkTo(ox, oy)
     humanoid:queueAction(UseObjectAction(obj))
   end
 
   obj, ox, oy = self.world:findObjectNear(humanoid, "desk")
   if not obj then return end -- (no desk to go back to: the room is being changed)
+  if not ox then
+    -- The desk cannot be reached (objects in the way): leave the room
+    -- instead of stopping there (a walk to nowhere stopped the doctor for
+    -- good); another doctor is called, and the room can be edited.
+    humanoid:queueAction(self:createLeaveAction())
+    return
+  end
   humanoid:queueAction(WalkAction(ox, oy))
 
   -- A skilled doctor requires less time at the desk to diagnose the patient
