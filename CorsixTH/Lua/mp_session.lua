@@ -373,6 +373,9 @@ end
 --! Steps between attempts when a handler asks to retry (see build_room).
 MultiplayerSession.RETRY_STEPS = 4
 MultiplayerSession.MAX_RETRIES = 12
+--! A room waiting for people to walk out of its area waits longer (single
+--! player waits until they have left): 150 tries, 600 steps, 12 days.
+MultiplayerSession.MAX_CLEAR_RETRIES = 150
 
 --! Apply every command scheduled for the step about to run, in the shared order.
 function MultiplayerSession:beforeStep()
@@ -402,7 +405,7 @@ function MultiplayerSession:beforeStep()
     if not ok and why == "retry" then
       -- Try again a few steps later, at the same step on every peer.
       cmd.retries = (cmd.retries or 0) + 1
-      if cmd.retries <= MultiplayerSession.MAX_RETRIES then
+      if cmd.retries <= (cmd.max_retries or MultiplayerSession.MAX_RETRIES) then
         cmd.step = n + MultiplayerSession.RETRY_STEPS
         self.pending[#self.pending + 1] = cmd
         why = "retry " .. cmd.retries .. " at step " .. cmd.step
@@ -886,7 +889,8 @@ function handlers.build_room(world, cmd)
   if not hospital then return false, "no such hospital" end
   local room, why, dlg = builder.build(world, hospital, cmd)
   if why == "people in the area" then
-    builder.clearArea(world, cmd.x, cmd.y, cmd.w, cmd.h)
+    builder.clearArea(world, cmd.x, cmd.y, cmd.w, cmd.h, cmd)
+    cmd.max_retries = MultiplayerSession.MAX_CLEAR_RETRIES
     return false, "retry" -- the reserved outline stays visible meanwhile
   end
   local session = TheApp.mp_session
@@ -1011,7 +1015,8 @@ function handlers.room_rebuild(world, cmd)
   local builder = corsixth.require("mp_room_builder")
   local ok, why = builder.rebuild(world, entry, cmd)
   if why == "people in the area" then
-    builder.clearArea(world, cmd.x, cmd.y, cmd.w, cmd.h)
+    builder.clearArea(world, cmd.x, cmd.y, cmd.w, cmd.h, cmd)
+    cmd.max_retries = MultiplayerSession.MAX_CLEAR_RETRIES
     return false, "retry"
   end
   local session = TheApp.mp_session
@@ -2045,7 +2050,9 @@ function handlers.shoot_rat(world, cmd)
 end
 
 --! Clear away a room destroyed by an exploding machine (the single player
---! "remove destroyed rooms" option; the player who asks has it on): {room}.
+--! "remove destroyed rooms" option, always there in multiplayer): {room,
+--! rebuild}. With rebuild=1 the player who asked then gets the room editor
+--! for the same kind of room, its outline where the old one was.
 function handlers.remove_crashed_room(world, cmd)
   local room = world.rooms[tonumber(cmd.room)]
   if not room or not room.crashed then return false, "no such room" end
@@ -2063,6 +2070,16 @@ function handlers.remove_crashed_room(world, cmd)
   world:resetSideObjects()
   world.rooms[room.id] = nil
   hospital:spendMoney(cost, _S.transactions.remove_room)
+  local session = TheApp.mp_session
+  local ui = world.ui
+  if tonumber(cmd.rebuild) == 1 and session and cmd.peer == session.peer_id and not session.observer
+      and ui and not ui:getWindow(UIEditRoom) then
+    local fullscreen = ui:getWindow(UIFullscreen)
+    if fullscreen then fullscreen:close() end
+    local dlg = UIEditRoom(ui, room.room_info)
+    ui:addWindow(dlg)
+    dlg:setBlueprintRect(room.x, room.y, room.width, room.height)
+  end
   return true
 end
 

@@ -136,15 +136,30 @@ local function humanoids_in(world, x, y, w, h)
 end
 
 --! Ask everybody in the area to walk out, and keep others away meanwhile.
-function builder.clearArea(world, x, y, w, h)
+--!param cmd (table) optional: the command that waits for the area, retried
+--!  every few steps. As in single player, each person is asked once (asking
+--!  again turns them round while they walk out); somebody still there ten
+--!  tries later is asked again.
+function builder.clearArea(world, x, y, w, h, cmd)
   local th = world.map.th
   for tx = x, x + w - 1 do
     for ty = y, y + h - 1 do
       th:setCellFlags(tx, ty, {avoidTile = true})
     end
   end
+  local asked = cmd and cmd.asked
+  if cmd and not asked then
+    asked = {}
+    cmd.asked = asked
+  end
+  local now = cmd and cmd.retries or 0
   for _, humanoid in ipairs(humanoids_in(world, x, y, w, h)) do
-    humanoid:leaveArea()
+    local id = humanoid.mp_id
+    local last = asked and id and asked[id]
+    if not last or now - last >= 10 then
+      if asked and id then asked[id] = now end
+      humanoid:leaveArea()
+    end
   end
 end
 
