@@ -372,7 +372,7 @@ local function run()
         editor:setActiveIndex(index)
         local object = editor.objects[index] and editor.objects[index].object
         local facings = {}
-        for name in pairs(object and object.orientations or {}) do facings[#facings + 1] = name end
+        for facing in pairs(object and object.orientations or {}) do facings[#facings + 1] = facing end
         table.sort(facings)
         if #facings > 0 then editor:setOrientation(facings[hover_n % #facings + 1]) end
         local tx = rect.x + (hover_n * 7) % math.max(1, rect.w)
