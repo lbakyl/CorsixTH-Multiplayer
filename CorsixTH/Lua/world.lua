@@ -1214,10 +1214,20 @@ function World:_tickCoopTransfers()
   local list = self.mp_transfers
   if not list or #list == 0 then return end
   local walking = {}
+  local function still_to_walk(staff)
+    local walk = staff.mp_transfer_walk
+    if not walk then return false end
+    for _, queued in ipairs(staff.action_queue) do
+      if queued == walk then return true end
+    end
+    return false
+  end
   for _, staff in ipairs(list) do
     local t = staff.mp_in_transit
     local action = staff:getCurrentAction()
-    if t and action and action.name == "walk" then
+    if t and action and (action.name == "walk" or still_to_walk(staff)) then
+      -- On the way, or still finishing something that must happen before
+      -- they set off (an operation): not there yet.
       walking[#walking + 1] = staff
     elseif t and class.is(staff, Patient) then
       -- A referred patient: now that hospital's patient (reception, or the
@@ -1240,6 +1250,7 @@ function World:_tickCoopTransfers()
       if staff.tile_x ~= t.x or staff.tile_y ~= t.y then staff:setTile(t.x, t.y) end
       local to = self.hospitals[t.to]
       staff.mp_in_transit = nil
+      staff.mp_transfer_walk = nil
       local session = self.app.mp_session
       if session then session.log("transferred staff #" .. staff.mp_id .. " arrived at hospital " .. t.to) end
       to.staff[#to.staff + 1] = staff

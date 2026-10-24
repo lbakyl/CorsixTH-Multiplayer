@@ -1228,7 +1228,12 @@ function MultiplayerSession.transferStaff(world, from, to, staff)
   -- A brisk walk: the way between two hospitals is long (normal speed
   -- again on arrival, Staff:onPlaceInCorridor).
   staff.speed, staff.slow_animation = "transit", false
-  staff:setNextAction(WalkAction(x, y):setMustHappen(true))
+  -- (Busy with something that must happen first, an operation say, they
+  -- finish it before they set off: World:_tickCoopTransfers waits for this
+  -- walk.)
+  local walk = WalkAction(x, y):setMustHappen(true)
+  staff.mp_transfer_walk = walk
+  staff:setNextAction(walk)
   staff:queueAction(IdleAction())
   world.mp_transfers = world.mp_transfers or {}
   world.mp_transfers[#world.mp_transfers + 1] = staff
