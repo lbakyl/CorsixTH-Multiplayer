@@ -67,6 +67,7 @@ local function describe(entity, offer)
     lines[#lines + 1] = S.offer_tired:format(pct(entity:getAttribute("fatigue")))
     lines[#lines + 1] = S.offer_happy:format(pct(entity:getAttribute("happiness")))
     if entity.quitting_in then lines[#lines + 1] = S.offer_raise end
+    if (offer.price or 0) > 0 then lines[#lines + 1] = S.offer_price_line:format(offer.price) end
   else
     if entity.diagnosed and entity.disease then
       lines[#lines + 1] = S.offer_illness:format(entity.disease.name)

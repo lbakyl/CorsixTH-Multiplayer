@@ -328,6 +328,10 @@ local function run()
   -- Test runs: one lockstep step per tick, whatever the shared speed (a
   -- player's own speed setting does not change a multiplayer game).
   if fast then session.unpaced, session.steps_per_tick = true, 1 end
+  -- A scripted player agrees to every speed vote (MP_VOTE=no declines,
+  -- MP_VOTE=ask shows the fax, answered by the votefax action).
+  local vote_mode = os.getenv("MP_VOTE") or "yes"
+  session.auto_agree = vote_mode ~= "ask" and vote_mode or nil
   if desk_x then look_at(desk_x, desk_y) end
   shot("game-start")
 
@@ -650,16 +654,21 @@ local function run()
         elseif a == "notreatfax" then
           session:issue({kind = "probe_notreat"})
         elseif a == "sendstaff" then
+          -- sendstaff:<class>[:<price>], in the trade window.
+          local class_name, price = entry.arg:match("^(%a+):?(%d*)$")
           local trade = UIMultiplayerTrade(world.ui)
           world.ui:addWindow(trade)
           local row
           for i, e in ipairs(trade.staff_list) do
-            if not row and e.staff.humanoid_class == entry.arg then row = i end
+            if not row and e.staff.humanoid_class == class_name then row = i end
           end
           if row then
             trade:selectStaff(row, true)
-            log(string.format("UI: sent %s %s to %s at step %d", entry.arg,
-                tostring(trade.staff_list[row].staff.profile:getFullName()), trade.target.name, session.step))
+            local step = MultiplayerSession.STAFF_PRICE_STEP
+            for _ = 1, math.floor((tonumber(price) or 0) / step) do trade:setPrice(trade.price + step) end
+            log(string.format("UI: sent %s %s to %s for $%d at step %d", class_name,
+                tostring(trade.staff_list[row].staff.profile:getFullName()), trade.target.name, trade.price,
+                session.step))
             trade:sendStaff()
           else
             log("UI: no " .. entry.arg .. " to send")
@@ -790,6 +799,23 @@ local function run()
         elseif a == "speed" then
           log("UI: chose speed " .. entry.arg .. " at step " .. session.step)
           world:setUserSpeed(entry.arg)
+        elseif a == "votefax" then
+          -- Answer the speed vote fax with choice <arg> (1 agree, 2 decline),
+          -- clicked in the fax window; wait for it if it is not there yet.
+          local icon
+          for _, ic in ipairs(world.ui.bottom_panel:allMessageIcons()) do
+            if ic.mp_vote then icon = ic end
+          end
+          if icon then
+            local fax = UIFax(world.ui, icon)
+            icon.fax = fax
+            world.ui:addWindow(fax)
+            log(string.format("UI: answered the speed vote fax with %s at step %d", entry.arg, session.step))
+            fax:buttonChoice(tonumber(entry.arg) or 1)
+          else
+            done[i] = false
+            entry.hour = session.step + 5
+          end
         elseif a == "quit" then
           log("UI: quitting at step " .. session.step)
           quit = true

@@ -58,10 +58,17 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   moment after the click. If one player is slower or pauses, the others wait
   ("Waiting for the other player...").
 - **Speed and pause** are shared too; the room's connection limits the top
-  speed. A click takes effect a moment later at every speed, Slowest and
-  pause included (about a tenth of a second on a good connection). A window
-  that pauses your own game (a question, the annual report) makes the others
-  wait and tells them why.
+  speed. Any player can pause or unpause, at once (the chat works while
+  paused). A different speed is a vote: the other players get a purple fax
+  with a fast-forward sign (Agree or Decline); it does not pause the game.
+  The speed changes once more than half of the players agree, the asker
+  included (with two players the other one must agree; with three, one of
+  the other two). A vote nobody decides lapses after 30 seconds. Scripted
+  players agree by themselves. If the room lets only its owner set the
+  speed, the owner changes it without a vote. A click takes effect a moment
+  later at every speed, Slowest and pause included (about a tenth of a
+  second on a good connection). A window that pauses your own game makes
+  the others wait and tells them why.
 - **Rooms:** after the walls, door and windows, you place the furniture as
   usual; the other players see the room fill up. While you draw a room, the
   others see its outline in blue (the space is reserved). While furnishing
@@ -79,7 +86,9 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 - **A hospital each (co-op):** each player runs their own hospital and can
   look at, but not act on, the others' patients, staff and machines. The
   **MULTIPLAYER** menu, **TRADE WITH OTHER PLAYERS** sends money, or offers
-  a member of staff; patients are offered with the purple **Refer** icon in
+  a member of staff, free or for a price (the -$500 and +$500 buttons;
+  the other player pays it on accepting, if they can afford it); patients
+  are offered with the purple **Refer** icon in
   the patient window or the "refer" answer on a "no treatment" fax. The
   other player gets a purple icon at the bottom and accepts or declines;
   an accepted person walks over (it takes a few game days). Land: you can buy the plots on your side of the map (nearest

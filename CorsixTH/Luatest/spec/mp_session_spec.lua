@@ -304,3 +304,120 @@ describe("MultiplayerSession notices", function()
     assert.equal(0, #notes.b)
   end)
 end)
+
+describe("MultiplayerSession speed votes", function()
+  require("mp_lobby")
+  local saved
+
+  before_each(function()
+    saved = {TheApp = _G.TheApp, _S = _G._S}
+    _G.TheApp = {} -- no mp_session: the handlers tell nobody
+    local texts = {}
+    for _, key in ipairs({"vote_asked", "vote_open", "vote_passed", "vote_passed_paused",
+        "vote_declined", "vote_lapsed", "vote_request", "vote_request_speed", "vote_agree",
+        "vote_decline"}) do
+      texts[key] = key .. " %s %s"
+    end
+    _G._S = {multiplayer_window = texts}
+  end)
+
+  after_each(function()
+    _G.TheApp, _G._S = saved.TheApp, saved._S
+  end)
+
+  -- n peers that all hear each other, on the game's own command handlers.
+  local function make_group(n)
+    local queues, sessions, worlds = {}, {}, {}
+    local peers = {}
+    for i = 1, n do peers[i], queues[i] = i, {} end
+    for i = 1, n do
+      local transport = {
+        send = function(_, line)
+          for j = 1, n do
+            if j ~= i then queues[j][#queues[j] + 1] = line end
+          end
+        end,
+        receive = function(_) return table.remove(queues[i], 1) end,
+      }
+      local world = {mp_speed = "Normal", applySharedSpeed = function() end}
+      worlds[i] = world
+      sessions[i] = MultiplayerSession({world = world, peer_id = i, peers = peers,
+          transport = transport, fingerprint = function(w) return tostring(w.mp_speed) end})
+      sessions[i].request_speed = function() end
+    end
+    return sessions, worlds
+  end
+
+  local function run_all(sessions, steps)
+    for _ = 1, steps do
+      for i, s in ipairs(sessions) do assert(try_step(s), "peer " .. i .. " stalled") end
+    end
+  end
+
+  it("changes the speed once more than half of the players agree", function()
+    local s, w = make_group(3)
+    assert.is_true(s[1]:requestSpeed("Max speed"))
+    run_all(s, 3)
+    for i = 1, 3 do
+      assert.equal("Normal", w[i].mp_speed)
+      assert.equal(2, w[i].mp_vote.need)
+    end
+    s[3]:issue({kind = "speed_vote_answer", vote = w[3].mp_vote.id, agree = 1})
+    run_all(s, 3)
+    for i = 1, 3 do
+      assert.equal("Max speed", w[i].mp_speed)
+      assert.is_nil(w[i].mp_vote)
+    end
+  end)
+
+  it("keeps the speed when the majority is out of reach", function()
+    local s, w = make_group(2)
+    s[1]:requestSpeed("Slowest")
+    run_all(s, 3)
+    s[2]:issue({kind = "speed_vote_answer", vote = w[2].mp_vote.id, agree = 0})
+    run_all(s, 3)
+    for i = 1, 2 do
+      assert.equal("Normal", w[i].mp_speed)
+      assert.is_nil(w[i].mp_vote)
+    end
+  end)
+
+  it("lets a scripted player agree by itself", function()
+    local s, w = make_group(2)
+    s[2].auto_agree = "yes"
+    s[1]:requestSpeed("Slower")
+    run_all(s, 6)
+    assert.equal("Slower", w[1].mp_speed)
+    assert.equal("Slower", w[2].mp_speed)
+  end)
+
+  it("lets an unanswered vote lapse", function()
+    local s, w = make_group(2)
+    s[1]:requestSpeed("Slower")
+    run_all(s, 3)
+    assert.truthy(w[1].mp_vote)
+    run_all(s, math.ceil(MultiplayerSession.VOTE_SECONDS * 1000 / 18 / 3))
+    assert.is_nil(w[1].mp_vote)
+    assert.is_nil(w[2].mp_vote)
+    assert.equal("Normal", w[2].mp_speed)
+  end)
+
+  it("pauses and unpauses at once, and votes on a different speed", function()
+    local s, w = make_group(2)
+    s[2]:requestSpeed("Pause")
+    run_all(s, 3)
+    assert.equal("Pause", w[1].mp_speed)
+    assert.is_nil(w[1].mp_vote)
+    s[1]:requestSpeed("Max speed") -- unpauses at Normal, and asks for Max speed
+    run_all(s, 3)
+    assert.equal("Normal", w[2].mp_speed)
+    assert.equal("Max speed", w[2].mp_vote.speed)
+  end)
+
+  it("changes the speed at once for a player alone", function()
+    local s, w = make_group(1)
+    s[1]:requestSpeed("Max speed")
+    run_all(s, 3)
+    assert.equal("Max speed", w[1].mp_speed)
+  end)
+end)

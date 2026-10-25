@@ -147,6 +147,11 @@ function UIFax:buttonChoice(choice_number)
     self:close()
     return
   end
+  if self.icon.mp_vote and TheApp.mp_session then
+    -- Multiplayer speed vote: the answer counts for this player only.
+    TheApp.mp_session:answerVote(self.icon, choices[choice_number].choice == "mp_vote_agree")
+    return
+  end
   if MultiplayerSession.actionsAreCommands() and self.icon.mp_id then
     TheApp.mp_session:issue({kind = "fax_choice", msg = self.icon.mp_id, choice = choice_number})
     self:close()

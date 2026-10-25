@@ -478,6 +478,17 @@ function UIBottomPanel:queueMessage(type, message, owner, timeout, default_choic
   end
 end
 
+--! Multiplayer: a message only for this player's screen (a speed vote),
+--! not one of the shared messages: it has no number and no timer, and the
+--! game does not depend on it.
+--!return the message's icon
+function UIBottomPanel:addLocalMessage(type, message)
+  local message_info = {type = type, message = message, hospital = self.ui.hospital}
+  self.message_queue[#self.message_queue + 1] = message_info
+  self:_initMessageWithDrawerIcon(message_info)
+  return message_info.drawer_icon
+end
+
 function UIBottomPanel:_factoryIconWitdh()
   return FACTORY_ICON_WIDTH
 end

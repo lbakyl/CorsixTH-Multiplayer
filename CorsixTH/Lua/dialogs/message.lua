@@ -61,7 +61,7 @@ function UIMessage:UIMessage(ui, x, stop_x, onClose, type, message, owner, timeo
   self.type = type
 
   local types = { emergency = 43, epidemy = 45, strike = 47, personality = 49, information = 51, disease = 53, report = 55,
-                  mp_offer = 51, mp_research = 51, mp_money = 51 } -- multiplayer co-op: drawn below
+                  mp_offer = 51, mp_research = 51, mp_money = 51, mp_vote = 51 } -- multiplayer: drawn below
   local kind = types[type]
 
   self.can_dismiss = self.type ~= "strike" and #self.message.choices == 1
@@ -69,8 +69,8 @@ function UIMessage:UIMessage(ui, x, stop_x, onClose, type, message, owner, timeo
   self.button = self:addPanel(kind, 0, 0)
     :setTooltip(self.can_dismiss and _S.tooltip.message.button_dismiss or _S.tooltip.message.button) -- FIXME: tooltip doesn't work very well here
     :makeToggleButton(0, 0, 30, 28, kind + 1, self.openMessage, nil, self.dismissMessage)
-  if type == "mp_offer" or type == "mp_research" or type == "mp_money" then
-    -- Multiplayer co-op offers (a person, or research): a raised purple
+  if type == "mp_offer" or type == "mp_research" or type == "mp_money" or type == "mp_vote" then
+    -- Multiplayer offers (a person, research, money) and speed votes: a raised purple
     -- button like the game's own message icons (UIMessage.drawOfferIcon).
     self.button.panel_for_sprite.custom_draw = --[[persistable:mp_offer_icon_draw]] function(panel, canvas, px, py)
       local s = TheApp.gfx:getUIScale()
@@ -96,7 +96,7 @@ end
 --! frame (the grey stand of the "?" icon), with its green square painted
 --! purple and bevelled, pressed in while the offer's window is open, and a
 --! white symbol on it: a person for staff and patient offers, a flask for
---! research.
+--! research, coins for money, a fast-forward sign for a speed vote.
 --!param sprites the message's panel sprites (Panel02V)
 function UIMessage.drawOfferIcon(canvas, ix, iy, s, open, kind, sprites)
   local function rect(c, x, y, w, h)
@@ -120,7 +120,14 @@ function UIMessage.drawOfferIcon(canvas, ix, iy, s, open, kind, sprites)
   rect(light, 8, 6, 2, 1)
   local white, tint = {243, 243, 243}, {214, 196, 240}
   local d = open and 1 or 0
-  if kind == "mp_money" then
+  if kind == "mp_vote" then
+    -- Two white arrowheads pointing right (fast forward).
+    for col = 0, 4 do
+      local h = 10 - 2 * col
+      rect(white, 9 + col + d, 8 + col + d, 1, h)
+      rect(white, 15 + col + d, 8 + col + d, 1, h)
+    end
+  elseif kind == "mp_money" then
     -- A stack of gold coins, the top one with a dollar sign.
     local gold, edge, glint = {246, 200, 64}, {170, 120, 20}, {255, 240, 160}
     for i = 0, 3 do

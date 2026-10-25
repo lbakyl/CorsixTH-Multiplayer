@@ -18,8 +18,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
---! Multiplayer co-op: send money or a member of staff to another player's
---! hospital. Every action is a lockstep command (give_money, send_staff).
+--! Multiplayer co-op: send money or offer a member of staff (free or for a
+--! price) to another player's hospital. Every action is a lockstep command
+--! (give_money, offer_staff).
 class "UIMultiplayerTrade" (UIResizable)
 
 ---@type UIMultiplayerTrade
@@ -41,7 +42,7 @@ local AMOUNTS = {1000, 5000, 20000}
 --!param target (Hospital) optional: the player to trade with
 --!param staff (Staff) optional: this member of staff selected
 function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
-  local height = 120 + STAFF_ROWS * 25 + 36 + 70
+  local height = 120 + STAFF_ROWS * 25 + 36 + 34 + 70
   self:UIResizable(ui, WIDTH, height, col.bg)
   self.esc_closes = true
   self.resizable = false
@@ -54,6 +55,7 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
   self.hospital = ui.hospital
   self.target = target or self:_nextTarget(nil)
   self.selected = nil
+  self.price = 0
 
   local title = self.target and S.trade_caption:format(self.target.name) or S.trade_alone
   self:addBevelPanel(20, 10, WIDTH - 40, 20, col.title):setLabel(title).lowered = true
@@ -106,7 +108,18 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
       :makeButton(0, 0, 60, 28, nil, function(window) window:turnPage(1) end)
   self:_showPage()
 
+  -- The price the other player pays for the member of staff (free by default).
   y = y + 36
+  self.price_panel = self:addBevelPanel(20, y, WIDTH - 180, 28, col.caption)
+  self.price_panel.lowered = true
+  local step = MultiplayerSession.STAFF_PRICE_STEP
+  self:addBevelPanel(WIDTH - 150, y, 60, 28, col.button):setLabel("-$" .. step)
+      :makeRepeatButton(0, 0, 60, 28, nil, function(window) window:setPrice(window.price - step) end)
+  self:addBevelPanel(WIDTH - 80, y, 60, 28, col.button):setLabel("+$" .. step)
+      :makeRepeatButton(0, 0, 60, 28, nil, function(window) window:setPrice(window.price + step) end)
+  self:setPrice(0)
+
+  y = y + 34
   self:addBevelPanel(20, y, 180, 30, col.button):setLabel(S.trade_send_staff)
       :makeButton(0, 0, 180, 30, nil, self.sendStaff)
   self:addBevelPanel(210, y, WIDTH - 230, 30, col.button):setLabel(S.trade_next_player)
@@ -138,6 +151,13 @@ function UIMultiplayerTrade:sendMoney(amount)
   if not session then return end
   session:issue({kind = "give_money", to = self.world:getHospitalIndex(self.target), amount = amount})
   self:setStatus(_S.multiplayer_window.trade_sent)
+end
+
+--! Set the price asked for the member of staff, $0 to STAFF_MAX_PRICE.
+function UIMultiplayerTrade:setPrice(price)
+  self.price = math.max(0, math.min(MultiplayerSession.STAFF_MAX_PRICE, price))
+  local S = _S.multiplayer_window
+  self.price_panel:setLabel(self.price > 0 and S.trade_price:format(self.price) or S.trade_free)
 end
 
 function UIMultiplayerTrade:_pages()
@@ -180,7 +200,8 @@ function UIMultiplayerTrade:sendStaff()
   local staff = self.selected.staff
   -- An offer: they move only if the other player accepts it.
   session:issue({kind = "offer_staff", to = self.world:getHospitalIndex(self.target),
-      index = self.selected.index, key = MultiplayerSession.staffKey(staff)})
+      index = self.selected.index, key = MultiplayerSession.staffKey(staff),
+      price = self.price > 0 and self.price or nil})
   self:setStatus(_S.multiplayer_window.trade_offered)
   -- They are on their way: they cannot be sent again from this window.
   self.selected.offered = true
@@ -192,8 +213,11 @@ function UIMultiplayerTrade:nextPlayer()
   local ui = self.ui
   local target = self:_nextTarget(self.target)
   local staff = self.selected and self.selected.staff
+  local price = self.price
   self:close()
-  ui:addWindow(UIMultiplayerTrade(ui, target, staff))
+  local window = UIMultiplayerTrade(ui, target, staff)
+  ui:addWindow(window)
+  if window.price_panel then window:setPrice(price) end
 end
 
 --! Open the window (co-op only), optionally with a member of staff selected.

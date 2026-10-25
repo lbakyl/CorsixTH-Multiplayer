@@ -88,7 +88,20 @@ steps later: 2 × 54 ms = 108 ms at Normal and slower.
 messages, since below Normal the speed decides which steps advance the clock:
 every game must switch at the same step. The issuing game checks the room's
 limits (top speed, owner only); the server notes the speed for players who
-rejoin. (`SPEED` from older clients is still relayed as before.)
+rejoin (a fallback: the shared save carries the speed). (`SPEED` from older
+clients is still relayed as before.)
+
+Pause and unpause are `set_speed` at once. **A new speed is voted on**:
+`C kind=speed_vote speed=... voters=N` opens the vote (N = the asker's count
+of players, so every game uses the same majority, more than N/2 with the
+asker counted yes); each other player answers with
+`C kind=speed_vote_answer vote=<id> agree=1|0`. The vote is game state
+(`world.mp_vote`): the answer that makes the majority applies the speed at
+that step on every game, the one that makes it impossible ends the vote, and
+an open vote lapses after 30 s of play, counted in steps (each step adds its
+world ticks). The fax for it is local to each answering player's screen (not
+one of the shared, numbered messages). With one player, or when only the
+owner sets the speed, `set_speed` is sent directly.
 
 ## Leaving
 

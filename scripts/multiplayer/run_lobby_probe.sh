@@ -6,7 +6,7 @@
 # join a password-protected room, get ready and start. Checks:
 #   1. two players: room, ping and pacing in the lobby, game start, actions
 #      from both (buy, hire), a pause by one player that both get, an
-#      unpause by the other, a speed change, a doctor whose tick breaks in
+#      unpause by the other, a speed change (voted: bob agrees), a doctor whose tick breaks in
 #      both games (set aside alike, reported), a question that does not
 #      pause the game, a frozen game the other one waits for (and says
 #      for whom) -> IN SYNC
@@ -62,6 +62,10 @@
 #  23. Slowest at real-time pace: a step every 54 ms (not an hour every
 #      second), a game hour every 18 or 19 steps, a purchase and a hire take
 #      effect `delay` steps after the click -> IN SYNC
+#  25. speed votes with three players: a new speed declined (one player by
+#      clicking in the vote fax, one by itself), one agreed in the fax (2 of
+#      3 is a majority), one nobody answers lapses after 30 s of play; the
+#      speed changes only for the agreed one -> IN SYNC
 # With MP_REFEREE=1 the local server also runs its headless referee for every
 # room, and four more checks: 13. the referee agrees with the players in every
 # room except 'cheat' (that one desyncs before the referee is there); 14, 15.
@@ -184,13 +188,13 @@ sleep 1
 run_probe finn MP_ROLE=join MP_ROOM=epi MP_SCENARIO=busy MP_STEPS=7500   MP_UI_SCRIPT="30:openhospital;300:epidemic;320:answerfax:epidemy:2:wait;400:vaccinate;600:answerfax:report:1:wait" & pids+=($!)
 
 # Offers (co-op): patients referred from the patient window and from a
-# "no treatment" fax, a nurse offered; offers accepted and declined in the
+# "no treatment" fax, a nurse offered for $3,000; offers accepted and declined in the
 # purple offer window.
 run_probe xavi MP_ROLE=host MP_ROOM=refer MP_COOP=1 MP_STEPS=1100 \
   MP_UI_SCRIPT="20:openhospital;100:patients:4;140:referpatient;400:acceptoffer;620:declineoffer;780:acceptoffer" & pids+=($!)
 sleep 1
 run_probe yuki MP_ROLE=join MP_ROOM=refer MP_STEPS=1100 \
-  MP_UI_SCRIPT="30:openhospital;180:acceptoffer;200:hire:Nurse;300:sendstaff:Nurse;500:patients:3;540:referpatient;700:notreatfax;720:answerfax:information:4" & pids+=($!)
+  MP_UI_SCRIPT="30:openhospital;180:acceptoffer;200:hire:Nurse;300:sendstaff:Nurse:3000;500:patients:3;540:referpatient;700:notreatfax;720:answerfax:information:4" & pids+=($!)
 
 # Research sharing (co-op): the host's hospital discovers two things (test
 # command) and offers them for $5,000; the other player accepts in the fax.
@@ -254,6 +258,13 @@ run_probe otto MP_ROLE=join MP_ROOM=wreck MP_STEPS=700 MP_SCENARIO=none & pids+=
 run_probe pia MP_ROLE=host MP_ROOM=slowest MP_STEPS=400 MP_FAST=0 MP_REALTIME=1   MP_UI_SCRIPT="10:speed:Slowest;60:buy:bench" & pids+=($!)
 sleep 1
 run_probe quin MP_ROLE=join MP_ROOM=slowest MP_STEPS=400 MP_FAST=0 MP_REALTIME=1 MP_UI_SCRIPT="80:hire:Nurse" & pids+=($!)
+# Speed votes with three players (check 25).
+run_probe vic MP_ROLE=host MP_ROOM=vote MP_PLAYERS=3 MP_STEPS=1400 \
+  MP_UI_SCRIPT="50:speed:Slower;300:speed:Slowest;450:speed:Slower" & pids+=($!)
+sleep 1
+run_probe wren MP_ROLE=join MP_ROOM=vote MP_STEPS=1400 MP_VOTE=ask MP_UI_SCRIPT="60:votefax:2;310:votefax:1" & pids+=($!)
+sleep 1
+run_probe zack MP_ROLE=join MP_ROOM=vote MP_STEPS=1400 MP_VOTE=no & pids+=($!)
 # Co-op level goals (test commands decide the goals; checks 21 and 22).
 run_probe gil MP_ROLE=host MP_ROOM=goals MP_COOP=1 MP_STEPS=600 \
   MP_UI_SCRIPT="20:openhospital;100:goals:1:win;150:wincheck;250:goals:2:win;300:wincheck" & pids+=($!)
@@ -318,8 +329,9 @@ lobby = re.search(r'lobby: .*', a)
 paused_both = 'speed is now Pause' in a and 'speed is now Pause' in b
 unpaused = bool(re.search(r'\[bob\] UI: pressed P at step \d+ \(paused\)', b))
 slower_both = 'speed is now Slower' in a and 'speed is now Slower' in b
-ok_cmds = [x for x in applied('alice') if x.endswith('-> ok') and 'set_speed' not in x]
+ok_cmds = [x for x in applied('alice') if x.endswith('-> ok') and 'set_speed' not in x and 'speed_vote' not in x]
 speeds1 = [x for x in applied('alice') if 'set_speed -> ok' in x]
+votes1 = 'speed vote 1 for Slower: agreed' in a and 'speed vote 1 for Slower: agreed' in b
 # At step 600 the doctor's tick breaks in all games (probe_break, as a bug would): all
 # set him aside alike, stay in sync, and tell the server.
 # An error in alice's mouse handler leaves it connected (her mouse goes on).
@@ -335,11 +347,11 @@ input1 = 'UI: motion handler after an error at step 650: connected (before true)
 stopped1 = all(re.search(r'UI: Doctor #\d+ ticks false at step 620', log(p)) for p in ('alice', 'bob'))
 reported1 = all(re.search(rf"room 'ward': state of '{p}' .*ERROR at step 6\d\d in the tick of Doctor", server) for p in ('alice', 'bob'))
 ok1 = (result('alice').startswith('IN SYNC') and result('bob').startswith('IN SYNC')
-       and applied('alice') == applied('bob') and len(ok_cmds) == 5 and len(speeds1) == 3
+       and applied('alice') == applied('bob') and len(ok_cmds) == 5 and len(speeds1) == 2 and votes1
        and paused_both and unpaused and slower_both and stopped1 and reported1 and input1 and wait1)
 print(f"1. Two players via server:  {result('alice')}; commands applied {len(ok_cmds)}/5, identical: {applied('alice') == applied('bob')}; broken doctor set aside on both: {stopped1}, reported: {reported1}; mouse after an error: {input1}; question does not pause: {question1}; waiting shown: {wait1}")
 print(f"   {lobby.group(0) if lobby else 'no lobby line'}")
-print(f"   shared pause on both: {paused_both}; unpaused by the other player: {unpaused}; shared speed change: {slower_both}")
+print(f"   shared pause on both: {paused_both}; unpaused by the other player: {unpaused}; shared speed change: {slower_both}, voted: {votes1}")
 fail |= not ok1
 
 refused = 'JOIN REFUSED: bad_password' in log('mallory')
@@ -445,11 +457,13 @@ okx = [x for x in cx if x.endswith('-> ok')]
 kinds_x = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in okx)
 arrived_p = len(re.findall(r'referred patient #\d+ arrived', xl))
 arrived_s = len(re.findall(r'transferred staff #\d+ arrived', xl))
+# The nurse was offered for $3,000: hospital 1 paid it on accepting.
+paid17 = all(re.search(r'offer of staff #\d+ to hospital 1 accepted: on the way, paid \$3000', t) for t in (xl, yl))
 okr = (result('xavi').startswith('IN SYNC through step 1100') and result('yuki').startswith('IN SYNC')
        and cx == applied('yuki') and kinds_x.count('offer_patient') == 3 and kinds_x.count('offer_staff') == 1
-       and 'UI: declined offer' in xl and arrived_p == 2 and arrived_s == 1)
+       and 'UI: declined offer' in xl and arrived_p == 2 and arrived_s == 1 and paid17)
 print(f"17. Offers and referrals:   {result('xavi')}; offers {kinds_x.count('offer_patient')} patients, "
-      f"{kinds_x.count('offer_staff')} staff; arrived: {arrived_p} patients, {arrived_s} staff; identical: {cx == applied('yuki')}")
+      f"{kinds_x.count('offer_staff')} staff; arrived: {arrived_p} patients, {arrived_s} staff; identical: {cx == applied('yuki')}; nurse paid for: {paid17}")
 fail |= not okr
 
 kl, ll = log('kim'), log('lea')
@@ -541,6 +555,20 @@ print(f"23. Slowest, real time:     {result('pia')}; {ms23:.0f} ms per step; gam
       f"purchase at step {buy23.group(1) if buy23 else '-'} and hire at {hire23.group(1) if hire23 else '-'} "
       f"(clicked at 60 and 80, delay {d23}: {d23 * ms23:.0f} ms)")
 fail |= not ok23
+
+logs25 = {n: log(n) for n in ('vic', 'wren', 'zack')}
+outcomes25 = {n: re.findall(r'speed vote \d+ for ([\w ]+): (\w+)', t) for n, t in logs25.items()}
+want25 = [('Slower', 'declined'), ('Slowest', 'agreed'), ('Slower', 'lapsed')]
+fax25 = len(re.findall(r'UI: answered the speed vote fax', logs25['wren'])) == 2
+# (Speeds below Normal: a slow connection may cap the room's top speed at Normal.)
+max25 = all('speed is now Slowest' in t and 'speed is now Slower' not in t
+            for t in logs25.values())
+ok25 = (all(o == want25 for o in outcomes25.values()) and fax25 and max25
+        and all(result(n).startswith('IN SYNC') for n in logs25)
+        and applied('vic') == applied('wren') == applied('zack'))
+print(f"25. Speed votes:            {result('vic')}; votes {outcomes25['vic']}; same on all three: "
+      f"{len(set(map(tuple, outcomes25.values()))) == 1}; answered in the fax: {fax25}; speed only changed when agreed: {max25}")
+fail |= not ok25
 
 resets24 = []
 for d in sorted(out.iterdir()):
@@ -702,7 +730,7 @@ if with_referee:
     after_u = [x for x in applied('uma') if int(re.search(r'step (\d+):', x).group(1)) > at]
     after_v = [x for x in applied('vera-back') if int(re.search(r'step (\d+):', x).group(1)) > at]
     kinds = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in after_u
-                   if x.endswith('-> ok') and 'set_speed' not in x)
+                   if x.endswith('-> ok') and 'set_speed' not in x and 'speed_vote' not in x)
     # (The game steps on while paused, so the steps go past 1500.)
     ok13 = (rejoined is not None and "room 'back': 'vera' rejoins as player 2" in server
             and result('uma').startswith('IN SYNC through step')

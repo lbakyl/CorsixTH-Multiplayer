@@ -258,10 +258,40 @@ function MultiplayerSession:requestSpeed(speed)
     return true
   end
   if speed ~= "Pause" then speed = MultiplayerLobby.clampSpeed(speed, self.max_speed) end
-  -- A command: every peer changes speed at the same step (the lockstep
-  -- steps depend on the speed below Normal, see World:_mpTick).
-  self:issue({kind = "set_speed", speed = speed})
+  -- Commands: every peer changes speed at the same step (the lockstep
+  -- steps depend on the speed below Normal, see World:_mpTick). Pausing and
+  -- unpausing take effect at once; a new speed is put to the vote (unless
+  -- only the owner sets it, or nobody else plays).
+  local world = self.world
+  local current = world and world.mp_speed or "Normal"
+  local voters = self:voterCount()
+  if speed == "Pause" or self.speed_control == "owner" or voters <= 1 then
+    if speed ~= current then self:issue({kind = "set_speed", speed = speed}) end
+    return true
+  end
+  if current == "Pause" then
+    -- Unpause at the speed from before the pause; a different one is voted on.
+    local resume = world.mp_resume_speed or "Normal"
+    self:issue({kind = "set_speed", speed = resume})
+    if speed == resume then return true end
+  elseif speed == current then
+    return true
+  end
+  if world.mp_vote then
+    self.notify(_S.multiplayer_window.vote_open)
+    return true
+  end
+  self:issue({kind = "speed_vote", speed = speed, voters = voters})
   return true
+end
+
+--! How many players play (and vote on a new speed): the referee does not.
+function MultiplayerSession:voterCount()
+  local n = 0
+  for _, p in ipairs(self.peers or {}) do
+    if p ~= 0 then n = n + 1 end
+  end
+  return n
 end
 
 --! Is every other peer far enough along for us to run the next step?
@@ -337,6 +367,7 @@ end
 function MultiplayerSession:restartAt(world, step, peers)
   self.world = world
   self.last_fp = nil
+  self.vote_shown = nil -- the loaded screen has no vote fax yet
   if peers then
     self.peers = peers
     self.peer_step = {}
@@ -452,6 +483,7 @@ function MultiplayerSession:beforeStep()
           tostring(cmd.kind), ok and "ok" or ("rejected: " .. tostring(why))))
     end
   end
+  self:tickVote()
 end
 
 --! What the player is told when one of their own actions is turned down
@@ -998,20 +1030,189 @@ end
 
 --! The shared speed or pause: {speed}. Applied at the same step on every
 --! peer, since below Normal the speed decides how many steps an hour takes.
-function handlers.set_speed(world, cmd)
-  local session = TheApp.mp_session
-  local speed = cmd.speed
-  local known = speed == "Pause"
-  for _, s in ipairs(MultiplayerLobby.SPEEDS) do known = known or s == speed end
-  if not known then return false, "unknown speed" end
-  if speed ~= "Pause" then speed = MultiplayerLobby.clampSpeed(speed, session and session.max_speed) end
+local function known_speed(speed)
+  for _, s in ipairs(MultiplayerLobby.SPEEDS) do
+    if s == speed then return true end
+  end
+  return false
+end
+
+--! Set the shared speed (or pause) on this peer, in the simulation.
+local function apply_speed(world, speed)
+  if speed == "Pause" and world.mp_speed ~= "Pause" then
+    world.mp_resume_speed = world.mp_speed -- unpausing goes back to it
+  end
   world.mp_speed = speed
   -- The menus and the screen show it (a local window that pauses the game,
   -- like the annual report, does not stop the shared game).
   world:applySharedSpeed(speed)
+end
+
+function handlers.set_speed(world, cmd)
+  local session = TheApp.mp_session
+  local speed = cmd.speed
+  if speed ~= "Pause" and not known_speed(speed) then return false, "unknown speed" end
+  if speed ~= "Pause" then speed = MultiplayerLobby.clampSpeed(speed, session and session.max_speed) end
+  apply_speed(world, speed)
   if session and cmd.peer ~= session.peer_id then
     local name = session.peer_name and session.peer_name(cmd.peer) or "A player"
     session.notify(name .. " " .. (speed == "Pause" and "paused the game." or ("set the speed to " .. speed .. ".")))
+  end
+  return true
+end
+
+--------------------------------------------------------------------------------
+-- Speed votes. Pausing and unpausing take effect at once (set_speed); a new
+-- speed needs more than half of the players to agree, the asker included.
+-- The vote (world.mp_vote) is game state, the same on every peer; the others
+-- get a fax for it that does not pause the game, only on their own screens
+-- (it is not one of the shared messages). A vote nobody decides lapses after
+-- VOTE_SECONDS of play, counted in steps on every peer alike.
+--------------------------------------------------------------------------------
+
+MultiplayerSession.VOTE_SECONDS = 30
+local VOTE_FRAMES = math.ceil(MultiplayerSession.VOTE_SECONDS * 1000 / 18) -- world ticks
+
+local function count_keys(t)
+  local n = 0
+  for _ in pairs(t) do n = n + 1 end
+  return n
+end
+
+local function peer_label(session, peer)
+  return session and session.peer_name and session.peer_name(peer) or "A player"
+end
+
+--! Take this player's speed vote fax off the screen (all of them: after a
+--! load or a repair there may be a stale one).
+local function remove_vote_faxes(world)
+  local panel = world and world.ui and world.ui.bottom_panel
+  if not panel then return end
+  for _, icon in ipairs(panel:allMessageIcons()) do
+    if icon.mp_vote then icon:removeMessage() end
+  end
+end
+
+--! Show this player the fax for the open vote if they may still answer it
+--! (or answer it at once: a scripted player, session.auto_agree "yes" or
+--! "no"). Runs when the vote opens or ends, and again whenever the screen
+--! may have lost the fax (a load or a repair).
+function MultiplayerSession:syncVote(world)
+  local vote = world and world.mp_vote
+  local key = vote and vote.id or false
+  if self.vote_shown == key then return end
+  self.vote_shown = key
+  remove_vote_faxes(world)
+  if not vote or self.observer or vote.yes[self.peer_id] or vote.no[self.peer_id] then return end
+  if self.auto_agree then
+    self:issue({kind = "speed_vote_answer", vote = vote.id, agree = self.auto_agree == "no" and 0 or 1})
+    return
+  end
+  local panel = world.ui and world.ui.bottom_panel
+  if not panel then return end
+  local S = _S.multiplayer_window
+  local message = {
+    {text = S.vote_request:format(peer_label(self, vote.peer))},
+    {text = S.vote_request_speed:format(vote.speed)},
+    choices = {
+      {text = S.vote_agree, choice = "mp_vote_agree"},
+      {text = S.vote_decline, choice = "mp_vote_decline"},
+    },
+  }
+  local icon = panel:addLocalMessage("mp_vote", message)
+  icon.mp_vote = vote.id
+end
+
+--! The player answered the speed vote fax (UIFax:buttonChoice).
+function MultiplayerSession:answerVote(icon, agree)
+  self:issue({kind = "speed_vote_answer", vote = icon.mp_vote, agree = agree and 1 or 0})
+  icon:removeMessage()
+end
+
+--! The open vote ended: "agreed", "declined" (by peer `by`) or "lapsed".
+local function end_vote(world, outcome, by)
+  local vote = world.mp_vote
+  world.mp_vote = nil
+  local session = TheApp.mp_session
+  local S = _S.multiplayer_window
+  local text
+  if outcome == "agreed" then
+    if world.mp_speed == "Pause" then
+      world.mp_resume_speed = vote.speed
+      text = S.vote_passed_paused:format(vote.speed)
+    else
+      apply_speed(world, vote.speed)
+      text = S.vote_passed:format(vote.speed)
+    end
+  elseif outcome == "declined" then
+    text = S.vote_declined:format(peer_label(session, by), vote.speed)
+  else
+    text = S.vote_lapsed
+  end
+  if session then
+    session.log(string.format("speed vote %d for %s: %s", vote.id, vote.speed, outcome))
+    session.notify(text)
+    session:syncVote(world)
+  end
+end
+
+--! Count the open vote's play time (after every step's commands, on every
+--! peer); it lapses after VOTE_SECONDS.
+function MultiplayerSession:tickVote()
+  local world = self.world
+  local vote = world and world.mp_vote
+  if vote then
+    local frames = world._mpStepFrames and world:_mpStepFrames(world.mp_speed or "Normal") or 3
+    vote.frames = vote.frames + frames
+    if vote.frames >= VOTE_FRAMES then
+      end_vote(world, "lapsed")
+      self.applied_this_step = true
+    end
+  end
+  self:syncVote(world)
+end
+
+--! Ask the others for a new speed: {speed, voters (the asker's count of
+--! players)}.
+function handlers.speed_vote(world, cmd)
+  local session = TheApp.mp_session
+  if not known_speed(cmd.speed) then return false, "unknown speed" end
+  if world.mp_vote then return false, "a vote is open" end
+  local voters = math.max(1, math.floor(tonumber(cmd.voters) or 1))
+  world.mp_vote_seq = (world.mp_vote_seq or 0) + 1
+  world.mp_vote = {
+    id = world.mp_vote_seq,
+    speed = MultiplayerLobby.clampSpeed(cmd.speed, session and session.max_speed),
+    peer = cmd.peer,
+    voters = voters,
+    need = math.floor(voters / 2) + 1, -- more than half
+    yes = {[cmd.peer] = true},
+    no = {},
+    frames = 0,
+  }
+  if world.mp_vote.need <= 1 then
+    end_vote(world, "agreed")
+    return true
+  end
+  if session then
+    if cmd.peer == session.peer_id then
+      session.notify(_S.multiplayer_window.vote_asked:format(world.mp_vote.speed))
+    end
+    session:syncVote(world)
+  end
+  return true
+end
+
+--! A player's answer to the open speed vote: {vote, agree (1 or 0)}.
+function handlers.speed_vote_answer(world, cmd)
+  local vote = world.mp_vote
+  if not vote or vote.id ~= tonumber(cmd.vote) then return false, "the vote is over" end
+  if vote.yes[cmd.peer] or vote.no[cmd.peer] then return false, "already answered" end
+  if tonumber(cmd.agree) == 1 then vote.yes[cmd.peer] = true else vote.no[cmd.peer] = true end
+  if count_keys(vote.yes) >= vote.need then
+    end_vote(world, "agreed")
+  elseif vote.voters - count_keys(vote.no) < vote.need then
+    end_vote(world, "declined", cmd.peer)
   end
   return true
 end
@@ -1426,6 +1627,10 @@ end
 -- Like the VIP fax: 20 game days (its default is yes; an offer's is no).
 MultiplayerSession.OFFER_DAYS = 20
 
+-- A member of staff may be offered for a price, in steps of $500.
+MultiplayerSession.STAFF_MAX_PRICE = 50000
+MultiplayerSession.STAFF_PRICE_STEP = 500
+
 local function display_name(entity)
   local S = _S.multiplayer_window
   if entity.profile then return entity.profile:getFullName() end
@@ -1436,37 +1641,44 @@ local function display_name(entity)
   return "?"
 end
 
---! Create an offer of `entity` (staff or patient) from one hospital to another.
-local function create_offer(world, kind, from, to, entity)
+--! Create an offer of `entity` (staff or patient) from one hospital to
+--! another, for `price` (optional, staff only).
+local function create_offer(world, kind, from, to, entity, price)
   local S = _S.multiplayer_window
   local panel = world.ui and world.ui.bottom_panel
   if not panel then return false, "no message panel" end
   local name = display_name(entity)
+  price = price or 0
   local message = {
     {text = (kind == "staff" and S.offer_staff_line or S.offer_patient_line):format(from.name)},
     {text = name},
     choices = {
-      {text = S.offer_accept, choice = "mp_offer_accept"},
+      {text = price > 0 and S.offer_accept_price:format(price) or S.offer_accept, choice = "mp_offer_accept"},
       {text = S.offer_decline, choice = "mp_offer_decline"},
     },
     mp_offer = {kind = kind, from = world:getHospitalIndex(from), to = world:getHospitalIndex(to),
-        entity = entity.mp_id, name = name},
+        entity = entity.mp_id, name = name, price = price > 0 and price or nil},
   }
+  if price > 0 then table.insert(message, 3, {text = S.offer_price_line:format(price)}) end
   panel:queueMessage("mp_offer", message, nil, Date.hoursPerDay() * MultiplayerSession.OFFER_DAYS, 2, nil, to)
   entity.mp_offer = world.next_message_id
-  MultiplayerSession.tellPlayer(world, from, S.offer_sent_note:format(name, to.name))
+  MultiplayerSession.tellPlayer(world, from, price > 0 and S.offer_sent_price_note:format(name, to.name, price)
+      or S.offer_sent_note:format(name, to.name))
   return true
 end
 
---! Offer a member of staff to another player: {to, index, key}. They join
---! that hospital only if its player accepts (MultiplayerSession.resolveOffer).
+--! Offer a member of staff to another player: {to, index, key, price
+--! (optional)}. They join that hospital only if its player accepts (and
+--! pays the price; MultiplayerSession.resolveOffer).
 function handlers.offer_staff(world, cmd)
   local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
   if not from or not to or from == to then return false, "no such hospital" end
+  local price = math.floor(tonumber(cmd.price) or 0)
+  if price < 0 or price > MultiplayerSession.STAFF_MAX_PRICE then return false, "invalid price" end
   local staff = find_staff(from, cmd.index, cmd.key)
   if not staff or staff.mp_in_transit then return false, "no such staff member" end
   if staff.mp_offer then return false, "already offered" end
-  return create_offer(world, "staff", from, to, staff)
+  return create_offer(world, "staff", from, to, staff, price)
 end
 
 --! Can this patient be referred to another hospital? (They must be free to
@@ -1795,20 +2007,37 @@ function MultiplayerSession.resolveOffer(world, offer, accept)
     MultiplayerSession.tellPlayer(world, from, S.offer_declined_note:format(to.name, offer.name))
     return
   end
+  local price = offer.price or 0
+  local session = world.app.mp_session
+  if price > 0 and to.balance < price then
+    MultiplayerSession.tellPlayer(world, to, S.offer_no_money_note:format(price, offer.name))
+    MultiplayerSession.tellPlayer(world, from, S.offer_no_money_sender_note:format(to.name, offer.name))
+    if session then
+      session.log(string.format("offer of %s #%s to hospital %d accepted: no money", offer.kind,
+          tostring(offer.entity), offer.to))
+    end
+    return
+  end
   local ok, why = false, "gone"
   if entity and offer.kind == "staff" and class.is(entity, Staff) and entity.hospital == from and
       not entity.fired and not entity.mp_in_transit then
     ok, why = MultiplayerSession.transferStaff(world, from, to, entity)
+    if ok and price > 0 then
+      to:spendMoney(price, S.staff_bought_transaction:format(from.name))
+      from:receiveMoney(price, S.staff_sold_transaction:format(to.name))
+    end
   elseif entity and offer.kind == "patient" and class.is(entity, Patient) and entity.hospital == from then
     ok, why = MultiplayerSession.transferPatient(world, from, to, entity)
   end
-  local session = world.app.mp_session
   if session then
     session.log(string.format("offer of %s #%s to hospital %d accepted: %s", offer.kind,
-        tostring(offer.entity), offer.to, ok and "on the way" or tostring(why)))
+        tostring(offer.entity), offer.to, ok and ("on the way" .. (price > 0 and (", paid $" .. price) or ""))
+        or tostring(why)))
   end
   if ok then
-    MultiplayerSession.tellPlayer(world, from, S.offer_accepted_note:format(to.name, offer.name))
+    MultiplayerSession.tellPlayer(world, from, price > 0 and
+        S.offer_accepted_price_note:format(to.name, offer.name, price) or
+        S.offer_accepted_note:format(to.name, offer.name))
   else
     MultiplayerSession.tellPlayer(world, from, S.offer_gone_note:format(offer.name))
     MultiplayerSession.tellPlayer(world, to, S.offer_gone_note:format(offer.name))
