@@ -651,6 +651,48 @@ end
 --! seconds and it is not a pause everybody chose, tell the server why (it
 --! logs the note): a player's game that stops for no visible reason can
 --! then be explained from the server log. Once per stop.
+--! Called every tick (App:onTick), acting about once a second. Clicks on the
+--! map are off while a placement window or room editor is open; a player
+--! reported them staying off with none open (after placing objects and
+--! saving; opening and closing a room editor brought them back). Until the
+--! cause is found: log the UI state to the game log whenever it is unusual,
+--! and give the map its clicks back when no such window is open.
+function MultiplayerSession:checkMapClicks(world)
+  self.map_click_ticks = (self.map_click_ticks or 0) + 1
+  if self.map_click_ticks % 50 ~= 0 or self.observer then return end
+  local ui = world and world.ui
+  if not ui or ui.do_world_hit_test == nil then return end
+  local placing, names = false, {}
+  for _, window in ipairs(ui.windows or {}) do
+    local name = class.type(window) or "?"
+    if class.is(window, UIPlaceObjects) then
+      placing = true
+      if not window.visible then name = name .. "(hidden)" end
+    end
+    names[#names + 1] = name
+  end
+  local hit, edit = ui.do_world_hit_test, ui.edit_room
+  local unusual = hit ~= true or (edit and edit ~= true)
+  if unusual then
+    local text = string.format("hit test %s, edit_room %s, windows %s",
+        hit == true and "on" or hit == false and "off" or "one room",
+        type(edit) == "table" and (class.type(edit) or "table") or tostring(edit),
+        table.concat(names, ","))
+    if text ~= self.map_click_state then
+      self.map_click_state = text
+      print(string.format("Multiplayer UI at step %d: %s", self.step, text))
+    end
+  else
+    self.map_click_state = nil
+  end
+  if not placing and hit ~= true and not (edit and class.is(edit, Room)) then
+    print(string.format("Multiplayer UI at step %d: map clicks were off with no placement window open; " ..
+        "turned back on", self.step))
+    if type(edit) == "table" and not class.is(edit, Room) then ui.edit_room = false end
+    ui:setWorldHitTest(true)
+  end
+end
+
 function MultiplayerSession:checkStall(world)
   local now = self.clock()
   if self.step ~= self.stall_step then
