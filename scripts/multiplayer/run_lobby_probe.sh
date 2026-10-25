@@ -149,7 +149,7 @@ sleep 1
 run_probe hugo MP_ROLE=join MP_ROOM=build MP_STEPS=900   MP_UI_SCRIPT="100:room:pharmacy:4:4;300:room:toilets:4:4" & pids+=($!)
 run_probe ivan MP_ROLE=host MP_ROOM=crowd MP_STEPS=1200 MP_SCENARIO=busy & pids+=($!)
 sleep 1
-run_probe judy MP_ROLE=join MP_ROOM=crowd MP_STEPS=1200 MP_SCENARIO=busy   MP_UI_SCRIPT="300:crowdroom:gp:4:4;340:crowdroom:gp:4:4;380:crowdroom:gp:4:4;500:crowdroom:toilets:4:4" & pids+=($!)
+run_probe judy MP_ROLE=join MP_ROOM=crowd MP_STEPS=1200 MP_SCENARIO=busy   MP_UI_SCRIPT="300:crowdroom:gp:4:4;340:crowdroom:gp:4:4;380:crowdroom:gp:4:4;500:crowdroom:toilets:4:4;700:buyunder:bench" & pids+=($!)
 run_probe kate MP_ROLE=host MP_ROOM=fax MP_STEPS=1300 MP_UI_SCRIPT="100:vip;400:vip" & pids+=($!)
 sleep 1
 run_probe liam MP_ROLE=join MP_ROOM=fax MP_STEPS=1300 MP_DRAW_EVERY=2   MP_UI_SCRIPT="160:answerfax:personality:2" & pids+=($!)
@@ -200,7 +200,7 @@ run_probe yara MP_ROLE=join MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
 # Room editing: ed builds a GP's office, then edits it while patients are
 # about (pick up, place, buy, move, confirm) and later removes it; flo watches.
 run_probe ed MP_ROLE=host MP_ROOM=edit MP_STEPS=1400 MP_SCENARIO=busy \
-  MP_UI_SCRIPT="100:furnishroom:gp:5:5;500:editroom:gp:pickup:cabinet+place+buy:first+place+buy:radiator+place+move:1:0+place+done;950:overlay;1000:editroom:gp:delete;1300:overlay;1310:uistate" & pids+=($!)
+  MP_UI_SCRIPT="100:furnishroom:gp:5:5;500:editroom:gp:pickup:cabinet+place+buy:first+place+buy:radiator+place+move:1:0+place+done;950:overlay;1000:editroom:gp:tool+delete;1300:overlay;1310:uistate" & pids+=($!)
 sleep 1
 run_probe flo MP_ROLE=join MP_ROOM=edit MP_STEPS=1400 MP_SCENARIO=busy MP_UI_SCRIPT="1350:overlay" & pids+=($!)
 # Level 2, a cardiogram room furnished by hand: the cardio faces east, the
@@ -347,9 +347,18 @@ ri = re.search(r'rooms built: (.*)', i); rj = re.search(r'rooms built: (.*)', j)
 ri = ri.group(1) if ri else None; rj = rj.group(1) if rj else None
 retries = len(re.findall(r'build_room -> rejected: retry', j))
 drawn = len(re.findall(r'UI: drew ', j))
+# A bench put down where somebody stands (as if they stepped there just
+# after the click): placed once they stepped aside, or back in the list.
+bench_tried = 'UI: put a bench where' in j
+bench_cmds = [x for x in applied('judy') if 'place_object' in x]
+bench_placed = any(x.endswith('place_object -> ok') for x in bench_cmds)
+bench_back = 'gave up' in ' '.join(bench_cmds) and 'objects to place: bench x1' in j
+bench_ok = bench_tried and not any('someone is in the way' in x for x in bench_cmds) and (bench_placed or bench_back)
 ok6 = (result('ivan').startswith('IN SYNC') and result('judy').startswith('IN SYNC') and ri == rj
-       and drawn >= 1 and retries > 0)
-print(f"6. Rooms over people:       {result('ivan')}; same rooms on both: {ri == rj}; drawn over people: {drawn}; retries while people left: {retries}")
+       and drawn >= 1 and retries > 0 and bench_ok)
+print(f"6. Rooms over people:       {result('ivan')}; same rooms on both: {ri == rj}; drawn over people: {drawn}; retries while people left: {retries}; "
+      f"bench where somebody stood: {'placed' if bench_placed else 'back in the list' if bench_back else 'LOST'} "
+      f"({sum(1 for x in bench_cmds if 'retry' in x)} retries)")
 for l in sorted(set(re.findall(r'step \d+: peer 2 #\d+ build_room -> .*', j))):
     print("   " + l)
 fail |= not ok6

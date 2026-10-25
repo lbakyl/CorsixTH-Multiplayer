@@ -35,6 +35,7 @@
 --                       rebuildcrashed                  clear a destroyed room away and build it again
 --                       buyinroom:<object>:<room>       buy an object, put it into such a room
 --                       researchlists                   log the share list for each other player
+--                       buyunder:<object>               buy an object, put it where someone stands
 --                       givemoney:<amount>              co-op trade window: send money
 --                       sendstaff:<class>               co-op trade window: send the first
 --                                                       member of staff of that class
@@ -540,6 +541,8 @@ local function run()
           else
             log("UI: no crashed room")
           end
+        elseif a == "buyunder" then
+          builder.ui_buy_under_person(world, entry.arg, log)
         elseif a == "buyinroom" then
           -- Corridor shop: buy an object and put it into a room ("<object>:<room>").
           local object_id, room_id = entry.arg:match("^([%w_]+):([%w_]+)$")
@@ -1432,6 +1435,14 @@ local function run()
       log(string.format("hospital %d settings: loan %s, heat %s, cure research %s%%", i,
           tostring(h.loan), tostring(h.heating.radiator_heat),
           tostring(h.research.research_policy.cure and h.research.research_policy.cure.frac)))
+    end
+  end
+  -- Objects bought but not placed yet (the placement window's list).
+  for _, window in ipairs(TheApp.ui.windows or {}) do
+    if class.type(window) == "UIPlaceObjects" then
+      local waiting = {}
+      for _, o in ipairs(window.objects) do waiting[#waiting + 1] = o.object.id .. " x" .. o.qty end
+      log("objects to place: " .. table.concat(waiting, ", "))
     end
   end
   local chat = TheApp.ui:getWindow(UIMultiplayerChat)
