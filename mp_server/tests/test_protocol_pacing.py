@@ -27,19 +27,26 @@ def test_game_line_helpers():
 
 
 def test_pacing_loopback():
-    # Delay 2 at the fastest speed leaves no time at all for the network,
-    # so even a loopback connection is capped one speed below.
+    # Delay 2 leaves one step (18 ms at the fastest speed) for the network:
+    # enough on a loopback connection.
     p = pacing.recommend([1.0, 1.0])
-    assert p.delay == 2 and p.max_speed == "Max speed"
+    assert p.delay == 2 and p.max_speed == "And then some more"
 
 
 def test_pacing_internet_needs_more_delay():
     # Two players with 40 ms round trips: 40 ms one way through the relay.
+    # Normal would fit with delay 2, but delay 3 allows Max speed.
     p = pacing.recommend([40.0, 40.0])
-    assert pacing.speed_ok(54, p.delay, p.one_way_ms)
-    assert not pacing.speed_ok(54, p.delay - 1, p.one_way_ms)
-    assert p.delay == 3
-    assert pacing.speed_rank(p.max_speed) >= pacing.speed_rank("Normal")
+    assert pacing.speed_ok(54, 2, p.one_way_ms)
+    assert not pacing.speed_ok(36, 2, p.one_way_ms)
+    assert p.delay == 3 and p.max_speed == "Max speed"
+
+
+def test_pacing_helsinki_jitter_keeps_max_speed():
+    # Pings seen from Prague to Helsinki: about 40 ms with some spread.
+    rtts = [pacing.effective_rtt([38, 43, 41, 52, 40]), pacing.effective_rtt([36, 39, 44, 39, 37])]
+    p = pacing.recommend(rtts)
+    assert p.delay == 3 and p.max_speed == "Max speed"
 
 
 def test_pacing_slow_link_caps_speed():
@@ -49,4 +56,4 @@ def test_pacing_slow_link_caps_speed():
 
 
 def test_effective_rtt_includes_jitter():
-    assert pacing.effective_rtt([10, 10, 30]) == 10 + 10
+    assert pacing.effective_rtt([10, 10, 30]) == 10 + 5

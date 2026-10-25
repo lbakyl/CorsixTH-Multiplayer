@@ -96,8 +96,9 @@ end
 --!  control    (function) optional; receives every line that is neither a
 --!             command nor a step report (messages from the relay server)
 --!  request_speed (function) optional; when set, speed and pause changes
---!             made by the player are sent through it instead of being
---!             applied locally (the server shares them with everybody)
+--!             made by the player become a set_speed command (see
+--!             MultiplayerSession:requestSpeed) instead of being applied
+--!             locally; it is called with the speed (for the server's records)
 --!  observer   (bool) optional; this peer only follows the game (the server's
 --!             headless referee): it issues no commands and is not in anybody's
 --!             peers list
@@ -249,7 +250,17 @@ end
 --! server instead of being applied here (it comes back for everybody).
 function MultiplayerSession:requestSpeed(speed)
   if not self.request_speed then return false end
-  self.request_speed(speed)
+  if self.observer then return true end
+  -- Only the room owner, if the room says so (checked here: the owner can
+  -- change during a game, which the command handlers do not know).
+  if self.speed_control == "owner" and self.lobby and not self.lobby:isOwner() then
+    self.notify("Only the room owner changes the speed.")
+    return true
+  end
+  if speed ~= "Pause" then speed = MultiplayerLobby.clampSpeed(speed, self.max_speed) end
+  -- A command: every peer changes speed at the same step (the lockstep
+  -- steps depend on the speed below Normal, see World:_mpTick).
+  self:issue({kind = "set_speed", speed = speed})
   return true
 end
 
@@ -325,6 +336,7 @@ end
 --!param peers (list) optional; the players from now on (a player rejoined)
 function MultiplayerSession:restartAt(world, step, peers)
   self.world = world
+  self.last_fp = nil
   if peers then
     self.peers = peers
     self.peer_step = {}
@@ -385,6 +397,7 @@ function MultiplayerSession:beforeStep()
     if cmd.step == n then due[#due + 1] = cmd else keep[#keep + 1] = cmd end
   end
   self.pending = keep
+  self.applied_this_step = #due > 0
   table.sort(due, command_order)
   for _, cmd in ipairs(due) do
     local handler = self.handlers[cmd.kind]
@@ -508,10 +521,13 @@ function MultiplayerSession:_tellRejected(cmd, why)
 end
 
 --! Record and send this peer's fingerprint for the step just completed.
-function MultiplayerSession:afterStep()
+--!param unchanged (bool) optional; nothing happened in this step (no game
+--!  hour, no command), so the fingerprint is the previous one
+function MultiplayerSession:afterStep(unchanged)
   self.step = self.step + 1
   local n = self.step
-  local fp = self.fingerprint(self.world)
+  local fp = unchanged and self.last_fp or self.fingerprint(self.world)
+  self.last_fp = fp
   self.transport:send(string.format("S %d %d %s", self.peer_id, n, fp))
   local waiting = self.peer_fps[n]
   if waiting then
@@ -888,6 +904,26 @@ end
 function handlers.save_game(world, cmd) -- luacheck: ignore 212
   local session = TheApp and TheApp.mp_session
   if session then session:requestLocalSave("save") end
+  return true
+end
+
+--! The shared speed or pause: {speed}. Applied at the same step on every
+--! peer, since below Normal the speed decides how many steps an hour takes.
+function handlers.set_speed(world, cmd)
+  local session = TheApp.mp_session
+  local speed = cmd.speed
+  local known = speed == "Pause"
+  for _, s in ipairs(MultiplayerLobby.SPEEDS) do known = known or s == speed end
+  if not known then return false, "unknown speed" end
+  if speed ~= "Pause" then speed = MultiplayerLobby.clampSpeed(speed, session and session.max_speed) end
+  world.mp_speed = speed
+  -- The menus and the screen show it (a local window that pauses the game,
+  -- like the annual report, does not stop the shared game).
+  world:applySharedSpeed(speed)
+  if session and cmd.peer ~= session.peer_id then
+    local name = session.peer_name and session.peer_name(cmd.peer) or "A player"
+    session.notify(name .. " " .. (speed == "Pause" and "paused the game." or ("set the speed to " .. speed .. ".")))
+  end
   return true
 end
 

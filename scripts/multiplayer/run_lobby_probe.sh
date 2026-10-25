@@ -55,6 +55,9 @@
 #  22. co-op team loss: player 2's hospital fails the goals at a year end
 #      (both told), and still at the next one: the game ends for both at the
 #      same step
+#  23. Slowest at real-time pace: a step every 54 ms (not an hour every
+#      second), a game hour every 18 or 19 steps, a purchase and a hire take
+#      effect `delay` steps after the click -> IN SYNC
 # With MP_REFEREE=1 the local server also runs its headless referee for every
 # room, and four more checks: 13. the referee agrees with the players in every
 # room except 'cheat' (that one desyncs before the referee is there); 14, 15.
@@ -243,6 +246,10 @@ run_probe otto MP_ROLE=join MP_ROOM=wreck MP_STEPS=700 MP_SCENARIO=none & pids+=
     MP_UI_SCRIPT="500:hire:Nurse" & b=$!
   wait $a $b
 ) & pids+=($!)
+# Slowest at real-time pace (check 23).
+run_probe pia MP_ROLE=host MP_ROOM=slowest MP_STEPS=400 MP_FAST=0 MP_REALTIME=1   MP_UI_SCRIPT="10:speed:Slowest;60:buy:bench" & pids+=($!)
+sleep 1
+run_probe quin MP_ROLE=join MP_ROOM=slowest MP_STEPS=400 MP_FAST=0 MP_REALTIME=1 MP_UI_SCRIPT="80:hire:Nurse" & pids+=($!)
 # Co-op level goals (test commands decide the goals; checks 21 and 22).
 run_probe gil MP_ROLE=host MP_ROOM=goals MP_COOP=1 MP_STEPS=600 \
   MP_UI_SCRIPT="20:openhospital;100:goals:1:win;150:wincheck;250:goals:2:win;300:wincheck" & pids+=($!)
@@ -307,7 +314,8 @@ lobby = re.search(r'lobby: .*', a)
 paused_both = 'speed is now Pause' in a and 'speed is now Pause' in b
 unpaused = bool(re.search(r'\[bob\] UI: pressed P at step \d+ \(paused\)', b))
 slower_both = 'speed is now Slower' in a and 'speed is now Slower' in b
-ok_cmds = [x for x in applied('alice') if x.endswith('-> ok')]
+ok_cmds = [x for x in applied('alice') if x.endswith('-> ok') and 'set_speed' not in x]
+speeds1 = [x for x in applied('alice') if 'set_speed -> ok' in x]
 # At step 600 the doctor's tick breaks in all games (probe_break, as a bug would): all
 # set him aside alike, stay in sync, and tell the server.
 # An error in alice's mouse handler leaves it connected (her mouse goes on).
@@ -318,7 +326,7 @@ input1 = 'UI: motion handler after an error at step 650: connected (before true)
 stopped1 = all(re.search(r'UI: Doctor #\d+ ticks false at step 620', log(p)) for p in ('alice', 'bob'))
 reported1 = all(re.search(rf"room 'ward': state of '{p}' .*ERROR at step 6\d\d in the tick of Doctor", server) for p in ('alice', 'bob'))
 ok1 = (result('alice').startswith('IN SYNC') and result('bob').startswith('IN SYNC')
-       and applied('alice') == applied('bob') and len(ok_cmds) == 5
+       and applied('alice') == applied('bob') and len(ok_cmds) == 5 and len(speeds1) == 3
        and paused_both and unpaused and slower_both and stopped1 and reported1 and input1 and wait1)
 print(f"1. Two players via server:  {result('alice')}; commands applied {len(ok_cmds)}/5, identical: {applied('alice') == applied('bob')}; broken doctor set aside on both: {stopped1}, reported: {reported1}; mouse after an error: {input1}; waiting shown: {wait1}")
 print(f"   {lobby.group(0) if lobby else 'no lobby line'}")
@@ -496,6 +504,25 @@ ok22 = (warned22 and ended(i_) is not None and ended(i_) == ended(j_) and ended(
 print(f"22. Co-op team loss:        warned at the first year end: {warned22}; game ended at step {ended(i_)} / {ended(j_)}; "
       f"{result('ian')} / {result('joy')}")
 fail |= not ok22
+
+p_, q_ = log('pia'), log('quin')
+wall23 = re.search(r'wall seconds ([\d.]+) for (\d+) steps', p_)
+ms23 = 1000 * float(wall23.group(1)) / int(wall23.group(2)) if wall23 else 0
+date23 = re.search(r'final \d+-\d+-(\d+)T(\d+)', p_)
+hours23 = (int(date23.group(1)) - 1) * 50 + int(date23.group(2)) if date23 else -1
+buy23 = re.search(r'step (\d+): peer 1 #\d+ place_object -> ok', p_)
+hire23 = re.search(r'step (\d+): peer 2 #\d+ hire -> ok', p_)
+delay23 = re.search(r'delay (\d+)', p_)
+d23 = int(delay23.group(1)) if delay23 else 0
+ok23 = (result('pia').startswith('IN SYNC through step 400') and result('quin').startswith('IN SYNC')
+        and applied('pia') == applied('quin') and 40 <= ms23 <= 80
+        and buy23 is not None and int(buy23.group(1)) <= 60 + d23 + 1
+        and hire23 is not None and int(hire23.group(1)) <= 80 + d23 + 1
+        and 20 <= hours23 <= 40)
+print(f"23. Slowest, real time:     {result('pia')}; {ms23:.0f} ms per step; game hours {hours23} in 400 steps; "
+      f"purchase at step {buy23.group(1) if buy23 else '-'} and hire at {hire23.group(1) if hire23 else '-'} "
+      f"(clicked at 60 and 80, delay {d23}: {d23 * ms23:.0f} ms)")
+fail |= not ok23
 
 w_, y_ = log('wade'), log('yara')
 cw = applied('wade')

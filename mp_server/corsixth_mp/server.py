@@ -738,7 +738,21 @@ class Server:
                 room.command_log.clear()
             else:
                 room.command_log.append(line)
+        if line.startswith("C ") and "kind=set_speed" in line:
+            self._note_speed(room, line)
         room.broadcast(line, exclude=player, referee=True)
+
+    @staticmethod
+    def _note_speed(room: Room, line: str) -> None:
+        """The players change speed with a set_speed command (every game
+        switches at the same step); the room remembers it for rejoining."""
+        try:
+            _, f = decode(line)
+        except ProtocolError:
+            return
+        speed = f.get("speed", "")
+        if speed == "Pause" or speed in pacing.SPEED_NAMES:
+            room.speed = speed
 
     def _record_fingerprint(self, room: Room, peer: int, step: int, fp: str) -> None:
         if room.desync_step is not None or room.recovery is not None:

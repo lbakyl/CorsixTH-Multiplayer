@@ -918,7 +918,10 @@ function World:mustPauseWindowRemoved()
     return
   end
 
-  if self:isCurrentSpeed("Pause") and not self:isGameUserPaused() then
+  if self.app.mp_session and self.mp_speed then
+    -- Multiplayer: the shared speed, which may have changed meanwhile.
+    self:applySharedSpeed(self.mp_speed)
+  elseif self:isCurrentSpeed("Pause") and not self:isGameUserPaused() then
     self:setSpeed(self.prev_speed)
   end
 
@@ -1022,32 +1025,15 @@ function World:onTick()
     end
     self.tick_timer = self.tick_rate
 
-    -- The session lives on the App, not the World, so it is never saved.
-    local session = self.app.mp_session
-    if session and self.hours_per_tick > 0 then
-      -- Multiplayer lockstep: advance in one-hour steps, each allowed only
-      -- once every peer's input for it is known. If a peer is behind, the
-      -- remaining steps wait for a later tick (the UI keeps running).
-      for _ = 1, self.hours_per_tick do
-        if not session:canStep() then break end
-        -- canStep() reads the network; a shared pause may just have arrived.
-        -- Running the step now would advance the date with no hourly ticks.
-        if self.hours_per_tick == 0 then break end
-        session:beforeStep()
-        -- The game ends between steps, at the same step on every peer.
-        if session.finish_request then session:finishGame() return end
-        if self:_advanceHours(1, true) then return end
-        session:afterStep()
-        if session.finish_request then session:finishGame() return end
-      end
-    elseif self:_advanceHours(self.hours_per_tick, not self:isCurrentSpeed("Pause")) then
+    -- (Multiplayer runs its own steps below, every world tick.)
+    if not self.app.mp_session and
+        self:_advanceHours(self.hours_per_tick, not self:isCurrentSpeed("Pause")) then
       return
-    elseif session then
-      -- Paused: keep reading the network so the unpause (or a chat, or a
-      -- player leaving) still arrives.
-      session:poll()
     end
   end
+  -- The session lives on the App, not the World, so it is never saved.
+  local session = self.app.mp_session
+  if session and self:_mpTick(session) then return end
   if self.hours_per_tick > 0 and self.floating_dollars then
     for obj in pairs(self.floating_dollars) do
       obj:tick()
@@ -1058,6 +1044,75 @@ function World:onTick()
     end
   end
   self.tick_timer = self.tick_timer - 1
+end
+
+-- Multiplayer lockstep steps (World:_mpTick). At Normal and faster one step
+-- is one game hour, as in single player. Slower speeds and pause step every
+-- MP_STEP_FRAMES world ticks (54 ms, like Normal) and an hour passes every so
+-- many steps, so a click takes effect as quickly at Slowest as at Normal,
+-- and even while the game is paused (a pause everybody chose; a window that
+-- pauses only this game still holds it, see World:_mpTick). The shared speed (world.mp_speed) only
+-- changes through the set_speed command, at the same step everywhere, and
+-- world.mp_frames carries the part of an hour already done.
+local MP_STEP_FRAMES = 3
+
+--! World ticks (18 ms) a lockstep step takes at a speed.
+function World:_mpStepFrames(speed)
+  local rate = (tick_rates[speed] or tick_rates.Normal)[2]
+  return math.min(rate, MP_STEP_FRAMES)
+end
+
+--! Game hours the coming step advances (part of the simulation: the same
+--! on every peer). Call once per step, after its commands ran.
+function World:_mpHoursForStep()
+  local speed = self.mp_speed or "Normal"
+  local timing = tick_rates[speed] or tick_rates.Normal
+  if speed == "Pause" or speed == "Speed Up" then return 0 end
+  local rate = timing[2]
+  self.mp_frames = (self.mp_frames or 0) + math.min(rate, MP_STEP_FRAMES)
+  local hours = 0
+  while self.mp_frames >= rate do
+    self.mp_frames = self.mp_frames - rate
+    hours = hours + 1
+  end
+  return hours
+end
+
+--! Multiplayer, once per world tick: run the steps that are due by the clock
+--! (a step every few ticks, see MP_STEP_FRAMES), each only once every peer's
+--! input for it is known. If a peer is behind, the step waits for a later
+--! tick (the UI keeps running). Test players and the server's referee
+--! (session.unpaced) step as fast as the others allow.
+--!return true if the game has ended (the world is gone)
+function World:_mpTick(session)
+  -- A window that pauses this game (a question, the annual report...) holds
+  -- it, and the others wait for it (and are told why, showBusy): a few game
+  -- rules look at whether this game is paused, so it must not step behind
+  -- such a window. Keep reading the network meanwhile.
+  if self:isMustPauseActive() then
+    session:poll()
+    return
+  end
+  local speed_frames = self:_mpStepFrames(self.mp_speed or "Normal")
+  -- A little catching up after a short wait, but no bursts.
+  session.tick_budget = math.min((session.tick_budget or 0) + 1, 2 * MP_STEP_FRAMES)
+  for _ = 1, session.steps_per_tick or 8 do
+    local cost = session.unpaced and 0 or speed_frames
+    if session.tick_budget < cost then break end
+    if not session:canStep() then break end
+    session.tick_budget = session.tick_budget - cost
+    session:beforeStep()
+    -- The game ends between steps, at the same step on every peer.
+    if session.finish_request then session:finishGame() return true end
+    local hours = self:_mpHoursForStep()
+    for _ = 1, hours do
+      if self:_advanceHours(1, true) then return true end
+    end
+    -- No hour and no command: the state, and so its fingerprint, is unchanged.
+    session:afterStep(hours == 0 and not session.applied_this_step)
+    if session.finish_request then session:finishGame() return true end
+    speed_frames = self:_mpStepFrames(self.mp_speed or "Normal")
+  end
 end
 
 --! Advance game time by a number of hours: end of day/month/year handling,

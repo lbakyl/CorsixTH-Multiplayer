@@ -524,16 +524,9 @@ function MultiplayerLobby:_onSTART(f)
 end
 
 function MultiplayerLobby:_onSPEED(f)
+  -- The speed itself changes with the set_speed command (at the same step on
+  -- every peer); this is the server's note of it.
   self.shared_speed = f.speed
-  if self.is_referee then return end -- the referee always runs at full speed
-  local world = TheApp and TheApp.world
-  if world and TheApp.mp_session and TheApp.mp_session.lobby == self then
-    world:applySharedSpeed(f.speed)
-    if f.peer ~= tostring(self.start_params and self.start_params.peer) then
-      local what = f.speed == "Pause" and "paused the game" or ("set the speed to " .. f.speed)
-      TheApp.mp_session.notify((f.name or "A player") .. " " .. what .. ".")
-    end
-  end
 end
 
 function MultiplayerLobby:_onLEFT(f)
@@ -743,7 +736,9 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
       if entry.unbuilt then room_builder.startRedraw(world, entry) else room_builder.show(world, entry) end
     end
   end
-  world:applySharedSpeed(self.is_referee and "And then some more" or (self.shared_speed or "Normal"))
+  -- The shared speed is the saved one (older saves: the room's).
+  world.mp_speed = world.mp_speed or self.shared_speed or "Normal"
+  world:applySharedSpeed(world.mp_speed)
   self.log(string.format("multiplayer: loaded the shared save at step %d (%d bytes): %s", step, #data,
       MultiplayerSession.defaultFingerprint(world)))
 end
@@ -920,12 +915,13 @@ function MultiplayerLobby:_beginGame(f)
         lobby:send("DIAG", {step = step, part = math.floor(i / 3000) + 1, text = text:sub(i, i + 2999)})
       end
     end,
-    request_speed = function(speed)
-      lobby:send("SPEED", {speed = MultiplayerLobby.clampSpeed(speed, f.max_speed)})
-    end,
+    request_speed = function() end, -- speed changes are set_speed commands
   })
   session.lobby = self
   session.max_speed = f.max_speed
+  session.speed_control = f.speed_control
+  -- The referee follows as fast as the players allow.
+  if self.is_referee then session.unpaced, session.steps_per_tick = true, 32 end
   session.hospital_index = my_index
   app.mp_session = session
   self.shared_speed = f.speed or "Normal"
@@ -936,7 +932,8 @@ function MultiplayerLobby:_beginGame(f)
   end
   self:_addMultiplayerMenu(world.ui, coop)
   self:_attachChat(world.ui)
-  world:applySharedSpeed(f.speed or "Normal")
+  world.mp_speed = f.speed or "Normal" -- the shared speed (set_speed commands)
+  world:applySharedSpeed(world.mp_speed)
   self.log(string.format("multiplayer: playing as %s of %s, seed %s, delay %s, max speed %s",
       f.peer, f.peers, f.seed, f.delay, tostring(f.max_speed)))
 end

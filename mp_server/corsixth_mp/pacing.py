@@ -1,18 +1,22 @@
 """Choose the lockstep delay and the fastest game speed for a room.
 
-One lockstep step is one game hour. A peer may run step n only after every
-other peer has reported step n - delay + 1, so the reports of the slowest
-peer must cross the relay within (delay - 1) step durations:
+At Normal and faster one lockstep step is one game hour; slower speeds (and
+pause) step every 54 ms like Normal (the game, World:_mpTick). A peer may run
+step n only after every other peer has reported step n - delay + 1, so the
+reports of the slowest peer must cross the relay within (delay - 1) steps:
 
-    (delay - 1) * step_ms >= one_way_ms * MARGIN + TICK_MS
+    (delay - 1) * step_ms >= one_way_ms * MARGIN + SLACK_MS
 
 ``one_way_ms`` between two players through the relay is about half of the sum
-of their round-trip times to the server. ``TICK_MS`` covers the 18 ms game
-timer: a report only leaves at the next tick.
+of their round-trip times to the server. ``SLACK_MS`` covers part of the 18 ms
+game timer (a report leaves at the next tick).
 
 A larger delay allows a faster speed but makes every click take effect later
-(``delay`` steps). We pick the smallest delay that keeps "Normal" smooth, then
-the fastest speed that this delay allows.
+(``delay`` steps of at least 54 ms). We pick the smallest delay that keeps
+"Normal" smooth, raise it up to FAST_DELAY if that allows a faster speed, and
+allow the fastest speed that this delay keeps smooth. (Before 2026-10-25 the
+margin was 25 %, the slack a whole tick, the jitter allowance half the spread
+and the delay was never raised: Max speed was often refused on the internet.)
 """
 
 from __future__ import annotations
@@ -21,9 +25,11 @@ import statistics
 from dataclasses import dataclass
 
 TICK_MS = 18
-MARGIN = 1.25
+SLACK_MS = 9
+MARGIN = 1.0
 MIN_DELAY = 2
 MAX_DELAY = 6
+FAST_DELAY = 3  # raise the delay up to this for a faster speed (3 x 54 ms per click at Normal)
 
 # Name -> milliseconds per game hour (CorsixTH/Lua/world.lua tick_rates,
 # 18 ms timer). Ordered slowest first.
@@ -43,11 +49,11 @@ def speed_rank(name: str) -> int:
 
 
 def effective_rtt(samples: list[float]) -> float:
-    """Typical round trip plus half the spread, so jitter is covered."""
+    """Typical round trip plus a quarter of the spread, for some jitter."""
     if not samples:
         return 0.0
     recent = samples[-10:]
-    return statistics.median(recent) + (max(recent) - min(recent)) / 2
+    return statistics.median(recent) + (max(recent) - min(recent)) / 4
 
 
 def worst_one_way(rtts: list[float]) -> float:
@@ -59,7 +65,7 @@ def worst_one_way(rtts: list[float]) -> float:
 
 
 def speed_ok(step_ms: int, delay: int, one_way_ms: float) -> bool:
-    return (delay - 1) * step_ms >= one_way_ms * MARGIN + TICK_MS
+    return (delay - 1) * step_ms >= one_way_ms * MARGIN + SLACK_MS
 
 
 @dataclass(frozen=True)
@@ -82,6 +88,13 @@ def recommend(rtts: list[float]) -> Pacing:
     delay = MIN_DELAY
     while delay < MAX_DELAY and not speed_ok(target_ms, delay, one_way):
         delay += 1
+    # A faster speed for a slightly longer delay, up to FAST_DELAY.
+    for _, ms in SPEEDS:
+        if ms < target_ms and not speed_ok(ms, delay, one_way):
+            for longer in range(delay + 1, FAST_DELAY + 1):
+                if speed_ok(ms, longer, one_way):
+                    delay = longer
+                    break
     max_speed = SPEEDS[0][0]
     for name, ms in SPEEDS:
         if speed_ok(ms, delay, one_way):

@@ -58,7 +58,10 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   moment after the click. If one player is slower or pauses, the others wait
   ("Waiting for the other player...").
 - **Speed and pause** are shared too; the room's connection limits the top
-  speed.
+  speed. A click takes effect a moment later at every speed, Slowest and
+  pause included (about a tenth of a second on a good connection). A window
+  that pauses your own game (a question, the annual report) makes the others
+  wait and tells them why.
 - **Rooms:** after the walls, door and windows, you place the furniture as
   usual; the other players see the room fill up. While you draw a room, the
   others see its outline in blue (the space is reserved). While furnishing
@@ -108,6 +111,22 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   hospital's value, balance and reputation.
 - If an action cannot be done (somebody stands in the way, a candidate is
   gone), the adviser tells you why.
+
+## Winning and losing
+
+- **One shared hospital:** the single-player rules. When the hospital meets
+  the level's goals, everybody gets the win fax: **Back to the lobby** ends
+  the game for everybody (whoever answers first decides), **Keep playing**
+  carries on. Moving on to the next level is not available in multiplayer.
+  Losing at a year end ends the game for everybody.
+- **A hospital each (co-op) is a team game:** a hospital that reaches the
+  level's goals is told so, and everybody hears who is still missing (the
+  Goals column in MULTIPLAYER > PLAYERS shows it too). When the last
+  hospital gets there, everybody gets the win fax (back to the lobby or keep
+  playing). A hospital that fails the goals at a year end is not thrown
+  out: it and the others are told, and they can help it with money or
+  staff. If it still fails them at the next year end, the team loses and
+  the game ends for everybody.
 
 ## Saving and continuing
 

@@ -15,7 +15,10 @@
 --   MP_SCENARIO       light | busy | none                (default light; none: no
 --                     test setup, to join a game a person hosts)
 --   MP_STEPS          game hours to play                 (default 1500)
---   MP_FAST           1: run at the fastest local speed (test only, default 1)
+--   MP_FAST           1: one lockstep step per tick, whatever the speed (test
+--                     only, default 1); 0: steps at the game's own pace
+--   MP_REALTIME       1: tick every 18 ms like the real game (default: as fast
+--                     as possible)
 --   MP_UI_SCRIPT      ";"-separated "hour:action[:arg]":
 --                       buy:<object>, hire:<class>      as in ingame_probe.lua; hire:Doctor:surgeon for a skill
 --                       room:<id>:<w>:<h>[:window]      draw a room in the room editor
@@ -124,7 +127,16 @@ end
 
 local socket
 
+-- MP_REALTIME=1: tick every 18 ms like the real game (SDL timer), not as
+-- fast as possible.
+local realtime = os.getenv("MP_REALTIME") == "1"
+local next_tick
 local function tick()
+  if realtime then
+    local now = socket.gettime()
+    if next_tick and now < next_tick then socket.sleep(next_tick - now) end
+    next_tick = math.max(now, next_tick or now) + 0.018
+  end
   TheApp:onTick()
 end
 
@@ -255,14 +267,17 @@ local function run_lobby()
   return lobby
 end
 
+local probe_started, game_started
 local function run()
   assert(loadfile(source_dir .. "/CorsixTH/CorsixTH.lua"))(unpack_args(args))
   assert(TheApp.good_install_folder, "Game data was not accepted")
   socket = require("socket")
+  probe_started = socket.gettime()
 
   local lobby = run_lobby()
   if not lobby then log("PROBE: DONE") return end
   local session = assert(TheApp.mp_session, "no session after start")
+  game_started = socket.gettime() - probe_started
   -- What the adviser tells this player goes into the log too.
   if not UIAdviser.mp_probe_say then
     UIAdviser.mp_probe_say = UIAdviser.say
@@ -296,7 +311,9 @@ local function run()
     -- The same test setup runs on every peer (and on the server's referee).
     desk_x, desk_y = builder.start_game(world, session, scenario, log)
   end
-  if fast then world:setSpeed("And then some more") end
+  -- Test runs: one lockstep step per tick, whatever the shared speed (a
+  -- player's own speed setting does not change a multiplayer game).
+  if fast then session.unpaced, session.steps_per_tick = true, 1 end
   if desk_x then look_at(desk_x, desk_y) end
   shot("game-start")
 
@@ -319,6 +336,16 @@ local function run()
     local before = session.step
     tick()
     ticks = ticks + 1
+    if waiting_rejoin and session.step > before then
+      -- The game steps on while paused (so the unpause can arrive): while
+      -- waiting for the rejoin, those steps count neither towards the end
+      -- nor for the rest of the UI script.
+      local made = session.step - before
+      target = target + made
+      for k, e in ipairs(ui_script) do
+        if not done[k] then e.hour = e.hour + made end
+      end
+    end
     if (session.restarts or 0) > repairs then
       -- Desync repaired: everybody loaded the referee's game.
       repairs = session.restarts
@@ -1404,6 +1431,8 @@ local function run()
     end
   end
   log("final " .. MultiplayerSession.defaultFingerprint(world))
+  log(string.format("wall seconds %.1f for %d steps (game started %.1f s after the probe)",
+      socket.gettime() - probe_started - (game_started or 0), session.step, game_started or 0))
   log(string.format("steps=%d ticks=%d issued=%d applied=%d rejected=%d peers=%d",
       session.step, ticks, session.stats.issued, session.stats.applied,
       session.stats.rejected, #session.peers))

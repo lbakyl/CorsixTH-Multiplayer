@@ -66,19 +66,29 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 
 ## Pacing
 
-`mp_server/corsixth_mp/pacing.py`. One step is one game hour. A peer may run
-step *n* only once every other peer reported *n − delay + 1*, so reports must
+`mp_server/corsixth_mp/pacing.py`. At Normal and faster one step is one game
+hour; at Slower, Slowest and pause the game steps every 54 ms (like Normal)
+and an hour passes every 4 (Slower) or 18 to 19 (Slowest) steps, so a click
+takes effect as quickly at every speed (World:_mpTick). A peer may run step
+*n* only once every other peer reported *n − delay + 1*, so reports must
 cross the relay within `(delay − 1)` step durations:
 
 ```
-(delay − 1) × step_ms ≥ 1.25 × one_way_ms + 18 ms
+(delay − 1) × step_ms ≥ one_way_ms + 9 ms
 ```
 
-Step durations: Slowest 1008 ms, Slower 216, Normal 54, Max speed 36, And
-then some more 18. The server picks the smallest delay (2–6) that keeps
-Normal smooth, then the fastest speed that delay allows. Faster speeds are
-refused (`too_fast`). The trade-off: a click takes effect `delay` steps later,
-for example 2 × 54 ms = 108 ms at Normal, but 2 s at Slowest.
+Step durations: 54 ms at Pause, Slowest, Slower and Normal; Max speed 36,
+And then some more 18. The server picks the smallest delay (2–6) that keeps
+Normal smooth, raises it up to 3 if that allows a faster speed, and allows
+the fastest speed that delay keeps smooth (round trips count with a quarter
+of their spread). Faster speeds are refused. A click takes effect `delay`
+steps later: 2 × 54 ms = 108 ms at Normal and slower.
+
+**Speed changes are commands** (`C kind=set_speed speed=...`), not server
+messages, since below Normal the speed decides which steps advance the clock:
+every game must switch at the same step. The issuing game checks the room's
+limits (top speed, owner only); the server notes the speed for players who
+rejoin. (`SPEED` from older clients is still relayed as before.)
 
 ## Leaving
 

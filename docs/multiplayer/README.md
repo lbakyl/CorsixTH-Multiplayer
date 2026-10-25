@@ -45,7 +45,8 @@ data, saves from it, or logs that contain it.**
 | Relay/lobby server | `mp_server/`; rooms, passwords, build check, ping, pacing, start, relay, fingerprint check, leave handling; 26 pytest tests |
 | Headless referee (S3/S4) | Optional: the server runs one more copy of each game without a screen. It checks the players' fingerprints, repairs a desync (everybody loads its save and plays on) and lets a player who left rejoin. Tested on the VM, shared and co-op (`referee.md`); not in the Docker image yet |
 | In-game lobby | Main menu → Multiplayer: server address, name, room list, create (shared / a hospital each, level, players), password, ready, start |
-| Shared speed and pause | Any player's speed or pause applies to everybody, capped at the room's ping-based maximum |
+| Shared speed and pause | Any player's speed or pause applies to everybody (a set_speed command, the same step everywhere), capped at the room's ping-based maximum. Below Normal and in pause the game steps every 54 ms, so clicks take about 0.1 s at every speed |
+| Winning and losing | Shared hospital: single-player rules, the win fax offers back to the lobby or keep playing. Co-op: the team wins when every hospital has reached the goals and loses if a hospital fails them at two year ends in a row. A game ends between steps and everybody returns to the lobby |
 | Player actions as commands | Corridor objects (buy, move, sell), hiring, firing, pay rise answers, rooms (draw outline/door/windows, then place the furniture by hand), opening the hospital early, fax answers, hospital settings (loans, prices, research, policies, plots, heating, handymen, queue sizes), queue order and sending a queued patient to another room, actions on one patient/staff/machine/rat, co-op money and staff transfers |
 | Room outlines | While someone draws a room the others see its floor in blue (reserved); the finished room appears for everyone at once |
 | Co-op | Original two- to four-player maps (tested with two); a hospital each, kept apart (rooms, staff, patients, heating, research, events, goals, epidemics); trade window in the Multiplayer menu; staff and patients move only as offers the other player accepts (purple icon); research can be shared, free or for a price (research blackboard or Multiplayer menu). Design and open points: `coop-architecture.md` |
@@ -327,6 +328,17 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
     player's fax paused the game and the other player thought it froze.
     The waiting game now turns blue and names the player and the open
     window (a busy notice, SHOW kind=busy).
+39. **A step need not be an hour.** At Slowest an hour lasts a second, so a
+    click two steps ahead took two seconds. Below Normal the game now steps
+    every 54 ms and advances the clock every few steps (world.mp_frames);
+    the speed became a command so every game switches at the same step. A
+    window that pauses only one game must still hold that game: a few rules
+    look at whether the game is paused, and stepping behind such a window
+    desynced at once (lobby check 1).
+40. **"No timeout" is not 0 in game hours.** The single-player win fax uses
+    timeout 0, harmless because the fax pauses the game; in multiplayer the
+    timers run in game hours and 0 expired at once, choosing "stay on level"
+    for everybody.
 
 ## 8. Next steps
 
