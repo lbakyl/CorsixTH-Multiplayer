@@ -434,7 +434,8 @@ MultiplayerSession.rejection_texts = {
   hire = {["no longer available"] = "That candidate is no longer available. The list changes every month.",
           ["invalid position"] = "Could not place the new member of staff there."},
   place_object = {["tile not free"] = "Could not place the object there: the spot was taken.",
-                  ["someone is in the way"] = "Could not place the object there: someone was in the way."},
+                  ["someone is in the way"] = "Could not place the object there: someone was in the way.",
+                  ["gave up"] = "Could not place the object there: someone stayed in the way."},
   move_object = {["tile not free"] = "Could not move the object there: the spot was taken.",
                  ["someone is in the way"] = "Could not move the object there: someone was in the way."},
   build_room = {["gave up"] = "The room could not be built: people did not leave the area."},
@@ -492,6 +493,7 @@ end
 --! Tell this player that one of their actions could not be done. Every peer
 --! turns it down alike; only the player who asked sees the notice.
 function MultiplayerSession:_tellRejected(cmd, why)
+  if cmd.kind == "place_object" then self:_returnObject(cmd) end
   local texts = MultiplayerSession.rejection_texts[cmd.kind]
   local text = texts and texts[why]
   if not text and (why == "not ours" or why == "not our staff" or why == "not our patient" or
@@ -505,6 +507,22 @@ function MultiplayerSession:_tellRejected(cmd, why)
     text = "The room could not be built: " .. tostring(why) .. "."
   end
   self.notify(text or ("That could not be done (" .. tostring(why) .. ")."))
+end
+
+--! An object this player clicked down was not placed: back into their list
+--! of objects to place (it left the list at the click; nothing was paid).
+function MultiplayerSession:_returnObject(cmd)
+  local ui = self.world and self.world.ui
+  local object = TheApp.objects[cmd.object]
+  if not ui or not object then return end
+  local entry = {{object = object, qty = 1}}
+  for _, window in ipairs(ui.windows or {}) do
+    if class.type(window) == "UIPlaceObjects" then -- (not a room editor)
+      window:addObjects(entry, false)
+      return
+    end
+  end
+  ui:addWindow(UIPlaceObjects(ui, entry, false))
 end
 
 --! Record and send this peer's fingerprint for the step just completed.
@@ -798,7 +816,17 @@ function handlers.place_object(world, cmd)
     return false, "tile not free"
   end
   if world:anyHumanoidObscuringArea(cmd.x, cmd.y) then
-    return false, "someone is in the way"
+    -- Somebody walks there: ask them to step aside (once each) and try again
+    -- a few steps later, on every peer alike.
+    cmd.asked = cmd.asked or {}
+    for _, e in ipairs(world.entities) do
+      if class.is(e, Humanoid) and e.tile_x == cmd.x and e.tile_y == cmd.y and e.mp_id and
+          not cmd.asked[e.mp_id] then
+        cmd.asked[e.mp_id] = true
+        e:leaveArea()
+      end
+    end
+    return false, "retry"
   end
   local cost = hospital:getObjectBuildCost(cmd.object)
   local msg = _S.transactions.buy_object .. ": " .. object_type.name
