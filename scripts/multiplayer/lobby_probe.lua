@@ -34,6 +34,7 @@
 --                       staffsend                       staff management: send the first doctor
 --                       rebuildcrashed                  clear a destroyed room away and build it again
 --                       buyinroom:<object>:<room>       buy an object, put it into such a room
+--                       researchlists                   log the share list for each other player
 --                       givemoney:<amount>              co-op trade window: send money
 --                       sendstaff:<class>               co-op trade window: send the first
 --                                                       member of staff of that class
@@ -1238,6 +1239,21 @@ local function run()
           world.ui:addWindow(board)
           shot("research-board")
           board:close()
+        elseif a == "researchlists" then
+          -- MULTIPLAYER > SHARE RESEARCH, then "Next player" round all the
+          -- players: what the list offers each of them.
+          UIMultiplayerResearch.open(world.ui)
+          for _ = 1, (world.mp_coop and world.mp_coop.players or 2) - 1 do
+            local w = world.ui:getWindow(UIMultiplayerResearch)
+            if not w or not w.target then break end
+            local keys = {}
+            for _, item in ipairs(w.items or {}) do keys[#keys + 1] = item.key end
+            log(string.format("UI: research list for %s: %s", tostring(w.target.name),
+                #keys > 0 and table.concat(keys, ",") or "nothing"))
+            w:nextPlayer()
+          end
+          local w = world.ui:getWindow(UIMultiplayerResearch)
+          if w then w:close() end
         elseif a == "shareresearch" then
           -- MULTIPLAYER > SHARE RESEARCH: everything, at a price, Offer.
           UIMultiplayerResearch.open(world.ui)
