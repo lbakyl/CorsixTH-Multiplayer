@@ -545,7 +545,8 @@ fail |= not ok23
 resets24 = []
 for d in sorted(out.iterdir()):
     f = d / 'log.txt'
-    if d.is_dir() and f.exists():
+    # (The save test leaves a stale room editor on purpose: not counted.)
+    if d.is_dir() and f.exists() and 'UI: left a stale room editor' not in f.read_text(errors='replace'):
         for line in f.read_text(errors='replace').splitlines():
             if 'map clicks were off with no placement window open' in line:
                 resets24.append(d.name)
