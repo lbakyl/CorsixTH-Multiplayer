@@ -44,8 +44,11 @@ jobs:
           grep -q "MACOS SMOKE OK" smoke.txt
       - name: Smoke test (the game starts and keeps running without game data)
         run: |
-          app=dist/CorsixTH-Multiplayer/CorsixTH.app
+          app=$PWD/dist/CorsixTH-Multiplayer/CorsixTH.app
           export SDL_VIDEODRIVER=dummy SDL_AUDIO_DRIVER=dummy SDL_RENDER_DRIVER=software
+          # From an empty folder, as from Finder: the program looks for
+          # CorsixTH.lua in the current folder first (here the checkout has one).
+          mkdir -p "$RUNNER_TEMP/run" && cd "$RUNNER_TEMP/run"
           "$app/Contents/MacOS/CorsixTH" > game.log 2>&1 &
           pid=$!
           sleep 15
