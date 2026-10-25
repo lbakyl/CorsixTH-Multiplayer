@@ -1,0 +1,50 @@
+---
+name: macOS package
+
+permissions:
+  contents: read
+
+# A macOS (Apple Silicon) build for multiplayer testing, with Lua 5.5 like
+# the Windows and Linux builds (the multiplayer build id contains the Lua
+# version). Built on macOS 15, so it runs there and on newer systems (Tahoe).
+# See scripts/multiplayer/build_macos_package.sh.
+on:
+  push:
+    branches:
+      - master
+      - 'mp/macos-package'
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install build packages
+        run: brew install cmake ninja pkg-config sdl3 sdl3_mixer fluid-synth freetype libpng zstd
+      - name: Cache Lua 5.5 and its modules
+        uses: actions/cache@v5
+        with:
+          path: build-macos-package/prefix
+          key: macos-package-prefix-${{ hashFiles('scripts/multiplayer/build_macos_package.sh') }}
+      - name: Build the package
+        run: bash scripts/multiplayer/build_macos_package.sh "$(git rev-parse --short=8 HEAD)"
+      - name: Smoke test (libraries inside the app, Lua modules load)
+        run: |
+          app=dist/CorsixTH.app
+          ls "$app/Contents/Frameworks" | head -50
+          # Nothing may still point at Homebrew or the build folders.
+          for f in "$app/Contents/MacOS/CorsixTH" "$app"/Contents/Frameworks/*.dylib; do
+            if otool -L "$f" | tail -n +2 | grep -E "/opt/homebrew|/usr/local|build-macos-package"; then
+              echo "not self-contained: $f"; exit 1
+            fi
+          done
+          CORSIXTH_APP="$PWD/$app" SDL_VIDEODRIVER=dummy SDL_AUDIO_DRIVER=dummy \
+            "$app/Contents/MacOS/CorsixTH" --interpreter="$PWD/scripts/multiplayer/macos_smoke.lua" | tee smoke.txt
+          grep -q "SMOKE: build id part lua5.5-" smoke.txt
+      - name: Upload the package
+        uses: actions/upload-artifact@v7
+        with:
+          name: CorsixTH-macos
+          path: dist/*.zip
+          if-no-files-found: error
