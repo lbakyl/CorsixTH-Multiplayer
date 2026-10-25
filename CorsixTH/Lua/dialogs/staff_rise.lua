@@ -105,7 +105,9 @@ end
 
 -- Staff raise requests pause game
 function UIStaffRise:mustPause()
-  return true
+  -- Multiplayer: the game goes on for everybody (the request times out by the
+  -- hospital policy as usual if nobody answers).
+  return not TheApp.mp_session
 end
 
 function UIStaffRise:getStaffPosition(dx, dy)

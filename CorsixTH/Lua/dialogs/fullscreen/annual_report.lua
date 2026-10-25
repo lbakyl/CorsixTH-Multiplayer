@@ -168,7 +168,9 @@ end
 
 -- Make sure this window pauses the game, we want to let the player browse their awards
 function UIAnnualReport:mustPause()
-  return true
+  -- Multiplayer: the game goes on for everybody (awards are already paid in
+  -- the simulation at the year end).
+  return not TheApp.mp_session
 end
 
 --! Finds out which awards and/or trophies the player has been awarded this year.

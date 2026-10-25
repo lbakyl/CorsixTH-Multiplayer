@@ -913,6 +913,11 @@ local function run()
           world.ui:addWindow(win)
           holding = {win = win, until_time = socket.gettime() + (tonumber(entry.arg) or 3)}
           log(string.format("UI: opened a question at step %d", session.step))
+        elseif a == "freeze" then
+          -- This game stops for <arg> seconds (a slow computer): the others wait.
+          log(string.format("UI: freezing for %s s at step %d", entry.arg, session.step))
+          socket.sleep(tonumber(entry.arg) or 3)
+          log(string.format("UI: going on at step %d", session.step))
         elseif a == "inputerror" then
           -- An error in the mouse movement handler, as the game reports it
           -- (App:errorHandler): in multiplayer the handler stays connected.

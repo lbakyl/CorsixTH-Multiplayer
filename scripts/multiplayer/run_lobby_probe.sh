@@ -7,7 +7,9 @@
 #   1. two players: room, ping and pacing in the lobby, game start, actions
 #      from both (buy, hire), a pause by one player that both get, an
 #      unpause by the other, a speed change, a doctor whose tick breaks in
-#      both games (set aside alike, reported) -> IN SYNC
+#      both games (set aside alike, reported), a question that does not
+#      pause the game, a frozen game the other one waits for (and says
+#      for whom) -> IN SYNC
 #   2. wrong password -> refused
 #   3. one player changes money locally only -> DESYNC (found by the game
 #      and by the server)
@@ -141,7 +143,7 @@ EOF
 # wait for the server).
 pids=()
 run_probe alice MP_ROLE=host MP_ROOM=ward MP_STEPS=1500 \
-  MP_UI_SCRIPT="30:buy:bench;60:hire:Doctor;200:pause;600:breakstaff:Doctor;620:ticks:Doctor;650:inputerror;700:speed:Slower;900:holdpause:3" & pids+=($!)
+  MP_UI_SCRIPT="30:buy:bench;60:hire:Doctor;200:pause;600:breakstaff:Doctor;620:ticks:Doctor;650:inputerror;700:speed:Slower;900:holdpause:3;1100:freeze:3" & pids+=($!)
 sleep 1
 run_probe bob MP_ROLE=join MP_ROOM=ward MP_STEPS=1500 MP_DRAW_EVERY=3 \
   MP_UI_SCRIPT="40:buy:plant;90:hire:Nurse;190:unpause:150;620:ticks:Doctor" & pids+=($!)
@@ -319,16 +321,21 @@ speeds1 = [x for x in applied('alice') if 'set_speed -> ok' in x]
 # At step 600 the doctor's tick breaks in all games (probe_break, as a bug would): all
 # set him aside alike, stay in sync, and tell the server.
 # An error in alice's mouse handler leaves it connected (her mouse goes on).
-# alice keeps a question open (it pauses her game): bob's game turns blue
-# and says whom it waits for, and why.
-wait1 = re.search(r'waiting for peer 1 at step \d+: the screen turns blue', log('bob')) is not None and 'notice: Waiting for alice: a question is open.' in log('bob')
+# alice keeps a question open: in multiplayer it does not pause her game
+# (her steps go on). Then her game stops for 3 s: bob's game turns blue and
+# says whom it waits for.
+opened1 = re.search(r'UI: opened a question at step (\d+)', log('alice'))
+closed1 = re.search(r'UI: closed the question at step (\d+)', log('alice'))
+question1 = opened1 is not None and closed1 is not None and int(closed1.group(1)) - int(opened1.group(1)) >= 20
+wait1 = (re.search(r'waiting for peer 1 at step \d+: the screen turns blue', log('bob')) is not None
+         and 'notice: Waiting for alice...' in log('bob') and question1)
 input1 = 'UI: motion handler after an error at step 650: connected (before true)' in log('alice')
 stopped1 = all(re.search(r'UI: Doctor #\d+ ticks false at step 620', log(p)) for p in ('alice', 'bob'))
 reported1 = all(re.search(rf"room 'ward': state of '{p}' .*ERROR at step 6\d\d in the tick of Doctor", server) for p in ('alice', 'bob'))
 ok1 = (result('alice').startswith('IN SYNC') and result('bob').startswith('IN SYNC')
        and applied('alice') == applied('bob') and len(ok_cmds) == 5 and len(speeds1) == 3
        and paused_both and unpaused and slower_both and stopped1 and reported1 and input1 and wait1)
-print(f"1. Two players via server:  {result('alice')}; commands applied {len(ok_cmds)}/5, identical: {applied('alice') == applied('bob')}; broken doctor set aside on both: {stopped1}, reported: {reported1}; mouse after an error: {input1}; waiting shown: {wait1}")
+print(f"1. Two players via server:  {result('alice')}; commands applied {len(ok_cmds)}/5, identical: {applied('alice') == applied('bob')}; broken doctor set aside on both: {stopped1}, reported: {reported1}; mouse after an error: {input1}; question does not pause: {question1}; waiting shown: {wait1}")
 print(f"   {lobby.group(0) if lobby else 'no lobby line'}")
 print(f"   shared pause on both: {paused_both}; unpaused by the other player: {unpaused}; shared speed change: {slower_both}")
 fail |= not ok1

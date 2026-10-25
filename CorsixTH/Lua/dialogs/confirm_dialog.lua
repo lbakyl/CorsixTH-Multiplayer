@@ -84,7 +84,9 @@ end
 
 -- Confirm dialogs are used for errors, if it is an error then pause the game
 function UIConfirmDialog:mustPause()
-  return self.must_pause
+  -- Multiplayer: a question does not stop the game for everybody (what it
+  -- asks about is a command, checked again when it runs).
+  return self.must_pause and not TheApp.mp_session
 end
 
 function UIConfirmDialog:registerKeyHandlers()
