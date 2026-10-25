@@ -27,7 +27,8 @@
 #   8. co-op on an original two-player map: a hospital each, both opened
 #      early, purchases and hires in each player's own hospital, money and a
 #      nurse sent between them, loans, a price, research and heating changed
-#      in their windows -> IN SYNC, every command accepted
+#      in their windows, the send icon in a staff window -> IN SYNC, every
+#      command accepted
 #   9. co-op events: an emergency and a VIP visit for player 2's hospital,
 #      accepted by player 2; the emergency countdown runs in the simulation
 #      -> IN SYNC
@@ -175,7 +176,7 @@ run_probe mira MP_ROLE=host MP_ROOM=coop MP_COOP=1 MP_STEPS=1200 \
   MP_UI_SCRIPT="20:openhospital;60:buy:bench;80:hire:Doctor;200:givemoney:5000;250:loan;260:priceup;270:research:cure;280:heatup;330:acceptoffer;400:bonus:Doctor;410:raise:Doctor;500:buyplot" & pids+=($!)
 sleep 1
 run_probe nico MP_ROLE=join MP_ROOM=coop MP_STEPS=1200 MP_DRAW_EVERY=3 \
-  MP_UI_SCRIPT="30:openhospital;60:buy:plant;90:hire:Nurse;300:sendstaff:Nurse;350:loan;360:heatup;370:heatup;520:buyplot:other;600:sendhome" & pids+=($!)
+  MP_UI_SCRIPT="30:openhospital;60:buy:plant;90:hire:Nurse;200:staffwindow:Nurse;300:sendstaff:Nurse;350:loan;360:heatup;370:heatup;520:buyplot:other;600:sendhome" & pids+=($!)
 run_probe olga MP_ROLE=host MP_ROOM=events MP_COOP=1 MP_STEPS=1600   MP_UI_SCRIPT="20:openhospital;100:emergency:2;400:vip:2" & pids+=($!)
 sleep 1
 run_probe paul MP_ROLE=join MP_ROOM=events MP_STEPS=1600 MP_DRAW_EVERY=3   MP_UI_SCRIPT="30:openhospital;130:answerfax:emergency:1;430:answerfax:personality:1" & pids+=($!)
@@ -427,14 +428,16 @@ ok_all = len(other8) == 1 and all(x.endswith('-> ok') for x in cm if x not in ot
 # mira buys a plot with entrance doors on it: they are made in the same
 # order on both machines (pairs order once differed).
 plot8 = re.search(r'UI: buying plot (\d+) \(\$\d+, (\d+) objects', m)
-ok8 = (result('mira').startswith('IN SYNC') and result('nico').startswith('IN SYNC') and cm == applied('nico')
+# The purple send icon in the nurse's staff window opens the trade window with her selected.
+icon8 = 'send icon opens the trade window: true, selected: true' in log('nico')
+ok8 = (icon8 and result('mira').startswith('IN SYNC') and result('nico').startswith('IN SYNC') and cm == applied('nico')
        and ok_all and sorted(kinds) == sorted(['open_hospital', 'open_hospital', 'place_object', 'place_object',
                                                'hire', 'hire', 'give_money', 'offer_staff', 'fax_choice', 'loan', 'loan',
                                                'set_price', 'research_frac', 'set_heat', 'set_heat', 'set_heat',
                                                'staff_bonus', 'raise_wage', 'send_home', 'buy_plot', 'buy_plot'])
        and plot8 is not None and int(plot8.group(2)) > 0
        and 'co-op: 2 hospitals' in m)
-print(f"8. Co-op, a hospital each:  {result('mira')}; commands {len(cm)} all ok: {ok_all}; identical: {cm == applied('nico')}; plot bought: {plot8.group(1, 2) if plot8 else '-'}")
+print(f"8. Co-op, a hospital each:  {result('mira')}; commands {len(cm)} all ok: {ok_all}; identical: {cm == applied('nico')}; plot bought: {plot8.group(1, 2) if plot8 else '-'}; send icon in the staff window: {icon8}")
 for line in re.findall(r'hospital \d (?:[A-Z]+:|settings:).*', m)[-4:]:
     print("   " + line)
 fail |= not ok8

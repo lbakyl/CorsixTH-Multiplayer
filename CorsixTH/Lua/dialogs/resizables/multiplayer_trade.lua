@@ -220,6 +220,26 @@ function UIMultiplayerTrade:nextPlayer()
   if window.price_panel then window:setPrice(price) end
 end
 
+--! Draw the purple "send to another player" icon (w x h, default 24 x 28,
+--! at ix, iy, UI scale s): a person and an arrow, centred. Used in the
+--! patient and staff windows.
+function UIMultiplayerTrade.drawSendIcon(canvas, ix, iy, s, w, h)
+  w, h = w or 24, h or 28
+  local edge = h >= 28 and 2 or 1
+  canvas:drawRect(canvas:mapRGB(48, 16, 74), ix, iy, w * s, h * s)
+  canvas:drawRect(canvas:mapRGB(150, 76, 206), ix + edge * s, iy + edge * s, (w - 2 * edge) * s, (h - 2 * edge) * s)
+  -- The figure is 16 x 16 (at 4, 5 in the 24 x 28 icon).
+  local fx, fy = ix + (math.floor((w - 16) / 2) - 4) * s, iy + (math.floor((h - 16) / 2) - 5) * s
+  local light = canvas:mapRGB(246, 238, 255)
+  canvas:drawRect(light, fx + 6 * s, fy + 5 * s, 5 * s, 5 * s)   -- head
+  canvas:drawRect(light, fx + 4 * s, fy + 11 * s, 9 * s, 6 * s)  -- shoulders
+  canvas:drawRect(light, fx + 5 * s, fy + 17 * s, 7 * s, 4 * s)  -- body
+  local arrow = canvas:mapRGB(255, 214, 90)                       -- "to another hospital"
+  canvas:drawRect(arrow, fx + 14 * s, fy + 13 * s, 5 * s, 2 * s)
+  canvas:drawRect(arrow, fx + 17 * s, fy + 11 * s, 2 * s, 6 * s)
+  canvas:drawRect(arrow, fx + 19 * s, fy + 12 * s, 1 * s, 4 * s)
+end
+
 --! Open the window (co-op only), optionally with a member of staff selected.
 function UIMultiplayerTrade.open(ui, staff)
   if not (TheApp.mp_session and ui.app.world and ui.app.world.mp_coop) then return end

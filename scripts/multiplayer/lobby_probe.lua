@@ -721,6 +721,27 @@ local function run()
           log("UI: asked for an emergency at step " .. session.step)
         elseif a == "shot" then
           shot(entry.arg)
+        elseif a == "staffwindow" then
+          -- Open the staff window of this hospital's first <arg> (a screenshot
+          -- shows it), then click its send icon: the trade window opens.
+          local member
+          for _, st in ipairs(world.ui.hospital.staff) do
+            if not member and st.humanoid_class == entry.arg then member = st end
+          end
+          if member then
+            local win = UIStaff(world.ui, member)
+            world.ui:addWindow(win)
+            shot("staffwindow-" .. entry.arg)
+            win:sendToPlayer()
+            local trade = world.ui:getWindow(UIMultiplayerTrade)
+            log(string.format("UI: staff window of %s at step %d: send icon opens the trade window: %s, selected: %s",
+                entry.arg, session.step, tostring(trade ~= nil),
+                tostring(trade and trade.selected and trade.selected.staff == member)))
+            if trade then trade:close() end
+            win:close()
+          else
+            log("UI: no " .. entry.arg .. " for the staff window")
+          end
         elseif a == "lookroom" then
           -- Centre the view on this hospital's newest room.
           local best

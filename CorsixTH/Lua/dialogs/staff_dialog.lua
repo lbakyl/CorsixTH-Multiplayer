@@ -116,6 +116,24 @@ function UIStaff:UIStaff(ui, staff)
 
   self:addPanel(305, 178,  18):makeButton(0, 0, 24, 24, 306, self.close):setTooltip(_S.tooltip.staff_window.close)
 
+  -- Co-op: this player's staff can be offered to another player's hospital
+  -- (the purple icon of the patient window; it opens the trade window).
+  local world = app.world
+  if TheApp.mp_session and world and world.mp_coop and world.mp_coop.players > 1 and
+      staff.hospital and staff.hospital == ui.hospital then
+    -- (At the right end of the skills box; a handyman has his tasks there, so
+    -- his covers the wage note exactly.)
+    local ix, iy, iw, ih = 175, 147, 24, 28
+    if class.is(staff, Handyman) then ix, iy, iw, ih = 90, 218, 33, 21 end
+    local icon = self:addColourPanel(ix, iy, iw, ih, 48, 16, 74)
+    icon.custom_draw = --[[persistable:staff_send_icon_draw]] function(panel, canvas, x, y)
+      local s = TheApp.gfx:getUIScale()
+      _G.UIMultiplayerTrade.drawSendIcon(canvas, x + panel.x * s, y + panel.y * s, s, panel.w, panel.h)
+    end
+    icon:makeButton(0, 0, iw, ih, nil, self.sendToPlayer)
+        :setTooltip(_S.tooltip.multiplayer_window.send_staff)
+  end
+
   self:makeTooltip(_S.tooltip.staff_window.name, 33, 19, 172, 42)
   self:makeTooltip(_S.tooltip.staff_window.happiness, 113,  49, 204,  74)
   self:makeTooltip(_S.tooltip.staff_window.tiredness, 113,  74, 204, 109)
@@ -359,6 +377,12 @@ end
 
 --! Raise one of a handyman's priorities ('cleaning', 'watering' or
 --! 'repairing'); the other two go down so that they stay balanced.
+--! Multiplayer co-op: offer this member of staff to another player (in the
+--! trade window, where a price can be set).
+function UIStaff:sendToPlayer()
+  UIMultiplayerTrade.open(self.ui, self.staff)
+end
+
 --! (Also used by the multiplayer handyman_prio command.)
 function UIStaff.raiseHandymanPriority(staff, increased)
   local incr_value = 0.1  -- Increase of 'increased'
