@@ -86,7 +86,7 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 - **A hospital each (co-op):** each player runs their own hospital and can
   look at, but not act on, the others' patients, staff and machines. The
   **MULTIPLAYER** menu, **TRADE WITH OTHER PLAYERS** sends money, or offers
-  a member of staff, free or for a price (the -$500 and +$500 buttons;
+  a member of staff, free or for a price up to $10,000 (the -$500 and +$500 buttons;
   the other player pays it on accepting, if they can afford it); patients
   are offered with the purple **Refer** icon in
   the patient window or the "refer" answer on a "no treatment" fax. The

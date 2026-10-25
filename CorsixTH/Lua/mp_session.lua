@@ -1628,7 +1628,7 @@ end
 MultiplayerSession.OFFER_DAYS = 20
 
 -- A member of staff may be offered for a price, in steps of $500.
-MultiplayerSession.STAFF_MAX_PRICE = 50000
+MultiplayerSession.STAFF_MAX_PRICE = 10000
 MultiplayerSession.STAFF_PRICE_STEP = 500
 
 local function display_name(entity)
