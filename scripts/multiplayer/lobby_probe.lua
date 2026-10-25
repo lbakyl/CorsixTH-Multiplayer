@@ -799,6 +799,18 @@ local function run()
         elseif a == "speed" then
           log("UI: chose speed " .. entry.arg .. " at step " .. session.step)
           world:setUserSpeed(entry.arg)
+        elseif a == "speedother" then
+          -- The slowest speed the room allows that is not the current one
+          -- (the room's top speed depends on the connection).
+          local pick
+          for _, sp in ipairs(MultiplayerLobby.SPEEDS) do
+            if not pick and sp ~= world.mp_speed and
+                MultiplayerLobby.clampSpeed(sp, session.max_speed) == sp then
+              pick = sp
+            end
+          end
+          log("UI: chose speed " .. tostring(pick) .. " at step " .. session.step)
+          if pick then world:setUserSpeed(pick) end
         elseif a == "votefax" then
           -- Answer the speed vote fax with choice <arg> (1 agree, 2 decline),
           -- clicked in the fax window; wait for it if it is not there yet.

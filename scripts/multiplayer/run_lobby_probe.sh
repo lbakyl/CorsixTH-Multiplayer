@@ -211,10 +211,10 @@ run_probe lea MP_ROLE=join MP_ROOM=research MP_STEPS=900 \
 # rise window, one accepted and one declined; a nurse fired; queues
 # reordered by dragging in the queue window.
 run_probe wade MP_ROLE=host MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
-  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench;860:movestaff:Doctor;866:whereis:Doctor;950:overlay" & pids+=($!)
+  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench;860:movestaff:Doctor;870:whereis:Doctor;950:overlay" & pids+=($!)
 sleep 1
 run_probe yara MP_ROLE=join MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
-  MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront;500:furnishroom:gp:5:5;750:cancelroom:toilets:4:4;866:whereis:Doctor;900:uistate;950:overlay" & pids+=($!)
+  MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront;500:furnishroom:gp:5:5;750:cancelroom:toilets:4:4;870:whereis:Doctor;900:uistate;950:overlay" & pids+=($!)
 # Room editing: ed builds a GP's office, then edits it while patients are
 # about (pick up, place, buy, move, confirm) and later removes it; flo watches.
 run_probe ed MP_ROLE=host MP_ROOM=edit MP_STEPS=1400 MP_SCENARIO=busy \
@@ -260,7 +260,7 @@ sleep 1
 run_probe quin MP_ROLE=join MP_ROOM=slowest MP_STEPS=400 MP_FAST=0 MP_REALTIME=1 MP_UI_SCRIPT="80:hire:Nurse" & pids+=($!)
 # Speed votes with three players (check 25).
 run_probe vic MP_ROLE=host MP_ROOM=vote MP_PLAYERS=3 MP_STEPS=1400 \
-  MP_UI_SCRIPT="50:speed:Slower;300:speed:Slowest;450:speed:Slower" & pids+=($!)
+  MP_UI_SCRIPT="50:speedother;300:speedother;450:speedother" & pids+=($!)
 sleep 1
 run_probe wren MP_ROLE=join MP_ROOM=vote MP_STEPS=1400 MP_VOTE=ask MP_UI_SCRIPT="60:votefax:2;310:votefax:1" & pids+=($!)
 sleep 1
@@ -544,7 +544,8 @@ date23 = re.search(r'final \d+-\d+-(\d+)T(\d+)', p_)
 hours23 = (int(date23.group(1)) - 1) * 50 + int(date23.group(2)) if date23 else -1
 buy23 = re.search(r'step (\d+): peer 1 #\d+ place_object -> ok', p_)
 hire23 = re.search(r'step (\d+): peer 2 #\d+ hire -> ok', p_)
-delay23 = re.search(r'delay (\d+)', p_)
+# (The game's delay, from START: the lobby line shows the server's first guess.)
+delay23 = re.search(r'START: .*delay (\d+)', p_)
 d23 = int(delay23.group(1)) if delay23 else 0
 ok23 = (result('pia').startswith('IN SYNC through step 400') and result('quin').startswith('IN SYNC')
         and applied('pia') == applied('quin') and 40 <= ms23 <= 80
@@ -558,12 +559,14 @@ fail |= not ok23
 
 logs25 = {n: log(n) for n in ('vic', 'wren', 'zack')}
 outcomes25 = {n: re.findall(r'speed vote \d+ for ([\w ]+): (\w+)', t) for n, t in logs25.items()}
-want25 = [('Slower', 'declined'), ('Slowest', 'agreed'), ('Slower', 'lapsed')]
+want25 = ['declined', 'agreed', 'lapsed']
 fax25 = len(re.findall(r'UI: answered the speed vote fax', logs25['wren'])) == 2
-# (Speeds below Normal: a slow connection may cap the room's top speed at Normal.)
-max25 = all('speed is now Slowest' in t and 'speed is now Slower' not in t
-            for t in logs25.values())
-ok25 = (all(o == want25 for o in outcomes25.values()) and fax25 and max25
+# (Each vote is for a speed other than the current one, within the room's
+# top speed, which depends on the connection.) The agreed speed is the last.
+agreed25 = [sp for sp, r in outcomes25['vic'] if r == 'agreed']
+max25 = bool(agreed25) and all(re.findall(r'speed is now ([\w ]+?) at step', t)[-1:] == agreed25
+                               for t in logs25.values())
+ok25 = (all([r for _, r in o] == want25 for o in outcomes25.values()) and fax25 and max25
         and all(result(n).startswith('IN SYNC') for n in logs25)
         and applied('vic') == applied('wren') == applied('zack'))
 print(f"25. Speed votes:            {result('vic')}; votes {outcomes25['vic']}; same on all three: "
@@ -600,8 +603,8 @@ clean10 = marks10 == ['0', '0']
 # wade moved a doctor into a room (right click, then a click there): both
 # games have them in that room at the same tile a few hours later.
 moving10 = re.search(r'UI: moving Doctor #(\d+) from \S+ to (\d+),(\d+) in (\S+) \(picked up: hidden (\w+)\)', w_)
-where_w = re.search(r'UI: Doctor #(\d+) at step 866 is at (\S+) in (\S+), visible (\w+)', w_)
-where_y = re.search(r'UI: Doctor #(\d+) at step 866 is at (\S+) in (\S+), visible (\w+)', y_)
+where_w = re.search(r'UI: Doctor #(\d+) at step 870 is at (\S+) in (\S+), visible (\w+)', w_)
+where_y = re.search(r'UI: Doctor #(\d+) at step 870 is at (\S+) in (\S+), visible (\w+)', y_)
 moved10 = bool(moving10 and where_w and where_y and where_w.groups() == where_y.groups()
                and where_w.group(1) == moving10.group(1) and where_w.group(3) == moving10.group(4)
                # gone from the mover's screen at once, seen again where they landed
