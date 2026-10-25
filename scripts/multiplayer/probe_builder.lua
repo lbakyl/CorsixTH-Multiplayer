@@ -356,6 +356,44 @@ function builder.ui_buy_into_room(world, object_id, room_id, log)
   return fx, fy
 end
 
+--! Buy an object in the corridor shop and put it down on a corridor tile
+--! where a person stands, as if they stepped there just after the click
+--! (the window's own place, without its "somebody there" check).
+function builder.ui_buy_under_person(world, object_id, log)
+  local ui = world.ui
+  local shop = UIFurnishCorridor(ui)
+  ui:addWindow(shop)
+  for _, o in ipairs(shop.objects) do
+    if o.object.id == object_id then o.qty = o.qty + 1 end
+  end
+  shop:confirm()
+  local place
+  for _, window in ipairs(ui.windows) do
+    if class.type(window) == "UIPlaceObjects" then place = window end
+  end
+  if not place then log("UI: no placement window") return end
+  local people = {}
+  for _, e in ipairs(world.entities) do
+    if class.is(e, Humanoid) and e.tile_x and e.mp_id and not world:getRoom(e.tile_x, e.tile_y) and
+        ui.hospital:isInHospital(e.tile_x, e.tile_y) then
+      people[#people + 1] = e
+    end
+  end
+  table.sort(people, function(a, b) return a.mp_id < b.mp_id end)
+  for _, person in ipairs(people) do
+    place:setBlueprintCell(person.tile_x, person.tile_y)
+    if place.object_blueprint_good then
+      log(string.format("UI: put a %s where %s #%d stands, at %d,%d (step %d)", object_id,
+          tostring(person.humanoid_class), person.mp_id, person.tile_x, person.tile_y, TheApp.mp_session.step))
+      place:placeObject()
+      if ui:getWindow(UIPlaceObjects) then place:close() end
+      return
+    end
+  end
+  log("UI: nobody standing where a " .. object_id .. " fits")
+  place:close()
+end
+
 function builder.ui_hire(world, desk_x, desk_y, class, log)
   local ui = world.ui
   local dlg = UIHireStaff(ui)
@@ -652,6 +690,12 @@ function builder.edit_tick(world, state, log)
     ui:onMouseUp(1, sx, sy)
     log(string.format("UI: edit: clicked %s #%d at %d,%d", state.room_type, state.room.id, x, y))
     state.i, state.since = 1, step
+    if state.steps[1] == "tool" then
+      -- The player picks the edit room tool again while the room empties.
+      ui:setEditRoom(true)
+      log("UI: edit: chose the edit room tool again while waiting")
+      state.i = 2
+    end
     return false
   end
   if state.i > #state.steps then return true end
