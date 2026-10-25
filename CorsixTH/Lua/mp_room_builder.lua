@@ -464,6 +464,12 @@ end
 --! that player's machine). False if another room editor is open there.
 function builder.show(world, entry)
   local ui = world.ui
+  -- The edit room tool still chosen (the player clicked it again while the
+  -- room emptied) is no other editor: this one opens instead.
+  if ui and ui.edit_room == true then
+    ui.edit_room = false
+    ui:setCursor(ui.default_cursor)
+  end
   if not ui or (ui.edit_room and ui.edit_room ~= entry.dlg) then return false end
   local dlg = entry.dlg
   dlg.mp_room_id = entry.dlg.room.id
