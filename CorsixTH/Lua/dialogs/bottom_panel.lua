@@ -442,7 +442,9 @@ end
 --!param hospital (Hospital) optional; whose message it is (default: the owner's
 --!  hospital, else hospital 1). In multiplayer co-op only that player sees it,
 --!  but it exists (and times out) on every peer.
-function UIBottomPanel:queueMessage(type, message, owner, timeout, default_choice, callback, hospital)
+--!param everyone (bool) optional; multiplayer co-op: every player sees it and
+--!  may answer it (the team's win fax)
+function UIBottomPanel:queueMessage(type, message, owner, timeout, default_choice, callback, hospital, everyone)
   -- Show a helpful message if there has been no messages before - only in campaign though
   if not self.ui.hospital.message_popup and tonumber(self.world.map.level_number) then
     self.world.ui.adviser:say(_A.information.fax_received)
@@ -461,6 +463,7 @@ function UIBottomPanel:queueMessage(type, message, owner, timeout, default_choic
     callback = callback,
     mp_id = self.world.next_message_id,
     hospital = hospital or (owner and owner.hospital) or self.world.hospitals[1],
+    everyone = everyone or nil,
   }
 
   if self:canQueueFax(message_info) then
@@ -508,6 +511,7 @@ function UIBottomPanel:_initMessageWithDrawerIcon(message_info)
   message_info["drawer_icon"] = drawer_icon
   drawer_icon.mp_id = message_info.mp_id
   drawer_icon.hospital = message_info.hospital
+  drawer_icon.everyone = message_info.everyone
 end
 
 --! All message icons, shown or still queued, in creation order.
@@ -549,13 +553,14 @@ function UIBottomPanel:showOwnMessages()
   local mine = self.ui.hospital
   local shown = {}
   for _, icon in ipairs(self.message_windows) do
-    if icon.hospital == mine then
+    if icon.everyone or icon.hospital == mine then
       shown[#shown + 1] = icon
     else
       self:removeWindow(icon)
       icon.parent = nil -- queued (see onWorldTick)
       self.message_queue[#self.message_queue + 1] = {type = icon.type, message = icon.message,
-          owner = icon.owner, mp_id = icon.mp_id, hospital = icon.hospital, drawer_icon = icon}
+          owner = icon.owner, mp_id = icon.mp_id, hospital = icon.hospital, drawer_icon = icon,
+          everyone = icon.everyone}
     end
   end
   table.sort(self.message_queue, function(a, b) return (a.mp_id or 0) < (b.mp_id or 0) end)
@@ -659,7 +664,7 @@ function UIBottomPanel:_findMessageToShow()
 
   for i, fax_msg in ipairs(self.message_queue) do
     -- Multiplayer co-op: another player's messages stay hidden here.
-    local mine = not self.world.mp_coop or fax_msg.hospital == self.ui.hospital
+    local mine = not self.world.mp_coop or fax_msg.everyone or fax_msg.hospital == self.ui.hospital
     if mine and not shown_types[fax_msg.type] then
       return i
     end

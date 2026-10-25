@@ -48,6 +48,13 @@
 #      build it again", with the remove option off): the room editor opens
 #      on the old outline and the room is built there again -> IN SYNC, the
 #      same rooms on both
+#  21. co-op team win: player 1's hospital reaches the level's goals (test
+#      command), both hear who is still missing; then player 2's; the win fax
+#      comes to both and player 2 answers "Back to the lobby": the game ends
+#      for both at the same step, IN SYNC until then
+#  22. co-op team loss: player 2's hospital fails the goals at a year end
+#      (both told), and still at the next one: the game ends for both at the
+#      same step
 # With MP_REFEREE=1 the local server also runs its headless referee for every
 # room, and four more checks: 13. the referee agrees with the players in every
 # room except 'cheat' (that one desyncs before the referee is there); 14, 15.
@@ -236,6 +243,16 @@ run_probe otto MP_ROLE=join MP_ROOM=wreck MP_STEPS=700 MP_SCENARIO=none & pids+=
     MP_UI_SCRIPT="500:hire:Nurse" & b=$!
   wait $a $b
 ) & pids+=($!)
+# Co-op level goals (test commands decide the goals; checks 21 and 22).
+run_probe gil MP_ROLE=host MP_ROOM=goals MP_COOP=1 MP_STEPS=600 \
+  MP_UI_SCRIPT="20:openhospital;100:goals:1:win;150:wincheck;250:goals:2:win;300:wincheck" & pids+=($!)
+sleep 1
+run_probe hana MP_ROLE=join MP_ROOM=goals MP_STEPS=600 \
+  MP_UI_SCRIPT="30:openhospital;350:answerfax:information:1" & pids+=($!)
+run_probe ian MP_ROLE=host MP_ROOM=teamloss MP_COOP=1 MP_STEPS=600 \
+  MP_UI_SCRIPT="20:openhospital;100:goals:2:lose;150:yearend;300:yearend" & pids+=($!)
+sleep 1
+run_probe joy MP_ROLE=join MP_ROOM=teamloss MP_STEPS=600 MP_UI_SCRIPT="30:openhospital" & pids+=($!)
 if [[ "${MP_REFEREE:-0}" == 1 ]]; then
   # Desync repair: one player changes money locally, the server holds both
   # games, both load the referee's save and play on (shared and co-op).
@@ -458,6 +475,27 @@ print(f"20. Destroyed room rebuilt: {result('nell')}; cleared away: {removed}; e
       f"{'on the old outline: true' in nl}; built again on the same spot, on both: {same_spot and built_n == built_o} ({built_n}); "
       f"radiator put into it: {placed_in}")
 fail |= not ok20
+
+def ended(text):
+    m = re.search(r'LEVEL ENDED at step (\d+)', text); return int(m.group(1)) if m else None
+g_, h_ = log('gil'), log('hana')
+told21 = ("ADVISER: Your hospital has reached this level's goals! Still to get there: HANA." in g_
+          and "ADVISER: GIL has reached this level's goals. Still to get there: HANA." in h_)
+answered21 = [x for x in applied('gil') if 'fax_choice -> ok' in x]
+ok21 = (told21 and len(answered21) == 1 and ended(g_) is not None and ended(g_) == ended(h_)
+        and 'DESYNC' not in result('gil') + result('hana') and applied('gil') == applied('hana'))
+print(f"21. Co-op team win:         who is missing told: {told21}; win fax answered: {answered21[0].split(': ', 1)[1] if answered21 else '-'}; "
+      f"game ended at step {ended(g_)} / {ended(h_)}; {result('gil')} / {result('hana')}")
+fail |= not ok21
+
+i_, j_ = log('ian'), log('joy')
+warned22 = ("ADVISER: Your hospital has failed this level's goals." in j_
+            and "ADVISER: JOY has failed this level's goals." in i_)
+ok22 = (warned22 and ended(i_) is not None and ended(i_) == ended(j_) and ended(i_) > 290
+        and 'DESYNC' not in result('ian') + result('joy'))
+print(f"22. Co-op team loss:        warned at the first year end: {warned22}; game ended at step {ended(i_)} / {ended(j_)}; "
+      f"{result('ian')} / {result('joy')}")
+fail |= not ok22
 
 w_, y_ = log('wade'), log('yara')
 cw = applied('wade')

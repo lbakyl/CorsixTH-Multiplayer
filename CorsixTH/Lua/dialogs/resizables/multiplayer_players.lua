@@ -38,7 +38,7 @@ local col = {
 -- Columns: key, width (all of them fit a 640 pixel wide screen).
 local COLUMNS = {
   {"name", 95}, {"hospital", 75}, {"ping", 50}, {"status", 115},
-  {"value", 65}, {"balance", 65}, {"reputation", 70},
+  {"value", 65}, {"balance", 65}, {"reputation", 70}, {"goals", 60},
 }
 local MAX_ROWS = 4
 local WIDTH = 20 * 2 + (#COLUMNS - 1) * 4
@@ -118,6 +118,10 @@ function UIMultiplayerPlayers.rows(lobby, session, world)
       value = hospital and money(hospital.value) or "-",
       balance = hospital and money(hospital.balance) or "-",
       reputation = hospital and tostring(math.floor(hospital.reputation or 0)) or "-",
+      -- Co-op: who has reached the level's goals, and who fails them.
+      goals = not (hospital and world.mp_coop) and S.goals_open or
+          (hospital.mp_goals_reached and S.goals_done) or
+          (hospital.mp_failing_since and S.goals_failing) or S.goals_open,
     }
   end
   return rows

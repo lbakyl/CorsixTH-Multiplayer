@@ -281,8 +281,13 @@ function UIFax:choice(choice_number)
       end
     end
   elseif choice == "return_to_main_menu" then
-    self.ui.app.moviePlayer:playWinMovie()
-    self.ui.app:loadMainMenu()
+    if TheApp.mp_session then
+      -- Multiplayer: the game ends for everybody, back to the lobby.
+      TheApp.mp_session:finish({_S.multiplayer_window.level_won_end})
+    else
+      self.ui.app.moviePlayer:playWinMovie()
+      self.ui.app:loadMainMenu()
+    end
   elseif choice == "stay_on_level" then
     hospital.win_declined = true
   end

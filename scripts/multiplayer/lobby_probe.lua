@@ -263,6 +263,15 @@ local function run()
   local lobby = run_lobby()
   if not lobby then log("PROBE: DONE") return end
   local session = assert(TheApp.mp_session, "no session after start")
+  -- What the adviser tells this player goes into the log too.
+  if not UIAdviser.mp_probe_say then
+    UIAdviser.mp_probe_say = UIAdviser.say
+    UIAdviser.say = function(adviser, speech, ...)
+      local text = type(speech) == "table" and speech.text or speech
+      log("ADVISER: " .. (tostring(text):gsub("^<LocalisedString> Current value:", "")))
+      return UIAdviser.mp_probe_say(adviser, speech, ...)
+    end
+  end
   local world = TheApp.world
   local p = lobby.start_params
   log(string.format("START: peer %s of %s, seed %s, delay %s, max speed %s, speed %s",
@@ -703,7 +712,7 @@ local function run()
           local ftype, n, wait = entry.arg:match("^(%a+):(%d+):?(%a*)$")
           local icon
           for _, i in ipairs(world.ui.bottom_panel:allMessageIcons()) do
-            if not icon and i.type == ftype and (not world.mp_coop or i.hospital == world.ui.hospital) then
+            if not icon and i.type == ftype and (not world.mp_coop or i.everyone or i.hospital == world.ui.hospital) then
               icon = i
             end
           end
@@ -1123,6 +1132,21 @@ local function run()
                 st.humanoid_class, tostring(st.tile_x), tostring(st.tile_y),
                 action and action.name or "-", tostring(t.x), tostring(t.y), session.step))
           end
+        elseif a == "faxes" then
+          -- The messages this game holds (shown or queued), for the log.
+          local parts = {}
+          for _, icon in ipairs(world.ui.bottom_panel:allMessageIcons()) do
+            parts[#parts + 1] = string.format("%s#%s%s%s", tostring(icon.type), tostring(icon.mp_id),
+                icon.parent and "" or "(queued)", icon.everyone and "(everyone)" or "")
+          end
+          log("UI: messages at step " .. session.step .. ": " .. table.concat(parts, " "))
+        elseif a == "goals" then
+          -- goals:<hospital>:<win|lose|real> (test command on every peer)
+          local target, outcome = entry.arg:match("^(%d+):(%a+)$")
+          session:issue({kind = "probe_goals", target = tonumber(target),
+              outcome = outcome ~= "real" and outcome or nil})
+        elseif a == "wincheck" or a == "yearend" then
+          session:issue({kind = "probe_" .. a})
         elseif a == "patients" then
           session:issue({kind = "probe_patients", n = tonumber(entry.arg)})
         elseif a == "chat" then

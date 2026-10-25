@@ -1034,8 +1034,11 @@ function World:onTick()
         -- Running the step now would advance the date with no hourly ticks.
         if self.hours_per_tick == 0 then break end
         session:beforeStep()
+        -- The game ends between steps, at the same step on every peer.
+        if session.finish_request then session:finishGame() return end
         if self:_advanceHours(1, true) then return end
         session:afterStep()
+        if session.finish_request then session:finishGame() return end
       end
     elseif self:_advanceHours(self.hours_per_tick, not self:isCurrentSpeed("Pause")) then
       return
@@ -1470,16 +1473,30 @@ function World:onEndDay()
 end
 
 function World:checkIfGameWon()
-  -- Multiplayer co-op: each player hears when their own hospital reaches the
-  -- level's goals; the game goes on (the original only ends it for player 1,
-  -- which would end the game for everybody).
+  -- Multiplayer co-op is a team game: the level is won once every hospital
+  -- has reached the level's goals (once reached, they stay reached). Until
+  -- then each player hears when a hospital gets there, and who is missing.
   if self.mp_coop then
+    if self.mp_team_won then return end
+    local newly, missing = {}, {}
     for i = 1, self.mp_coop.players do
       local hosp = self.hospitals[i]
       if not hosp.mp_goals_reached and self.endconditions:checkEndGame(hosp) == "win" then
         hosp.mp_goals_reached = true
-        MultiplayerSession.tellPlayer(self, hosp, _S.multiplayer_window.goals_reached)
+        newly[#newly + 1] = hosp
       end
+      if not hosp.mp_goals_reached then missing[#missing + 1] = hosp.name end
+    end
+    local S = _S.multiplayer_window
+    if #missing == 0 then
+      self.mp_team_won = true
+      self:_mpTeamWon()
+      return
+    end
+    local still = table.concat(missing, ", ")
+    for _, hosp in ipairs(newly) do
+      MultiplayerSession.tellPlayer(self, hosp, S.goals_reached_team:format(still))
+      MultiplayerSession.tellOthers(self, hosp, S.goals_reached_other:format(hosp.name, still))
     end
     return
   end
@@ -1676,7 +1693,50 @@ end
 
 --! Process that the given player number won the game.
 --!param player_no (integer) Number of the player who just won.
+--! Multiplayer co-op: every hospital has reached the goals. One win fax for
+--! everybody; whoever answers first decides for all (fax_choice command):
+--! back to the lobby (the game ends for everybody) or keep playing.
+function World:_mpTeamWon()
+  local S = _S.multiplayer_window
+  local message = {
+    {text = S.team_won[1]},
+    {text = S.team_won[2]},
+    {text = S.team_won[3]},
+    choices = {
+      {text = S.back_to_lobby, choice = "return_to_main_menu"},
+      {text = S.keep_playing, choice = "stay_on_level"},
+    },
+  }
+  -- (No timeout: faxes do not pause a multiplayer game, and the single
+  -- player value 0 would answer it at once.)
+  self.ui.bottom_panel:queueMessage("information", message, nil, nil, 2, nil, nil, true)
+  self.ui.bottom_panel:openLastMessage()
+end
+
 function World:winGame(player_no)
+  if player_no == 1 and self.app.mp_session then
+    -- Multiplayer, one shared hospital: the single-player rules, but no next
+    -- level (it would leave the game); back to the lobby or keep playing.
+    local S = _S.multiplayer_window
+    local level_info = not self:isCampaign() and TheApp:readLevelFile(self.map.level_number)
+    local message = {
+      {text = _S.letter.dear_player:format(self.hospitals[player_no].name)},
+      {text = level_info and level_info.end_praise or _S.letter.custom_level_completed},
+      {text = S.shared_won},
+      choices = {
+        {text = S.back_to_lobby, choice = "return_to_main_menu"},
+        {text = S.keep_playing, choice = "stay_on_level"},
+      },
+    }
+    local --[[persistable:world_mp_win_game_message_close_callback]] function callback()
+      local world = self.ui.app.world
+      if world then world.hospitals[player_no].game_won = false end
+    end
+    self.hospitals[player_no].game_won = true
+    self.ui.bottom_panel:queueMessage("information", message, nil, nil, 2, callback)
+    self.ui.bottom_panel:openLastMessage()
+    return
+  end
   if player_no == 1 then -- Player won. TODO: Needs to be changed for multiplayer
     local text = {}
     local choice_text, choice
@@ -1792,6 +1852,17 @@ end
 --!param reason (string) [optional] The name of the criterion the player lost to.
 --!param limit (number) [optional] The number the player went over/under which caused him to lose.
 function World:loseGame(player_no, reason, limit)
+  if player_no == 1 and self.app.mp_session then
+    -- Multiplayer, one shared hospital: the game ends for everybody, between
+    -- steps (see MultiplayerSession:finish), back to the lobby.
+    local message = {_S.information.level_lost[1]}
+    if reason then
+      message[2] = _S.information.level_lost[2]
+      message[3] = _S.information.level_lost[reason]:format(limit)
+    end
+    self.app.mp_session:finish(message)
+    return
+  end
   if player_no == 1 then -- TODO: Multiplayer
     self.ui.app.moviePlayer:playLoseMovie()
     local message = {_S.information.level_lost[1]}
@@ -1813,15 +1884,37 @@ function World:onEndYear()
 
   -- This is done here instead of in onEndMonth so that the player gets
   -- the chance to receive money or reputation from trophies and awards first.
+  -- (Single player checks for a win when the annual report is closed, which
+  -- is a different moment on every multiplayer peer: here instead.)
+  if self.app.mp_session then self:checkIfGameWon() end
   if self.mp_coop then
-    -- Each player hears when their own hospital fails the level's goals.
+    -- A team game: a hospital failing the goals is not thrown out; the others
+    -- can rescue it. The team loses only if a hospital still fails them at
+    -- the next year end.
+    local S = _S.multiplayer_window
+    local lost
     for i = 1, self.mp_coop.players do
       local hosp = self.hospitals[i]
-      local _, limit = self.endconditions:checkEndGame(hosp)
-      if limit and not hosp.mp_goals_failed then
-        hosp.mp_goals_failed = true
-        MultiplayerSession.tellPlayer(self, hosp, _S.multiplayer_window.goals_failed)
+      local reason, limit = self.endconditions:checkEndGame(hosp)
+      if limit then
+        if hosp.mp_failing_since then
+          lost = lost or {hospital = hosp, reason = reason, limit = limit}
+        else
+          hosp.mp_failing_since = self.game_date:year()
+          MultiplayerSession.tellPlayer(self, hosp, S.goals_failed_team)
+          MultiplayerSession.tellOthers(self, hosp, S.goals_failed_other:format(hosp.name))
+        end
+      elseif hosp.mp_failing_since then
+        hosp.mp_failing_since = nil
+        MultiplayerSession.tellOthers(self, nil, S.goals_recovered:format(hosp.name))
       end
+    end
+    if lost and not self.mp_team_won and self.app.mp_session then
+      local message = {_S.information.level_lost[1], S.team_lost:format(lost.hospital.name)}
+      if _S.information.level_lost[lost.reason] then
+        message[3] = _S.information.level_lost[lost.reason]:format(lost.limit)
+      end
+      self.app.mp_session:finish(message)
     end
   end
   for i, hosp in ipairs(self.mp_coop and {} or self.hospitals) do -- see checkIfGameWon

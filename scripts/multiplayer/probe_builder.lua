@@ -804,6 +804,34 @@ end
 --! (each player's, in co-op). Returns this player's desk tile.
 --! Test-only commands, registered on every peer.
 function builder.register_handlers()
+  -- The level's goals of a hospital decided by the test: {target, outcome =
+  -- "win" (all goals reached) or "lose" (bankrupt)}; nil outcome: the real check.
+  MultiplayerSession.default_handlers.probe_goals = function(w, cmd)
+    w.mp_test_goals = w.mp_test_goals or {}
+    w.mp_test_goals[tonumber(cmd.target) or 1] = cmd.outcome
+    return true
+  end
+  -- (A class method, so nothing of the test ends up in saved games.)
+  if not EndConditions.mp_probe_check then
+    EndConditions.mp_probe_check = EndConditions.checkEndGame
+    EndConditions.checkEndGame = function(self, hospital)
+      local w = hospital.world
+      local outcome = w.mp_test_goals and w.mp_test_goals[w:getHospitalIndex(hospital)]
+      if outcome == "win" then return "win" end
+      if outcome == "lose" then return "balance", -20000 end
+      return EndConditions.mp_probe_check(self, hospital)
+    end
+  end
+  -- Run the level's win check now (normally at the end of months 3, 6, 9).
+  MultiplayerSession.default_handlers.probe_wincheck = function(w)
+    w:checkIfGameWon()
+    return true
+  end
+  -- Run the year-end checks now (the team loses at a second failing year end).
+  MultiplayerSession.default_handlers.probe_yearend = function(w)
+    w:onEndYear()
+    return true
+  end
   -- A room type becomes available to build, as finished research makes it.
   MultiplayerSession.default_handlers.probe_discover = function(w, cmd)
     local hospital = w.hospitals[cmd.hospital or 1]

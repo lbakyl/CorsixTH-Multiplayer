@@ -1131,7 +1131,9 @@ function handlers.fax_choice(world, cmd)
   local panel = world.ui and world.ui.bottom_panel
   local icon = panel and panel:findMessageIcon(cmd.msg)
   if not icon then return false, "message no longer there" end
-  if icon.hospital and icon.hospital ~= world.hospitals[cmd.hospital or 1] then return false, "not ours" end
+  if icon.hospital and not icon.everyone and icon.hospital ~= world.hospitals[cmd.hospital or 1] then
+    return false, "not ours"
+  end
   local choices = icon.message and icon.message.choices
   if not choices or not choices[cmd.choice] then return false, "no such choice" end
   if choices[cmd.choice].enabled == false or choices[cmd.choice].choice == "disabled" then
@@ -1250,6 +1252,38 @@ function MultiplayerSession.tellPlayer(world, hospital, text)
   local ui = world.ui
   if ui and ui.adviser and ui.hospital == hospital then
     ui.adviser:say({text = text, priority = 10})
+  end
+end
+
+--! Tell every player except the one of `hospital` (nil: everybody).
+function MultiplayerSession.tellOthers(world, hospital, text)
+  local ui = world.ui
+  if ui and ui.adviser and ui.hospital ~= hospital then
+    ui.adviser:say({text = text, priority = 10})
+  end
+end
+
+--! End the multiplayer game for this player (every peer asks for it at the
+--! same step: a fax answer or the level lost). It ends between steps (see
+--! World:onTick), never in the middle of one; the player goes back to the
+--! main menu with `message` and into the lobby of the same server.
+function MultiplayerSession:finish(message)
+  self.finish_request = self.finish_request or {message = message}
+end
+
+function MultiplayerSession:finishGame()
+  local request = self.finish_request
+  self.finish_request = nil
+  local back_to_lobby = self.lobby and not self.lobby.is_referee
+  local app = TheApp
+  app:loadMainMenu(request.message)
+  if back_to_lobby and app.ui then
+    local menu = app.ui:getWindow(UIMainMenu)
+    if menu and menu.buttonMultiplayer then
+      menu:buttonMultiplayer()
+      local lobby_window = app.ui:getWindow(UIMultiplayer)
+      if lobby_window then lobby_window:buttonConnect() end
+    end
   end
 end
 
