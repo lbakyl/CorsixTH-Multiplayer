@@ -1490,7 +1490,16 @@ function handlers.give_money(world, cmd)
 end
 
 --! Staff member `index` of a hospital, if their profile still has `key`.
-local function find_staff(hospital, index, key)
+--! The member of staff a command names: by entity id (cmd.staff), else by
+--! position and key (wage and skill; a skill grows while training, so the
+--! key alone can miss someone in the training room).
+local function find_staff(world, hospital, cmd)
+  local by_id = cmd.staff and world:getEntityById(tonumber(cmd.staff))
+  if by_id then
+    if class.is(by_id, Staff) and by_id.hospital == hospital and not by_id.fired then return by_id end
+    return nil
+  end
+  local index, key = cmd.index, cmd.key
   local staff = hospital.staff[index]
   if staff and not staff.fired and MultiplayerSession.staffKey(staff) == key then return staff end
   for _, s in ipairs(hospital.staff) do
@@ -1528,7 +1537,7 @@ end
 function handlers.send_staff(world, cmd)
   local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
   if not from or not to or from == to then return false, "no such hospital" end
-  local staff = find_staff(from, cmd.index, cmd.key)
+  local staff = find_staff(world, from, cmd)
   if not staff then return false, "no such staff member" end
   return MultiplayerSession.transferStaff(world, from, to, staff)
 end
@@ -1667,15 +1676,15 @@ local function create_offer(world, kind, from, to, entity, price)
   return true
 end
 
---! Offer a member of staff to another player: {to, index, key, price
---! (optional)}. They join that hospital only if its player accepts (and
+--! Offer a member of staff to another player: {to, staff (entity id), index,
+--! key, price (optional)}. They join that hospital only if its player accepts (and
 --! pays the price; MultiplayerSession.resolveOffer).
 function handlers.offer_staff(world, cmd)
   local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
   if not from or not to or from == to then return false, "no such hospital" end
   local price = math.floor(tonumber(cmd.price) or 0)
   if price < 0 or price > MultiplayerSession.STAFF_MAX_PRICE then return false, "invalid price" end
-  local staff = find_staff(from, cmd.index, cmd.key)
+  local staff = find_staff(world, from, cmd)
   if not staff or staff.mp_in_transit then return false, "no such staff member" end
   if staff.mp_offer then return false, "already offered" end
   return create_offer(world, "staff", from, to, staff, price)

@@ -200,7 +200,7 @@ function UIMultiplayerTrade:sendStaff()
   local staff = self.selected.staff
   -- An offer: they move only if the other player accepts it.
   session:issue({kind = "offer_staff", to = self.world:getHospitalIndex(self.target),
-      index = self.selected.index, key = MultiplayerSession.staffKey(staff),
+      staff = staff.mp_id, index = self.selected.index, key = MultiplayerSession.staffKey(staff),
       price = self.price > 0 and self.price or nil})
   self:setStatus(_S.multiplayer_window.trade_offered)
   -- They are on their way: they cannot be sent again from this window.
