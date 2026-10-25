@@ -708,6 +708,9 @@ function Audio:playBackgroundTrack(index)
       local data = self:getFileData(index)
       if info.is_xmi then
         if self.midi_player then
+          -- A track playing through SDL_mixer (MIDI, MP3, ... in a music
+          -- folder that mixes formats) would go on under this one.
+          SDL.audio.stopMusic()
           local ok, err = pcall(self.midi_player.setVolume, self.midi_player, self.app.config.music_volume)
           if ok then
             ok, err = pcall(self.midi_player.playXmi, self.midi_player, data)
@@ -762,6 +765,8 @@ function Audio:playBackgroundTrack(index)
       end)
       return
     end
+    -- An XMI track on the MIDI player would go on under this one.
+    if self.midi_player then pcall(self.midi_player.stop, self.midi_player) end
     assert(SDL.audio.playMusic(music))
     SDL.audio.setMusicVolume(self.app.config.music_volume)
     self.background_music = music
