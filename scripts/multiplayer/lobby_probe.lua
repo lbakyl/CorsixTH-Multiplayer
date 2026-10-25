@@ -280,6 +280,15 @@ local function run()
   if not lobby then log("PROBE: DONE") return end
   local session = assert(TheApp.mp_session, "no session after start")
   game_started = socket.gettime() - probe_started
+  -- MP_TRACE_HIT=1: log who turns clicks on the map on or off.
+  if os.getenv("MP_TRACE_HIT") == "1" and not GameUI.mp_probe_set_hit then
+    GameUI.mp_probe_set_hit = GameUI.setWorldHitTest
+    GameUI.setWorldHitTest = function(ui, mode)
+      log("HITTEST " .. tostring(mode) .. " at step " .. tostring(TheApp.mp_session and TheApp.mp_session.step)
+          .. " " .. debug.traceback("", 2))
+      return GameUI.mp_probe_set_hit(ui, mode)
+    end
+  end
   -- What the adviser tells this player goes into the log too.
   if not UIAdviser.mp_probe_say then
     UIAdviser.mp_probe_say = UIAdviser.say

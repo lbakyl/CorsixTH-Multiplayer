@@ -855,6 +855,11 @@ local function placement_allowed(world, hospital, object_type, x, y, orientation
   if not ui then return false end
   local config = TheApp.config
   local saved_hospital, saved_blocking = ui.hospital, config.blocking_off_areas
+  -- (Creating a placement window turns off clicks on the map, until it is
+  -- closed by UIPlaceObjects.close, which this check does not use: every
+  -- corridor object placed by anybody left this player unable to click
+  -- anybody on the map.)
+  local saved_hit_test = ui.do_world_hit_test
   ui.hospital, config.blocking_off_areas = hospital, 2 -- (the default rule on every peer)
   local ok, result = pcall(function()
     local dlg = UIPlaceObjects(ui, {{object = object_type, qty = 1}})
@@ -866,6 +871,7 @@ local function placement_allowed(world, hospital, object_type, x, y, orientation
     return good
   end)
   ui.hospital, config.blocking_off_areas = saved_hospital, saved_blocking
+  ui.do_world_hit_test = saved_hit_test
   if not ok then error(result, 0) end
   return result
 end

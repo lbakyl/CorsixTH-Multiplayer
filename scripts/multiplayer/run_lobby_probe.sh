@@ -57,6 +57,8 @@
 #  22. co-op team loss: player 2's hospital fails the goals at a year end
 #      (both told), and still at the next one: the game ends for both at the
 #      same step
+#  24. clicks on the map: in no game of the suite were they found off with
+#      no placement window open (MultiplayerSession:checkMapClicks)
 #  23. Slowest at real-time pace: a step every 54 ms (not an hour every
 #      second), a game hour every 18 or 19 steps, a purchase and a hire take
 #      effect `delay` steps after the click -> IN SYNC
@@ -539,6 +541,16 @@ print(f"23. Slowest, real time:     {result('pia')}; {ms23:.0f} ms per step; gam
       f"purchase at step {buy23.group(1) if buy23 else '-'} and hire at {hire23.group(1) if hire23 else '-'} "
       f"(clicked at 60 and 80, delay {d23}: {d23 * ms23:.0f} ms)")
 fail |= not ok23
+
+resets24 = []
+for d in sorted(out.iterdir()):
+    f = d / 'log.txt'
+    if d.is_dir() and f.exists():
+        for line in f.read_text(errors='replace').splitlines():
+            if 'map clicks were off with no placement window open' in line:
+                resets24.append(d.name)
+print(f"24. Map clicks:             turned back on by the safety net {len(resets24)} times {sorted(set(resets24)) or ''}")
+fail |= bool(resets24)
 
 w_, y_ = log('wade'), log('yara')
 cw = applied('wade')
