@@ -1,0 +1,67 @@
+---
+name: macOS app
+
+permissions:
+  contents: read
+
+# A self-contained macOS app for Apple Silicon, macOS 26 Tahoe or newer, for
+# multiplayer testing, with Lua 5.5 like the Windows and Linux builds (the
+# multiplayer build id contains the Lua version). Signed ad hoc, not
+# notarized. See scripts/multiplayer/build_macos_app.sh.
+on:
+  push:
+    branches:
+      - master
+      - 'mp/macos-build'
+  workflow_dispatch:
+
+jobs:
+  app:
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install build packages
+        run: |
+          brew update --quiet
+          brew install ninja pkgconf freetype libpng zstd fluidsynth dylibbundler
+          cmake --version
+          sw_vers
+      - name: Cache SDL3 and Lua 5.5
+        uses: actions/cache@v5
+        with:
+          path: build-macos-app/prefix
+          key: macos-app-prefix-${{ hashFiles('scripts/multiplayer/build_macos_app.sh') }}
+      - name: Build the app
+        run: bash scripts/multiplayer/build_macos_app.sh "$(git rev-parse --short=8 HEAD)"
+      - name: Smoke test (Lua modules, build checksum, LuaSocket to a local server)
+        run: |
+          PYTHONPATH=mp_server python3 -m corsixth_mp --host 127.0.0.1 --port 47800 --log-level INFO > server.log 2>&1 &
+          sleep 2
+          app=dist/CorsixTH-Multiplayer/CorsixTH.app
+          "$app/Contents/MacOS/CorsixTH" --interpreter="$PWD/scripts/multiplayer/macos_smoke.lua" \
+            --resources="$PWD/$app/Contents/Resources" --server=127.0.0.1:47800 | tee smoke.txt
+          grep -q "MACOS SMOKE OK" smoke.txt
+      - name: Smoke test (the game starts and keeps running without game data)
+        run: |
+          app=$PWD/dist/CorsixTH-Multiplayer/CorsixTH.app
+          export SDL_VIDEODRIVER=dummy SDL_AUDIO_DRIVER=dummy SDL_RENDER_DRIVER=software
+          # From an empty folder, as from Finder: the program looks for
+          # CorsixTH.lua in the current folder first (here the checkout has one).
+          mkdir -p "$RUNNER_TEMP/run" && cd "$RUNNER_TEMP/run"
+          "$app/Contents/MacOS/CorsixTH" > game.log 2>&1 &
+          pid=$!
+          sleep 15
+          if kill -0 "$pid" 2>/dev/null; then
+            echo "Still running after 15 s"; kill "$pid"
+          else
+            wait "$pid" || true
+            echo "The game ended early:"; cat game.log; exit 1
+          fi
+          cat game.log
+      - name: Upload the app
+        uses: actions/upload-artifact@v7
+        with:
+          name: CorsixTH-macos
+          path: dist/*.zip
+          if-no-files-found: error
