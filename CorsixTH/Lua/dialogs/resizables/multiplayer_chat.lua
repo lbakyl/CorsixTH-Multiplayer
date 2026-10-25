@@ -31,12 +31,15 @@ class "UIMultiplayerChat" (Window)
 ---@type UIMultiplayerChat
 local UIMultiplayerChat = _G["UIMultiplayerChat"]
 
-local SHOW_MS = 15000 -- how long a line stays
+local SHOW_MS = 30000 -- how long a line stays
 local LINES = 6
 
+-- Milliseconds. (SDL is a module, not a global: rawget(_G, "SDL") was always
+-- nil, the clock always 0, and chat lines never went away.)
+local clock
 local function now()
-  local sdl = rawget(_G, "SDL")
-  return sdl and sdl.getTicks() or 0
+  clock = clock or MultiplayerSession.defaultClock() -- (loaded after this file)
+  return clock()
 end
 
 function UIMultiplayerChat:UIMultiplayerChat(ui)
