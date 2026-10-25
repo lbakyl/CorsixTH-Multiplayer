@@ -118,6 +118,7 @@ set(WITH_FONT ${WITH_FONT_DEFAULT} CACHE FILEPATH "Use this font if one is not s
 # Dependency management
 if(APPLE)
   option(WITH_LUAROCKS "Install required luarocks in the app" OFF)
+  option(WITH_FIXUP_BUNDLE "Copy the libraries into the app on install (CMake's fixup_bundle)" ON)
 endif()
 
 if(WITH_MOVIES)

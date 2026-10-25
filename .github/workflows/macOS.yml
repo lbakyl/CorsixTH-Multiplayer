@@ -18,12 +18,13 @@ on:
 jobs:
   app:
     runs-on: macos-26
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
       - name: Install build packages
         run: |
           brew update --quiet
-          brew install ninja pkgconf freetype libpng zstd fluidsynth
+          brew install ninja pkgconf freetype libpng zstd fluidsynth dylibbundler
           cmake --version
           sw_vers
       - name: Cache SDL3 and Lua 5.5

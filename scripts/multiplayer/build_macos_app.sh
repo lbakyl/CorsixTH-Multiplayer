@@ -7,7 +7,8 @@
 # game loads (LuaFileSystem, LPeg, LuaSocket) are built here and bundled, as
 # in build_linux_package.sh. SDL3 and SDL3_mixer are built from source (the
 # same versions as on Linux); FreeType, libpng, zstd and FluidSynth come from
-# Homebrew and are copied into the app (CMake's fixup_bundle). The modules go
+# Homebrew and are copied into the app with dylibbundler (CMake's
+# fixup_bundle cannot follow Homebrew's @rpath references). The modules go
 # into Contents/Resources next to CorsixTH.lua, not into its Lua folder: the
 # build id is a checksum of that folder.
 #
@@ -95,13 +96,11 @@ fi
 
 # 3. CorsixTH, installed as an app bundle. Lua is linked statically, all of it
 # (force_load), so the Lua modules above find every function they use in the
-# program. The install step copies the libraries into the app (fixup_bundle),
-# found through the install rpath.
+# program.
 cmake -S "$src" -B "$work/build" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -DCMAKE_PREFIX_PATH="$P;$brew_prefix" -DCMAKE_INSTALL_PREFIX="$work/stage" \
   -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
-  -DCMAKE_INSTALL_RPATH="$P/lib" \
-  -DWITH_MOVIES=OFF -DWITH_UPDATE_CHECK=OFF -DWITH_MIDI_DEVICE=OFF -DWITH_LUAROCKS=OFF \
+  -DWITH_FIXUP_BUNDLE=OFF -DWITH_MOVIES=OFF -DWITH_UPDATE_CHECK=OFF -DWITH_MIDI_DEVICE=OFF -DWITH_LUAROCKS=OFF \
   -DFETCH_SOUNDFONT=ON -DFETCH_UNICODE_FONT=ON -DWITH_FONT="" \
   -DLUA_INCLUDE_DIR="$P/include-cmake" -DLUA_LIBRARY="$P/lib/liblua.a" \
   -DCMAKE_EXE_LINKER_FLAGS="-Wl,-force_load,$P/lib/liblua.a"
@@ -109,8 +108,8 @@ cmake --build "$work/build" -j"$jobs"
 rm -rf "$work/stage"
 cmake --install "$work/build"
 
-# 4. The app: Lua modules next to CorsixTH.lua, the build rpath removed,
-# everything signed ad hoc.
+# 4. The app: libraries in Contents/Frameworks, Lua modules next to
+# CorsixTH.lua, everything signed ad hoc.
 pkg=$dist/CorsixTH-Multiplayer
 app=$pkg/CorsixTH.app
 rm -rf "$pkg"
@@ -119,7 +118,12 @@ cp -R "$work/stage/CorsixTH.app" "$app"
 res=$app/Contents/Resources
 cp -R "$mods/." "$res/"
 cp -R "$lmods/." "$res/"
-install_name_tool -delete_rpath "$P/lib" "$app/Contents/MacOS/CorsixTH" 2>/dev/null || true
+dylibbundler -of -b -x "$app/Contents/MacOS/CorsixTH" -d "$app/Contents/Frameworks/" \
+  -p @executable_path/../Frameworks/ -s "$P/lib" -s "$brew_prefix/lib" < /dev/null
+# Only the app's own library folder stays on the search path.
+for rp in $(otool -l "$app/Contents/MacOS/CorsixTH" | awk '/LC_RPATH/ {getline; getline; print $2}'); do
+  case "$rp" in @*) ;; *) install_name_tool -delete_rpath "$rp" "$app/Contents/MacOS/CorsixTH" ;; esac
+done
 # Nothing may point outside the app (except the system's own libraries).
 leaks=$(find "$app" -type f \( -perm -u+x -o -name '*.dylib' -o -name '*.so' \) -print0 |
   xargs -0 otool -L 2>/dev/null | grep -E "$brew_prefix|$P|/usr/local" || true)
@@ -142,7 +146,7 @@ CorsixTH and click Open Anyway (once). Alternatively, in Terminal:
   xattr -dr com.apple.quarantine /Applications/CorsixTH.app
 
 The first start asks for your Theme Hospital folder (the game data is not
-included). Settings and saves are in ~/Library/Application Support/CorsixTH.
+included). Settings and saves are in the hidden folder ~/.config/CorsixTH.
 
 Everybody in a game must use a build of the same commit, on Windows, Linux
 or macOS. Main menu > Multiplayer, server address (host:port) and your name.

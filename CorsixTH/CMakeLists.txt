@@ -496,7 +496,7 @@ if(NOT USE_SOURCE_DATADIRS)
     )
   endif()
 
-  if(APPLE)
+  if(APPLE AND WITH_FIXUP_BUNDLE)
     # Fix the macOS bundle to include required libraries (create a redistributable app)
     install(
       CODE
@@ -506,6 +506,8 @@ if(NOT USE_SOURCE_DATADIRS)
       FIXUP_BUNDLE(\"${CMAKE_INSTALL_PREFIX}/CorsixTH.app\" \"\" \"\")
       "
     )
+  endif()
+  if(APPLE)
     if(WITH_LUAROCKS)
       install(
         CODE

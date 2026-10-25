@@ -7,8 +7,8 @@ It is a test version: expect rough edges, and please report what you find.
 
 ## What you need
 
-- **Windows or Linux** (64-bit). Windows and Linux players can play
-  together.
+- **Windows or Linux** (64-bit), or **macOS 26 Tahoe or newer on Apple
+  Silicon** (M1 or later). Players on all three can play together.
 - **Your own Theme Hospital game data** (GOG, EA or the original CD). It is
   not included and must never be shared.
 - **The multiplayer build of this fork**, the same one as everybody you play
@@ -33,10 +33,19 @@ It is a test version: expect rough edges, and please report what you find.
 that folder. It brings its own libraries; the usual desktop ones (graphics,
 sound) come from your system.
 
+**macOS** (Apple Silicon, macOS 26 Tahoe or newer): download the
+`...-macos-arm64.zip` of the same release, unzip it and move
+`CorsixTH.app` to Applications. The app is not notarized by Apple, so the
+first time macOS refuses to open it: open **System Settings > Privacy &
+Security**, scroll down to the note about CorsixTH and click **Open
+Anyway** (once). (Or in Terminal:
+`xattr -dr com.apple.quarantine /Applications/CorsixTH.app`.) Settings
+and saves are in the hidden folder `~/.config/CorsixTH`.
+
 Everybody in a game must use the same test build, and the server must run the
 matching version (each release names its server image). Builds of newer
-commits are also on the fork's **Actions** tab (a run of the Windows or the
-Linux package workflow on `master`, Artifacts; this needs a GitHub account).
+commits are also on the fork's **Actions** tab (a run of the Windows, the
+Linux package or the macOS app workflow on `master`, Artifacts; this needs a GitHub account).
 
 ## Play
 
