@@ -28,9 +28,7 @@ for _, arg in ipairs{...} do
   end
 end
 
--- (Lua modules shipped next to this file, such as LuaSocket's socket.lua in
--- the macOS app, are found too; Windows finds them there by default.)
-package.path = code_dir .. "?.lua;" .. code_dir .. "?/init.lua;" .. base_dir .. "?.lua;" .. package.path
+package.path = code_dir .. "?.lua;" .. code_dir .. "?/init.lua;" .. package.path
 
 local done_files = {}
 local persist = require("persist")
