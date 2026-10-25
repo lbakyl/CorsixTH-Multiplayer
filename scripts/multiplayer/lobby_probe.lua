@@ -305,6 +305,9 @@ local function run()
     log(string.format("%s: loaded the shared save at step %d; playing %s (hospital %d): %s",
         rejoin and "REJOINED" or "LOADED", session.step, tostring(world.ui.hospital.name),
         world:getHospitalIndex(world.ui.hospital), MultiplayerSession.defaultFingerprint(world)))
+    -- Rejoining: MP_STEPS steps from here (the others' steps went on while
+    -- this player was away, also while their game was paused).
+    if rejoin then target = session.step + target end
   elseif scenario == "none" then
     -- Playing with a person: their game has no test setup, so neither has this.
     builder.register_handlers()

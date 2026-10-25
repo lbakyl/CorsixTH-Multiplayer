@@ -1105,6 +1105,7 @@ function World:_mpTick(session)
     -- The game ends between steps, at the same step on every peer.
     if session.finish_request then session:finishGame() return true end
     local hours = self:_mpHoursForStep()
+    self.mp_hours = (self.mp_hours or 0) + hours -- game hours of the session (retries wait in hours)
     for _ = 1, hours do
       if self:_advanceHours(1, true) then return true end
     end

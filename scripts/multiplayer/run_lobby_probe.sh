@@ -681,10 +681,12 @@ if with_referee:
     at = int(rejoined.group(1)) if rejoined else 10**9
     after_u = [x for x in applied('uma') if int(re.search(r'step (\d+):', x).group(1)) > at]
     after_v = [x for x in applied('vera-back') if int(re.search(r'step (\d+):', x).group(1)) > at]
-    kinds = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in after_u if x.endswith('-> ok'))
+    kinds = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in after_u
+                   if x.endswith('-> ok') and 'set_speed' not in x)
+    # (The game steps on while paused, so the steps go past 1500.)
     ok13 = (rejoined is not None and "room 'back': 'vera' rejoins as player 2" in server
-            and result('uma').startswith('IN SYNC through step 1500')
-            and result('vera-back').startswith('IN SYNC through step 1500')
+            and result('uma').startswith('IN SYNC through step')
+            and result('vera-back').startswith('IN SYNC through step')
             and after_u == after_v and kinds == ['hire', 'place_object']
             and int(confirmed_after('back')) >= 1400)
     print(f"16. Rejoin after a crash:   {result('uma')} / {result('vera-back')}; "

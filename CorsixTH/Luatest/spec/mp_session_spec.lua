@@ -125,6 +125,24 @@ describe("MultiplayerSession", function()
     assert.equal(1, b.stats.rejected)
   end)
 
+  it("lets a retry wait game hours, not steps (steps below Normal are shorter)", function()
+    local tries = 0
+    local h = {wait = function() tries = tries + 1 if tries < 2 then return false, "retry" end return true end}
+    local ta, tb = linked_transports()
+    local world = {log = {}, mp_hours = 0}
+    local a = MultiplayerSession({world = world, peer_id = 1, peers = {1, 2}, transport = ta,
+        handlers = h, fingerprint = fingerprint})
+    local b = MultiplayerSession({world = {log = {}, mp_hours = 0}, peer_id = 2, peers = {1, 2},
+        transport = tb, handlers = {wait = function() return true end}, fingerprint = fingerprint})
+    a:issue({kind = "wait"})
+    run_both(a, b, 12) -- no game hour passes: the retry keeps waiting
+    assert.equal(1, tries)
+    world.mp_hours = MultiplayerSession.RETRY_STEPS
+    run_both(a, b, 2)
+    assert.equal(2, tries)
+    assert.equal(1, a.stats.applied)
+  end)
+
   it("stalls a peer that would run ahead of the other", function()
     local a, b = make_pair(2)
     -- With delay 2, a peer may be at most one step ahead.

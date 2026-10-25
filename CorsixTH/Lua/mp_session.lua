@@ -397,12 +397,19 @@ function MultiplayerSession:beforeStep()
     if cmd.step == n then due[#due + 1] = cmd else keep[#keep + 1] = cmd end
   end
   self.pending = keep
-  self.applied_this_step = #due > 0
+  self.applied_this_step = false -- a command ran (see afterStep)
   table.sort(due, command_order)
+  local hours_done = self.world and self.world.mp_hours
   for _, cmd in ipairs(due) do
     local handler = self.handlers[cmd.kind]
     local ok, why
-    if handler then
+    if cmd.retry_at_hour and hours_done and hours_done < cmd.retry_at_hour then
+      -- A retry waits RETRY_STEPS game hours, not steps: below Normal a step
+      -- is a fraction of an hour, and people need hours to walk away.
+      cmd.step = n + 1
+      self.pending[#self.pending + 1] = cmd
+      ok, why = nil, "waiting"
+    elseif handler then
       self.applying = true
       local called, res, reason = pcall(handler, self.world, cmd)
       self.applying = false
@@ -420,6 +427,7 @@ function MultiplayerSession:beforeStep()
       cmd.retries = (cmd.retries or 0) + 1
       if cmd.retries <= (cmd.max_retries or MultiplayerSession.MAX_RETRIES) then
         cmd.step = n + MultiplayerSession.RETRY_STEPS
+        cmd.retry_at_hour = hours_done and hours_done + MultiplayerSession.RETRY_STEPS
         self.pending[#self.pending + 1] = cmd
         why = "retry " .. cmd.retries .. " at step " .. cmd.step
       else
@@ -428,7 +436,9 @@ function MultiplayerSession:beforeStep()
         if giveup then giveup(self.world, cmd) end
       end
     end
-    if ok then
+    if why == "waiting" then -- luacheck: ignore 542
+      -- (still waiting for its retry; nothing to count or log)
+    elseif ok then
       self.stats.applied = self.stats.applied + 1
     else
       self.stats.rejected = self.stats.rejected + 1
@@ -436,8 +446,11 @@ function MultiplayerSession:beforeStep()
         self:_tellRejected(cmd, why)
       end
     end
-    self.log(string.format("step %d: peer %d #%d %s -> %s", n, cmd.peer, cmd.seq,
-        tostring(cmd.kind), ok and "ok" or ("rejected: " .. tostring(why))))
+    if why ~= "waiting" then
+      self.applied_this_step = true
+      self.log(string.format("step %d: peer %d #%d %s -> %s", n, cmd.peer, cmd.seq,
+          tostring(cmd.kind), ok and "ok" or ("rejected: " .. tostring(why))))
+    end
   end
 end
 

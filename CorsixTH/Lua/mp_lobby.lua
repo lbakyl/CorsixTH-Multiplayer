@@ -738,6 +738,7 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
   end
   -- The shared speed is the saved one (older saves: the room's).
   world.mp_speed = world.mp_speed or self.shared_speed or "Normal"
+  world.mp_hours = world.mp_hours or 0
   world:applySharedSpeed(world.mp_speed)
   self.log(string.format("multiplayer: loaded the shared save at step %d (%d bytes): %s", step, #data,
       MultiplayerSession.defaultFingerprint(world)))
@@ -933,6 +934,7 @@ function MultiplayerLobby:_beginGame(f)
   self:_addMultiplayerMenu(world.ui, coop)
   self:_attachChat(world.ui)
   world.mp_speed = f.speed or "Normal" -- the shared speed (set_speed commands)
+  world.mp_hours = 0
   world:applySharedSpeed(world.mp_speed)
   self.log(string.format("multiplayer: playing as %s of %s, seed %s, delay %s, max speed %s",
       f.peer, f.peers, f.seed, f.delay, tostring(f.max_speed)))
