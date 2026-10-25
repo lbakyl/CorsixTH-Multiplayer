@@ -118,7 +118,7 @@ cp -R "$work/stage/CorsixTH.app" "$app"
 res=$app/Contents/Resources
 cp -R "$mods/." "$res/"
 cp -R "$lmods/." "$res/"
-dylibbundler -of -b -x "$app/Contents/MacOS/CorsixTH" -d "$app/Contents/Frameworks/" \
+dylibbundler -cd -of -b -x "$app/Contents/MacOS/CorsixTH" -d "$app/Contents/Frameworks/" \
   -p @executable_path/../Frameworks/ -s "$P/lib" -s "$brew_prefix/lib" < /dev/null
 # Only the app's own library folder stays on the search path.
 for rp in $(otool -l "$app/Contents/MacOS/CorsixTH" | awk '/LC_RPATH/ {getline; getline; print $2}'); do
