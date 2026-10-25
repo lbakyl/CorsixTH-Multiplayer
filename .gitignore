@@ -117,4 +117,5 @@ CorsixTH/corsix-th
 
 # Linux package (scripts/multiplayer/build_linux_package.sh)
 /build-linux-package/
+/build-macos-app/
 /dist/
