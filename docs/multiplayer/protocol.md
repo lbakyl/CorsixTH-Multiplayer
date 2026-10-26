@@ -56,7 +56,7 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 | `SHOW peer kind ...` | another player's cosmetic information, relayed unchanged with the sender's `peer` |
 | `LEFT peer step name` | a player left the game after reporting `step`; stop waiting for them |
 | `DESYNC step` | fingerprints differed at `step` and cannot be repaired: the game is over |
-| `HOLD step` | stop stepping and issuing commands; answer `HELD` (desync at `step`, or a player rejoins) |
+| `HOLD step why` | stop stepping and issuing commands; answer `HELD` (`why=desync` at `step`, or `why=rejoin`: a player rejoins). A game that found the desync itself waits 3 s for `HOLD` before it tells its player the games stay different; after a repaired desync (`RESUME`) only the adviser says so |
 | `SAVE step` | referee only: save once at `step` (or later) |
 | `LOAD step parts peers`, `SAVEDATA d`, `LOADEND step` | the shared save (base64 in `parts` lines); load it and restart at `step` with `peers` |
 | `RESUME step` | play on |

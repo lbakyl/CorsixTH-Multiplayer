@@ -379,6 +379,7 @@ function MultiplayerSession:restartAt(world, step, peers)
   self.pending = {}
   self.own_fps, self.peer_fps = {}, {}
   self.desync = nil
+  self.desync_notice_at = nil
   self.remote_blueprints = {}
   for p in pairs(self.peer_step) do self.peer_step[p] = step end
   self.wait_started, self.wait_notified = nil, false
@@ -617,8 +618,32 @@ function MultiplayerSession:_reportDesync(step, why, peer, own, other)
   if self.desync then return end
   self.desync = {step = step, reason = why, peer = peer, own = own, other = other}
   self.log(string.format("DESYNC at step %d with peer %s: %s", step, tostring(peer), why))
+  -- A server with a referee repairs it at once (HOLD, then the referee's
+  -- game): the player hears about it only afterwards, from the adviser
+  -- (MultiplayerLobby:_onRESUME). Without a repair the games stay different:
+  -- the player is told so, hard to miss, a moment later (checkDesyncNotice).
+  self.desync_notice_at = self.clock() + MultiplayerSession.DESYNC_NOTICE_MS
+  if own then self.log("  local: " .. own) end
+  if other then self.log("  peer:  " .. tostring(other)) end
+  -- For finding the cause: this game's state goes to the server's log.
+  if self.send_diagnostics and self.world then
+    local ok, text = pcall(MultiplayerSession.diagnostics, self.world)
+    if ok then self.send_diagnostics(self.step, text) end
+  end
+end
+
+-- How long a desync waits for the server's repair before the player is told
+-- that the games stay different.
+MultiplayerSession.DESYNC_NOTICE_MS = 3000
+
+--! Between game ticks: a desync the server has not started to repair within
+--! DESYNC_NOTICE_MS will not be repaired. Tell the player, hard to miss: from
+--! now on every player plays a different game.
+function MultiplayerSession:checkDesyncNotice()
+  if not self.desync_notice_at or self.held or self.clock() < self.desync_notice_at then return end
+  self.desync_notice_at = nil
+  local step = self.desync and self.desync.step or self.step
   self.notify(string.format("Multiplayer games are out of sync (step %d). Please restart the game.", step))
-  -- Hard to miss: from now on every player plays a different game.
   local ui = TheApp and TheApp.world and TheApp.ui
   if ui and self.world and not self.observer then
     pcall(function()
@@ -630,13 +655,6 @@ function MultiplayerSession:_reportDesync(step, why, peer, own, other)
         "Multiplayer, create a room with Continue (the monthly autosave or your last File > Save).",
       }))
     end)
-  end
-  if own then self.log("  local: " .. own) end
-  if other then self.log("  peer:  " .. tostring(other)) end
-  -- For finding the cause: this game's state goes to the server's log.
-  if self.send_diagnostics and self.world then
-    local ok, text = pcall(MultiplayerSession.diagnostics, self.world)
-    if ok then self.send_diagnostics(self.step, text) end
   end
 end
 

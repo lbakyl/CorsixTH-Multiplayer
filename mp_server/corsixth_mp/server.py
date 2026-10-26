@@ -822,9 +822,12 @@ class Server:
         rec = room.recovery = Recovery(step=step)
         if rejoining is not None:
             rec.held[rejoining] = None
+        # (why: the games tell their players about a repaired desync, not
+        # about a player rejoining.)
+        why = "desync" if rejoining is None else "rejoin"
         for peer, p in room.players.items():
             if peer != rejoining:
-                p.send(encode("HOLD", step=step))
+                p.send(encode("HOLD", step=step, why=why))
         asyncio.get_running_loop().call_later(RECOVERY_TIMEOUT, self._recovery_timeout,
                                               room, rec)
         self._recovery_progress(room)

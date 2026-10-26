@@ -576,11 +576,10 @@ function MultiplayerLobby:_onHOLD(f)
   local session = self:_ownSession()
   if not session then return end
   session.held = true
-  self.log(string.format("multiplayer: held at step %d (desync at step %s)", session.step,
-      tostring(f.step)))
-  if not self.is_referee then
-    session.notify("The games went out of sync. The server is putting them back in sync...")
-  end
+  -- (A player rejoining also holds the game: why=rejoin.)
+  session.repair_why = f.why or "desync"
+  self.log(string.format("multiplayer: held at step %d (%s at step %s)", session.step,
+      session.repair_why, tostring(f.step)))
   self:send("HELD", {step = session.step})
 end
 
@@ -616,7 +615,11 @@ function MultiplayerLobby:_onRESUME(f)
   if not session then return end
   session.held = false
   self.log("multiplayer: resumed at step " .. tostring(f.step))
-  if not self.is_referee then session.notify("The games are back in sync.") end
+  -- Only a word from the adviser: the game goes on where it was.
+  if not self.is_referee and session.repair_why ~= "rejoin" then
+    session.notify("Your game got out of sync and was recovered successfully.")
+  end
+  session.repair_why = nil
 end
 
 --! Characters of save data per SAVEDATA line (lines are at most 64 KiB).
@@ -699,9 +702,21 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
   local persist = require("persist")
   local raw = assert(persist.decompress(data))
   local old_world = app.world
+  -- This player's view (the save has the referee's): kept through a repair.
+  local view
+  if old_world and app.ui and app.ui.getScreenOffset and not self.is_referee then
+    local x, y = app.ui:getScreenOffset()
+    view = {x = x, y = y, zoom = app.ui.zoom_factor}
+  end
   LoadGame(raw)
   local world = app.world
   assert(world and world ~= old_world, "the shared save could not be loaded")
+  -- Windows the referee's screen had open (the level's introduction, which
+  -- nobody closes there) would pop up for every player again.
+  for i = #(app.ui.windows or {}), 1, -1 do
+    local window = app.ui.windows[i]
+    if class.is(window, UIInformation) then window:close() end
+  end
   -- The save is the referee's: show this player's own hospital again.
   if world.mp_coop then
     world.mp_local_index = session.hospital_index
@@ -740,6 +755,10 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
   world.mp_speed = world.mp_speed or self.shared_speed or "Normal"
   world.mp_hours = world.mp_hours or 0
   world:applySharedSpeed(world.mp_speed)
+  if view and app.ui.scrollMap then
+    if view.zoom and view.zoom ~= app.ui.zoom_factor then app.ui:setZoom(view.zoom) end
+    app.ui:scrollMap(view.x - app.ui.screen_offset_x, view.y - app.ui.screen_offset_y)
+  end
   self.log(string.format("multiplayer: loaded the shared save at step %d (%d bytes): %s", step, #data,
       MultiplayerSession.defaultFingerprint(world)))
 end

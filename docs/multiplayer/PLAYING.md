@@ -158,12 +158,16 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 
 ## If the games go out of sync
 
-The game says so ("Multiplayer games are out of sync"). This should not
-happen; if it does, please report it (below). Then continue from the last
-save or autosave. Servers that run the headless referee repair this
-automatically (everybody loads the server's copy of the game and plays on)
-and let a player who dropped out rejoin: join the same room again under the
-same name. The test server runs the referee for the current test release.
+Servers that run the headless referee repair this automatically, within a
+second: everybody loads the server's copy of the game and plays on, each
+player's view stays where it was, and the adviser says "Your game got out of
+sync and was recovered successfully." (People may jump a little.) They also
+let a player who dropped out rejoin: join the same room again under the same
+name. The test server runs the referee for the current test release.
+
+Without a referee the game says so a moment later ("Multiplayer games are
+out of sync"); then continue from the last save or autosave. Either way,
+please report it (below).
 
 ## Not there yet
 

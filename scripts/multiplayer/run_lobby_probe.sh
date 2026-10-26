@@ -707,7 +707,12 @@ if with_referee:
         same = applied(host) == applied(join)
         kinds = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in applied(host) if x.endswith('-> ok'))
         later = 'place_object' in kinds and 'hire' in kinds
-        ok = (repaired and fixed is not None and same and later
+        # The players hear about it only from the adviser, afterwards; no
+        # popup (the referee's level introduction neither), the view kept.
+        quiet = all('notice: Your game got out of sync and was recovered successfully.' in x
+                    and 'Multiplayer games are out of sync' not in x
+                    and re.search(r'REPAIRED: .*popups 0; view kept true', x) is not None for x in (hl, jl))
+        ok = (repaired and fixed is not None and same and later and quiet
               and result(host).startswith('IN SYNC through step 1000')
               and result(join).startswith('IN SYNC through step 1000')
               and int(confirmed_after(room)) >= 900)
@@ -727,7 +732,7 @@ if with_referee:
             own = f"; own messages only: {own_ok} {shown}; own countdowns: {watch_ok} {watches}"
             ok = ok and own_ok and watch_ok
         print(f"{14 + n}. Desync repair ({room}):{' ' * (8 - len(room))}{result(host)} / {result(join)}; "
-              f"{where}; commands after it ok on both: {same and later}{own}")
+              f"{where}; commands after it ok on both: {same and later}; quiet repair, view kept: {quiet}{own}")
         fail |= not ok
 
     u, v = log('uma'), log('vera-back')
@@ -742,7 +747,9 @@ if with_referee:
             and result('uma').startswith('IN SYNC through step')
             and result('vera-back').startswith('IN SYNC through step')
             and after_u == after_v and kinds == ['hire', 'place_object']
-            and int(confirmed_after('back')) >= 1400)
+            and int(confirmed_after('back')) >= 1400
+            # (A player coming back is no desync: uma is not told about one.)
+            and 'recovered successfully' not in u)
     print(f"16. Rejoin after a crash:   {result('uma')} / {result('vera-back')}; "
           f"rejoined at step {at if rejoined else '-'}; commands after it on both: {after_u == after_v} {kinds}")
     fail |= not ok13

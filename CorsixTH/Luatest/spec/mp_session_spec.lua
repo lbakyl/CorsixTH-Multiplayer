@@ -245,7 +245,27 @@ describe("MultiplayerSession notices", function()
     inbox[#inbox + 1] = "S 2 1 different"
     a:poll()
     assert.is_not_nil(a.desync)
+    -- A moment later, unless the server has started to repair it.
+    a:checkDesyncNotice()
+    assert.equal(0, #notes)
+    now[1] = MultiplayerSession.DESYNC_NOTICE_MS
+    a:checkDesyncNotice()
     assert.truthy(notes[#notes]:find("out of sync"))
+  end)
+
+  it("says nothing about a desync the server repairs", function()
+    local now = {0}
+    local a, notes, inbox = pair_with_clock(now)
+    a:beforeStep() a:afterStep()
+    inbox[#inbox + 1] = "S 2 1 different"
+    a:poll()
+    a.held = true -- HOLD: the server repairs it
+    now[1] = MultiplayerSession.DESYNC_NOTICE_MS * 2
+    a:checkDesyncNotice()
+    a:restartAt(a.world, 1)
+    now[1] = MultiplayerSession.DESYNC_NOTICE_MS * 4
+    a:checkDesyncNotice()
+    assert.equal(0, #notes)
   end)
 
   it("reports a game that stops for no visible reason once, not a shared pause", function()

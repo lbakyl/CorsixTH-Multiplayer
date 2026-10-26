@@ -1317,6 +1317,7 @@ function App:onTick(...)
     if session and self.world then
       session:checkStall(self.world)
       session:checkMapClicks(self.world)
+      session:checkDesyncNotice()
     end
     if session and session.lobby and (session.load_data or
         (session.save_at and session.step >= session.save_at) or

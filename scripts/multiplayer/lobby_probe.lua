@@ -352,6 +352,8 @@ local function run()
   local monkey -- random clicks all over the screen, like a small child (monkey)
   while session.step < target and (expect_repair or not session.desync) and not quit do
     local before = session.step
+    -- This player's view before the tick (a repair during it must keep it).
+    local view_before = world.ui.getScreenOffset and {world.ui:getScreenOffset()} or {}
     tick()
     ticks = ticks + 1
     if waiting_rejoin and session.step > before then
@@ -384,8 +386,16 @@ local function run()
               tostring(win.hospital and world:getHospitalIndex(win.hospital)))
         end
       end
-      log(string.format("REPAIRED: loaded the shared save at step %d (repair %d); messages shown: %s; watches: %s",
-          session.step, repairs, table.concat(shown, ","), table.concat(watches, ",")))
+      -- Information popups left open (the referee's level introduction must
+      -- not pop up again) and whether the view stayed where it was.
+      local popups = 0
+      for _, win in ipairs(world.ui.windows or {}) do
+        if class.is(win, UIInformation) then popups = popups + 1 end
+      end
+      local vx, vy = world.ui:getScreenOffset()
+      log(string.format("REPAIRED: loaded the shared save at step %d (repair %d); popups %d; view kept %s; messages shown: %s; watches: %s",
+          session.step, repairs, popups, tostring(vx == view_before[1] and vy == view_before[2]),
+          table.concat(shown, ","), table.concat(watches, ",")))
     end
     if TheApp.world ~= world then log("LEVEL ENDED at step " .. session.step) break end
     for peer, r in pairs(session.remote_blueprints) do
