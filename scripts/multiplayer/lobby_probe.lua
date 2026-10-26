@@ -96,6 +96,9 @@ local shot_dir = os.getenv("MP_SHOT_DIR")
 local expect_repair = os.getenv("MP_EXPECT_REPAIR") == "1"
 -- Join a running game again (this name left it earlier).
 local rejoin = os.getenv("MP_REJOIN") == "1"
+-- MP_AUTO_ROOMS=1: a joining player types the password first and never
+-- clicks Refresh; the room list must show the room by itself.
+local auto_rooms = os.getenv("MP_AUTO_ROOMS") == "1"
 
 local function log(msg)
   io.stdout:write("[" .. name .. "] " .. msg .. "\n")
@@ -235,18 +238,32 @@ local function run_lobby()
     end)
   else
     local index
-    wait_for("room " .. room, function()
-      for i, r in ipairs(lobby.rooms) do
-        if r.room == room then index = i return true end
-      end
-      lobby:refreshRooms()
-      socket.sleep(0.2)
-      return false
-    end, 30)
+    if auto_rooms then
+      lobby_window().password_box:setText(join_password)
+      local since = socket.gettime()
+      wait_for("room " .. room .. " in the list", function()
+        local win = lobby_window()
+        for i, r in ipairs(lobby.rooms) do
+          if r.room == room and win and (win.rooms_shown or ""):find(room, 1, true) then index = i return true end
+        end
+        return false
+      end, 30)
+      log(string.format("UI: the room list showed '%s' without Refresh after %.1f s; password kept: %s", room,
+          socket.gettime() - since, tostring(lobby_window().password_box.text == join_password)))
+    else
+      wait_for("room " .. room, function()
+        for i, r in ipairs(lobby.rooms) do
+          if r.room == room then index = i return true end
+        end
+        lobby:refreshRooms()
+        socket.sleep(0.2)
+        return false
+      end, 30)
+    end
     w = lobby_window()
     shot("lobby-rooms")
     w:selectRoom(index, true)
-    w.password_box:setText(join_password)
+    if not auto_rooms then w.password_box:setText(join_password) end
     w:buttonJoin()
     wait_for("joining", function()
       return lobby.state == "in_room" or lobby.state == "in_game" or lobby.error ~= nil
@@ -914,10 +931,13 @@ local function run()
           editing = {room_type = id, steps = list}
         elseif a == "moveobject" or a == "sellobject" then
           -- Pick up a corridor object of this hospital (right click), then
-          -- put it down a few tiles away, or sell it (close the window).
+          -- put it down a few tiles away (or <id>:<dx>:<dy> tiles away,
+          -- exactly), or sell it (close the window).
+          local id, dx, dy = entry.arg:match("^([%w_]+):?(-?%d*):?(-?%d*)$")
+          dx, dy = tonumber(dx), tonumber(dy)
           local obj
           for _, e in ipairs(world.entities) do
-            if not obj and class.is(e, Object) and e.object_type.id == entry.arg and e.tile_x and
+            if not obj and class.is(e, Object) and e.object_type.id == id and e.tile_x and
                 not e:getRoom() and world.ui.hospital:isInHospital(e.tile_x, e.tile_y) then
               obj = e
             end
@@ -926,21 +946,30 @@ local function run()
             obj:onClick(world.ui, "right")
             local place = world.ui:getWindow(UIPlaceObjects)
             if a == "moveobject" and place then
-              local x, y = builder.find_free_rect(world, obj.tile_x + 3, obj.tile_y, 1, 1, 10,
-                  function(tx, ty) return not world:anyHumanoidObscuringArea(tx, ty) end)
+              local x, y
+              if dx then
+                x, y = obj.tile_x + dx, obj.tile_y + (dy or 0)
+              else
+                x, y = builder.find_free_rect(world, obj.tile_x + 3, obj.tile_y, 1, 1, 10,
+                    function(tx, ty) return not world:anyHumanoidObscuringArea(tx, ty) end)
+              end
               place:setBlueprintCell(x, y)
               place.object_cell_x, place.object_cell_y = x, y
+              local valid = place.object_blueprint_good and not world:anyHumanoidObscuringArea(x, y)
               place:onMouseUp("left", 100000, 100000)
-              log(string.format("UI: moved %s #%d from %d,%d to %d,%d at step %d", entry.arg, obj.mp_id,
-                  obj.tile_x, obj.tile_y, x, y, session.step))
+              log(string.format("UI: moved %s #%d from %d,%d to %d,%d at step %d (spot valid: %s)", id, obj.mp_id,
+                  obj.tile_x, obj.tile_y, x, y, session.step, tostring(valid)))
               place = world.ui:getWindow(UIPlaceObjects)
-              if place then place:close(true) end -- click refused: put it back
+              if place then
+                log("UI: the placement was refused on the screen; put back")
+                place:close(true) -- click refused: put it back
+              end
             elseif place then
               log(string.format("UI: sold %s #%d at step %d", entry.arg, obj.mp_id, session.step))
               place:close(false)
             end
           else
-            log("UI: no " .. entry.arg .. " to pick up")
+            log("UI: no " .. id .. " to pick up")
           end
         elseif a == "discover" then
           -- Test command: the room becomes available (as research would).

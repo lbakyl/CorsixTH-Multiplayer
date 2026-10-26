@@ -833,6 +833,19 @@ function UIPlaceObjects:_placementAvailableHereAndOtherObjectsDoNotInterfere(
     existing_object:deoccupyTilesByObjectFootprintAt(existing_object.tile_x, existing_object.tile_y)
   end
 
+  -- Multiplayer: an object being moved stays where it is in the shared game
+  -- until the move command runs (which lifts it before checking, on every
+  -- peer), so its own tiles count as free here. (The game is not changed
+  -- for this check: it is not this player's alone.)
+  local own_tiles
+  if existing_object and existing_object == self.mp_moving and existing_object.tile_x and
+      object.class ~= "SideObject" then
+    own_tiles = {}
+    for _, t in ipairs(existing_object.footprint or {}) do
+      own_tiles[(existing_object.tile_x + t[1]) .. "," .. (existing_object.tile_y + t[2])] = true
+    end
+  end
+
   -- for each tile in object_footprint check map tile availability
   for i, tile in ipairs(object_footprint) do
     local xpos = x + tile[1]
@@ -887,6 +900,10 @@ function UIPlaceObjects:_placementAvailableHereAndOtherObjectsDoNotInterfere(
         local tile_exclusively_passable = world:isTileExclusivelyPassable(xpos, ypos, 10)
         is_object_allowed = tile_exclusively_passable and
           (moving_existing_object_on_same_place or objects_do_not_interfere)
+      end
+
+      if not is_object_allowed and own_tiles and own_tiles[xpos .. "," .. ypos] then
+        is_object_allowed = true
       end
 
       -- Having checked if the tile is good set its blueprint appearance flag:

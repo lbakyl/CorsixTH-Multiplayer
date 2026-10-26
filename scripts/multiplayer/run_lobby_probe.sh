@@ -63,6 +63,11 @@
 #  23. Slowest at real-time pace: a step every 54 ms (not an hour every
 #      second), a game hour every 18 or 19 steps, a purchase and a hire take
 #      effect `delay` steps after the click -> IN SYNC
+#  26. the lobby's room list refreshes itself: a player waiting in the lobby
+#      sees a new room appear without clicking Refresh, and what they typed
+#      (the password) stays -> they join, IN SYNC
+#  27. the reception desk moved one tile over (right, then down) -> both
+#      moves accepted, IN SYNC
 #  25. speed votes with three players: a new speed declined (one player by
 #      clicking in the vote fax, one by itself), one agreed in the fax (2 of
 #      3 is a majority), one nobody answers lapses after 30 s of play; the
@@ -259,6 +264,11 @@ run_probe otto MP_ROLE=join MP_ROOM=wreck MP_STEPS=700 MP_SCENARIO=none & pids+=
 run_probe pia MP_ROLE=host MP_ROOM=slowest MP_STEPS=400 MP_FAST=0 MP_REALTIME=1   MP_UI_SCRIPT="10:speed:Slowest;60:buy:bench" & pids+=($!)
 sleep 1
 run_probe quin MP_ROLE=join MP_ROOM=slowest MP_STEPS=400 MP_FAST=0 MP_REALTIME=1 MP_UI_SCRIPT="80:hire:Nurse" & pids+=($!)
+# The room list refreshes itself (check 26): lina is in the lobby before
+# kai creates the room, types the password and never clicks Refresh.
+run_probe lina MP_ROLE=join MP_ROOM=autolist MP_STEPS=100 MP_AUTO_ROOMS=1 & pids+=($!)
+sleep 6
+run_probe kai MP_ROLE=host MP_ROOM=autolist MP_STEPS=100   MP_UI_SCRIPT="40:moveobject:reception_desk:1:0;70:moveobject:reception_desk:0:1" & pids+=($!)
 # Speed votes with three players (check 25).
 run_probe vic MP_ROLE=host MP_ROOM=vote MP_PLAYERS=3 MP_STEPS=1400 \
   MP_UI_SCRIPT="50:speedother;300:speedother;450:speedother" & pids+=($!)
@@ -575,6 +585,20 @@ ok25 = (all([r for _, r in o] == want25 for o in outcomes25.values()) and fax25 
 print(f"25. Speed votes:            {result('vic')}; votes {outcomes25['vic']}; same on all three: "
       f"{len(set(map(tuple, outcomes25.values()))) == 1}; answered in the fax: {fax25}; speed only changed when agreed: {max25}")
 fail |= not ok25
+
+auto26 = re.search(r"UI: the room list showed 'autolist' without Refresh after ([\d.]+) s; password kept: true", log('lina'))
+ok26 = auto26 is not None and result('kai').startswith('IN SYNC') and result('lina').startswith('IN SYNC')
+print(f"26. Room list refreshes:    {result('lina')}; room shown by itself after {auto26.group(1) if auto26 else '-'} s, "
+      f"password kept: {auto26 is not None}")
+fail |= not ok26
+
+# The reception desk moved one tile over, twice (its own tiles do not count
+# as taken while it is moved).
+moves27 = re.findall(r'UI: moved reception_desk #\d+ .* \(spot valid: true\)', log('kai'))
+desk27 = [x for x in applied('kai') if 'move_object -> ok' in x]
+ok27 = len(moves27) == 2 and len(desk27) == 2 and applied('kai') == applied('lina') and result('kai').startswith('IN SYNC')
+print(f"27. Desk one tile over:     {result('kai')}; moves accepted on the screen {len(moves27)}/2, in the game {len(desk27)}/2")
+fail |= not ok27
 
 resets24 = []
 for d in sorted(out.iterdir()):
