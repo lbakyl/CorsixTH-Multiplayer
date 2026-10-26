@@ -54,7 +54,9 @@ local function run()
   -- Tests only: the probes set up their hospitals the same way on every
   -- peer before the first step; the referee must do it too.
   local probe_spec = os.getenv("MP_REFEREE_PROBE_SCENARIO") -- "room=scenario;..."
-  if probe_spec then
+  -- (A continued game has no world until its save arrives, and was set up
+  -- before it was saved.)
+  if probe_spec and TheApp.world then
     local probe_scenario = "light"
     for r, sc in probe_spec:gmatch("([^;=]+)=([^;]+)") do
       if r == room then probe_scenario = sc end
@@ -71,15 +73,18 @@ local function run()
   local last_report = socket.gettime()
   while lobby.state == "in_game" and not lobby.transport.closed do
     local session = TheApp.mp_session
-    if not session or not TheApp.world then break end
+    if not session then break end
+    -- A continued game: no world until the host's save arrives (the session
+    -- is held until then); App:onTick reads the network and loads it.
+    if not TheApp.world and not session.held then break end
     -- Always run as fast as the lockstep allows; the players set the pace.
-    if not TheApp.world:isCurrentSpeed("And then some more") and not session.held then
+    if TheApp.world and not TheApp.world:isCurrentSpeed("And then some more") and not session.held then
       TheApp.world:setSpeed("And then some more")
     end
     local before = session.step
     TheApp:onTick()
     -- The annual report window would pause this game; close it at once.
-    local report = TheApp.ui:getWindow(UIAnnualReport)
+    local report = TheApp.world and TheApp.ui:getWindow(UIAnnualReport)
     if report then report:close() end
     if session.step == before then socket.sleep(0.002) end
     if socket.gettime() - last_report > 60 then

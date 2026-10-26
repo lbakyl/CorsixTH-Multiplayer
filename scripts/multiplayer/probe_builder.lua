@@ -899,6 +899,22 @@ function builder.register_handlers()
     end
     return false, "no such staff"
   end
+  -- The next patient entering the first room of type <room> makes the
+  -- room's code fail once there (as a machine out of reach would).
+  MultiplayerSession.default_handlers.probe_breakroom = function(w, cmd)
+    local ids = {}
+    for id, r in pairs(w.rooms) do
+      if r.room_info.id == cmd.room and r.is_active then ids[#ids + 1] = id end
+    end
+    table.sort(ids) -- (pairs order differs between games)
+    local room = ids[1] and w.rooms[ids[1]]
+    if not room then return false, "no such room" end
+    room.commandEnteringPatient = function(self)
+      self.commandEnteringPatient = nil -- the room's own code again next time
+      error("broken by the probe")
+    end
+    return true
+  end
   -- A VIP asks to visit.
   MultiplayerSession.default_handlers.probe_vip = function(w, cmd)
     w.hospitals[cmd.target or 1]:createVip()

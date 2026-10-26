@@ -932,7 +932,10 @@ class Server:
                 room.referee = None
                 room.referee_token = ""  # no more repairs in this room
                 log.warning("room %r: the referee disconnected", room.name)
-                if room.recovery is not None:
+                # (Only a repair from the referee's own save fails: a continued
+                # game's save comes from its host.)
+                rec = room.recovery
+                if rec is not None and (rec.saver is player or not rec.asked):
                     self._recovery_failed(room)
             return
         if room.state == "running":

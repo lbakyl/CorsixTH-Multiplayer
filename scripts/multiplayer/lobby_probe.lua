@@ -959,14 +959,24 @@ local function run()
               end
               place:setBlueprintCell(x, y)
               place.object_cell_x, place.object_cell_y = x, y
-              local valid = place.object_blueprint_good and not world:anyHumanoidObscuringArea(x, y)
-              place:onMouseUp("left", 100000, 100000)
-              log(string.format("UI: moved %s #%d from %d,%d to %d,%d at step %d (spot valid: %s)", id, obj.mp_id,
-                  obj.tile_x, obj.tile_y, x, y, session.step, tostring(valid)))
-              place = world.ui:getWindow(UIPlaceObjects)
-              if place then
-                log("UI: the placement was refused on the screen; put back")
-                place:close(true) -- click refused: put it back
+              local someone = world:anyHumanoidObscuringArea(x, y)
+              local valid = place.object_blueprint_good and not someone
+              if dx and place.object_blueprint_good and someone and (entry.retries or 0) < 20 then
+                -- Somebody stands on the spot: wait a moment and try again,
+                -- as a player would.
+                place:close(true)
+                entry.retries = (entry.retries or 0) + 1
+                done[i] = false
+                entry.hour = session.step + 5
+              else
+                place:onMouseUp("left", 100000, 100000)
+                log(string.format("UI: moved %s #%d from %d,%d to %d,%d at step %d (spot valid: %s)", id, obj.mp_id,
+                    obj.tile_x, obj.tile_y, x, y, session.step, tostring(valid)))
+                place = world.ui:getWindow(UIPlaceObjects)
+                if place then
+                  log("UI: the placement was refused on the screen; put back")
+                  place:close(true) -- click refused: put it back
+                end
               end
             elseif place then
               log(string.format("UI: sold %s #%d at step %d", entry.arg, obj.mp_id, session.step))
@@ -1094,6 +1104,11 @@ local function run()
           TheApp:errorHandler("motion", "probe: an error in the motion handler")
           log(string.format("UI: motion handler after an error at step %d: %s (before %s)", session.step,
               TheApp.eventHandlers.motion ~= nil and "connected" or "disconnected", tostring(had_handler)))
+        elseif a == "breakroom" then
+          -- The next patient entering the first <arg> room makes its code fail
+          -- once, in every game (test command probe_breakroom).
+          log(string.format("UI: breaking the next patient's entry into a %s at step %d", entry.arg, session.step))
+          session:issue({kind = "probe_breakroom", room = entry.arg})
         elseif a == "breakstaff" then
           -- A broken tick for the first member of staff of a class, in every
           -- game (test command probe_break): the game sets them aside alike.
