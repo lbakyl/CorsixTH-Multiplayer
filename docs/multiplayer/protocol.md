@@ -25,7 +25,7 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 |---|---|---|
 | `HELLO` | first line | `proto` (1), `build` (game build id, must match the room's), `name`; the server's referee adds `role=referee`, `room` and `token` |
 | `LIST` | lobby | (none) |
-| `CREATE` | lobby | `room`, `password` (empty = open), `max` (2–4), `mode` (`shared` = one hospital for everybody, `coop` = one hospital each), `level` (1–12), `difficulty` (`easy`/`full`/`hard`), `speed_control` (`any`/`owner`); to continue a saved game also `continue=1`, `step` (the step it was saved at), `date`, `seats` (its hospitals' names, comma-separated) |
+| `CREATE` | lobby | `room`, `password` (empty = open), `max` (2–4), `mode` (`shared` = one hospital for everybody, `coop` = one hospital each as a team, `competitive` = one hospital each, a race), `level` (1–12), `difficulty` (`easy`/`full`/`hard`), `speed_control` (`any`/`owner`); to continue a saved game also `continue=1`, `step` (the step it was saved at), `date`, `seats` (its hospitals' names, comma-separated) |
 | `JOIN` | lobby | `room`, `password`; for a running room: rejoin under the name of a player who left |
 | `READY` | in a room | `ready` |
 | `START` | room owner | (none) |

@@ -1,8 +1,9 @@
 # Playing CorsixTH multiplayer (test version)
 
 This fork adds network multiplayer to CorsixTH: two to four players run one
-game together over the internet, either in **one shared hospital** or in
-**a hospital each** (co-op) on Theme Hospital's original multiplayer maps.
+game together over the internet, either in **one shared hospital**, in
+**a hospital each** as a team (co-op), or in a **competitive race** with a
+hospital each, on Theme Hospital's original multiplayer maps.
 It is a test version: expect rough edges, and please report what you find.
 
 ## What you need
@@ -53,7 +54,8 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
 1. Main menu, **Multiplayer**. Enter the server address and your name, then
    **Connect**.
 2. **To host:** type a room name, and a password if you like. Choose **One
-   shared hospital** or **A hospital each**, the level and the number of
+   shared hospital**, **A hospital each** (co-op) or **Competitive race**
+   (click the button to cycle through them), the level and the number of
    players (or a saved game with **Continue**, see below), then **Create**.
    When everybody has pressed **Ready**, press **Start game**.
 3. **To join:** pick the room in the list, type its password, **Join**, then
@@ -146,6 +148,33 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   out: it and the others are told, and they can help it with money or
   staff. If it still fails them at the next year end, the team loses and
   the game ends for everybody.
+- **Competitive race:** a hospital each, but every player for themselves.
+  The first hospital to reach the level's goals takes 1st place, the next
+  one 2nd, and so on. A placed player gets a fax: **Back to the lobby**
+  (only that player leaves; the others play on) or **Watch**. A placed
+  hospital gets no more patients. A hospital that fails the goals at two
+  year ends in a row is out, at the bottom of the standings. When only one
+  hospital is still racing, it takes the place left and everybody gets the
+  final standings. MULTIPLAYER > PLAYERS shows each place.
+
+## Dirty tricks (competitive race)
+
+MULTIPLAYER > **DIRTY TRICKS** sells tricks to play on a rival, each at three
+levels; **Next rival** picks whom. You pay when the trick is done. The rival
+is not told who sent an epidemic or an emergency.
+
+| Trick | L1 | L2 | L3 |
+|---|---|---|---|
+| **Evil handyman**: looks like one of their handymen and strolls their corridors | $5,000: does no work | $12,500: also drops litter | $20,000: also wears a machine down until it nearly breaks (about every three days) |
+| **Epidemic**: contagious patients of one disease arrive at their hospital | $6,000: 2 patients | $12,000: 4 | $20,000: 7 |
+| **Emergency** they cannot refuse: patients arrive by helicopter | $5,000: 3 patients | $10,000: 6 | $18,000: 10, maybe of a disease they have not discovered |
+
+**Found a handyman who is not on your staff list?** Click him and press the
+sack button: he is thrown out (no severance pay) and walks back to whoever
+sent him, who has to employ him from then on. A trick is refused while it
+cannot work, for example while their emergency is still on.
+
+Trading staff and money and sharing research work as in co-op.
 
 ## Saving and continuing
 
@@ -172,7 +201,6 @@ please report it (below).
 
 ## Not there yet
 
-- Competitive games.
 - Passwords and traffic are not encrypted.
 
 ## Reporting a problem
