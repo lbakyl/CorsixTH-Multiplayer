@@ -121,10 +121,10 @@ function UIStaff:UIStaff(ui, staff)
   local world = app.world
   if TheApp.mp_session and world and world.mp_coop and world.mp_coop.players > 1 and
       staff.hospital and staff.hospital == ui.hospital then
-    -- (At the right end of the skills box; a handyman has his tasks there, so
-    -- his covers the wage note exactly.)
-    local ix, iy, iw, ih = 175, 147, 24, 28
-    if class.is(staff, Handyman) then ix, iy, iw, ih = 90, 218, 33, 21 end
+    -- (Over the wage note, sized to it: the skills box has the doctors'
+    -- specialist icons, and a handyman has his tasks there.)
+    local ix, iy, iw, ih = 90, 191, 33, 21
+    if class.is(staff, Handyman) then iy = 218 end
     local icon = self:addColourPanel(ix, iy, iw, ih, 48, 16, 74)
     icon.custom_draw = --[[persistable:staff_send_icon_draw]] function(panel, canvas, x, y)
       local s = TheApp.gfx:getUIScale()
