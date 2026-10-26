@@ -428,12 +428,37 @@ function Room:onHumanoidEnter(humanoid)
       if self.staff_member then
         self:setStaffMembersAttribute("dealing_with_patient", true)
       end
-      self:commandEnteringPatient(patient_entered)
+      -- A room that cannot start on this patient (its machine out of reach,
+      -- say) would otherwise stop the patient for good: they walk out and
+      -- queue again instead (in every multiplayer game alike).
+      local ok, err = xpcall(function() self:commandEnteringPatient(patient_entered) end, debug.traceback)
+      if not ok then self:_patientCouldNotStart(patient_entered, err) end
     else
       patient_entered:setNextAction(self:createLeaveAction())
       patient_entered:queueAction(self:createEnterAction(patient_entered))
     end
   end
+end
+
+--! The room's code failed as a patient entered (Room:onHumanoidEnter):
+--! note it (in multiplayer with the room's layout, for the server's log),
+--! and let the patient walk out and queue again.
+--!param patient (Patient) The patient who entered.
+--!param err (string) The error and its stack trace.
+function Room:_patientCouldNotStart(patient, err)
+  if self.staff_member then
+    self:setStaffMembersAttribute("dealing_with_patient", false)
+  end
+  self.world:gameLog("Error in a " .. self.room_info.id .. " room as a patient entered; " ..
+      "they leave and queue again: " .. tostring(err))
+  local session = TheApp.mp_session
+  if session then
+    session:reportError(string.format("%s room #%d (patient #%s leaves and queues again)",
+        self.room_info.id, self.id, tostring(patient.mp_id)),
+        tostring(err) .. "\n" .. MultiplayerSession.roomLayout(self))
+  end
+  patient:setNextAction(self:createLeaveAction())
+  patient:queueAction(self:createEnterAction(patient))
 end
 
 --! Get the current staff member.

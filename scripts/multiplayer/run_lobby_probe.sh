@@ -66,6 +66,9 @@
 #  26. the lobby's room list refreshes itself: a player waiting in the lobby
 #      sees a new room appear without clicking Refresh, and what they typed
 #      (the password) stays -> they join, IN SYNC
+#  28. a room's code fails as a patient enters (test command): the patient
+#      walks out and queues again in both games, the report has the room's
+#      layout -> IN SYNC
 #  27. the reception desk moved one tile over (right, then down) -> both
 #      moves accepted, IN SYNC
 #  25. speed votes with three players: a new speed declined (one player by
@@ -217,7 +220,7 @@ run_probe lea MP_ROLE=join MP_ROOM=research MP_STEPS=900 \
 # rise window, one accepted and one declined; a nurse fired; queues
 # reordered by dragging in the queue window.
 run_probe wade MP_ROLE=host MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
-  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench;860:movestaff:Doctor;870:whereis:Doctor;950:overlay" & pids+=($!)
+  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;640:breakroom:gp;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench;860:movestaff:Doctor;870:whereis:Doctor;950:overlay" & pids+=($!)
 sleep 1
 run_probe yara MP_ROLE=join MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
   MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront;500:furnishroom:gp:5:5;750:cancelroom:toilets:4:4;870:whereis:Doctor;900:uistate;950:overlay" & pids+=($!)
@@ -585,6 +588,18 @@ ok25 = (all([r for _, r in o] == want25 for o in outcomes25.values()) and fax25 
 print(f"25. Speed votes:            {result('vic')}; votes {outcomes25['vic']}; same on all three: "
       f"{len(set(map(tuple, outcomes25.values()))) == 1}; answered in the fax: {fax25}; speed only changed when agreed: {max25}")
 fail |= not ok25
+
+# The next patient entering a GP's office makes the room's code fail (test
+# command): the patient walks out and queues again in both games, and the
+# report carries the room's layout.
+fail28 = [re.search(r"ERROR at step (\d+) in the gp room #\d+ \(patient #(\d+) leaves and queues again\)", log(n))
+          for n in ('wade', 'yara')]
+same28 = all(fail28) and fail28[0].groups() == fail28[1].groups()
+layout28 = re.search(r"room #\d+ gp at \d+,\d+ size \d+x\d+; door .*; objects: .*desk", server) is not None
+ok28 = same28 and layout28 and result('wade').startswith('IN SYNC through step 1000') and result('yara').startswith('IN SYNC')
+print(f"28. Room failed on entry:   {result('wade')}; patient walked out and queued again in both games at the same step: "
+      f"{same28} {fail28[0].groups() if fail28[0] else '-'}; room layout reported: {layout28}")
+fail |= not ok28
 
 auto26 = re.search(r"UI: the room list showed 'autolist' without Refresh after ([\d.]+) s; password kept: true", log('lina'))
 ok26 = auto26 is not None and result('kai').startswith('IN SYNC') and result('lina').startswith('IN SYNC')

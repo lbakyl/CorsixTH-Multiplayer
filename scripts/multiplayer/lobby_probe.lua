@@ -1032,6 +1032,11 @@ local function run()
           TheApp:errorHandler("motion", "probe: an error in the motion handler")
           log(string.format("UI: motion handler after an error at step %d: %s (before %s)", session.step,
               TheApp.eventHandlers.motion ~= nil and "connected" or "disconnected", tostring(had_handler)))
+        elseif a == "breakroom" then
+          -- The next patient entering the first <arg> room makes its code fail
+          -- once, in every game (test command probe_breakroom).
+          log(string.format("UI: breaking the next patient's entry into a %s at step %d", entry.arg, session.step))
+          session:issue({kind = "probe_breakroom", room = entry.arg})
         elseif a == "breakstaff" then
           -- A broken tick for the first member of staff of a class, in every
           -- game (test command probe_break): the game sets them aside alike.

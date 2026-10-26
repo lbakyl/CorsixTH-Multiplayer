@@ -662,6 +662,10 @@ end
 --! game alike. Tell the server, and the player once.
 function MultiplayerSession:reportEntityError(entity, trace)
   local what = tostring(entity.humanoid_class or (entity.object_type and entity.object_type.id) or "entity")
+  -- The room they are in (or at the door of), to see what went wrong there.
+  local world = self.world
+  local room = world and entity.tile_x and world.getRoom and world:getRoom(entity.tile_x, entity.tile_y)
+  if room then trace = tostring(trace) .. "\n" .. MultiplayerSession.roomLayout(room) end
   if self:reportError("tick of " .. what .. " #" .. tostring(entity.mp_id), trace) then
     self.notify("After a game error a " .. what .. " stopped working. Save and continue the game " ..
         "(File > Save, then Continue in the lobby) to have them work again.")
@@ -770,6 +774,33 @@ function MultiplayerSession:checkStall(world)
       tostring(self.local_save and self.local_save.at), table.concat(waiting, ","), table.concat(windows, ","))
   self.log(text)
   self.send_diagnostics(self.step, text)
+end
+
+--! A room's layout for an error report: where it is, its door, state, the
+--! objects in it (and whether usable) and the people in it.
+function MultiplayerSession.roomLayout(room)
+  local world = room.world
+  local parts = {string.format("room #%d %s at %d,%d size %dx%d; door %s,%s; active %s, crashed %s, built %s",
+      room.id, room.room_info.id, room.x, room.y, room.width, room.height,
+      tostring(room.door and room.door.tile_x), tostring(room.door and room.door.tile_y),
+      tostring(room.is_active), tostring(room.crashed), tostring(room.built))}
+  local objects, people = {}, {}
+  for _, e in ipairs(world.entities) do
+    if e.tile_x and world:getRoom(e.tile_x, e.tile_y) == room then
+      if e.object_type then
+        objects[#objects + 1] = string.format("%s#%s@%d,%d %s%s%s", e.object_type.id, tostring(e.mp_id),
+            e.tile_x, e.tile_y, tostring(e.direction), e.picked_up and " picked up" or "",
+            e.user and " in use" or "")
+      elseif e.humanoid_class then
+        local action = e.getCurrentAction and e:getCurrentAction()
+        people[#people + 1] = string.format("%s#%s@%d,%d %s", e.humanoid_class, tostring(e.mp_id),
+            e.tile_x, e.tile_y, tostring(action and action.name))
+      end
+    end
+  end
+  parts[#parts + 1] = "objects: " .. table.concat(objects, ", ")
+  parts[#parts + 1] = "people: " .. table.concat(people, ", ")
+  return table.concat(parts, "; ")
 end
 
 --! A description of the game state for comparing two games after a desync:
