@@ -617,3 +617,40 @@ describe("world.lua co-op patients: ", function()
   end)
 end)
 
+describe("world.lua VIP visits: ", function()
+  local saved_t_random, saved_round
+
+  before_each(function()
+    -- As App:init defines them (the tests have no App).
+    saved_t_random, saved_round = math.t_random, math.round
+    math.round = math.round or function(x) return math.floor(x + 0.5) end
+    math.t_random = function(a, c, b)
+      assert(a < c, "Left boundary a should be less than center c.")
+      assert(c < b, "Right boundary b should more than center c.")
+      return c
+    end
+  end)
+
+  after_each(function()
+    math.t_random, math.round = saved_t_random, saved_round
+  end)
+
+  local function makeWorld(mayor_launch)
+    return setmetatable({
+      map = {level_config = {gbv = {MayorLaunch = mayor_launch}}},
+      game_date = Date(1, 1, 1),
+    }, {__index = World})
+  end
+
+  it("plans the next visit around the level's MayorLaunch days", function()
+    local date = makeWorld(150):_generateNextVipDate()
+    assert.are.equal(Date(1, 1, 1):plusDays(150):tostring(), date:tostring())
+  end)
+
+  it("still plans a visit when a level sets MayorLaunch to 0 or 1", function()
+    for _, value in ipairs({0, 1}) do
+      local date = makeWorld(value):_generateNextVipDate()
+      assert.is_true(date > Date(1, 1, 1))
+    end
+  end)
+end)

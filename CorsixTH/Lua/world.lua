@@ -1739,8 +1739,10 @@ end
 -- PRIVATE method to generate the next VIP date
 -- Note: it is important we ensure this date always is in the future
 function World:_generateNextVipDate()
-  -- Support standard values for mean and bound
-  local mean, bound = math.max(self.map.level_config.gbv.MayorLaunch, 1), 30
+  -- Support standard values for mean and bound (at least 2 days: with a mean
+  -- of 1 there is no room below it, and math.t_random refuses that, so a
+  -- level setting MayorLaunch to 0 or 1 could not be loaded)
+  local mean, bound = math.max(self.map.level_config.gbv.MayorLaunch or 0, 2), 30
   -- How many days until next vip?
   local lower, upper = math.max(mean - bound, 1), mean + bound
   local days = math.round(math.t_random(lower, mean, upper))
