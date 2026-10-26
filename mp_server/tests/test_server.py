@@ -554,3 +554,30 @@ def test_private_chat_reaches_only_the_addressee(run):
         assert (await c.expect("CHAT", text="hello all")).get("to") is None
         assert not any("psst" in line for line in c.inbox)
     run(body)
+
+
+def test_competitive_room_and_continued_seats(run):
+    async def body(server, port):
+        a = await Client.connect(port, "Ann")
+        a.send(encode("CREATE", room="race", password="", max=3, mode="competitive", level=2))
+        assert (await a.expect("JOINED"))["mode"] == "competitive"
+        b = await Client.connect(port, "Ben")
+        b.send(encode("LIST"))
+        assert (await b.expect("ROOM"))["mode"] == "competitive"
+        # A continued competitive game seats every player at their hospital.
+        tom = await Client.connect(port, "Tom")
+        sara = await Client.connect(port, "Sara")
+        tom.send(encode("CREATE", room="again", password="", max=2, mode="competitive", level=3,
+                        step=300, date="1-02-10T05", seats="SARA,TOM", **{"continue": 1}))
+        await tom.expect("JOINED")
+        sara.send(encode("JOIN", room="again", password=""))
+        await sara.expect("JOINED")
+        sara.send(encode("READY", ready=1))
+        tom.send(encode("START"))
+        st = await tom.expect("START")
+        assert st["mode"] == "competitive" and st["seats"] == "1:2,2:1"
+        # Unknown modes are still refused.
+        x = await Client.connect(port, "Xena")
+        x.send(encode("CREATE", room="odd", password="", max=2, mode="battle", level=1))
+        assert (await x.expect("ERROR"))["code"] == "bad_room"
+    run(body)

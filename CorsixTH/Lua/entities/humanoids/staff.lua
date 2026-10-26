@@ -118,6 +118,9 @@ function Staff:tick()
   if self.fired or self.pickup or not self.hospital or self.dead or self.mp_in_transit then
     return
   end
+  -- A rival's evil handyman (multiplayer competitive): no rest, no pay rises;
+  -- only his mischief.
+  if self.mp_saboteur then return MultiplayerSession.sabotage.tick(self) end
 
   -- check if we need to use the staff room and go there if so
   self:checkIfNeedRest()

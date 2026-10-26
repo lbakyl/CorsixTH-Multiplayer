@@ -215,7 +215,7 @@ function UIMultiplayer:_updateRooms()
   for i = 1, math.min(ROOM_ROWS, #rooms) do
     local r = rooms[i]
     lines[i] = S.room_line:format(r.room, tonumber(r.players) or 0, tonumber(r.max) or 0,
-        r.mode == "coop" and S.mode_coop or S.mode_shared, r.level or "?",
+        MultiplayerLobby.modeLabel(r.mode), r.level or "?",
         (r.locked == "1" and S.locked or "") .. (r.build_ok == "0" and S.other_build or "") ..
         (r["continue"] == "1" and S.saved_flag or ""))
   end
@@ -261,9 +261,13 @@ end
 function UIMultiplayer:buttonRefresh() self.lobby:refreshRooms() end
 
 function UIMultiplayer:buttonMode()
-  local S = _S.multiplayer_window
-  self.new_mode = self.new_mode == "shared" and "coop" or "shared"
-  self.mode_button.panel_for_sprite:setLabel(self.new_mode == "coop" and S.mode_coop or S.mode_shared)
+  local modes = MultiplayerLobby.MODES
+  local next_mode = modes[1]
+  for i, mode in ipairs(modes) do
+    if mode == self.new_mode then next_mode = modes[i % #modes + 1] end
+  end
+  self.new_mode = next_mode
+  self.mode_button.panel_for_sprite:setLabel(MultiplayerLobby.modeLabel(self.new_mode))
 end
 
 function UIMultiplayer:buttonLevel()
@@ -286,10 +290,10 @@ function UIMultiplayer:buttonContinue()
   local save = self.saves[self.continue_index]
   self.continue_button.panel_for_sprite:setLabel(save and S.continue_save:format(save.label) or S.continue_new)
   if save then
-    self.new_mode = save.info.mode == "coop" and "coop" or "shared"
+    self.new_mode = MultiplayerLobby.hospitalEach(save.info.mode) and save.info.mode or "shared"
     self.new_level = tonumber(save.info.level) or 1
     self.new_max = math.max(2, tonumber(save.info.players) or 2)
-    self.mode_button.panel_for_sprite:setLabel(self.new_mode == "coop" and S.mode_coop or S.mode_shared)
+    self.mode_button.panel_for_sprite:setLabel(MultiplayerLobby.modeLabel(self.new_mode))
     self.level_button.panel_for_sprite:setLabel(S.level:format(self.new_level))
     self.max_button.panel_for_sprite:setLabel(S.players:format(self.new_max))
   end
@@ -357,7 +361,7 @@ function UIMultiplayer:_updateRoom()
   end
   local s = lobby.summary
   self.summary_panel:setLabel(s and S.recommendation:format(s.speed, s.latency or "?") or S.measuring)
-  self.mode_panel:setLabel((lobby.room.mode == "coop" and S.mode_coop or S.mode_shared) ..
+  self.mode_panel:setLabel(MultiplayerLobby.modeLabel(lobby.room.mode) ..
       ", " .. S.level:format(tonumber(lobby.room.level) or 1) ..
       (lobby.room["continue"] == "1" and (", " .. S.continuing:format((lobby.room.date or ""):gsub("T.*", ""))) or ""))
   local owner = lobby:isOwner()

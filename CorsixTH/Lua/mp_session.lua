@@ -562,6 +562,9 @@ function MultiplayerSession:_tellRejected(cmd, why)
   if not text and (why == "not enough money" or why == "loan limit") then
     text = "Not enough money for that."
   end
+  if not text and cmd.kind == "sabotage" then
+    text = _S.multiplayer_window.sabotage_refused:format(tostring(why))
+  end
   if not text and cmd.kind == "build_room" then
     text = "The room could not be built: " .. tostring(why) .. "."
   end
@@ -1514,7 +1517,11 @@ end
 local function find_staff(world, hospital, cmd)
   local by_id = cmd.staff and world:getEntityById(tonumber(cmd.staff))
   if by_id then
-    if class.is(by_id, Staff) and by_id.hospital == hospital and not by_id.fired then return by_id end
+    -- (An evil handyman, competitive, is not theirs to give away.)
+    if class.is(by_id, Staff) and by_id.hospital == hospital and not by_id.fired and
+        not by_id.mp_saboteur then
+      return by_id
+    end
     return nil
   end
   local index, key = cmd.index, cmd.key
@@ -1548,6 +1555,8 @@ local function arrival_tile(world, hospital)
     end
   end
 end
+
+MultiplayerSession.arrivalTile = arrival_tile
 
 --! Send a staff member to another player's hospital: {hospital (sender), to,
 --! index, key}. They walk over to the new one and start work there. No hiring fee
@@ -2281,7 +2290,9 @@ function handlers.move_staff(world, cmd)
   local session = TheApp and TheApp.mp_session
   if staff and session then session:showLocally(staff) end
   if not staff or not ours(world, cmd, staff) then return false, "not our staff" end
-  if staff.fired or staff.pickup or not staff.tile_x then return false, "cannot move them now" end
+  if staff.fired or staff.pickup or not staff.tile_x or staff.mp_saboteur then
+    return false, "cannot move them now"
+  end
   local x, y = tonumber(cmd.x), tonumber(cmd.y)
   local check = {world = world, tile_x = x, tile_y = y, ui = {hospital = staff.hospital},
       profile = staff.profile, allow_in_rooms = not staff.profile:isType("Receptionist")}
@@ -2395,7 +2406,11 @@ end
 function handlers.fire_staff(world, cmd)
   local staff = entity_of(world, cmd.staff, Staff)
   if not staff or staff.fired then return false, "no such staff member" end
-  if staff.hospital ~= hospital_of(world, cmd) then return false, "not our staff" end
+  if staff.hospital ~= hospital_of(world, cmd) or staff.mp_in_transit then return false, "not our staff" end
+  if staff.mp_saboteur then
+    -- Competitive: a rival's evil handyman, thrown out (no severance).
+    return MultiplayerSession.sabotage.throwOut(world, staff, staff.hospital)
+  end
   staff:fire()
   return true
 end
@@ -2588,3 +2603,6 @@ function handlers.hire(world, cmd)
   if window then window:updateStaffList() end
   return true
 end
+
+-- Competitive dirty tricks (handlers.sabotage and the evil handyman).
+MultiplayerSession.sabotage = corsixth.require("mp_sabotage")

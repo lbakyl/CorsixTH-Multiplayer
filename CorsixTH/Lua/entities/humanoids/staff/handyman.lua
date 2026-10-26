@@ -111,6 +111,11 @@ end
 
 function Handyman:searchForHandymanTask()
   self.task = nil
+  -- A rival's evil handyman (multiplayer competitive) does no work.
+  if self.mp_saboteur then
+    self:doMeandering()
+    return false
+  end
   local nr = math.random()
   local task_type_1, task_type_2, task_type_3
   local task_found = false

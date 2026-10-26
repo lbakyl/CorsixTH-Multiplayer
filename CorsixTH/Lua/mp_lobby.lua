@@ -35,6 +35,29 @@ local MultiplayerLobby = _G["MultiplayerLobby"]
 MultiplayerLobby.PROTOCOL = 1
 MultiplayerLobby.DEFAULT_PORT = 47800
 
+--! Room modes: one shared hospital; a hospital each, as a team (co-op); or a
+--! hospital each, racing to the level's goals (competitive).
+MultiplayerLobby.MODES = {"shared", "coop", "competitive"}
+
+--! Does a room of this mode give every player a hospital of their own?
+function MultiplayerLobby.hospitalEach(mode)
+  return mode == "coop" or mode == "competitive"
+end
+
+--! The lobby's name for a mode.
+function MultiplayerLobby.modeLabel(mode)
+  local S = _S.multiplayer_window
+  if mode == "coop" then return S.mode_coop end
+  if mode == "competitive" then return S.mode_competitive end
+  return S.mode_shared
+end
+
+--! The mode of a running game, from its world.
+function MultiplayerLobby.worldMode(world)
+  if not (world and world.mp_coop) then return "shared" end
+  return world.mp_coop.competitive and "competitive" or "coop"
+end
+
 -- Game speeds from slowest to fastest (World tick_rates); the server allows
 -- speeds up to the room's max_speed.
 MultiplayerLobby.SPEEDS = {"Slowest", "Slower", "Normal", "Max speed", "And then some more"}
@@ -352,7 +375,7 @@ function MultiplayerLobby:_writeLocalSave(session, kind)
   end
   local f = assert(io.open(dir .. label .. ".mpinfo", "w"))
   f:write("room=", self.room and self.room.room or "", "\n",
-      "mode=", world.mp_coop and "coop" or "shared", "\n",
+      "mode=", MultiplayerLobby.worldMode(world), "\n",
       "level=", tostring(p.level or 1), "\n",
       "difficulty=", tostring(p.difficulty or "full"), "\n",
       "step=", tostring(session.step), "\n",
@@ -726,7 +749,7 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
     MultiplayerLobby.showOwnWatches(world, app.ui)
   end
   -- A continued or rejoined game's first game UI (no-op for the same menu bar).
-  self:_addMultiplayerMenu(app.ui, world.mp_coop ~= nil)
+  self:_addMultiplayerMenu(app.ui, MultiplayerLobby.worldMode(world))
   self:_attachChat(app.ui)
   session:restartAt(world, step, peers)
   -- The saved UI may still point at a room editor that is not open here
@@ -803,11 +826,12 @@ function MultiplayerLobby.useCanonicalOrder(app)
   end
 end
 
---! The co-op Multiplayer menu (money and staff to the other players), once
---! per menu bar.
---! The MULTIPLAYER menu: the player list, and in co-op games trades.
-function MultiplayerLobby:_addMultiplayerMenu(ui, coop)
+--! The MULTIPLAYER menu, once per menu bar: the player list; with a hospital
+--! each also trades and research, and in a competitive game dirty tricks.
+--!param mode (string) the room mode (MultiplayerLobby.MODES)
+function MultiplayerLobby:_addMultiplayerMenu(ui, mode)
   if not (ui and ui.menu_bar) or self.mp_menu_bar == ui.menu_bar then return end
+  local coop = MultiplayerLobby.hospitalEach(mode)
   self.mp_menu_bar = ui.menu_bar
   local menu = UIMenu()
   menu:appendItem(_S.multiplayer_window.menu_players, function()
@@ -822,6 +846,12 @@ function MultiplayerLobby:_addMultiplayerMenu(ui, coop)
     -- (Also on the research blackboard; this way needs no research room.)
     menu:appendItem(_S.multiplayer_window.menu_research, function()
       UIMultiplayerResearch.open(TheApp.ui)
+    end)
+  end
+  if mode == "competitive" then
+    menu:appendItem(_S.multiplayer_window.menu_sabotage, function()
+      local current = TheApp.ui
+      current:addWindow(UIMultiplayerSabotage(current))
     end)
   end
   ui.menu_bar:addMenu(_S.multiplayer_window.menu_caption, menu)
@@ -865,7 +895,7 @@ function MultiplayerLobby:_beginGame(f)
   app.config.grant_wage_increase = f.grant_wage_increase == "1"
   app.config.free_build_mode = f.free_build_mode == "1"
 
-  local coop = f.mode == "coop"
+  local coop = MultiplayerLobby.hospitalEach(f.mode)
   local my_index = 1
   -- Each player's hospital (for the player list): one each in peer order, or
   -- as the server seated them in a continued game; all share hospital 1.
@@ -891,7 +921,8 @@ function MultiplayerLobby:_beginGame(f)
     for p, index in (f.seats or ""):gmatch("(%d+):(%d+)") do
       if tonumber(p) == tonumber(f.peer) then my_index = tonumber(index) end
     end
-    app.mp_coop = {players = #peers, local_index = my_index, names = names}
+    app.mp_coop = {players = #peers, local_index = my_index, names = names,
+        competitive = f.mode == "competitive"}
   end
 
   self.restore_order = MultiplayerLobby.useCanonicalOrder(app)
@@ -950,7 +981,7 @@ function MultiplayerLobby:_beginGame(f)
     self.log("multiplayer: rejoining; waiting for the shared save")
     return
   end
-  self:_addMultiplayerMenu(world.ui, coop)
+  self:_addMultiplayerMenu(world.ui, f.mode)
   self:_attachChat(world.ui)
   world.mp_speed = f.speed or "Normal" -- the shared speed (set_speed commands)
   world.mp_hours = 0

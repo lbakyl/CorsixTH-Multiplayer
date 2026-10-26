@@ -120,6 +120,7 @@ function UIMultiplayerPlayers.rows(lobby, session, world)
       reputation = hospital and tostring(math.floor(hospital.reputation or 0)) or "-",
       -- Co-op: who has reached the level's goals, and who fails them.
       goals = not (hospital and world.mp_coop) and S.goals_open or
+          world:mpPlaceText(hospital) or -- competitive: the place, or out
           (hospital.mp_goals_reached and S.goals_done) or
           (hospital.mp_failing_since and S.goals_failing) or S.goals_open,
     }

@@ -113,7 +113,8 @@ function World:World(app, free_build_mode)
   -- player hospital per player, hospital i owning the plots of player i.
   local coop = app.mp_coop
   if coop then
-    self.mp_coop = {players = coop.players}
+    -- (competitive: the players race to the goals; see World:_mpRaceCheck)
+    self.mp_coop = {players = coop.players, competitive = coop.competitive or nil}
     self.mp_local_index = coop.local_index
     for i = 1, coop.players do
       local hospital = PlayerHospital(self, avail_rooms, coop.names[i] or ("PLAYER " .. i), i)
@@ -473,12 +474,13 @@ end
 --!return a hospital, or nil if none is open
 function World:_coopPatientHospital()
   local chosen = self:chooseHospitalForPatient(nil)
-  if not chosen or chosen.opened then return chosen end
+  if not chosen or (chosen.opened and not chosen.mp_place) then return chosen end
   local players = self.mp_coop.players
   local start = self:getHospitalIndex(chosen) or 1
   for step = 1, players do
     local hospital = self.hospitals[(start - 1 + step) % players + 1]
-    if hospital and hospital.opened then return hospital end
+    -- (Competitive: a hospital out of the race gets no more patients.)
+    if hospital and hospital.opened and not hospital.mp_place then return hospital end
   end
   return nil
 end
@@ -1246,7 +1248,7 @@ end
 function World:_patientsCanArrive()
   if not self.mp_coop then return self.hospitals[1].opened end
   for _, hospital in ipairs(self.hospitals) do
-    if hospital.opened then return true end
+    if hospital.opened and not hospital.mp_place then return true end
   end
   return false
 end
@@ -1255,7 +1257,12 @@ end
 --! ("vip", "emergency"), in hospital order.
 function World:_coopTurn(event)
   self.mp_turns = self.mp_turns or {}
-  local turn = (self.mp_turns[event] or 0) % self.mp_coop.players + 1
+  local turn = self.mp_turns[event] or 0
+  -- (Competitive: hospitals out of the race are skipped.)
+  for _ = 1, self.mp_coop.players do
+    turn = turn % self.mp_coop.players + 1
+    if not self.hospitals[turn].mp_place then break end
+  end
   self.mp_turns[event] = turn
   return self.hospitals[turn]
 end
@@ -1323,6 +1330,12 @@ function World:_tickCoopTransfers()
       if session then session.log("referred patient #" .. patient.mp_id .. " arrived at hospital " .. t.to) end
       MultiplayerSession.tellPlayer(self, to, _S.multiplayer_window.patient_arrived_note:format(
           self.hospitals[t.from] and self.hospitals[t.from].name or "?"))
+    elseif t and staff.mp_saboteur then
+      -- A rival's evil handyman (competitive) walks in: not on the payroll.
+      if staff.tile_x ~= t.x or staff.tile_y ~= t.y then staff:setTile(t.x, t.y) end
+      staff.mp_in_transit = nil
+      staff.mp_transfer_walk = nil
+      MultiplayerSession.sabotage.arrived(self, staff)
     elseif t then
       if staff.tile_x ~= t.x or staff.tile_y ~= t.y then staff:setTile(t.x, t.y) end
       local to = self.hospitals[t.to]
@@ -1529,6 +1542,7 @@ function World:onEndDay()
 end
 
 function World:checkIfGameWon()
+  if self.mp_coop and self.mp_coop.competitive then return self:_mpRaceCheck() end
   -- Multiplayer co-op is a team game: the level is won once every hospital
   -- has reached the level's goals (once reached, they stay reached). Until
   -- then each player hears when a hospital gets there, and who is missing.
@@ -1749,6 +1763,103 @@ function World:_generateNextVipDate()
   return self.game_date:plusDays(days)
 end
 
+--! The English ordinal of a place (1st, 2nd...).
+local function place_text(place)
+  return _S.multiplayer_window.places[place] or tostring(place)
+end
+
+--! Multiplayer competitive: the players race to the level's goals. A
+--! hospital that reaches them takes the next place (hospital order when
+--! several get there at the same check). It is then out of the race: no new
+--! patients or events, and its player may go back to the lobby or watch. A
+--! hospital failing the goals at two year ends in a row is out at the bottom
+--! (see World:onEndYear). When at most one hospital still races, the race is
+--! over: it takes the place left and everybody gets the final standings.
+function World:_mpRaceCheck()
+  if self.mp_race_over then return end
+  for i = 1, self.mp_coop.players do
+    local hosp = self.hospitals[i]
+    if not hosp.mp_place and self.endconditions:checkEndGame(hosp) == "win" then
+      self:_mpPlace(hosp, "won")
+    end
+  end
+  self:_mpRaceCheckOver()
+end
+
+--! Competitive: give `hosp` its place, "won" (the next place from the top)
+--! or "out" (the next place from the bottom), and tell everybody.
+function World:_mpPlace(hosp, how)
+  local S = _S.multiplayer_window
+  if how == "out" then
+    self.mp_last_place = self.mp_last_place or self.mp_coop.players
+    hosp.mp_place = self.mp_last_place
+    self.mp_last_place = self.mp_last_place - 1
+  else
+    self.mp_next_place = self.mp_next_place or 1
+    hosp.mp_place = self.mp_next_place
+    self.mp_next_place = self.mp_next_place + 1
+  end
+  hosp.mp_place_how = how
+  hosp.mp_failing_since = nil
+  local place = place_text(hosp.mp_place)
+  if how == "last" then return end -- the race is over: the standings say it
+  local message
+  if how == "won" then
+    MultiplayerSession.tellOthers(self, hosp, S.race_placed_other:format(hosp.name, place))
+    message = {{text = S.race_won[1]}, {text = S.race_won[2]:format(place)}, {text = S.race_won[3]}}
+  else
+    MultiplayerSession.tellOthers(self, hosp, S.race_out_other:format(hosp.name, place))
+    message = {{text = S.race_out[1]}, {text = S.race_out[2]:format(place)}, {text = S.race_out[3]}}
+  end
+  message.choices = {
+    {text = S.back_to_lobby, choice = "mp_leave_game"},
+    {text = S.race_watch, choice = "stay_on_level"},
+  }
+  -- Only this hospital's player sees it (and answers it: fax_choice).
+  self.ui.bottom_panel:queueMessage("information", message, nil, nil, 2, nil, hosp)
+  if self.ui.hospital == hosp then self.ui.bottom_panel:openLastMessage() end
+end
+
+--! Competitive: is the race over (at most one hospital still racing)? Then
+--! the last one takes the place left, and the standings go to everybody.
+function World:_mpRaceCheckOver()
+  if self.mp_race_over then return end
+  local racing = {}
+  for i = 1, self.mp_coop.players do
+    if not self.hospitals[i].mp_place then racing[#racing + 1] = self.hospitals[i] end
+  end
+  if #racing > 1 then return end
+  if racing[1] then self:_mpPlace(racing[1], "last") end
+  self.mp_race_over = true
+  local S = _S.multiplayer_window
+  local order = {}
+  for i = 1, self.mp_coop.players do order[i] = self.hospitals[i] end
+  table.sort(order, function(a, b) return a.mp_place < b.mp_place end)
+  local lines = {}
+  for _, hosp in ipairs(order) do
+    lines[#lines + 1] = S.race_standing:format(place_text(hosp.mp_place), hosp.name) ..
+        (hosp.mp_place_how == "out" and S.race_standing_out or "")
+  end
+  local message = {
+    {text = S.race_over[1]},
+    {text = table.concat(lines, ", ")},
+    {text = S.race_over[2]},
+    choices = {
+      {text = S.back_to_lobby, choice = "return_to_main_menu"},
+      {text = S.keep_playing, choice = "stay_on_level"},
+    },
+  }
+  self.ui.bottom_panel:queueMessage("information", message, nil, nil, 2, nil, nil, true)
+  self.ui.bottom_panel:openLastMessage()
+end
+
+--! The player list's text for a hospital's place in a competitive game, or nil.
+function World:mpPlaceText(hosp)
+  if not (hosp and hosp.mp_place) then return nil end
+  if hosp.mp_place_how == "out" then return _S.multiplayer_window.race_out_short end
+  return place_text(hosp.mp_place)
+end
+
 --! Multiplayer co-op: every hospital has reached the goals. One win fax for
 --! everybody; whoever answers first decides for all (fax_choice command):
 --! back to the lobby (the game ends for everybody) or keep playing.
@@ -1945,7 +2056,28 @@ function World:onEndYear()
   -- (Single player checks for a win when the annual report is closed, which
   -- is a different moment on every multiplayer peer: here instead.)
   if self.app.mp_session then self:checkIfGameWon() end
-  if self.mp_coop then
+  if self.mp_coop and self.mp_coop.competitive then
+    -- A race: a hospital still failing the goals at the next year end is out
+    -- (at the bottom of the standings); the others race on.
+    local S = _S.multiplayer_window
+    for i = 1, self.mp_coop.players do
+      local hosp = self.hospitals[i]
+      local _, limit = self.endconditions:checkEndGame(hosp)
+      if hosp.mp_place then -- luacheck: ignore 542
+        -- (out of the race already)
+      elseif limit and hosp.mp_failing_since then
+        self:_mpPlace(hosp, "out")
+      elseif limit then
+        hosp.mp_failing_since = self.game_date:year()
+        MultiplayerSession.tellPlayer(self, hosp, S.race_failing)
+        MultiplayerSession.tellOthers(self, hosp, S.race_failing_other:format(hosp.name))
+      elseif hosp.mp_failing_since then
+        hosp.mp_failing_since = nil
+        MultiplayerSession.tellOthers(self, nil, S.goals_recovered:format(hosp.name))
+      end
+    end
+    self:_mpRaceCheckOver()
+  elseif self.mp_coop then
     -- A team game: a hospital failing the goals is not thrown out; the others
     -- can rescue it. The team loses only if a hospital still fails them at
     -- the next year end.

@@ -293,6 +293,13 @@ function UIFax:choice(choice_number)
       self.ui.app.moviePlayer:playWinMovie()
       self.ui.app:loadMainMenu()
     end
+  elseif choice == "mp_leave_game" then
+    -- Multiplayer competitive: only this hospital's player leaves (back to the
+    -- lobby); the others race on. (The server's referee never leaves.)
+    local session = TheApp.mp_session
+    if session and not session.observer and self.ui.app.world:getUIHospital() == hospital then
+      session:finish({_S.multiplayer_window.race_left_end})
+    end
   elseif choice == "stay_on_level" then
     hospital.win_declined = true
   end

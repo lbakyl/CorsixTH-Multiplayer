@@ -40,7 +40,9 @@ log = logging.getLogger("corsixth_mp")
 SERVER_VERSION = "0.1"
 MAX_NAME = 32
 MAX_ROOMS = 64
-MODES = ("shared", "coop")
+MODES = ("shared", "coop", "competitive")
+# Modes in which every player runs a hospital of their own.
+HOSPITAL_EACH = ("coop", "competitive")
 SPEED_CONTROL = ("any", "owner")
 DIFFICULTIES = ("easy", "full", "hard")
 PING_INTERVAL_LOBBY = 1.0
@@ -481,7 +483,7 @@ class Server:
                 self._error(player, "bad_room", "step must be a number")
                 return
             seat_names = [n.strip()[:MAX_NAME] for n in f.get("seats", "").split(",") if n.strip()][:4]
-            if mode == "coop" and seat_names:
+            if mode in HOSPITAL_EACH and seat_names:
                 max_players = min(4, max(2, len(seat_names)))
         password = f.get("password", "")
         salt = secrets.token_bytes(16)
@@ -625,7 +627,7 @@ class Server:
             # A saved game: nobody loads the level; the host sends the save,
             # and everybody loads it like after a desync repair.
             room.start_fields["resume"] = 1
-            if room.mode == "coop":
+            if room.mode in HOSPITAL_EACH:
                 room.start_fields["seats"] = ",".join(
                     f"{p}:{i}" for p, i in sorted(self._seats(room).items()))
         for peer, pl in room.players.items():

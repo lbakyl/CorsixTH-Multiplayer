@@ -12,6 +12,7 @@
 --   MP_JOIN_PASSWORD  password the joiner types (default MP_PASSWORD)
 --   MP_PLAYERS        players the host waits for         (default 2)
 --   MP_COOP           1: the host creates a co-op room (a hospital each)
+--   MP_MODE           the room mode the host picks: shared, coop or competitive
 --   MP_SCENARIO       light | busy | none                (default light; none: no
 --                     test setup, to join a game a person hosts)
 --   MP_STEPS          game hours to play                 (default 1500)
@@ -91,6 +92,7 @@ local target = tonumber(os.getenv("MP_STEPS") or "1500")
 local fast = (os.getenv("MP_FAST") or "1") == "1"
 local draw_every = tonumber(os.getenv("MP_DRAW_EVERY") or "0")
 local coop = os.getenv("MP_COOP") == "1"
+local room_mode = os.getenv("MP_MODE") or (coop and "coop" or "shared")
 local shot_dir = os.getenv("MP_SHOT_DIR")
 -- With the server's referee a desync is repaired: keep playing through it.
 local expect_repair = os.getenv("MP_EXPECT_REPAIR") == "1"
@@ -205,7 +207,9 @@ local function run_lobby()
     w = lobby_window()
     w.room_name_box:setText(room)
     w.password_box:setText(password)
-    if coop then w:buttonMode() end -- "A hospital each"
+    for _ = 1, 3 do -- "A hospital each", "Competitive race"
+      if w.new_mode ~= room_mode then w:buttonMode() end
+    end
     for _ = 2, tonumber(os.getenv("MP_LEVEL") or 1) do w:buttonLevel() end
     -- Room size: MP_PLAYERS (2 to 4).
     for _ = 1, 3 do
@@ -971,6 +975,50 @@ local function run()
           else
             log("UI: no " .. id .. " to pick up")
           end
+        elseif a == "sabotage" then
+          -- sabotage:<trick>:<level>:<hospital>: MULTIPLAYER > DIRTY TRICKS
+          local trick, level, to = entry.arg:match("^(%a+):(%d+):(%d+)$")
+          local win = UIMultiplayerSabotage(world.ui, world.hospitals[tonumber(to)])
+          world.ui:addWindow(win)
+          win:buy(trick, tonumber(level))
+          log(string.format("UI: dirty trick %s level %s against hospital %s at step %d: %s", trick, level, to,
+              session.step, tostring(win.status_panel and win.status_panel.label)))
+          win:close()
+        elseif a == "kickevil" then
+          -- Find a rival's evil handyman in this hospital and press the sack
+          -- button of his staff window (then OK). Look again later if none yet.
+          local evil
+          for _, e in ipairs(world.entities) do
+            if not evil and e.mp_saboteur and not e.mp_in_transit and e.hospital == world.ui.hospital then evil = e end
+          end
+          if not evil and (entry.retries or 0) < 40 and entry.hour < target - 100 then
+            entry.retries = (entry.retries or 0) + 1
+            entry.hour = entry.hour + 50
+            done[i] = nil
+          elseif evil then
+            local win = UIStaff(world.ui, evil)
+            world.ui:addWindow(win)
+            win:fireStaff()
+            local confirm = world.ui:getWindow(UIConfirmDialog)
+            if confirm then confirm:ok() end
+            log(string.format("UI: threw out evil handyman #%d at step %d", evil.mp_id, session.step))
+            if win.close and world.ui:getWindow(UIStaff) then win:close() end
+          else
+            log("UI: no evil handyman found")
+          end
+        elseif a == "race" then
+          -- Competitive: each hospital's place, and whether the race is over.
+          local parts = {}
+          for h = 1, (world.mp_coop and world.mp_coop.players or 1) do
+            local hosp = world.hospitals[h]
+            parts[#parts + 1] = string.format("%d=%s%s", h, tostring(hosp.mp_place or "-"),
+                hosp.mp_place_how and ("(" .. hosp.mp_place_how .. ")") or "")
+          end
+          local staff = {}
+          for _, s in ipairs(world.ui.hospital.staff) do staff[#staff + 1] = s.humanoid_class end
+          table.sort(staff)
+          log(string.format("UI: race at step %d: %s; over: %s; my staff: %s", session.step,
+              table.concat(parts, " "), tostring(world.mp_race_over or false), table.concat(staff, ",")))
         elseif a == "discover" then
           -- Test command: the room becomes available (as research would).
           session:issue({kind = "probe_discover", room = entry.arg})
@@ -1197,7 +1245,7 @@ local function run()
           local function text(v) return (tostring(v):gsub("^<LocalisedString> Current value:", "")) end
           for _, r in ipairs(UIMultiplayerPlayers.rows(lobby, session, world)) do
             parts[#parts + 1] = table.concat({text(r.name), text(r.hospital), text(r.ping), text(r.status),
-                text(r.value)}, "|")
+                text(r.value), text(r.goals)}, "|")
           end
           log(string.format("UI: players at step %d: %s", session.step, table.concat(parts, "; ")))
           if entry.arg == "shot" then shot("players") end

@@ -474,7 +474,7 @@ function UIBottomPanel:queueMessage(type, message, owner, timeout, default_choic
       owner.message = message
     end
   else
-    self:cancelFax(message_info.type)
+    self:cancelFax(message_info.type, message_info.hospital)
   end
 end
 
@@ -610,16 +610,21 @@ function UIBottomPanel:canQueueFax(fax)
   message queue or the message window (ui)
   @param fax_type (string) the fax type to check if any queued
   @return true if any of fax_type is queued false otherwise (boolean) ]]
+  -- (Multiplayer with a hospital each: only that hospital's faxes clash.)
+  local per_hospital = TheApp.mp_session and self.world.mp_coop
+  local function same(fax_msg)
+    return not per_hospital or fax_msg.hospital == fax.hospital
+  end
   local function isFaxTypeQueued(fax_type)
     -- Check the queued messages
     for _, fax_msg in ipairs(self.message_queue) do
-      if fax_msg.type == fax_type then
+      if fax_msg.type == fax_type and same(fax_msg) then
         return true
       end
     end
     -- Then the messages displayed on the bottom bar
     for _, fax_msg in ipairs(self.message_windows) do
-      if fax_msg.type == fax_type then
+      if fax_msg.type == fax_type and same(fax_msg) then
         return true
       end
     end
@@ -641,12 +646,16 @@ end
 --[[ Cancels a fax of a particular type currently only "emergency" and "epidemy"
 Handles the cancelling of the event which the fax pertains to.
 @param fax_type (string) type of fax event to be cancelled]]
-function UIBottomPanel:cancelFax(fax_type)
-  local hospital = self.ui.hospital
+--!param hospital (Hospital) optional; whose fax it is (multiplayer: not
+--! always this player's)
+function UIBottomPanel:cancelFax(fax_type, hospital)
+  hospital = hospital or self.ui.hospital
   if fax_type == "epidemy" then
-    hospital.epidemic:clearAllInfectedPatients()
+    if hospital.epidemic then hospital.epidemic:clearAllInfectedPatients() end
     hospital.epidemic = nil
   elseif fax_type == "emergency" then
+    -- (Multiplayer co-op asks the hospital whether an emergency is under way.)
+    if self.world.mp_coop then hospital.emergency = nil end
     self.world:nextEmergency()
   end
 end
