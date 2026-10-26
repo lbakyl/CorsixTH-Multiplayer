@@ -1,73 +1,68 @@
 <picture>![image](https://github.com/CorsixTH/CorsixTH/assets/20030128/923883d1-cd2b-48a9-8506-6ee03e2745dc)</picture>
 
-### Latest Release <a href="https://github.com/CorsixTh/CorsixTH/releases/latest"><img src="https://img.shields.io/github/v/release/CorsixTH/CorsixTH?style=for-the-badge&color=green" align="top"></a>
-[![Linux and Tests](https://github.com/CorsixTH/CorsixTH/actions/workflows/Linux.yml/badge.svg?branch=master)](https://github.com/CorsixTH/CorsixTH/actions/workflows/Linux.yml) [![Windows](https://github.com/CorsixTH/CorsixTH/actions/workflows/Windows.yml/badge.svg?branch=master&event=push)](https://github.com/CorsixTH/CorsixTH/actions/workflows/Windows.yml) [![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/github/CorsixTH/CorsixTH?branch=master&svg=true&passingText=Windows%20-%20OK&failingText=Windows%20-%20Failing)](https://ci.appveyor.com/project/TheCycoONE/corsixth)
-##### [Matrix Space](https://matrix.to/#/#CorsixTH:matrix.org) | [Matrix Chat](https://matrix.to/#/#corsixth-general:matrix.org) | [Discord](https://discord.gg/Mxeztvh) | [Report Issue](https://github.com/CorsixTH/CorsixTH/issues/new) | [Reddit](https://www.reddit.com/r/corsixth) | [Twitter/X](https://twitter.com/CorsixTH) | [Facebook](https://facebook.com/CorsixTH)
-----
+# CorsixTH Multiplayer
 
-## CorsixTH-Multiplayer (this fork)
+[![Latest release](https://img.shields.io/github/v/release/lbakyl/CorsixTH-Multiplayer?style=for-the-badge&color=green&label=latest%20release)](https://github.com/lbakyl/CorsixTH-Multiplayer/releases/latest)
+[![Linux and Tests](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/Linux.yml/badge.svg?branch=master)](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/Linux.yml) [![Windows](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/Windows.yml/badge.svg?branch=master&event=push)](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/Windows.yml) [![Linux package](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/LinuxPackage.yml/badge.svg?branch=master)](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/LinuxPackage.yml) [![macOS app](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/macOS.yml/badge.svg?branch=master)](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/macOS.yml)
 
-This fork adds **network multiplayer** to CorsixTH: two to four players in
-**one shared hospital** or **a hospital each** (co-op, with money and staff
-trades), through a small relay server. It is a **test version**.
+**Network multiplayer for [CorsixTH](https://github.com/CorsixTH/CorsixTH)**, the open-source reimplementation of Bullfrog's 1997 business sim Theme Hospital. Play with friends over the internet: in **one shared hospital**, or **each in your own hospital as a team** on the original multiplayer maps. Windows, Linux and macOS players play together.
 
-- **Newest tested state: the `master` branch.** Work in progress lives on
-  `mp/*` branches until it is tested and moved to `master`; the older
-  `mp/*` branches are history.
-- **Players:** download the newest **Multiplayer test build** from
-  [Releases](https://github.com/lbakyl/CorsixTH-Multiplayer/releases), then
-  read [docs/multiplayer/PLAYING.md](docs/multiplayer/PLAYING.md): the lobby,
-  co-op, saving and continuing, what is not there yet.
-- **Running a server:** [docs/multiplayer/vps-guide.md](docs/multiplayer/vps-guide.md)
-  (one command on a Debian or Ubuntu VPS).
-- **Developers:** [docs/multiplayer/README.md](docs/multiplayer/README.md)
-  (design, tests, lessons learned).
-- Everybody in a game, and the server, use the same commit. You need your
-  own Theme Hospital data, as for CorsixTH itself.
+This is a fork of CorsixTH, not an official CorsixTH release. Single player works exactly as in CorsixTH.
 
-The rest of this page is upstream CorsixTH's README.
-
-----
-
-A reimplementation of the 1997 Bullfrog business sim Theme Hospital. As well as faithfully recreating the original, CorsixTH adds support for modern operating systems (Windows, macOS, Linux and BSD), high resolutions and much more.
-
-<picture>![image](https://github.com/CorsixTH/CorsixTH/assets/20030128/71a42d5f-d486-4309-ba85-77e114880bcb)</picture>
-
+<picture>![A co-op game: a busy hospital, and the other player's chat message at the top](docs/multiplayer/images/coop-game.png)</picture>
 
 ## Getting Started ##
 
-You will need the following:
+1. **Download the game** for your system from the [latest release](https://github.com/lbakyl/CorsixTH-Multiplayer/releases/latest):
+   - **Windows** (64-bit): unzip `...-win64.zip` and start `CorsixTH.exe`.
+   - **Linux** (x86_64, Ubuntu 24.04, Linux Mint 22 or newer): unpack `...-linux-x86_64.tar.gz` and start `CorsixTH-Multiplayer/CorsixTH-Multiplayer.sh`.
+   - **macOS** (Apple Silicon, macOS 26 Tahoe or newer): unzip `...-macos-arm64.zip` and move `CorsixTH.app` to Applications. The app is not notarized by Apple: the first time, open **System Settings > Privacy & Security** and click **Open Anyway**.
+2. **Theme Hospital's game data** is needed, as for CorsixTH: the original CD, or a download from [GOG.com](https://www.gog.com/game/theme_hospital) or [EA](https://www.ea.com/games/theme/theme-hospital). The first start asks for its folder.
+3. **Main menu > Multiplayer**: enter the server address `eu1.bachelor-tech.com:47800` (the test server) and your name, then **Connect**.
+4. **Create a room** (one shared hospital, or a hospital each; the level; how many players; a password if you like) or **join** one. When everybody is ready, the room's owner starts the game. The lobby measures everybody's connection and sets the top speed that stays smooth.
+5. Everybody in a game must run the **same release**.
 
-- Grab the latest installer for your system:
-   - Windows and macOS builds, and an AppImage for Linux can be downloaded directly from [releases](https://github.com/CorsixTH/CorsixTH/releases).
-   - Linux and BSD repositories use either corsixth or corsix-th names [packaged versions](https://repology.org/metapackage/corsixth).
-   - A Flatpak for Linux users is available on [Flathub](https://flathub.org/apps/details/com.corsixth.corsixth).
-   - A Snap for Linux users is available on [Snapcraft](https://snapcraft.io/corsixth) [(support page)](https://github.com/snapcrafters/corsixth).
-   - An unofficial Anylinux AppImage is available from [Pkgforge](https://github.com/pkgforge-dev/CorsixTH-AppImage-Enhanced).
-- We use graphics, sound and other data from the original game so one of the following is required:
-   - Original game CD from eBay etc. or your dusty bookshelf :smile:
-   - A download from [GOG.com](https://www.gog.com/game/theme_hospital) or [EA](https://www.ea.com/games/theme/theme-hospital)
-
- Head over to our [getting started](https://github.com/CorsixTH/CorsixTH/wiki/Getting-Started) page for more detail.
+The full guide, with co-op, trading, saving and what to do if something goes wrong: [docs/multiplayer/PLAYING.md](docs/multiplayer/PLAYING.md). To run your own server (one command on a Debian or Ubuntu server): [docs/multiplayer/vps-guide.md](docs/multiplayer/vps-guide.md).
 
 ### What's Working? ###
-Most features of the game are available -- and we're at a state where you can complete the full campaign without issue.
-##### Original Features #####
+The whole single player game of CorsixTH (you can complete the full campaign), and multiplayer for two to four players.
+
+##### Multiplayer #####
+- **One shared hospital:** everybody builds, hires and manages the same hospital; single player rules for winning and losing.
+- **A hospital each (co-op):** the original two- to four-player maps, each player running their own hospital, as a team: the level is won when every hospital has reached its goals, and lost if one keeps failing them.
+- **Trading between hospitals:** send money or ask for it, offer staff (free or for a price, also from the staff window), refer patients, share research (free or for a price).
+- **Smooth at every speed:** a click takes effect in about a tenth of a second, Slowest and pause included.
+- **Shared speed:** pause and unpause are instant for everybody; a new speed is put to a vote and needs more than half of the players.
+- **Nobody waits for another player's windows:** faxes, pay rises, questions and the annual report do not pause the game.
+- **In-game chat**, to everybody or one player, and a players window (MULTIPLAYER > PLAYERS) with ping, money, value and each hospital's goals.
+- **Saving and continuing** a multiplayer game from the lobby (File > Save and a monthly autosave).
+- **Self-repairing games:** the server runs its own copy of every game; if the players' games ever differ, everybody quietly loads the server's copy and plays on. A player who drops out can rejoin.
+
+<picture>![The players window: each player's hospital, ping, value, balance, reputation and goals](docs/multiplayer/images/players-window.png)</picture>
+
+##### Original Features (from CorsixTH) #####
 - Single player campaign
 - All diseases, objects, rooms are available
 - All events (emergencies, earthquakes, epidemics, VIP visits)
 - Management windows (managing staff, patients, policies etc.)
 - Music/Jukebox
 - Gameplay videos
-- Cheats (naughty!)
-  
-##### New Features #####
+- Cheats (naughty!), in single player
+
+### New Features ###
+##### In this fork #####
+- Network multiplayer, shared and co-op, through a small relay server ([run your own](docs/multiplayer/vps-guide.md))
+- Builds for Windows, Linux and macOS (Apple Silicon) that play together
+- Votes on the game speed, trades with prices, chat, a players window
+- A headless referee on the server that repairs games and lets players rejoin
+
+##### From CorsixTH #####
 - Custom levels and campaigns
 - Full HD and 4K support
 - Zooming
 - UI scaling
 - Subtitles
-- More than 20 different languages
+- More than 20 different languages (multiplayer games are played in English for now)
 - Make your own maps and levels with built-in map editor
 - Unlimited save files
 - Play your own music!
@@ -76,17 +71,31 @@ Most features of the game are available -- and we're at a state where you can co
 - Improved game logic
 - Full control over all hotkeys
 - Machine menu
-- Adviser messages history 
+- Adviser messages history
 
 ### What's missing/needs improvement? ###
-There are some areas of the game still missing, and while we work to get them integrated any additional help from the community is always appreciated!
-- Multiplayer/LAN
+##### Multiplayer #####
+- Competitive games (hospitals playing against each other)
+- Encryption: connections and room passwords are not encrypted, so do not use a password you use elsewhere
+- Other game languages in multiplayer (everybody plays in English)
+- A notarized macOS app, and builds for Intel Macs and 32-bit systems
+- Now and then the players' games still go out of sync; the server repairs this within a second
+
+##### From CorsixTH #####
 - AI Hospitals (and the components associated with it)
 - Rats (but rat holes are present) and the bonus rat level
 - Vomit waves
 - Win level video/letter
 - The original graphics do not have a complete set for Pregnancy, Alien DNA, and female Fractured Bones patients -- these may cause anomalies if you enable regular spawning in settings
 - Some objects in the game may glitch with walls
+
+## Multiplayer development
+
+How it works (deterministic lockstep, the relay server, the referee), the tests and the lessons learned: [docs/multiplayer/README.md](docs/multiplayer/README.md), with [protocol.md](docs/multiplayer/protocol.md), [referee.md](docs/multiplayer/referee.md) and [coop-architecture.md](docs/multiplayer/coop-architecture.md). Work in progress lives on `mp/*` branches until it is tested and moved to `master`. Problems with multiplayer: please [open an issue on this fork](https://github.com/lbakyl/CorsixTH-Multiplayer/issues/new) (server, room name, time, what you were doing).
+
+----
+
+*The rest of this page is from upstream CorsixTH: the project this fork is built on, its community and how to help it.*
 
 ## Developers
 ### Coders and non-coders we want you!
