@@ -13,8 +13,9 @@ It is a test version: expect rough edges, and please report what you find.
   not included and must never be shared.
 - **The multiplayer build of this fork**, the same one as everybody you play
   with. The server only lets players with the same build into a room.
-- **A server address** (`host:port`, port 47800 by default). Anybody can run
-  one; see [vps-guide.md](vps-guide.md).
+- **A server address** (`host:port`, port 47800 by default). The test
+  server is `eu1.bachelor-tech.com:47800` (it runs the newest release).
+  Anybody can run one; see [vps-guide.md](vps-guide.md).
 
 ## Get the game
 
