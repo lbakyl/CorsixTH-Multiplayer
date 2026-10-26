@@ -4,6 +4,7 @@
 # (docs/multiplayer/referee.md). Ubuntu or Debian; run as root (sudo).
 #
 #   sudo bash setup-referee-host.sh --release mp-test-c364e17a [--data DIR] [--port 47800] [--motd TEXT]
+#   (a stable release is named mp-stable-<commit>)
 #
 # --release  a test release of lbakyl/CorsixTH-Multiplayer: its Linux package
 #            is the referee, and the server code comes from the same commit.
@@ -36,8 +37,8 @@ done
 die() { echo "ERROR: $*" >&2; exit 1; }
 say() { printf '\n== %s\n' "$*"; }
 [[ $(id -u) -eq 0 ]] || die "run as root, e.g. sudo bash $0 ..."
-[[ "$RELEASE" =~ ^mp-test-([0-9a-f]{7,40})$ ]] || die "--release must look like mp-test-<commit>"
-SHA=${BASH_REMATCH[1]}
+[[ "$RELEASE" =~ ^mp-(test|stable)-([0-9a-f]{7,40})$ ]] || die "--release must look like mp-test-<commit> or mp-stable-<commit>"
+SHA=${BASH_REMATCH[2]}
 export DEBIAN_FRONTEND=noninteractive
 
 say "Packages: Python, git, and the libraries the game binary links against"
