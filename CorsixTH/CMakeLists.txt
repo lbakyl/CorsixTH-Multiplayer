@@ -19,13 +19,16 @@ if(MSVC)
 endif()
 
 include(CheckCXXSourceCompiles)
-check_cxx_source_compiles("
+check_cxx_source_compiles(
+  "
 #include <atomic>
 int main() {
   std::atomic<double> d {0.0};
   return static_cast<int>(d.load());
 }
-" ATOMIC_BUILTIN)
+"
+  ATOMIC_BUILTIN
+)
 
 set(CORSIX_TH_SEARCH_LOCAL_DATADIRS ${SEARCH_LOCAL_DATADIRS})
 
@@ -187,8 +190,10 @@ if(NOT FluidSynth_FOUND AND PkgConfig_FOUND)
   if(FLUIDSYNTH_FOUND)
     add_library(FluidSynth::libfluidsynth INTERFACE IMPORTED)
     set_target_properties(
-            FluidSynth::libfluidsynth
-            PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${FLUIDSYNTH_INCLUDE_DIRS}" INTERFACE_LINK_LIBRARIES "${FLUIDSYNTH_LIBRARIES}"
+      FluidSynth::libfluidsynth
+      PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${FLUIDSYNTH_INCLUDE_DIRS}"
+        INTERFACE_LINK_LIBRARIES "${FLUIDSYNTH_LIBRARIES}"
     )
     set(FluidSynth_FOUND TRUE)
   endif()
@@ -302,12 +307,9 @@ if(VCPKG_TARGET_TRIPLET AND WIN32)
       POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:CorsixTH>/socket
       COMMAND
-        ${CMAKE_COMMAND} -E copy
-        "${LUASOCKET_ROOT}/$<$<CONFIG:Debug>:debug/>bin/socket/core.dll"
+        ${CMAKE_COMMAND} -E copy "${LUASOCKET_ROOT}/$<$<CONFIG:Debug>:debug/>bin/socket/core.dll"
         $<TARGET_FILE_DIR:CorsixTH>/socket/core.dll
-      COMMAND
-        ${CMAKE_COMMAND} -E copy "${LUASOCKET_ROOT}/share/lua/socket.lua"
-        $<TARGET_FILE_DIR:CorsixTH>/socket.lua
+      COMMAND ${CMAKE_COMMAND} -E copy "${LUASOCKET_ROOT}/share/lua/socket.lua" $<TARGET_FILE_DIR:CorsixTH>/socket.lua
     )
   endif()
 endif()
@@ -339,8 +341,9 @@ endif()
 
 if(FETCH_SOUNDFONT)
   set(SOUNDFONT_FILE "${CMAKE_BINARY_DIR}/GeneralUser-GS.sf2")
-  file(DOWNLOAD
-    https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/684543d5e5efaef08d02be50dcda8d552478fa60/GeneralUser-GS.sf2
+  file(
+    DOWNLOAD
+      https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/684543d5e5efaef08d02be50dcda8d552478fa60/GeneralUser-GS.sf2
     "${SOUNDFONT_FILE}"
     EXPECTED_HASH SHA256=9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe
     STATUS SOUNDFONT_STATUS
@@ -356,8 +359,8 @@ endif()
 
 if(FETCH_UNICODE_FONT)
   set(GONOTO_FILE "${CMAKE_BINARY_DIR}/CorsixTHUnicode.ttf")
-  file(DOWNLOAD
-    https://github.com/satbyy/go-noto-universal/releases/download/v7.0/GoNotoKurrent-Regular.ttf
+  file(
+    DOWNLOAD https://github.com/satbyy/go-noto-universal/releases/download/v7.0/GoNotoKurrent-Regular.ttf
     "${GONOTO_FILE}"
     EXPECTED_HASH SHA256=2f2cee5fbb2403df352ca2005247f6c4faa70f3086ebd31b6c62308b5f2f9865
     STATUS GONOTO_STATUS
@@ -383,14 +386,13 @@ endif()
 
 find_package(zstd CONFIG REQUIRED)
 if(TARGET zstd::libzstd)
-    set(CORSIXTH_ZSTD_TARGET zstd::libzstd)
+  set(CORSIXTH_ZSTD_TARGET zstd::libzstd)
 elseif(TARGET zstd::libzstd_shared)
-    set(CORSIXTH_ZSTD_TARGET zstd::libzstd_shared)
+  set(CORSIXTH_ZSTD_TARGET zstd::libzstd_shared)
 elseif(TARGET zstd::libzstd_static)
-    set(CORSIXTH_ZSTD_TARGET zstd::libzstd_static)
+  set(CORSIXTH_ZSTD_TARGET zstd::libzstd_static)
 else()
-    message(FATAL_ERROR
-        "zstd was found, but no supported CMake target was exported")
+  message(FATAL_ERROR "zstd was found, but no supported CMake target was exported")
 endif()
 target_link_libraries(CorsixTH_lib PRIVATE "${CORSIXTH_ZSTD_TARGET}")
 

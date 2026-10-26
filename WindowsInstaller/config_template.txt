@@ -495,3 +495,9 @@ new_machine_extra_info = true
 --
 player_name = [[]]
 
+
+-------------------------------------------------------------------------------
+-- Address of the last multiplayer server you connected to, like [[host:port]].
+--
+multiplayer_server = [[]]
+
