@@ -74,6 +74,16 @@ done (`spendMoney`, "Dirty tricks"). Prices in `sabotage.PRICES`.
   that says it cannot be refused. Level 3 may pick a disease the target has
   not discovered.
 
+- **Rat attack.** `sabotage.ratAttack`: `Hospital:mpAddRatholes` (random
+  corridor wall spots near the target's start view; the daily rathole update
+  tries spots over the whole map and seldom hits a small hospital), then
+  5/10/20 rats (`spawnRat`) with `mp_attack_rat`. Such a rat runs on to
+  another hole instead of going in (`Rat:_arrive`); `sabotage.dailyRats`
+  (from `Hospital:onEndDay`) takes a reputation point per live attack rat a
+  day and ends the attack after 60 days. Shooting is the existing
+  `shoot_rat` command (a click). In the original rules rats only run from
+  hole to hole and are a target for the rat-catching award; they do no harm.
+
 ## Fixed on the way
 
 `UIBottomPanel:canQueueFax` checked epidemic/emergency fax clashes across
@@ -89,17 +99,18 @@ players; `MP_REFEREE=1` adds the headless referee and a 4th check):
 1. tricks as commands; a second emergency refused at once;
 2. the evil handyman arrives, drops litter, wears the cardiogram machine
    down, is thrown out and works for the buyer;
-3. places, a winner leaving alone, elimination at two year ends, final
+3. a rat attack: ten rats, the target's reputation falls, one is shot;
+4. places, a winner leaving alone, elimination at two year ends, final
    standings; the others IN SYNC to the end;
-4. (referee) no repairs, confirmed to the end.
+5. (referee) no repairs, confirmed to the end.
 
-Probe actions: `sabotage:<trick>:<level>:<hospital>`, `kickevil`, `race`;
+Probe actions: `sabotage:<trick>:<level>:<hospital>`, `kickevil`, `shootrat`, `race`;
 `MP_MODE=competitive` for the host.
 
 ## Ideas not done yet
 
 See the report in the session; the main ones: a security guard or CCTV to
 spot evil handymen, poaching a rival's staff, a smear campaign (reputation),
-bribing the health inspector or a VIP, a rat infestation, insurance against
+bribing the health inspector or a VIP, insurance against
 tricks, a cooldown between tricks, and showing the race (places and goal
 progress) on the town map or the status bar.

@@ -168,10 +168,12 @@ is not told who sent an epidemic or an emergency.
 | **Evil handyman**: looks like one of their handymen and strolls their corridors | $5,000: does no work | $12,500: also drops litter | $20,000: also wears a machine down until it nearly breaks (about every three days) |
 | **Epidemic**: contagious patients of one disease arrive at their hospital | $6,000: 2 patients | $12,000: 4 | $20,000: 7 |
 | **Emergency** they cannot refuse: patients arrive by helicopter | $5,000: 3 patients | $10,000: 6 | $18,000: 10, maybe of a disease they have not discovered |
+| **Rat attack**: rats come out of new holes in their walls; each rat alive costs them a reputation point a day (for 60 days at most) | $4,000: 5 rats | $9,000: 10 | $15,000: 20 |
 
 **Found a handyman who is not on your staff list?** Click him and press the
 sack button: he is thrown out (no severance pay) and walks back to whoever
-sent him, who has to employ him from then on. A trick is refused while it
+sent him, who has to employ him from then on. **Rats?** Click them to shoot
+them (it counts for the rat-catching award too). A trick is refused while it
 cannot work, for example while their emergency is still on.
 
 Trading staff and money and sharing research work as in co-op.

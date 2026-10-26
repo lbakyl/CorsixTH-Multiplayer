@@ -119,6 +119,17 @@ end
 --! The rat has reached the end of its run: enter the target hole if it is a
 -- real rathole, otherwise just vanish.
 function Rat:_arrive()
+  -- A rat of a rival's rat attack (multiplayer competitive) runs on to
+  -- another hole instead of going in, until it is shot (or the attack ends).
+  if self.mp_attack_rat and self.target.wall then
+    self.origin_wall = self.target.wall
+    local target_x, target_y, target_wall = self:_chooseTarget()
+    if target_x and (target_x ~= self.tile_x or target_y ~= self.tile_y) then
+      self.target = {x = target_x, y = target_y, wall = target_wall}
+      self:_beginRun()
+      return
+    end
+  end
   if self.target.wall then
     self:_enterHole()
   else

@@ -10,11 +10,13 @@
 #   2. the evil handyman walks over, drops litter and wears lou's cardiogram
 #      machine down; lou throws him out with the sack button and he walks
 #      back to kim and works there as an ordinary handyman
-#   3. the race: lou's hospital reaches the goals (test command) and takes
+#   3. a rat attack (level 2, lou against max): ten rats in max's hospital,
+#      max's reputation falls while they live; max shoots one
+#   4. the race: lou's hospital reaches the goals (test command) and takes
 #      1st place, lou answers "Back to the lobby" and leaves alone; max fails
 #      the goals at two year ends and is out (3rd); kim, the last one racing,
 #      takes 2nd and the race is over; kim and max stay IN SYNC to the end
-# With MP_REFEREE=1 the server also runs its headless referee, and a 4th
+# With MP_REFEREE=1 the server also runs its headless referee, and a 5th
 # check needs it to agree with the players to the end.
 # Exits 0 only if all checks behave as expected.
 #
@@ -85,10 +87,10 @@ run_probe kim MP_ROLE=host MP_ROOM=race MP_MODE=competitive MP_PLAYERS=3 MP_STEP
   MP_UI_SCRIPT="20:openhospital;100:sabotage:handyman:3:2;150:sabotage:emergency:3:3;160:sabotage:emergency:1:3;1100:goals:2:win;1110:wincheck;1200:goals:3:lose;1210:yearend;1260:yearend;1300:race;1310:players" & pids+=($!)
 sleep 1
 run_probe lou MP_ROLE=join MP_ROOM=race MP_STEPS=1400 \
-  MP_UI_SCRIPT="30:openhospital;60:discover:cardiogram;80:room:cardiogram:4:4;950:kickevil;1150:answerfax:information:1:wait" & pids+=($!)
+  MP_UI_SCRIPT="30:openhospital;60:discover:cardiogram;80:room:cardiogram:4:4;250:sabotage:rats:2:3;950:kickevil;1150:answerfax:information:1:wait" & pids+=($!)
 sleep 1
 run_probe max MP_ROLE=join MP_ROOM=race MP_STEPS=1400 \
-  MP_UI_SCRIPT="40:openhospital;200:sabotage:epidemic:1:1;1300:race" & pids+=($!)
+  MP_UI_SCRIPT="40:openhospital;200:sabotage:epidemic:1:1;240:race;600:race;650:shootrat;1300:race" & pids+=($!)
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 python3 - "$out" "${MP_REFEREE:-0}" <<'PY'
@@ -109,8 +111,8 @@ k, l, m = log('kim'), log('lou'), log('max')
 tricks = [x for x in applied('kim') if ' sabotage -> ' in x]
 ok_tricks = [x for x in tricks if x.endswith('-> ok')]
 refused = 'dirty trick emergency level 1 against hospital 3' in k and 'they have an emergency on' in k
-ok1 = len(ok_tricks) == 3 and refused
-print(f"1. Dirty tricks:            {len(ok_tricks)}/3 accepted; second emergency refused at once: {refused}")
+ok1 = len(ok_tricks) == 4 and refused
+print(f"1. Dirty tricks:            {len(ok_tricks)}/4 accepted; second emergency refused at once: {refused}")
 for x in tricks: print("   " + x.split('multiplayer: ', 1)[1])
 fail |= not ok1
 
@@ -125,6 +127,16 @@ print(f"2. Evil handyman:           arrived: {bool(arrived)}; litter dropped: {l
       f"thrown out: {bool(thrown)}; works for kim now: {bool(back)} (kim's staff at 1300: {race1300.group(1) if race1300 else '-'})")
 fail |= not ok2
 
+rats = re.search(r'sabotage \(step \d+\): (\d+) rats let loose in hospital 3', k)
+rep_before = re.search(r'UI: race at step 240: .*reputation (\d+)', m)
+rep_after = re.search(r'UI: race at step 600: .*reputation (\d+)', m)
+shot = re.search(r'step \d+: peer 3 #\d+ shoot_rat -> ok', k)
+ok_r = bool(rats and int(rats.group(1)) == 10 and rep_before and rep_after
+            and int(rep_after.group(1)) < int(rep_before.group(1)) - 40 and shot)
+print(f"3. Rat attack:              rats: {rats.group(1) if rats else 0}; max's reputation {rep_before.group(1) if rep_before else '-'} -> "
+      f"{rep_after.group(1) if rep_after else '-'}; a rat shot: {bool(shot)}")
+fail |= not ok_r
+
 race_k = re.search(r'UI: race at step 1300: (.*)', k)
 race_m = re.search(r'UI: race at step 1300: (.*)', m)
 standings = '1=2(last) 2=1(won) 3=3(out); over: true'
@@ -132,7 +144,7 @@ lou_left = ended(l) is not None and re.search(r'step \d+: peer 2 #\d+ fax_choice
 ok3 = (race_k and race_k.group(1).startswith(standings) and race_m and race_m.group(1).startswith(standings)
        and lou_left and ended(k) is None and ended(m) is None
        and result('kim').startswith('IN SYNC') and result('max').startswith('IN SYNC'))
-print(f"3. The race:                lou left at step {ended(l)}; standings kim: {race_k.group(1) if race_k else '-'}; "
+print(f"4. The race:                lou left at step {ended(l)}; standings kim: {race_k.group(1) if race_k else '-'}; "
       f"max: {race_m.group(1) if race_m else '-'}; {result('kim')} / {result('max')}")
 players = re.search(r'UI: players at step \d+: (.*)', k)
 print(f"   players window: {players.group(1) if players else '-'}")
@@ -144,7 +156,7 @@ if with_referee:
     repaired = re.findall(r"room 'race': repaired", server)
     confirmed = re.search(r"room 'race': referee confirmed steps through (\d+)", server)
     ok4 = connected and not differ and not repaired and confirmed and int(confirmed.group(1)) >= 1300
-    print(f"4. Headless referee:        connected: {connected}; differs: {len(differ)}; repairs: {len(repaired)}; "
+    print(f"5. Headless referee:        connected: {connected}; differs: {len(differ)}; repairs: {len(repaired)}; "
           f"confirmed through {confirmed.group(1) if confirmed else '-'}")
     fail |= not ok4
 sys.exit(1 if fail else 0)

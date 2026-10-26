@@ -962,6 +962,38 @@ function Hospital:onEndDay()
   if self:isPlayerHospital() then
     dailyUpdateRatholes(self)
     dailyUpdateRats(self)
+    -- Multiplayer competitive: a rival's rat attack costs reputation daily.
+    if self.world.mp_coop and self.world.mp_coop.competitive then
+      MultiplayerSession.sabotage.dailyRats(self)
+    end
+  end
+end
+
+--! Multiplayer competitive (a rat attack): make up to `count` more ratholes in
+--! this hospital's corridor walls, at random spots near its start view (the
+--! daily update's tries over the whole map seldom hit a small hospital).
+function Hospital:mpAddRatholes(count)
+  local th = self.world.map.th
+  local cx, cy = th:getCameraTile(self:getPlayerIndex())
+  local width, height = th:size()
+  local spots = {}
+  for y = math.max(1, cy - 25), math.min(height, cy + 25) do
+    for x = math.max(1, cx - 25), math.min(width, cx + 25) do
+      local flags = th:getCellFlags(x, y)
+      if self:isInHospital(x, y) and flags.roomId == 0 and flags.buildable then
+        for _, wall in ipairs(self:getWallsAround(x, y)) do
+          local taken = false
+          for _, hole in ipairs(self.ratholes) do
+            if hole.x == x and hole.y == y and hole.wall == wall.wall then taken = true end
+          end
+          if not taken then spots[#spots + 1] = {x = x, y = y, wall = wall} end
+        end
+      end
+    end
+  end
+  for _ = 1, math.min(count, #spots) do
+    local spot = table.remove(spots, math.random(1, #spots))
+    self:addRathole(spot.x, spot.y, spot.wall.wall, spot.wall.parcel)
   end
 end
 

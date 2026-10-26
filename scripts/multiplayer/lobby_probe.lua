@@ -1006,6 +1006,19 @@ local function run()
           else
             log("UI: no evil handyman found")
           end
+        elseif a == "shootrat" then
+          -- Click the first attack rat in this hospital (shoot_rat command).
+          local rat
+          for _, e in ipairs(world.entities) do
+            if not rat and e.mp_attack_rat and not e.shot and e.hospital == world.ui.hospital then rat = e end
+          end
+          if rat then
+            rat:onClick(world.ui, "left")
+            log(string.format("UI: shot rat #%d at step %d (reputation %d)", rat.mp_id, session.step,
+                world.ui.hospital.reputation))
+          else
+            log("UI: no rat to shoot")
+          end
         elseif a == "race" then
           -- Competitive: each hospital's place, and whether the race is over.
           local parts = {}
@@ -1017,8 +1030,9 @@ local function run()
           local staff = {}
           for _, s in ipairs(world.ui.hospital.staff) do staff[#staff + 1] = s.humanoid_class end
           table.sort(staff)
-          log(string.format("UI: race at step %d: %s; over: %s; my staff: %s", session.step,
-              table.concat(parts, " "), tostring(world.mp_race_over or false), table.concat(staff, ",")))
+          log(string.format("UI: race at step %d: %s; over: %s; my staff: %s; reputation %d", session.step,
+              table.concat(parts, " "), tostring(world.mp_race_over or false), table.concat(staff, ","),
+              world.ui.hospital.reputation))
         elseif a == "discover" then
           -- Test command: the room becomes available (as research would).
           session:issue({kind = "probe_discover", room = entry.arg})

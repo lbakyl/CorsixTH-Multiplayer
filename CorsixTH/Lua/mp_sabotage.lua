@@ -31,6 +31,10 @@ SOFTWARE. --]]
 --!    hospital (2, 4 or 7 of them).
 --!  * an emergency the rival cannot refuse: the helicopter just comes (3, 6
 --!    or 10 patients; level 3 may bring a disease they have not discovered).
+--!  * a rat attack: 5, 10 or 20 rats come out of new holes in the rival's
+--!    walls and keep running between them; each one costs that hospital a
+--!    reputation point a day until it is shot (a click on it, as any rat),
+--!    for 60 days at most.
 --! Every purchase is the lockstep command `sabotage` {trick, level, to}; the
 --! rival is not told who sent an epidemic or an emergency.
 
@@ -41,14 +45,17 @@ sabotage.PRICES = {
   handyman = {5000, 12500, 20000},
   epidemic = {6000, 12000, 20000},
   emergency = {5000, 10000, 18000},
+  rats = {4000, 9000, 15000},
 }
-sabotage.KINDS = {"handyman", "epidemic", "emergency"}
+sabotage.KINDS = {"handyman", "epidemic", "emergency", "rats"}
 
 -- Evil handymen at once in one hospital, at most.
 local MAX_HANDYMEN = 3
 -- Contagious patients sent, and emergency patients, by level.
 local EPIDEMIC_PATIENTS = {2, 4, 7}
 local EMERGENCY_PATIENTS = {3, 6, 10}
+local RATS = {5, 10, 20}
+local MAX_RATS = 30 -- attack rats alive in one hospital, at most
 -- The evil handyman's habits, in game hours (one tick each; 50 in a day).
 sabotage.LITTER_EVERY = 25    -- level 2 and 3: litter twice a day
 sabotage.DAMAGE_EVERY = 150   -- level 3: a machine every three days
@@ -86,6 +93,8 @@ function sabotage.refusal(world, buyer, target, kind, level)
     if target.epidemic or #target.future_epidemics_pool > 0 then return "they have an epidemic already" end
     if target.emergency then return "they have an emergency on" end
     if not target:hasReceptionDesk(true) then return "they have no staffed reception desk" end
+  elseif kind == "rats" then
+    if sabotage.countRats(world, target) + RATS[level] > MAX_RATS then return "they have enough rats already" end
   elseif kind == "emergency" then
     if target.emergency or target.mp_emergency_timer then return "they have an emergency on" end
     if target.epidemic then return "they have an epidemic on" end
@@ -109,6 +118,8 @@ function handlers.sabotage(world, cmd)
     ok, why = sabotage.sendHandyman(world, buyer, target, level)
   elseif kind == "epidemic" then
     ok, why = sabotage.startEpidemic(world, target, level)
+  elseif kind == "rats" then
+    ok, why = sabotage.ratAttack(world, target, level)
   else
     ok, why = sabotage.sendEmergency(world, target, level)
   end
@@ -358,6 +369,57 @@ function sabotage.sendEmergency(world, target, level)
     ui.bottom_panel:queueMessage("information", message, nil, nil, nil, nil, target)
   end
   return true
+end
+
+--! Attack rats (from a rival) alive in `hospital`.
+function sabotage.countRats(world, hospital)
+  local count = 0
+  for _, entity in ipairs(world.entities) do
+    if entity.mp_attack_rat and entity.hospital == hospital and not entity.shot and not entity.to_destroy then
+      count = count + 1
+    end
+  end
+  return count
+end
+
+--! A rat attack: new holes in the rival's corridor walls and rats out of
+--! them, running from hole to hole like any rat.
+function sabotage.ratAttack(world, target, level)
+  target:mpAddRatholes(2 + level)
+  if #target.ratholes < 2 then return false, "no walls for rat holes" end
+  local spawned = 0
+  for _ = 1, RATS[level] do
+    local rat = target:spawnRat()
+    if rat then
+      rat.mp_attack_rat = true
+      spawned = spawned + 1
+    end
+  end
+  if spawned == 0 then return false, "no walls for rat holes" end
+  log(string.format("%d rats let loose in hospital %d", spawned, world:getHospitalIndex(target)))
+  MultiplayerSession.tellPlayer(world, target, S().sabotage_rats_notice)
+  return true
+end
+
+-- Days an attack rat keeps running before it goes back into a hole for good.
+local RAT_DAYS = 60
+
+--! Each day: every attack rat still alive costs its hospital a reputation
+--! point (from Hospital:onEndDay). After RAT_DAYS the attack wears off.
+function sabotage.dailyRats(hospital)
+  for _, entity in ipairs(hospital.world.entities) do
+    if entity.mp_attack_rat and entity.hospital == hospital then
+      entity.mp_attack_days = (entity.mp_attack_days or 0) + 1
+      if entity.mp_attack_days > RAT_DAYS then entity.mp_attack_rat = nil end
+    end
+  end
+  local count = sabotage.countRats(hospital.world, hospital)
+  if count > 0 then
+    hospital:unconditionalChangeReputation(-count)
+    if hospital.world.game_date:dayOfMonth() == 1 then
+      MultiplayerSession.tellPlayer(hospital.world, hospital, S().sabotage_rats_reminder:format(count))
+    end
+  end
 end
 
 return sabotage
