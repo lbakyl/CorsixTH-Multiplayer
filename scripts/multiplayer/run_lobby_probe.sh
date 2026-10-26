@@ -713,12 +713,15 @@ print(f"11. Save and continue:      saved at step {saved_t.group(2) if saved_t e
 fail |= not ok11
 
 if with_referee:
-    rooms = ['ward', 'leave', 'build', 'crowd', 'fax', 'coop', 'events', 'staff', 'edit', 'cardio', 'refer', 'epi']
+    # (savegame2 is a continued game: the referee waits for the host's save.)
+    rooms = ['ward', 'leave', 'build', 'crowd', 'fax', 'coop', 'events', 'staff', 'edit', 'cardio', 'refer', 'epi', 'savegame2']
     connected = [r for r in rooms if f"room '{r}': referee connected" in server]
     differ = re.findall(r"room '(\w+)': the players differ from the referee", server)
     confirmed = dict(re.findall(r"room '(\w+)': referee confirmed steps through (\d+)", server))
     def confirmed_after(room): return confirmed.get(room, 0)
-    ok10 = connected == rooms and not differ and all(int(confirmed.get(r, 0)) > 300 for r in rooms)
+    ok10 = (connected == rooms and not differ and all(int(confirmed.get(r, 0)) > 300 for r in rooms)
+            # (It joins a few seconds late; the fast test game ends soon after.)
+            and "room 'savegame2': the referee disconnected" not in server and int(confirmed.get('savegame2', 0)) > 303)
     print(f"13. Headless referee:       connected in {len(connected)}/{len(rooms)} rooms; "
           f"differs in {differ or 'none'}; confirmed through " +
           ", ".join(f"{r} {confirmed.get(r, 0)}" for r in rooms))
