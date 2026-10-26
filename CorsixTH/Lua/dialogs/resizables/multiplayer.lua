@@ -40,6 +40,8 @@ local col = {
 
 local WIDTH = 420
 local ROOM_ROWS = 6
+-- The room list asks the server again every few seconds while it is shown.
+local ROOMS_REFRESH_MS = 3000
 
 local function view_of(lobby)
   if not lobby or lobby.state == "closed" or lobby.state == "connecting" then return "connect" end
@@ -163,21 +165,20 @@ function UIMultiplayer:_buildRooms()
   local S, T = _S.multiplayer_window, _S.tooltip.multiplayer_window
   local lobby = self.lobby
   self.selected_room = nil
-  if #lobby.rooms == 0 then
-    label(self, 20, 40, WIDTH - 40, S.no_rooms)
-  end
-  for i = 1, math.min(ROOM_ROWS, #lobby.rooms) do
-    local r = lobby.rooms[i]
-    local text = S.room_line:format(r.room, tonumber(r.players) or 0, tonumber(r.max) or 0,
-        r.mode == "coop" and S.mode_coop or S.mode_shared, r.level or "?",
-        (r.locked == "1" and S.locked or "") .. (r.build_ok == "0" and S.other_build or "") ..
-        (r["continue"] == "1" and S.saved_flag or ""))
-    self:addBevelPanel(20, 40 + (i - 1) * 27, WIDTH - 40, 25, col.setting, nil, nil, nil,
-        col.setting_active):setLabel(text)
+  -- A row for each room shown; the list is filled in by _updateRooms, also
+  -- when it comes again from the server (every few seconds), without
+  -- disturbing the rest of the window.
+  self.room_rows = {}
+  for i = 1, ROOM_ROWS do
+    self.room_rows[i] = self:addBevelPanel(20, 40 + (i - 1) * 27, WIDTH - 40, 25, col.setting, nil, nil, nil,
+        col.setting_active)
         :makeToggleButton(0, 0, WIDTH - 40, 25, nil, function(window, state, btn)
           window:selectRoom(i, state, btn)
         end)
   end
+  self.rooms_shown = nil
+  self:_updateRooms()
+  self.next_rooms_refresh = MultiplayerSession.defaultClock()() + ROOMS_REFRESH_MS
   local y = 40 + ROOM_ROWS * 27 + 5
   label(self, 20, y, 110, S.password)
   self.password_box = textbox(self, 135, y, 135, "", 20, {"alpha", "numbers", "misc"}, T.password)
@@ -205,11 +206,48 @@ function UIMultiplayer:_buildRooms()
   button(self, WIDTH - 200, y, 180, S.disconnect, self.buttonDisconnect)
 end
 
+--! Show the lobby's room list in the rows. The selected room stays selected
+--! if it is still there.
+function UIMultiplayer:_updateRooms()
+  local S = _S.multiplayer_window
+  local rooms = self.lobby.rooms
+  local lines = {}
+  for i = 1, math.min(ROOM_ROWS, #rooms) do
+    local r = rooms[i]
+    lines[i] = S.room_line:format(r.room, tonumber(r.players) or 0, tonumber(r.max) or 0,
+        r.mode == "coop" and S.mode_coop or S.mode_shared, r.level or "?",
+        (r.locked == "1" and S.locked or "") .. (r.build_ok == "0" and S.other_build or "") ..
+        (r["continue"] == "1" and S.saved_flag or ""))
+  end
+  -- (Labels are localised strings: compared by their text.)
+  local shown = {}
+  for i, line in ipairs(lines) do shown[i] = tostring(line) end
+  shown = table.concat(shown, "\n")
+  if shown == self.rooms_shown then return end
+  self.rooms_shown = shown
+  local still_there
+  for i, row in ipairs(self.room_rows) do
+    local r = rooms[i]
+    if i <= #lines then
+      row.panel_for_sprite:setLabel(lines[i])
+      row:enable(true)
+      row:setToggleState(r.room == self.selected_room)
+      if r.room == self.selected_room then still_there = true end
+    else
+      row.panel_for_sprite:setLabel(i == 1 and S.no_rooms or "")
+      row:setToggleState(false)
+      row:enable(false)
+    end
+  end
+  if not still_there then self.selected_room = nil end
+end
+
 function UIMultiplayer:selectRoom(index, state, btn)
   for _, b in ipairs(self.buttons) do
     if b ~= btn and b.is_toggle then b:setToggleState(false) end
   end
-  self.selected_room = state and self.lobby.rooms[index].room or nil
+  local room = self.lobby.rooms[index]
+  self.selected_room = state and room and room.room or nil
 end
 
 function UIMultiplayer:buttonJoin()
@@ -351,12 +389,21 @@ function UIMultiplayer:onTick()
     if lobby.version ~= self.seen_version then
       self.seen_version = lobby.version
       local status = lobby.error and lobby.error.text or nil
-      if view_of(lobby) ~= self.view or self.view == "rooms" then
+      if view_of(lobby) ~= self.view then
         self:rebuild(status)
         return
       end
       if self.view == "room" then self:_updateRoom() end
+      if self.view == "rooms" then self:_updateRooms() end
       if status then self:setStatus(status) end
+    end
+    -- The room list keeps itself up to date.
+    if self.view == "rooms" and self.next_rooms_refresh then
+      local now = MultiplayerSession.defaultClock()()
+      if now >= self.next_rooms_refresh then
+        self.next_rooms_refresh = now + ROOMS_REFRESH_MS
+        lobby:refreshRooms()
+      end
     end
   end
   UIResizable.onTick(self)
