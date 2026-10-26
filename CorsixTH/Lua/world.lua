@@ -466,9 +466,6 @@ function World:_findClosestSpawnToDesk(staffed_desks, spawns)
   return best_spawn_point
 end
 
---! Spawn a patient from a spawn point for the given hospital.
---!param hospital (Hospital) Hospital that the new patient should visit.
---!return (Patient entity) The spawned patient, or 'nil' if no patient spawned.
 --! Multiplayer co-op: the hospital a new patient goes to. Patients are
 --! shared out in turn; one whose turn falls on a hospital that is not open
 --! yet goes to the next open one instead of being lost (a player who opened
@@ -486,6 +483,9 @@ function World:_coopPatientHospital()
   return nil
 end
 
+--! Spawn a patient from a spawn point for the given hospital.
+--!param hospital (Hospital) Hospital that the new patient should visit.
+--!return (Patient entity) The spawned patient, or 'nil' if no patient spawned.
 function World:spawnPatient(hospital)
   local disease
   if self.mp_coop then
@@ -1747,8 +1747,6 @@ function World:_generateNextVipDate()
   return self.game_date:plusDays(days)
 end
 
---! Process that the given player number won the game.
---!param player_no (integer) Number of the player who just won.
 --! Multiplayer co-op: every hospital has reached the goals. One win fax for
 --! everybody; whoever answers first decides for all (fax_choice command):
 --! back to the lobby (the game ends for everybody) or keep playing.
@@ -1769,6 +1767,8 @@ function World:_mpTeamWon()
   self.ui.bottom_panel:openLastMessage()
 end
 
+--! Process that the given player number won the game.
+--!param player_no (integer) Number of the player who just won.
 function World:winGame(player_no)
   if player_no == 1 and self.app.mp_session then
     -- Multiplayer, one shared hospital: the single-player rules, but no next
@@ -2758,10 +2758,6 @@ function World:wouldObjectBreakRoomObjectsAccessToTheRoomDoor(object_x, object_y
   return not pathfinding_success
 end
 
---! Notifies the world that an object has been placed, notifying
---  interested entities in the vicinity of the new arrival.
---!param entity (Entity) The entity that was just placed.
---!param id (optional string) That entity's id.
 --! Give an entity a number, in creation order. Every multiplayer peer
 --! creates entities in the same order, so commands can name an entity (a
 --! patient, a member of staff, a rat) by this number.
@@ -2779,6 +2775,10 @@ function World:getEntityById(id)
   end
 end
 
+--! Notifies the world that an object has been placed, notifying
+--  interested entities in the vicinity of the new arrival.
+--!param entity (Entity) The entity that was just placed.
+--!param id (optional string) That entity's id.
 function World:objectPlaced(entity, id)
   -- If id is not supplied, we can use the entities internal id if it exists
   -- This is so the bench check below works

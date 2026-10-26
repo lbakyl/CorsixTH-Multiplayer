@@ -396,12 +396,6 @@ function PlayerHospital:showGatesToHell(entity)
   entity:setAnimation(2550)
 end
 
---! Advises the player.
---!param msgs (array of string) Messages to select from.
---!param rnd_frac (optional float in range (0, 1]) Fraction of times that the
---    call actually says something.
---!param stay_up (bool) If true, let the adviser remain visible afterwards.
---!return (boolean) Whether a message was given to the user.
 --! Let the adviser say something about this hospital. In multiplayer co-op
 --! only the player running it hears it (every peer still runs the code
 --! deciding what to say, so the game stays the same everywhere).
@@ -410,6 +404,12 @@ function PlayerHospital:say(speech, talk_until_next_announce, override_current)
   self.world.ui.adviser:say(speech, talk_until_next_announce, override_current)
 end
 
+--! Advises the player.
+--!param msgs (array of string) Messages to select from.
+--!param rnd_frac (optional float in range (0, 1]) Fraction of times that the
+--    call actually says something.
+--!param stay_up (bool) If true, let the adviser remain visible afterwards.
+--!return (boolean) Whether a message was given to the user.
 function PlayerHospital:giveAdvice(msgs, rnd_frac, stay_up)
   local max_rnd = #msgs
   if rnd_frac and rnd_frac > 0 and rnd_frac < 1 then
