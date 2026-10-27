@@ -245,6 +245,30 @@ function MultiplayerLobby.connect(address, name, timeout, hello)
       address = host .. ":" .. port, log = print})
 end
 
+--! Start connecting to a server without waiting (the lobby window polls it
+--! with MultiplayerLobby.pollConnect every frame).
+--!return (table) the connection being made, or nil and why not
+function MultiplayerLobby.startConnect(address, name, timeout)
+  corsixth.require("mp_transport")
+  if not MultiplayerTransport.available() then
+    return nil, "LuaSocket is not available in this build"
+  end
+  local host, port = MultiplayerLobby.parseAddress(address)
+  if not host then return nil, "No server address" end
+  return {join = MultiplayerTransport.startJoin(host, port, timeout or 10), host = host, port = port,
+      name = name}
+end
+
+--! A connection started by startConnect: nil while it is being made, the
+--! lobby once it is, or false and why it failed.
+function MultiplayerLobby.pollConnect(connecting)
+  local transport, err = MultiplayerTransport.pollJoin(connecting.join)
+  if transport == nil then return nil end
+  if not transport then return false, tostring(err) end
+  return MultiplayerLobby({transport = transport, name = connecting.name,
+      address = connecting.host .. ":" .. connecting.port, log = print})
+end
+
 --! Register function(lobby, event, fields) called on every change.
 function MultiplayerLobby:addListener(fn)
   self.listeners[#self.listeners + 1] = fn

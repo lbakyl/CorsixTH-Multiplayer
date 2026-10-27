@@ -65,7 +65,9 @@ function CallsDispatcher:callForStaff(room)
   end
   local sound = room.room_info.call_sound
   if anyone_missed and sound and not room.sound_played then
-    room.world.ui:playAnnouncement(sound, AnnouncementPriority.Normal)
+    if room.world:isUIHospital(room.hospital) then
+      room.world.ui:playAnnouncement(sound, AnnouncementPriority.Normal)
+    end
     room.sound_played = true
   end
 end

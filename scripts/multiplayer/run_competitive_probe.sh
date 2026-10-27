@@ -16,7 +16,9 @@
 #      1st place, lou answers "Back to the lobby" and leaves alone; max fails
 #      the goals at two year ends and is out (3rd); kim, the last one racing,
 #      takes 2nd and the race is over; kim and max stay IN SYNC to the end;
-#      max's Progress Report shows his own hospital and, on a click, lou's
+#      max's Progress Report shows his own hospital and, on a click, lou's;
+#      the mouse finds nothing of the rivals' hospitals (people, doors), only
+#      the player's own and the evil handyman in it
 # With MP_REFEREE=1 the server also runs its headless referee, and a 5th
 # check needs it to agree with the players to the end.
 # Exits 0 only if all checks behave as expected.
@@ -88,10 +90,10 @@ run_probe kim MP_ROLE=host MP_ROOM=race MP_MODE=competitive MP_PLAYERS=3 MP_LEVE
   MP_UI_SCRIPT="20:openhospital;100:sabotage:handyman:3:2;150:sabotage:emergency:3:3;160:sabotage:emergency:1:3;1100:goals:2:win;1110:wincheck;1200:goals:3:lose;1210:yearend;1260:yearend;1300:race;1310:players" & pids+=($!)
 sleep 1
 run_probe lou MP_ROLE=join MP_ROOM=race MP_STEPS=1400 \
-  MP_UI_SCRIPT="30:openhospital;60:discover:cardiogram;80:room:cardiogram:4:4;250:sabotage:rats:2:3;950:kickevil;1150:answerfax:information:1:wait" & pids+=($!)
+  MP_UI_SCRIPT="30:openhospital;60:discover:cardiogram;80:room:cardiogram:4:4;250:sabotage:rats:2:3;600:rivals;950:kickevil;1150:answerfax:information:1:wait" & pids+=($!)
 sleep 1
 run_probe max MP_ROLE=join MP_ROOM=race MP_STEPS=1400 \
-  MP_UI_SCRIPT="40:openhospital;200:sabotage:epidemic:1:1;240:race;600:race;650:shootrat;700:progress;710:progress:2;1300:race" & pids+=($!)
+  MP_UI_SCRIPT="40:openhospital;200:sabotage:epidemic:1:1;240:race;600:race;610:rivals;650:shootrat;700:progress;710:progress:2;1300:race" & pids+=($!)
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 python3 - "$out" "${MP_REFEREE:-0}" <<'PY'
@@ -155,6 +157,14 @@ ok_p = bool(own_report and own_report.groups() == ('3', '3', '3') and lou_report
 print(f"   progress report (max): {own_report.group(0)[4:] if own_report else '-'}; "
       f"{lou_report.group(0)[4:] if lou_report else '-'}")
 ok3 = ok3 and ok_p
+riv_l = re.search(r'UI: rivals at step 600: own hidden (\d+) of (\d+); rivals shown (\d+) of (\d+); rival doors shown (\d+) of (\d+); evil handyman shown (\S+)', l)
+riv_m = re.search(r'UI: rivals at step 610: own hidden (\d+) of (\d+); rivals shown (\d+) of (\d+); rival doors shown (\d+) of (\d+); evil handyman shown (\S+)', m)
+ok_v = bool(riv_l and riv_m and riv_l.group(1) == '0' and riv_l.group(3) == '0' and int(riv_l.group(4)) > 0
+            and riv_l.group(5) == '0' and riv_l.group(7) == 'true'
+            and riv_m.group(1) == '0' and riv_m.group(3) == '0' and int(riv_m.group(4)) > 0
+            and riv_m.group(5) == '0' and int(riv_m.group(6)) > 0)
+print(f"   rivals hidden: lou {riv_l.group(0)[4:] if riv_l else '-'}; max {riv_m.group(0)[4:] if riv_m else '-'}")
+ok3 = ok3 and ok_v
 fail |= not ok3
 
 if with_referee:

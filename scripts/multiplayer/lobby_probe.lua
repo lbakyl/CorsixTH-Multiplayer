@@ -201,6 +201,7 @@ local function run_lobby()
   w.name_box:setText(name)
   shot("lobby-connect")
   w:buttonConnect()
+  wait_for("the connection", function() return TheApp.mp_lobby or not w.connecting end)
   local lobby = assert(TheApp.mp_lobby, "not connected: " .. tostring(w.status_text))
   log("connected as " .. lobby.build)
   wait_for("room list", function() return lobby.state == "connected" and lobby_window() and lobby_window().view == "rooms" end)
@@ -1098,6 +1099,35 @@ local function run()
           end
           log(string.format("UI: hospitals at step %d (%s, month %d): %s", session.step, d:tostring(),
               d:monthOfGame(), table.concat(parts, " ")))
+        elseif a == "rivals" then
+          -- Competitive: which people and doors the mouse may point at (the
+          -- hover test of the game UI): own ones, and not the rivals'.
+          local ui, mine = world.ui, world.ui.hospital
+          local own, own_hidden, rival, rival_shown, evil = 0, 0, 0, 0, "-"
+          for _, e in ipairs(world.entities) do
+            if class.is(e, Humanoid) and e.hospital and not e.going_home then
+              local hidden = ui:_isRivals(e)
+              if e.mp_saboteur and e.hospital == mine then
+                evil = tostring(not hidden)
+              elseif e.hospital == mine then
+                own = own + 1
+                if hidden then own_hidden = own_hidden + 1 end
+              else
+                rival = rival + 1
+                if not hidden then rival_shown = rival_shown + 1 end
+              end
+            end
+          end
+          local doors, doors_shown = 0, 0
+          for _, r in pairs(world.rooms) do
+            if r.door and r.hospital ~= mine then
+              doors = doors + 1
+              if not ui:_isRivals(r.door) then doors_shown = doors_shown + 1 end
+            end
+          end
+          log(string.format("UI: rivals at step %d: own hidden %d of %d; rivals shown %d of %d; " ..
+              "rival doors shown %d of %d; evil handyman shown %s", session.step, own_hidden, own,
+              rival_shown, rival, doors_shown, doors, evil))
         elseif a == "level" then
           -- What the level has: diseases, rooms there at the start, rooms
           -- that come later (research or automatic), and the goals.

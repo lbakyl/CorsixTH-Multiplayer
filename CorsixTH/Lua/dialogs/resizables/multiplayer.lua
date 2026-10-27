@@ -144,14 +144,27 @@ end
 function UIMultiplayer:buttonConnect()
   local S = _S.multiplayer_window
   local address, name = self.address_box.text, self.name_box.text
-  self:setStatus(S.connecting:format(address))
-  TheApp:drawFrame() -- show "Connecting..." before waiting for the server
-  -- At most 10 seconds for a server that does not answer (a wrong address).
-  local lobby, err = MultiplayerLobby.connect(address, name, 10)
-  if not lobby then
+  self:_stopConnecting()
+  -- The window keeps working meanwhile (onTick polls); at most 10 seconds for
+  -- a server that does not answer (a wrong address).
+  local connecting, err = MultiplayerLobby.startConnect(address, name, 10)
+  if not connecting then
     self:setStatus(err)
     return
   end
+  self.connecting = connecting
+  self.connecting_address = address
+  self:setStatus(S.connecting:format(address))
+end
+
+function UIMultiplayer:_stopConnecting()
+  if self.connecting then MultiplayerTransport.cancelJoin(self.connecting.join) end
+  self.connecting = nil
+end
+
+--! The connection is made: the lobby takes over (the window shows the rooms
+--! once the server has answered).
+function UIMultiplayer:_connected(lobby, address, name)
   TheApp.mp_lobby = lobby
   self.lobby = lobby
   TheApp.config.multiplayer_server = address
@@ -419,6 +432,18 @@ end
 -- Updates ---------------------------------------------------------------------
 
 function UIMultiplayer:onTick()
+  if self.connecting then
+    local lobby, err = MultiplayerLobby.pollConnect(self.connecting)
+    if lobby ~= nil then
+      local name = self.connecting.name
+      self.connecting = nil
+      if lobby then
+        self:_connected(lobby, self.connecting_address, name)
+      else
+        self:setStatus(err)
+      end
+    end
+  end
   local lobby = self.lobby
   if lobby then
     lobby:poll()
@@ -447,6 +472,7 @@ function UIMultiplayer:onTick()
 end
 
 function UIMultiplayer:close()
+  self:_stopConnecting()
   UIResizable.close(self)
   -- This window took the main menu's place; give it back (not when a game
   -- has just started and replaced the whole screen).

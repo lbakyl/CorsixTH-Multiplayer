@@ -581,7 +581,7 @@ function Hospital:tick()
       } -- ispot026 and ispot027 are both toilet related sounds.
 
       local sound_to_play = sounds[math.random(1, #sounds)]
-      if TheApp.audio:soundExists(sound_to_play) then
+      if TheApp.audio:soundExists(sound_to_play) and self.world:isUIHospital(self) then
         self.world.ui:playSound(sound_to_play)
       end
     end

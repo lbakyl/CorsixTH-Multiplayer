@@ -427,7 +427,8 @@ end
 
 --! Give the user possibly a message about a cured patient.
 function PlayerHospital:msgCured()
-  self.world.ui:playSound("cheer.wav") -- This sound is always heard
+  -- This sound is always heard (in multiplayer: in this player's hospital)
+  if self.world:isUIHospital(self) then self.world.ui:playSound("cheer.wav") end
 
   local num_cured = math.floor(self.num_cured)
   if num_cured == 1 then -- First cure is always reported.
@@ -443,7 +444,8 @@ end
 
 --! Give the user possibly a message about a dead patient.
 function PlayerHospital:msgKilled()
-  self.world.ui:playSound("boo.wav") -- this sound is always heard
+  -- This sound is always heard (in multiplayer: in this player's hospital)
+  if self.world:isUIHospital(self) then self.world.ui:playSound("boo.wav") end
 
   if self.num_deaths < 1 then -- First death is always reported.
     self:giveAdvice({_A.information.first_death})
@@ -481,6 +483,7 @@ end
 --!param broken_heat (0 or 1) Boiler output due to being broken.
 function PlayerHospital:adviseBoilerBreakdown(broken_heat)
   local ui = self.world.ui
+  if not self.world:isUIHospital(self) then return end
   if broken_heat == 0 then
     self:say(_A.boiler_issue.minimum_heat)
     ui:playRandomAnnouncement({ "sorry002.wav", "sorry004.wav" })
@@ -493,6 +496,7 @@ end
 --! Announces a machine needing repair
 --!param room The room of the machine
 function PlayerHospital:announceRepair(room)
+  if not self.world:isUIHospital(self) then return end
   local sound = room.room_info.handyman_call_sound
   local earthquake = self.world.earthquake
   self.world.ui:playAnnouncement("machwarn.wav", AnnouncementPriority.Critical)
@@ -528,8 +532,10 @@ function PlayerHospital:onEndDay()
         -- play VIP arrival sound and show tooltips
         local ui = self.world.ui
         -- there is also vip008 which announces a man from the ministry
-        ui:playRandomAnnouncement({ "vip001.wav", "vip002.wav", "vip003.wav",
-            "vip004.wav", "vip005.wav" }, AnnouncementPriority.High)
+        if self.world:isUIHospital(self) then
+          ui:playRandomAnnouncement({ "vip001.wav", "vip002.wav", "vip003.wav",
+              "vip004.wav", "vip005.wav" }, AnnouncementPriority.High)
+        end
         if self.num_vips < 1 then
           self:say(_A.information.initial_general_advice.first_VIP)
         else
@@ -612,6 +618,7 @@ end
 --! Announce to the player that a staff member is leaving the hospital
 --!param staff (table) The staff member
 function PlayerHospital:announceStaffLeave(staff)
+  if not self.world:isUIHospital(self) then return end
   self.world.ui:playRandomAnnouncement(staff.leave_sounds, staff.leave_priority)
 end
 

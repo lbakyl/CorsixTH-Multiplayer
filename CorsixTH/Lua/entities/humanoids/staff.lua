@@ -256,7 +256,7 @@ function Staff:fire()
   self:removeQueuedStaffMessage()
   self.hospital:spendMoney(self.profile.wage, _S.transactions.severance .. ": "
       .. self.profile:getFullName())
-  self.world.ui:playSound("sack.wav")
+  if self.world:isUIHospital(self.hospital) then self.world.ui:playSound("sack.wav") end
   self:setMood("exit", "activate")
   self:setDynamicInfoText(_S.dynamic_info.staff.actions.fired)
   self.fired = true
@@ -639,7 +639,7 @@ function Staff:increaseWage(amount)
     end
     -- Apply new salary
     self.profile.wage = new_wage
-    self.world.ui:playSound("bonusal2.wav")
+    if self.world:isUIHospital(self.hospital) then self.world.ui:playSound("bonusal2.wav") end
   end
   -- Reset
   self:setMood("pay_rise", "deactivate")

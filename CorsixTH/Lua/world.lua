@@ -355,6 +355,14 @@ function World:getUIHospital()
       self:getLocalPlayerHospital()
 end
 
+--! Whether this machine's player hears and sees what happens in `hospital`
+--! (announcements, sounds): always, except in multiplayer with a hospital
+--! each, where only their own hospital's. Every peer still runs the code
+--! around it, so the game stays the same everywhere.
+function World:isUIHospital(hospital)
+  return not self.mp_coop or hospital == self:getUIHospital()
+end
+
 --! Index of a hospital in world.hospitals (1 if not found).
 function World:getHospitalIndex(hospital)
   for i, h in ipairs(self.hospitals) do

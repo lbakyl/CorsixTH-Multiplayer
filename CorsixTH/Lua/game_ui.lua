@@ -454,6 +454,24 @@ function GameUI:setWorldHitTest(mode)
   self.do_world_hit_test = mode
 end
 
+--! Multiplayer competitive: whether `entity` is part of a rival's hospital,
+--! which this player may not look into (no information, staff or queue
+--! windows, no details in the bottom panel). Whatever is in their own
+--! hospital stays visible, a rival's evil handyman too.
+function GameUI:_isRivals(entity)
+  local world = self.app.world
+  if not (world and world.mp_coop and world.mp_coop.competitive) then return false end
+  local x, y = entity.tile_x, entity.tile_y
+  if x and self.hospital:isInHospital(x, y) then return false end
+  if entity.hospital and entity.hospital ~= self.hospital then return true end
+  if x then
+    for _, hospital in ipairs(world.hospitals) do
+      if hospital ~= self.hospital and hospital:isInHospital(x, y) then return true end
+    end
+  end
+  return false
+end
+
 function GameUI:onCursorWorldPositionChange()
   local zoom = self:getEffectiveZoom()
   local x = math.floor(self.screen_offset_x + self.cursor_x / zoom)
@@ -470,6 +488,7 @@ function GameUI:onCursorWorldPositionChange()
           entity:getRoom() == room and entity ~= room.door and entity
     end
   end
+  if entity and self:_isRivals(entity) then entity = nil end
   if entity == nil and self.do_world_hit_test and not overwindow then
     is_near_rat = self.app.world:isNearRat(x, y)
   end
@@ -535,6 +554,7 @@ function GameUI:onCursorWorldPositionChange()
       room = entity.master.room
     end
   end
+  if room and room.hospital ~= self.hospital and self:_isRivals(room.door) then room = nil end
   if room ~= self.cursor_room then
     -- Unset queue mood for patients queueing the old room
     if self.cursor_room then

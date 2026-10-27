@@ -83,6 +83,55 @@ function MultiplayerTransport.join(address, port, timeout)
   return MultiplayerTransport(conn)
 end
 
+--! Start connecting to a host without waiting for it (the lobby window must
+--! not freeze while a server at a wrong address does not answer). Poll the
+--! returned table with MultiplayerTransport.pollJoin every frame.
+function MultiplayerTransport.startJoin(address, port, timeout)
+  assert(MultiplayerTransport.available(), "LuaSocket is not available")
+  local tcp = socket.tcp()
+  tcp:settimeout(0)
+  local pending = {tcp = tcp, deadline = socket.gettime() + (timeout or 10)}
+  local ok, err = tcp:connect(address, port)
+  if ok then
+    pending.connected = true
+  elseif err ~= "timeout" then -- ("timeout": still connecting)
+    tcp:close()
+    pending.err = err
+  end
+  return pending
+end
+
+--! A connection started by startJoin: nil while it is still being made, a
+--! transport once it is, or false and the reason it failed.
+function MultiplayerTransport.pollJoin(pending)
+  if pending.err then return false, pending.err end
+  if not pending.connected then
+    local _, writable = socket.select(nil, {pending.tcp}, 0)
+    if writable and writable[1] then
+      -- Writable either way; only a made connection has a peer.
+      if not pending.tcp:getpeername() then
+        MultiplayerTransport.cancelJoin(pending)
+        pending.err = "connection refused"
+        return false, pending.err
+      end
+      pending.connected = true
+    elseif socket.gettime() > pending.deadline then
+      MultiplayerTransport.cancelJoin(pending)
+      pending.err = "timeout"
+      return false, pending.err
+    else
+      return nil
+    end
+  end
+  return MultiplayerTransport(pending.tcp)
+end
+
+--! Give up a connection started by startJoin.
+function MultiplayerTransport.cancelJoin(pending)
+  if pending.tcp then pending.tcp:close() end
+  pending.tcp = nil
+end
+
 function MultiplayerTransport:_flush()
   if self.out_buf == "" or self.closed then return end
   local sent, err, partial = self.conn:send(self.out_buf)
