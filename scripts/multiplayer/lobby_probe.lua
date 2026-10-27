@@ -12,6 +12,8 @@
 --   MP_JOIN_PASSWORD  password the joiner types (default MP_PASSWORD)
 --   MP_PLAYERS        players the host waits for         (default 2)
 --   MP_COOP           1: the host creates a co-op room (a hospital each)
+--   MP_ADD_BOTS       the host clicks this many empty places in the room to
+--                     add bots (the server must run them)
 --   MP_MODE           the room mode the host picks: shared, coop or competitive
 --   MP_SCENARIO       light | busy | none                (default light; none: no
 --                     test setup, to join a game a person hosts)
@@ -223,6 +225,35 @@ local function run_lobby()
     w:buttonCreate()
     wait_for("own room", function() return lobby.state == "in_room" end)
     log("created room " .. room)
+    -- Bots: click the first empty place, once per bot, as a person would.
+    local add_bots = tonumber(os.getenv("MP_ADD_BOTS") or "0")
+    for k = 1, add_bots do
+      local win = lobby_window()
+      local labels = {}
+      for i = 1, 4 do labels[i] = (tostring(win.player_panels[i].label or ""):gsub("^<LocalisedString> Current value:%s*", "")) end
+      local empty
+      for i = 1, tonumber(lobby.room.max) or 2 do
+        if not empty and not lobby.players[i] and labels[i]:find("add a bot", 1, true) then empty = i end
+      end
+      log(string.format("UI: room places before bot %d: %s", k, table.concat(labels, " | ")))
+      if not empty then error("no empty place to click for a bot") end
+      win:clickPlace(empty)
+      wait_for("bot " .. k .. " starting", function()
+        local n = 0
+        for _ in pairs(lobby.players) do n = n + 1 end
+        return n + (tonumber(lobby.summary and lobby.summary.starting) or 0) >= 1 + k
+      end, 10)
+    end
+    if add_bots > 0 then
+      wait_for("bots joined", function()
+        local bots = 0
+        for _, p in pairs(lobby.players) do if p.bot == "1" and p.ready == "1" then bots = bots + 1 end end
+        return bots >= add_bots
+      end, 60)
+      local win, labels = lobby_window(), {}
+      for i = 1, 4 do labels[i] = (tostring(win.player_panels[i].label or ""):gsub("^<LocalisedString> Current value:%s*", "")) end
+      log("UI: room places with the bots: " .. table.concat(labels, " | "))
+    end
     wait_for("players", function()
       local n, ready = 0, true
       for peer, p in pairs(lobby.players) do
@@ -301,6 +332,13 @@ local function run()
   if not lobby then log("PROBE: DONE") return end
   local session = assert(TheApp.mp_session, "no session after start")
   game_started = socket.gettime() - probe_started
+  -- Chat lines that reach this player go into the log.
+  lobby:addListener(function(_, event, f)
+    if event == "chat" then
+      log(string.format("CHAT IN at step %d: %s%s: %s", TheApp.mp_session and TheApp.mp_session.step or -1,
+          tostring(f.name), f.to and " (private)" or "", tostring(f.text)))
+    end
+  end)
   -- MP_TRACE_HIT=1: log who turns clicks on the map on or off.
   if os.getenv("MP_TRACE_HIT") == "1" and not GameUI.mp_probe_set_hit then
     GameUI.mp_probe_set_hit = GameUI.setWorldHitTest
@@ -1029,6 +1067,34 @@ local function run()
           else
             log("UI: no rat to shoot")
           end
+        elseif a == "hospitals" then
+          -- Every hospital: open or not, balance, its rooms and staff (to
+          -- see what a bot built), with the game date.
+          local d = world:date()
+          local parts = {}
+          for h, hosp in ipairs(world.hospitals) do
+            local rooms, staff = {}, {}
+            for _, r in pairs(world.rooms) do
+              if r.hospital == hosp and r.is_active then rooms[#rooms + 1] = r.room_info.id end
+            end
+            table.sort(rooms)
+            for _, s in ipairs(hosp.staff) do staff[s.humanoid_class] = (staff[s.humanoid_class] or 0) + 1 end
+            local st = {}
+            for k, v in pairs(staff) do st[#st + 1] = k .. "=" .. v end
+            table.sort(st)
+            local objects = 0
+            for _, e in ipairs(world.entities) do
+              if e.object_type and e.tile_x and hosp:isInHospital(e.tile_x, e.tile_y) and
+                  not world:getRoom(e.tile_x, e.tile_y) then
+                objects = objects + 1
+              end
+            end
+            parts[#parts + 1] = string.format("[%d %s opened=%s balance=%d rooms=%s staff=%s corridor_objects=%d]", h,
+                tostring(hosp.name), tostring(hosp.opened or false), math.floor(hosp.balance),
+                table.concat(rooms, ","), table.concat(st, ","), objects)
+          end
+          log(string.format("UI: hospitals at step %d (%s, month %d): %s", session.step, d:tostring(),
+              d:monthOfGame(), table.concat(parts, " ")))
         elseif a == "race" then
           -- Competitive: each hospital's place, and whether the race is over.
           local parts = {}

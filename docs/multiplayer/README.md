@@ -15,8 +15,8 @@ remake), planned in this order:
 2. **Co-op**: one hospital each, with trades between them: money, staff
    transfers; later loans, patient referrals, renting rooms, selling
    research. *(first version works)*
-3. **Competitive**: 2–4 humans race for the level goals. AI bot hospitals are
-   deferred (lowest priority, not ruled out).
+3. **Competitive**: 2–4 players race for the level goals. Computer players
+   (bots, run by the server) can take empty places for testing (`bots.md`).
 
 **Sync model: deterministic lockstep.** Every machine runs the full
 simulation. Only player *commands* travel over the network, and every peer
@@ -50,6 +50,7 @@ data, saves from it, or logs that contain it.**
 | Player actions as commands | Corridor objects (buy, move, sell), hiring, firing, pay rise answers, rooms (draw outline/door/windows, then place the furniture by hand), opening the hospital early, fax answers, hospital settings (loans, prices, research, policies, plots, heating, handymen, queue sizes), queue order and sending a queued patient to another room, actions on one patient/staff/machine/rat, co-op money and staff transfers |
 | Room outlines | While someone draws a room the others see its floor in blue (reserved); the finished room appears for everyone at once |
 | Competitive | Branch `mp/competitive`: a race to the level's goals with a hospital each (places, leaving when placed, out after two failing year ends) and dirty tricks (evil handyman, epidemic, emergency at three levels). `competitive.md`; `run_competitive_probe.sh` |
+| Bots | The host clicks an empty place in the room for a computer player run by the server (a headless game like the referee): it builds rooms one after the other, hires, opens, chats, accepts offers in co-op and refuses them in a race, plays dirty tricks in a race. `bots.md`; `run_bot_probe.sh` |
 | Co-op | Original two- to four-player maps (tested with two); a hospital each, kept apart (rooms, staff, patients, heating, research, events, goals, epidemics); trade window in the Multiplayer menu; staff and patients move only as offers the other player accepts (purple icon; staff free or for a price); research can be shared, free or for a price (research blackboard or Multiplayer menu). Design and open points: `coop-architecture.md` |
 | Blocked in multiplayer | Editing existing rooms, moving objects inside rooms, buying extra objects for a new room, picking up staff, load game, restart (menu and hotkeys), cheats and debug tools, pushing patients over, the wage-increase menu setting |
 | Linux package | `.github/workflows/LinuxPackage.yml` runs `scripts/multiplayer/build_linux_package.sh` on Ubuntu 24.04: Lua 5.5 (as Windows; the build id contains it), SDL3, LuaSocket and the libraries a desktop may lack bundled, a start script with a config.txt in the folder. Same build id as the Windows build of the same commit; a Windows and a Linux package player IN SYNC for 1,500 hours over a LAN |
@@ -111,7 +112,8 @@ Server (`mp_server/`): `corsixth_mp/server.py` (rooms, relay, repair,
 rejoin), `referee.py` (starts the headless referee), `pacing.py` (delay/speed
 from ping), `protocol.py` (line codec); protocol in
 `docs/multiplayer/protocol.md`. The referee itself is
-`scripts/multiplayer/referee.lua` (`referee.md`).
+`scripts/multiplayer/referee.lua` (`referee.md`); computer players are
+`scripts/multiplayer/bot.lua`, started the same way (`bots.md`).
 
 Tests and tools (`scripts/multiplayer/` unless noted):
 
@@ -122,6 +124,7 @@ Tests and tools (`scripts/multiplayer/` unless noted):
 | `CorsixTH/CppTest/` | C++ unit tests (Catch2, configure with `-DENABLE_UNIT_TESTS=ON`, run `UnitTests`), including the pathfinder test |
 | `run_lobby_probe.sh` | **Main integration test.** A local server (or `MP_EXTERNAL_SERVER`) and pairs of real games going through the main menu and lobby window. 11 checks, ~5 min; `MP_REFEREE=1` adds the referee and 4 checks (referee agrees, repair in shared and co-op games, rejoin) |
 | `run_ingame_probe.sh` | Two games connected directly (no server). 5 checks |
+| `run_bot_probe.sh` | Computer players (bots) in a co-op room and a race, with the referee. 7 checks |
 | `run_sync_probe.sh` | Harness-level determinism checks. 7 checks |
 | `run_sp_regression.sh` | Single player, two builds, 3 game years, fingerprints must match |
 | `setup_debian13.sh` | Build environment for Debian 13 |

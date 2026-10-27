@@ -330,6 +330,9 @@ function UIMultiplayer:_buildRoom()
   self.player_panels = {}
   for i = 1, 4 do
     self.player_panels[i] = label(self, 20, 40 + (i - 1) * 27, WIDTH - 40, "")
+    -- The host clicks an empty place to add a bot there, or a bot to take
+    -- it away again.
+    self.player_panels[i]:makeButton(0, 0, WIDTH - 40, 25, nil, function() self:clickPlace(i) end)
   end
   self.summary_panel = label(self, 20, 40 + 4 * 27 + 5, WIDTH - 40, "")
   self.mode_panel = label(self, 20, 40 + 5 * 27 + 5, WIDTH - 40, "")
@@ -347,15 +350,23 @@ function UIMultiplayer:_updateRoom()
   local S = _S.multiplayer_window
   local lobby = self.lobby
   local max = tonumber(lobby.room.max) or 2
+  local bots = lobby:canAddBots()
+  -- Bots the server is still starting take the first empty places.
+  local starting = tonumber(lobby.summary and lobby.summary.starting) or 0
   for i = 1, 4 do
     local p = lobby.players[i]
     local text = ""
-    if p then
+    if p and p.bot == "1" then
+      text = S.bot_line:format(p.name, bots and S.bot_remove or "")
+    elseif p then
       -- (The host is not asked whether they are ready.)
       text = S.player_line:format(p.name, p.owner == "1" and S.owner_mark or "", p.rtt or "?",
           p.owner == "1" and "" or (p.ready == "1" and S.is_ready or S.not_ready))
+    elseif i <= max and starting > 0 then
+      starting = starting - 1
+      text = S.bot_starting
     elseif i <= max then
-      text = S.waiting_player
+      text = bots and S.add_bot or S.waiting_player
     end
     self.player_panels[i]:setLabel(text)
   end
@@ -369,6 +380,19 @@ function UIMultiplayer:_updateRoom()
   self.start_button:enable(owner)
   self.ready_button:setVisible(not owner)
   self.ready_button:enable(not owner)
+end
+
+--! A place in the room's player list was clicked: the host adds a bot to an
+--! empty place or takes a bot away.
+function UIMultiplayer:clickPlace(i)
+  local lobby = self.lobby
+  if not lobby:canAddBots() then return end
+  local p = lobby.players[i]
+  if p and p.bot == "1" then
+    lobby:removeBot(i)
+  elseif not p and i <= (tonumber(lobby.room.max) or 2) then
+    lobby:addBot()
+  end
 end
 
 function UIMultiplayer:buttonReady(state)

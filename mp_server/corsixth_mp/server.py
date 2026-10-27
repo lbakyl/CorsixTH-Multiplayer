@@ -31,7 +31,7 @@ import time
 from dataclasses import dataclass, field
 
 from . import pacing
-from .referee import RefereeConfig, start_referee
+from .referee import RefereeConfig, start_bot, start_referee
 from .protocol import (MAX_LINE_BYTES, PROTOCOL_VERSION, ProtocolError, command_peer, command_step,
                        decode, encode, is_game_line, parse_step_report)
 
@@ -62,6 +62,16 @@ MAX_DIAG_BYTES = 256 * 1024
 # big, and everybody must have loaded it within the timeout.
 MAX_SAVE_BYTES = 64 * 1024 * 1024
 RECOVERY_TIMEOUT = 60.0
+# Computer players (bots): the room owner adds them in the lobby; each is a
+# headless game this server starts (like the referee) that joins the room as
+# a player. Names given in this order; a bot that has not joined within the
+# timeout is given up.
+BOT_NAMES = ("Bot Agnes", "Bot Bertie", "Bot Clive", "Bot Dora", "Bot Edna", "Bot Fergus",
+             "Bot Gwen", "Bot Hector")
+BOT_START_TIMEOUT = 60.0
+# Each bot is a whole game running on this server: at most this many at once
+# (all rooms together; CORSIXTH_MP_MAX_BOTS).
+MAX_BOTS = 6
 # Gameplay settings every peer must use (lesson 4 in the handover README).
 DEFAULT_SETTINGS = {"grant_wage_increase": 1, "free_build_mode": 0}
 
@@ -87,6 +97,8 @@ class Player:
     last_step: int = 0
     closed: bool = False
     is_referee: bool = False
+    is_bot: bool = False
+    bot_proc: object = None
     diag_bytes: int = 0
 
     @property
@@ -167,6 +179,14 @@ class Room:
     last_report: dict[int, str] = field(default_factory=dict)
     recovery: "Recovery | None" = None  # desync repair in progress
     recoveries: int = 0
+    # Bots started but not joined yet: token -> (name, process or None).
+    bots_pending: dict[str, list] = field(default_factory=dict)
+
+    def humans(self) -> list[Player]:
+        return [p for p in self.players.values() if not p.is_bot]
+
+    def is_full(self) -> bool:
+        return len(self.players) + len(self.bots_pending) >= self.max_players
 
     def check_password(self, password: str) -> bool:
         if self.password_hash is None:
@@ -194,8 +214,9 @@ class Room:
 class Server:
     def __init__(self, motd: str = "", max_connections: int = MAX_CONNECTIONS,
                  max_per_address: int = MAX_PER_ADDRESS,
-                 referee: RefereeConfig | None = None) -> None:
+                 referee: RefereeConfig | None = None, max_bots: int = MAX_BOTS) -> None:
         self.referee_config = referee
+        self.max_bots = max_bots
         self.port = 0
         self.max_connections = max_connections
         self.max_per_address = max_per_address
@@ -342,6 +363,8 @@ class Server:
             return False
         if f.get("role") == "referee":
             return self._referee_hello(player, f)
+        if f.get("role") == "bot":
+            return self._bot_hello(player, f)
         name = f.get("name", "").strip()[:MAX_NAME] or f"Player {player.pid}"
         player.name = name
         player.build = f.get("build", "")
@@ -512,7 +535,7 @@ class Server:
                         f"The room runs build {room.build}; you run {player.build}")
         elif room.state != "lobby":
             self._rejoin(player, room)
-        elif len(room.players) >= room.max_players:
+        elif room.is_full():
             self._error(player, "room_full", "The room is full")
         else:
             self._add_to_room(player, room)
@@ -545,15 +568,16 @@ class Server:
         room.broadcast(self._players_line(room))
         self._start_recovery(room, player.last_step, rejoining=peer)
 
-    def _add_to_room(self, player: Player, room: Room) -> None:
+    def _add_to_room(self, player: Player, room: Room, ready: bool = False) -> None:
         peer = room.free_peer()
         assert peer is not None
-        player.room, player.peer, player.ready = room, peer, False
+        player.room, player.peer, player.ready = room, peer, ready
         room.players[peer] = player
         player.send(encode("JOINED", room=room.name, peer=peer, owner=room.owner is player,
                            mode=room.mode, level=room.level, difficulty=room.difficulty,
                            max=room.max_players,
                            date=room.continue_date if room.continue_step is not None else None,
+                           bots=1 if self.referee_config is not None else None,
                            **{"continue": 1 if room.continue_step is not None else None}))
         room.broadcast(encode("CHAT", peer=0, name="server", text=f"{player.name} joined"),
                        exclude=player)
@@ -582,14 +606,127 @@ class Server:
             return
         room.broadcast(encode("CHAT", peer=player.peer, name=player.name, text=text))
 
+    # ------------------------------------------------------------------ bots
+
+    def _bot_name(self, room: Room) -> str:
+        """A name for a new bot: in a continued game the first saved
+        hospital nobody has taken (the bot plays it), else the next free one
+        of BOT_NAMES."""
+        taken = {p.name.lower() for p in room.players.values()}
+        taken |= {entry[0].lower() for entry in room.bots_pending.values()}
+        for name in list(room.seat_names) + list(BOT_NAMES):
+            if name.lower() not in taken:
+                return name
+        n = 1
+        while f"bot {n}" in taken:
+            n += 1
+        return f"Bot {n}"
+
+    def _on_bot(self, player: Player, f: dict[str, str]) -> None:
+        """The room owner adds a bot (add=1) or takes one away (remove=<peer>)
+        while the room waits in the lobby."""
+        room = player.room
+        if room is None or room.owner is not player:
+            self._error(player, "not_owner", "Only the room owner adds bots")
+            return
+        if room.state != "lobby":
+            return
+        if f.get("remove"):
+            bot = room.players.get(int(f["remove"])) if f["remove"].isdigit() else None
+            if bot is None or not bot.is_bot:
+                self._error(player, "not_bot", "That player is not a bot")
+                return
+            log.info("room %r: %r takes %r away", room.name, player.name, bot.name)
+            self._stop_bot(bot)
+            return
+        if self.referee_config is None:
+            self._error(player, "no_bots", "This server cannot run bots")
+            return
+        if room.is_full():
+            self._error(player, "room_full", "The room is full")
+            return
+        running = sum(len(r.bots_pending) + sum(1 for p in r.players.values() if p.is_bot)
+                      for r in self.rooms.values())
+        if running >= self.max_bots:
+            self._error(player, "too_many_bots", "This server runs as many bots as it can")
+            return
+        name = self._bot_name(room)
+        token = secrets.token_hex(16)
+        room.bots_pending[token] = [name, None]
+        log.info("room %r: %r adds %r", room.name, player.name, name)
+        loop = asyncio.get_running_loop()
+        loop.create_task(self._spawn_bot(room, token, name))
+        loop.call_later(BOT_START_TIMEOUT, self._bot_timeout, room, token)
+        self._send_lobby(room)
+
+    async def _spawn_bot(self, room: Room, token: str, name: str) -> None:
+        try:
+            proc = await start_bot(self.referee_config, self.port, room.name, token, name, room.mode)
+        except OSError as exc:
+            log.warning("room %r: cannot start %r: %s", room.name, name, exc)
+            if token in room.bots_pending:
+                self._bot_failed(room, token)
+            return
+        entry = room.bots_pending.get(token)
+        if entry is not None:
+            entry[1] = proc
+            return
+        # Taken away, or the room closed, while it started; or it has joined
+        # already (its connection keeps the process).
+        bot = next((p for p in room.players.values() if p.is_bot and p.name == name), None)
+        if bot is not None and bot.bot_proc is None:
+            bot.bot_proc = proc
+        elif proc is not None and getattr(proc, "returncode", 0) is None:
+            proc.terminate()
+
+    def _bot_timeout(self, room: Room, token: str) -> None:
+        if token in room.bots_pending:
+            self._bot_failed(room, token)
+
+    def _bot_failed(self, room: Room, token: str) -> None:
+        name, proc = room.bots_pending.pop(token)
+        if proc is not None and getattr(proc, "returncode", 0) is None:
+            try:
+                proc.terminate()
+            except ProcessLookupError:
+                pass
+        log.warning("room %r: %r did not join", room.name, name)
+        room.broadcast(encode("CHAT", peer=0, name="server", text=f"{name} could not start"))
+        self._send_lobby(room)
+
+    def _bot_hello(self, player: Player, f: dict[str, str]) -> bool:
+        """A bot this server started joins its room."""
+        room = self.rooms.get(f.get("room", ""))
+        token = f.get("token", "")
+        entry = room.bots_pending.get(token) if room is not None else None
+        if room is None or entry is None or room.state != "lobby":
+            self._error(player, "not_bot", "Unknown room or token")
+            return False
+        name, proc = room.bots_pending.pop(token)
+        player.name, player.build, player.is_bot, player.bot_proc = name, f.get("build", ""), True, proc
+        if player.build != room.build:
+            log.warning("room %r: %r runs build %s, the room %s", room.name, name, player.build,
+                        room.build)
+            self._error(player, "build_mismatch", "The bot runs another build")
+            room.broadcast(encode("CHAT", peer=0, name="server",
+                                  text=f"{name} could not join: this server's bots run another build"))
+            self._send_lobby(room)
+            return False
+        player.send(encode("WELCOME", proto=PROTOCOL_VERSION, id=player.pid, server=SERVER_VERSION))
+        log.info("player %d is %r (a bot), build %s", player.pid, name, player.build)
+        self._add_to_room(player, room, ready=True)
+        return True
+
     def _send_lobby(self, room: Room) -> None:
         if room.state != "lobby":
             return
         p = room.current_pacing()
         for peer, pl in sorted(room.players.items()):
             room.broadcast(encode("PLAYER", peer=peer, name=pl.name, ready=pl.ready,
-                                  rtt=round(pl.rtt), owner=room.owner is pl))
+                                  rtt=round(pl.rtt), owner=room.owner is pl,
+                                  bot=1 if pl.is_bot else None))
         room.broadcast(encode("LOBBY", room=room.name, count=len(room.players),
+                              starting=len(room.bots_pending) or None,
                               max=room.max_players, mode=room.mode, level=room.level,
                               delay=p.delay, speed=p.max_speed, one_way=p.one_way_ms,
                               latency=p.command_latency_ms.get(pacing.TARGET_SPEED)))
@@ -601,10 +738,11 @@ class Server:
             return
         if room.state != "lobby":
             return
-        if len(room.players) < 2:
+        if len(room.players) + len(room.bots_pending) < 2:
             self._error(player, "not_enough", "Wait for another player")
             return
         not_ready = [p.name for p in room.players.values() if not p.ready and p is not player]
+        not_ready += [entry[0] for entry in room.bots_pending.values()]
         if not_ready:
             self._error(player, "not_ready", "Not ready: " + ", ".join(not_ready))
             return
@@ -959,6 +1097,9 @@ class Server:
             self._recovery_progress(room)
         else:
             room.broadcast(encode("CHAT", peer=0, name="server", text=f"{player.name} left"))
+        if not room.humans():
+            # Nobody left to play with the bots: they go too.
+            self._stop_bots(room)
         if not room.players:
             del self.rooms[room.name]
             self._stop_referee(room)
@@ -967,8 +1108,8 @@ class Server:
                          room.verified_step)
             log.info("room %r closed", room.name)
             return
-        if room.owner is player:
-            room.owner = room.players[min(room.players)]
+        if room.owner is player and room.humans():
+            room.owner = min(room.humans(), key=lambda p: p.peer)
             room.owner.send(encode("OWNER"))
         self._send_lobby(room)
 
@@ -984,6 +1125,34 @@ class Server:
             ref, room.referee = room.referee, None
             ref.closed = True
             ref.writer.close()
+
+    @staticmethod
+    def _stop_bot(bot: Player) -> None:
+        """Close a bot's connection and end its process (it then leaves the
+        room like a player who closed the game)."""
+        proc = bot.bot_proc
+        if proc is not None and getattr(proc, "returncode", 0) is None:
+            try:
+                proc.terminate()
+            except ProcessLookupError:
+                pass
+        if not bot.closed:
+            bot.closed = True
+            try:
+                bot.writer.close()
+            except RuntimeError:
+                pass
+
+    def _stop_bots(self, room: Room) -> None:
+        for bot in [p for p in room.players.values() if p.is_bot]:
+            self._stop_bot(bot)
+        for token in list(room.bots_pending):
+            _, proc = room.bots_pending.pop(token)
+            if proc is not None and getattr(proc, "returncode", 0) is None:
+                try:
+                    proc.terminate()
+                except ProcessLookupError:
+                    pass
 
     def _disconnect(self, player: Player) -> None:
         self._leave_room(player)
@@ -1004,6 +1173,8 @@ def main(argv: list[str] | None = None) -> None:
                         default=int(os.environ.get("CORSIXTH_MP_MAX_CONNECTIONS", MAX_CONNECTIONS)))
     parser.add_argument("--max-per-address", type=int,
                         default=int(os.environ.get("CORSIXTH_MP_MAX_PER_ADDRESS", MAX_PER_ADDRESS)))
+    parser.add_argument("--max-bots", type=int,
+                        default=int(os.environ.get("CORSIXTH_MP_MAX_BOTS", MAX_BOTS)))
     args = parser.parse_args(argv)
     logging.basicConfig(level=args.log_level.upper(),
                         format="%(asctime)s %(levelname)s %(message)s")
@@ -1013,7 +1184,8 @@ def main(argv: list[str] | None = None) -> None:
         if referee:
             log.info("headless referee enabled: %s", referee.binary)
         server = Server(motd=args.motd, max_connections=args.max_connections,
-                        max_per_address=args.max_per_address, referee=referee)
+                        max_per_address=args.max_per_address, referee=referee,
+                        max_bots=args.max_bots)
         await server.start(args.host, args.port)
         # Stop cleanly on SIGTERM (docker stop) as well as Ctrl+C.
         stop = asyncio.Event()

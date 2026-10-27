@@ -417,6 +417,17 @@ function MultiplayerLobby:setReady(ready)
 end
 
 function MultiplayerLobby:startGame() self.error = nil; self:send("START") end
+
+--! The room owner adds a computer player (the server starts it; it joins
+--! like a player, ready at once) or takes one away by its peer number.
+function MultiplayerLobby:addBot() self.error = nil; self:send("BOT", {add = 1}) end
+function MultiplayerLobby:removeBot(peer) self.error = nil; self:send("BOT", {remove = peer}) end
+
+--! Can this room have bots (the server runs them, and this player owns it)?
+function MultiplayerLobby:canAddBots()
+  return self:isOwner() and self.room.bots == "1"
+end
+
 function MultiplayerLobby:sendChat(text) self:send("CHAT", {text = text}) end
 
 function MultiplayerLobby:leaveRoom()

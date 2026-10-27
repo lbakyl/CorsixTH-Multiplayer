@@ -61,6 +61,17 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
 3. **To join:** pick the room in the list, type its password, **Join**, then
    **Ready**.
 
+**Nobody to play with?** As the host, click an empty place in your room
+("click: add a bot") and a computer player takes it; click the bot to take it
+away again. A room for four can have up to three bots. A bot builds its
+hospital slowly, as a beginner would (a desk, a GP's office, then one room
+after the other), hires staff, opens, and chats a little. In co-op it accepts
+whatever you offer it and thanks you; in a competitive race it refuses
+everything, sends your money back and plays a dirty trick on you now and then
+(the first some time in months 7 to 12). Bots are there for trying the game
+out: after the first year they do not do much more. The test server runs a
+few at most.
+
 The lobby measures everybody's connection and shows the fastest speed that
 stays smooth, and how long a click takes to happen ("actions take 108 ms").
 

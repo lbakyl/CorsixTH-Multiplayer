@@ -581,3 +581,148 @@ def test_competitive_room_and_continued_seats(run):
         x.send(encode("CREATE", room="odd", password="", max=2, mode="battle", level=1))
         assert (await x.expect("ERROR"))["code"] == "bad_room"
     run(body)
+
+
+def run_with_bots(body):
+    """A server that can run bots (and the referee); starting either only
+    records what would have been started."""
+    bots, referees = [], []
+
+    async def fake_bot(config, port, room, token, name, mode):
+        bots.append({"room": room, "token": token, "name": name, "mode": mode})
+        return None
+
+    async def fake_referee(config, port, room, token):
+        referees.append(token)
+        return None
+
+    async def main():
+        orig = srv.start_bot, srv.start_referee
+        srv.start_bot, srv.start_referee = fake_bot, fake_referee
+        server = srv.Server(referee=srv.RefereeConfig(binary="x", source="", data=""))
+        port = await server.start("127.0.0.1", 0)
+        try:
+            await body(server, port, bots)
+        finally:
+            srv.start_bot, srv.start_referee = orig
+            await server.close()
+    asyncio.run(main())
+
+
+async def started_bots(bots, n):
+    for _ in range(100):
+        if len(bots) >= n:
+            return bots
+        await asyncio.sleep(0.01)
+    raise AssertionError(f"{len(bots)} bots started, expected {n}")
+
+
+async def connect_bot(port, bot, build="b1"):
+    r, w = await asyncio.open_connection("127.0.0.1", port)
+    c = Client(r, w)
+    c.send(encode("HELLO", proto=1, name="whatever", build=build, role="bot", room=bot["room"],
+                  token=bot["token"]))
+    return c
+
+
+def test_bots_join_on_the_owners_request_and_play():
+    async def body(server, port, bots):
+        ann = await Client.connect(port, "Ann")
+        ann.send(encode("CREATE", room="solo", password="", max=4, mode="competitive", level=1))
+        assert (await ann.expect("JOINED"))["bots"] == "1"
+        ann.send(encode("BOT", add=1))
+        ann.send(encode("BOT", add=1))
+        await started_bots(bots, 2)
+        assert [b["name"] for b in bots] == ["Bot Agnes", "Bot Bertie"]
+        assert bots[0]["mode"] == "competitive"
+        # Places taken by starting bots count: one more person fits, no more.
+        lobby = await ann.expect("LOBBY", starting=2)
+        assert lobby["count"] == "1"
+        # Nobody else adds bots, and the game waits for the starting ones.
+        ben = await Client.connect(port, "Ben")
+        ben.send(encode("JOIN", room="solo", password=""))
+        await ben.expect("JOINED")
+        ben.send(encode("BOT", add=1))
+        assert (await ben.expect("ERROR"))["code"] == "not_owner"
+        ben.send(encode("LEAVE"))
+        ann.send(encode("START"))
+        assert "Bot Agnes" in (await ann.expect("ERROR", code="not_ready"))["text"]
+        # A wrong token is refused; the right one joins, ready at once.
+        wrong = await connect_bot(port, dict(bots[0], token="nope"))
+        assert (await wrong.expect("ERROR"))["code"] == "not_bot"
+        agnes = await connect_bot(port, bots[0])
+        await agnes.expect("WELCOME")
+        assert (await agnes.expect("JOINED"))["peer"] == "2"
+        bertie = await connect_bot(port, bots[1])
+        await bertie.expect("JOINED")
+        player = await ann.expect("PLAYER", name="Bot Bertie")
+        assert player["bot"] == "1" and player["ready"] == "1"
+        # The owner takes one away again.
+        ann.send(encode("BOT", remove=player["peer"]))
+        with pytest.raises(ConnectionError):
+            await bertie.expect("NEVER")
+        await ann.expect("CHAT", text="Bot Bertie left")
+        # Start: the bot plays like anybody else.
+        ann.send(encode("START"))
+        st = await ann.expect("START")
+        assert st["names"] == "Ann,Bot Agnes" and (await agnes.expect("START"))["peer"] == "2"
+        agnes.send("C kind=build peer=2 seq=1 step=5")
+        assert await ann.expect("C") == "C kind=build peer=2 seq=1 step=5"
+        # The last person leaves: the bots go too and the room closes.
+        await ann.close()
+        with pytest.raises(ConnectionError):
+            await agnes.expect("NEVER")
+        for _ in range(100):
+            if "solo" not in server.rooms:
+                break
+            await asyncio.sleep(0.01)
+        assert "solo" not in server.rooms
+    run_with_bots(body)
+
+
+def test_bots_keep_to_the_room_size_and_take_free_saved_hospitals():
+    async def body(server, port, bots):
+        tom = await Client.connect(port, "Tom")
+        tom.send(encode("CREATE", room="again", password="", max=2, mode="coop", level=3,
+                        step=300, date="1-02-10T05", seats="SARA,TOM", **{"continue": 1}))
+        await tom.expect("JOINED")
+        tom.send(encode("BOT", add=1))
+        tom.send(encode("BOT", add=1))
+        assert (await tom.expect("ERROR"))["code"] == "room_full"
+        # And the server runs only so many bots in all.
+        server.max_bots = 1
+        ann = await Client.connect(port, "Ann")
+        ann.send(encode("CREATE", room="other", password="", max=2, mode="coop", level=1))
+        await ann.expect("JOINED")
+        ann.send(encode("BOT", add=1))
+        assert (await ann.expect("ERROR"))["code"] == "too_many_bots"
+        await started_bots(bots, 1)
+        # The bot plays the saved hospital nobody took.
+        assert bots[0]["name"] == "SARA"
+        sara = await connect_bot(port, bots[0])
+        await sara.expect("JOINED")
+        tom.send(encode("START"))
+        assert (await tom.expect("START"))["seats"] == "1:2,2:1"
+    run_with_bots(body)
+
+
+def test_bot_of_another_build_or_on_a_plain_server(run):
+    async def plain(server, port):
+        ann = await Client.connect(port, "Ann")
+        ann.send(encode("CREATE", room="r", password="", max=2, mode="coop", level=1))
+        assert "bots" not in await ann.expect("JOINED")
+        ann.send(encode("BOT", add=1))
+        assert (await ann.expect("ERROR"))["code"] == "no_bots"
+    run(plain)
+
+    async def other(server, port, bots):
+        ann = await Client.connect(port, "Ann")
+        ann.send(encode("CREATE", room="r", password="", max=2, mode="coop", level=1))
+        await ann.expect("JOINED")
+        ann.send(encode("BOT", add=1))
+        await started_bots(bots, 1)
+        bot = await connect_bot(port, bots[0], build="b2")
+        assert (await bot.expect("ERROR"))["code"] == "build_mismatch"
+        assert "another build" in (await ann.expect("CHAT", name="server"))["text"]
+        assert not server.rooms["r"].bots_pending
+    run_with_bots(other)

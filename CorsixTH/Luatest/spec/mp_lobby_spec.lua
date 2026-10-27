@@ -118,6 +118,28 @@ describe("MultiplayerLobby", function()
     assert.is_true(t.closed)
   end)
 
+  it("lets the owner add and remove bots where the server runs them", function()
+    local lobby, t = make_lobby()
+    t.inbox = {"WELCOME id=1 proto=1", "JOINED bots=1 max=4 mode=coop owner=0 peer=2 room=r",
+      "PLAYER name=Bob owner=1 peer=1 ready=0 rtt=12",
+      "PLAYER bot=1 name=Bot%20Agnes owner=0 peer=2 ready=1 rtt=0",
+      "LOBBY count=2 max=4 starting=1"}
+    lobby:poll()
+    assert.is_false(lobby:canAddBots()) -- not the owner
+    assert.equal("1", lobby.players[2].bot)
+    assert.equal("1", lobby.summary.starting)
+    t.inbox = {"OWNER"}
+    lobby:poll()
+    assert.is_true(lobby:canAddBots())
+    lobby:addBot()
+    assert.equal("BOT add=1", t.sent[#t.sent])
+    lobby:removeBot(2)
+    assert.equal("BOT remove=2", t.sent[#t.sent])
+    -- A server without bots does not say bots=1.
+    lobby.room.bots = nil
+    assert.is_false(lobby:canAddBots())
+  end)
+
   it("leaves a room and asks for the room list again", function()
     local lobby, t = make_lobby()
     t.inbox = {"WELCOME id=1 proto=1", "JOINED max=2 mode=shared owner=1 peer=1 room=r"}
