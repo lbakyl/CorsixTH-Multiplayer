@@ -98,8 +98,10 @@ function Window:setPosition(x, y)
   elseif y < 1 then
     y = math.floor((h - self.height) * y + 0.5)
   end
-  self.x = x
-  self.y = y
+  -- A position dragged at a UI scale above 1 can be a fraction of a pixel,
+  -- which the drawing functions refuse.
+  self.x = math.floor(x)
+  self.y = math.floor(y)
 end
 
 -- Sets the window's default onscreen position and onscreen position.
