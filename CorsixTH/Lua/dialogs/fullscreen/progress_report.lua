@@ -52,9 +52,14 @@ function UIProgressReport:UIProgressReport(ui)
 
   self.default_button_sound = "selectx.wav"
 
-  -- Selected hospital number
-  self.selected = 1
+  -- Selected hospital number (in multiplayer with a hospital each, the
+  -- player's own one is not always the first)
+  self.selected = world:getHospitalIndex(ui.hospital) or 1
+  self.own = self.selected
   local hospital = world.hospitals[self.selected]
+  -- Multiplayer with a hospital each: the other players' hospitals can be
+  -- looked at too.
+  local others_shown = world.mp_coop ~= nil
 
   -- Get the localised name for the month
   local function get_month_string(num)
@@ -119,14 +124,15 @@ function UIProgressReport:UIProgressReport(ui)
     end
   end
   local function tooltip(num)
-    return (num == 1) and _S.tooltip.status.win_progress_own or
-      _S.tooltip.status.win_progress_other:format(world.hospitals[num].name) .. " " .. _S.misc.not_yet_implemented
+    if num == self.own then return _S.tooltip.status.win_progress_own end
+    local text = _S.tooltip.status.win_progress_other:format(world.hospitals[num].name)
+    return others_shown and text or (text .. " " .. _S.misc.not_yet_implemented)
   end
   local function make_hosp_button(num)
     self:addPanel(0, 265, 71 + (num - 1) * 25)
       :makeButton(0, 0, 147, 20, 9, btn_handler(num))
       :setTooltip(tooltip(num))
-      :enable(num == 1)
+      :enable(num == self.own or others_shown)
   end
 
   for i = 1, math.min(#world.hospitals, 4) do
@@ -154,16 +160,17 @@ function UIProgressReport:drawMarkers(canvas, x, y)
   local x_max = 551 * s
 
   local width = x_max - x_min
-  local happiness = self.ui.hospital:getAveragePatientAttribute("happiness", 0.5)
-  local thirst = 1 - self.ui.hospital:getAveragePatientAttribute("thirst", 0.5)
-  local warmth = self.ui.hospital:getAveragePatientAttribute("warmth", nil)
+  local world = self.ui.app.world
+  local hospital = world.hospitals[self.selected] or self.ui.hospital
+  local happiness = hospital:getAveragePatientAttribute("happiness", 0.5)
+  local thirst = 1 - hospital:getAveragePatientAttribute("thirst", 0.5)
+  local warmth = hospital:getAveragePatientAttribute("warmth", nil)
   warmth = UIPatient.normaliseWarmth(warmth)
 
   self.panel_sprites:draw(canvas, 5, math.floor(x + x_min + width * happiness), y + 193 * s, { scaleFactor = s })
   self.panel_sprites:draw(canvas, 5, math.floor(x + x_min + width * thirst), y + 223 * s, { scaleFactor = s })
   self.panel_sprites:draw(canvas, 5, math.floor(x + x_min + width * warmth), y + 254 * s, { scaleFactor = s })
 
-  local world = self.ui.app.world
   if world.free_build_mode then
     self.normal_font:drawWrapped(canvas, _S.progress_report.free_build, x + 265 * s, y + 194 * s, 150 * s, "center")
   end
@@ -172,7 +179,9 @@ function UIProgressReport:drawMarkers(canvas, x, y)
   -- or if there's need to build drink machines as folks are thirsty.  Only show one at a time though!
   -- TODO the levels may need adjustment
   local msg = self.ui.hospital.show_progress_screen_warnings
-  if warmth < 0.3 and msg == 1 then
+  if hospital ~= self.ui.hospital then
+    self.warning.visible = false -- the advice is for the player's own hospital
+  elseif warmth < 0.3 and msg == 1 then
     self.warning.visible = true
     self.normal_font:drawWrapped(canvas, _S.progress_report.too_cold, x + 285 * s, y + 285 * s, 285 * s)
   elseif warmth > 0.7 and msg == 1 then

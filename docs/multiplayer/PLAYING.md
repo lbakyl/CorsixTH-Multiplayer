@@ -166,17 +166,19 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   hospital gets no more patients. A hospital that fails the goals at two
   year ends in a row is out, at the bottom of the standings. When only one
   hospital is still racing, it takes the place left and everybody gets the
-  final standings. MULTIPLAYER > PLAYERS shows each place.
+  final standings. MULTIPLAYER > PLAYERS shows each place. In the Progress
+  Report, click another player's name to see how their hospital is doing.
 
 ## Dirty tricks (competitive race)
 
 MULTIPLAYER > **DIRTY TRICKS** sells tricks to play on a rival, each at three
-levels; **Next rival** picks whom. You pay when the trick is done. The rival
+levels; **Next rival** picks whom. Click a level to see what it does, and
+click it again to buy it. You pay when the trick is done. The rival
 is not told who sent an epidemic or an emergency.
 
 | Trick | L1 | L2 | L3 |
 |---|---|---|---|
-| **Evil handyman**: looks like one of their handymen and strolls their corridors | $5,000: does no work | $12,500: also drops litter | $20,000: also wears a machine down until it nearly breaks (about every three days) |
+| **Evil handyman**: looks like one of their handymen and strolls their corridors; stays 4, 3 or 2 months (L1, L2, L3), then goes home | $5,000: does no work | $12,500: also drops litter | $20,000: also "repairs" a machine about every three days, and walks away leaving it nearly broken |
 | **Epidemic**: contagious patients of one disease arrive at their hospital | $6,000: 2 patients | $12,000: 4 | $20,000: 7 |
 | **Emergency** they cannot refuse: patients arrive by helicopter | $5,000: 3 patients | $10,000: 6 | $18,000: 10, maybe of a disease they have not discovered |
 | **Rat attack**: rats come out of new holes in their walls; each rat alive costs them a reputation point a day (for 60 days at most) | $4,000: 5 rats | $9,000: 10 | $15,000: 20 |

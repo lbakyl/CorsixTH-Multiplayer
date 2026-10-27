@@ -19,8 +19,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
 --! Multiplayer competitive: buy a dirty trick against a rival's hospital
---! (MULTIPLAYER > DIRTY TRICKS). Each button is a lockstep command
---! (`sabotage`, see mp_sabotage.lua); the price is paid when it is done.
+--! (MULTIPLAYER > DIRTY TRICKS). The first click on a level shows what it
+--! does, a second click on it buys it: a lockstep command (`sabotage`, see
+--! mp_sabotage.lua); the price is paid when it is done.
 class "UIMultiplayerSabotage" (UIResizable)
 
 ---@type UIMultiplayerSabotage
@@ -35,11 +36,12 @@ local col = {
 
 local WIDTH = 420
 local ROW = 70
+local INFO_H = 66 -- the box saying what the chosen level does
 
 --!param target (Hospital) optional: the rival to play tricks on
 function UIMultiplayerSabotage:UIMultiplayerSabotage(ui, target)
   local sabotage = MultiplayerSession.sabotage
-  local height = 50 + #sabotage.KINDS * ROW + 85
+  local height = 50 + #sabotage.KINDS * ROW + INFO_H + 95
   self:UIResizable(ui, WIDTH, height, col.bg)
   self.esc_closes = true
   self.resizable = false
@@ -50,6 +52,8 @@ function UIMultiplayerSabotage:UIMultiplayerSabotage(ui, target)
   self.world = ui.app.world
   self.hospital = ui.hospital
   self.target = target or self:_nextTarget(nil)
+  self.white_font = ui.app.gfx:loadFontAndSpriteTable("QData", "Font01V", nil, nil, { apply_ui_scale = true })
+  self.info = S.sabotage_pick
 
   self.title_panel = self:addBevelPanel(20, 10, WIDTH - 40, 20, col.title)
   self.title_panel.lowered = true
@@ -69,11 +73,14 @@ function UIMultiplayerSabotage:UIMultiplayerSabotage(ui, target)
     for level, price in ipairs(prices) do
       self:addBevelPanel(20 + (level - 1) * (w + 10), y + 27, w, 30, col.button)
           :setLabel(S.sabotage_level:format(level, price))
-          :makeButton(0, 0, w, 30, nil, function() self:buy(kind, level) end)
-          :setTooltip(S.sabotage_help[kind])
+          :makeButton(0, 0, w, 30, nil, function() self:choose(kind, level) end)
+          :setTooltip(S.sabotage_levels[kind][level])
     end
     y = y + ROW
   end
+  self.info_y = y + 5
+  self:addBevelPanel(20, self.info_y, WIDTH - 40, INFO_H, col.caption).lowered = true
+  y = y + INFO_H + 10
 
   self:addBevelPanel(20, y + 5, 180, 30, col.button):setLabel(S.sabotage_next)
       :makeButton(0, 0, 180, 30, nil, self.nextRival)
@@ -102,6 +109,28 @@ function UIMultiplayerSabotage:nextRival()
     self:close()
     ui:addWindow(UIMultiplayerSabotage(ui, target))
   end
+end
+
+function UIMultiplayerSabotage:draw(canvas, x_, y_)
+  UIResizable.draw(self, canvas, x_, y_)
+  if not self.info_y then return end
+  local s = TheApp.gfx:getUIScale()
+  local x, y = self.x * s + x_, self.y * s + y_
+  self.white_font:drawWrapped(canvas, self.info, x + 28 * s, y + (self.info_y + 6) * s, (WIDTH - 56) * s)
+end
+
+--! A level button: the first click says what it does and what it costs,
+--! a second click on the same one buys it.
+function UIMultiplayerSabotage:choose(kind, level)
+  local S = _S.multiplayer_window
+  if self.chosen_kind == kind and self.chosen_level == level then
+    self.chosen_kind, self.chosen_level = nil, nil
+    self.info = S.sabotage_pick
+    return self:buy(kind, level)
+  end
+  self.chosen_kind, self.chosen_level = kind, level
+  self.info = S["sabotage_" .. kind] .. " L" .. level .. ": " .. S.sabotage_levels[kind][level]
+  self:setStatus(S.sabotage_again:format(level, MultiplayerSession.sabotage.PRICES[kind][level]))
 end
 
 function UIMultiplayerSabotage:setStatus(text)
