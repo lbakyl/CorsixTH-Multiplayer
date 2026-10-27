@@ -93,6 +93,15 @@ done (`spendMoney`, "Dirty tricks"). Prices in `sabotage.PRICES`.
 
 ## Window and Progress Report
 
+- Rivals' hospitals are closed to the mouse: `GameUI:_isRivals` drops a
+  hovered entity in a rival's building, or a person of a rival's hospital
+  outside your own (no staff or patient windows, door queues, bottom panel
+  details or hover cursor). The evil handyman in your own hospital stays
+  clickable (his `hospital` is yours). Co-op teams still see each other.
+- Sounds of a hospital (sack, calls to a room, repairs, cheers, VIPs and so
+  on) play only for its own player (`World:isUIHospital`); every peer still
+  runs the code around them.
+
 - DIRTY TRICKS: the first click on a level shows what it does in a box
   (`sabotage_levels`), a second click buys it.
 - Progress Report (any multiplayer game with a hospital each): it opens on

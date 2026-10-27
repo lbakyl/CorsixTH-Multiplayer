@@ -198,6 +198,8 @@ or more than half of its patients have died.
   hospital is still racing, it takes the place left and everybody gets the
   final standings. MULTIPLAYER > PLAYERS shows each place. In the Progress
   Report, click another player's name to see how their hospital is doing.
+  You cannot look into a rival's hospital: clicking their staff, patients,
+  machines or doors does nothing.
 
 ## Dirty tricks (competitive race)
 
