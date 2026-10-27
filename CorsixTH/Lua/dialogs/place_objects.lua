@@ -1156,6 +1156,9 @@ function UIPlaceObjects:onCursorWorldPositionChange(x, y)
   if not self.place_objects then -- We don't want to place objects because we are selecting new objects for adding in a room being built/edited
     return repaint
   end
+  -- Multiplayer checks another player's object with a placement window of
+  -- its own: it must not paint (and then wipe) the map under this mouse.
+  if UIPlaceObjects.mp_checking then return repaint end
 
   repaint = true
   if self.world.user_actions_allowed then

@@ -16,7 +16,7 @@
 #      the doctor and thanks her for both in the chat
 #   4. competitive: bob offers the bot a doctor and sends money; the bot
 #      declines the doctor and sends the money back, with a word each
-#   5. the chat: every bot greets the room; Bot Agnes answers ann's question
+#   5. the chat: every bot greets the room; Bot Agnes answers ann's question; bots' lines are grey
 #   6. competitive: the bot plays a dirty trick on bob
 #   7. both rooms IN SYNC to the end, and the referee agrees (no repairs)
 # Exits 0 only if all checks behave as expected.
@@ -169,8 +169,11 @@ for name, text in bots.items():
 # (ann's question names Agnes: she answers whichever hospital she has.)
 answer = [t for s, t in chats_from(a, 'Bot Agnes') if int(s) >= 400 and 'ann' in t]
 distinct = len(set(g[0] for g in greets.values() if g)) > 1
-ok5 = len(bots) == 3 and all(greets.values()) and bool(answer) and distinct
-print(f"5. Chat:                    first lines: {greets}; Bot Agnes's answer to ann: {answer[:1]}")
+# The bots' lines in ann's chat are grey.
+colours = set(re.findall(r'CHAT COLOUR: (Bot [^ ]+) (\S+)', a + b))
+grey = bool(colours) and all(c == '75,75,75' for _, c in colours)
+ok5 = len(bots) == 3 and all(greets.values()) and bool(answer) and distinct and grey
+print(f"5. Chat:                    first lines: {greets}; Bot Agnes's answer to ann: {answer[:1]}; bots grey: {grey} {sorted(colours)}")
 fail |= not ok5
 
 tricks = applied(b, 2, 'sabotage')

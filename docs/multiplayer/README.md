@@ -103,6 +103,7 @@ Gameplay code (`CorsixTH/Lua/`):
 | `world.lua` | Lockstep in `World:onTick`/`_advanceHours`; co-op hospitals, `getUIHospital`, `getTileHospital`, co-op opening countdowns |
 | `map.lua` | Loads original multiplayer maps (`"net20"` … `"net44"`) |
 | `mp_levels.lua` | The five levels with a hospital each: what each takes from a campaign level, starting money, goals |
+| `audio.lua` (`Audio:playOwnAnnouncement`), `CorsixTH/Sounds/` | Announcements of CorsixTH's own (not in the game's sound archive), loaded by `soundEffects:addExtraSound` and played by `playExtra` (`Src/th_lua_sound.cpp`, `th_sound.cpp`): "a player has left the game" |
 | `dialogs/edit_room.lua`, `place_objects.lua`, `place_staff.lua`, `furnish_corridor.lua`, `hire_staff.lua`, `watch.lua`, `fullscreen/fax.lua`, `message.lua`, `bottom_panel.lua` | Player actions turned into commands; fax numbering and game-hour timeouts |
 
 **Everything multiplayer is gated on `TheApp.mp_session`** (and co-op on
@@ -133,6 +134,7 @@ Tests and tools (`scripts/multiplayer/` unless noted):
 | `setup_lua55_linux.sh` | Lua 5.5 build on Linux (to play with Windows builds) |
 | `run_s0_fingerprints.sh`, `compare_fingerprints.py` | Cross-platform determinism check |
 | `run_lobby_player.sh` | One scripted player against any server (tests across machines) |
+| `make_announcement.py` | Makes `CorsixTH/Sounds/mp_player_left.wav` (Piper text to speech, public domain voice, chime and loudspeaker filter) |
 | `lobby_probe.lua` with `MP_SHOT_DIR` | Saves screenshots (PNG) of the lobby views and of game moments (reserved outline, fax, trade window, `shot:<name>` in the UI script). They show graphics from the game data: never commit them |
 | `lobby_probe.lua`, `ingame_probe.lua`, `probe_builder.lua` | Scripted players |
 

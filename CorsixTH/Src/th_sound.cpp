@@ -286,6 +286,9 @@ sound_player::sound_player()
 
 sound_player::~sound_player() {
   populate_from(nullptr);
+  for (MIX_Audio* audio : extra_sounds) {
+    MIX_DestroyAudio(audio);
+  }
   if (singleton == this) {
     singleton = nullptr;
   }
@@ -326,7 +329,24 @@ uint32_t sound_player::play(size_t iIndex, double dVolume, int loops) {
     return null_handle;
   }
 
-  return play_raw(iIndex, static_cast<float>(dVolume), loops);
+  return play_raw(sounds[iIndex], static_cast<float>(dVolume), loops);
+}
+
+int sound_player::add_extra_sound(const uint8_t* data, size_t length) {
+  SDL_IOStream* io = SDL_IOFromConstMem(data, length);
+  if (io == nullptr) return -1;
+  MIX_Audio* audio =
+      MIX_LoadAudio_IO(th::sound::get_mixer()->get_mixer(), io, true, true);
+  if (audio == nullptr) return -1;
+  extra_sounds.push_back(audio);
+  return static_cast<int>(extra_sounds.size() - 1);
+}
+
+uint32_t sound_player::play_extra(size_t iIndex, double dVolume) {
+  if (iIndex >= extra_sounds.size()) {
+    return null_handle;
+  }
+  return play_raw(extra_sounds[iIndex], static_cast<float>(dVolume), 0);
 }
 
 uint32_t sound_player::play_at(size_t iIndex, int iX, int iY, int loops) {
@@ -350,7 +370,7 @@ uint32_t sound_player::play_at(size_t iIndex, double dVolume, int iX, int iY,
 
   double fVolume = (1.0 - fDistance * 0.8) * dVolume;
 
-  return play_raw(iIndex, static_cast<float>(fVolume), loops);
+  return play_raw(sounds[iIndex], static_cast<float>(fVolume), loops);
 }
 
 sound_player::toggle_pause_result sound_player::toggle_pause(uint32_t handle) {
@@ -411,7 +431,7 @@ void sound_player::release_channel(int channel) {
   channels[channel].handle = null_handle;
 }
 
-uint32_t sound_player::play_raw(size_t iIndex, float volume, int loops) {
+uint32_t sound_player::play_raw(MIX_Audio* audio, float volume, int loops) {
   int channel = reserve_channel();
   if (channel < 0) {
     return null_handle;
@@ -422,7 +442,7 @@ uint32_t sound_player::play_raw(size_t iIndex, float volume, int loops) {
   bool success = true;
 
   volume = th::sound::linear_to_logarithmic_volume(volume);
-  success &= MIX_SetTrackAudio(track, sounds[iIndex]);
+  success &= MIX_SetTrackAudio(track, audio);
   success &= MIX_SetTrackGain(track, volume);
 
   SDL_PropertiesID playProps = SDL_CreateProperties();

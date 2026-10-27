@@ -742,6 +742,15 @@ function UI:onKeyDown(rawchar, modifiers)
   -- the key.
   if not handled then
     local keyHandlers = self.key_handlers[key]
+    -- Multiplayer: Enter belongs to the chat, whatever else is open.
+    if keyHandlers and TheApp.mp_session then
+      for _, handler in ipairs(keyHandlers) do
+        if class.is(handler.window, UIMultiplayerChat) then
+          keyHandlers = {handler}
+          break
+        end
+      end
+    end
     if keyHandlers then
       -- Iterate over key handlers and call each one whose modifier(s) are pressed
       -- NB: Only if the exact correct modifiers are pressed will the shortcut get processed.

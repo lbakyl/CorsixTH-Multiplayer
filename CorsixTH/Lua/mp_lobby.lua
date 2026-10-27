@@ -550,7 +550,9 @@ function MultiplayerLobby:_onCHAT(f)
       text = S.chat_private_in:format(f.name or "?", f.text or "")
     end
     local window = TheApp.ui and TheApp.ui:getWindow(UIMultiplayerChat)
-    if window then window:add(text, private) else session.notify(text) end
+    local sender = self.players[tonumber(f.peer)]
+    local colour = UIMultiplayerChat.colourOf(tonumber(f.peer), sender and sender.bot == "1")
+    if window then window:add(text, private, colour) else session.notify(text) end
   end
   self:_changed("chat", f)
 end
@@ -596,6 +598,10 @@ function MultiplayerLobby:_onLEFT(f)
   if session and session.lobby == self then
     session:removePeer(tonumber(f.peer))
     session.notify((f.name or "A player") .. " has left the game.")
+    -- Also said aloud: "Warning! A player has left the game."
+    if not self.is_referee and TheApp.audio then
+      TheApp.audio:playOwnAnnouncement(TheApp:getFullPath({"Sounds", "mp_player_left.wav"}))
+    end
   end
 end
 
@@ -608,6 +614,9 @@ function MultiplayerLobby:_onSHOW(f)
     return
   end
   if f.kind == "blueprint" then
+    -- A race: the rivals' plans stay their own.
+    local world = TheApp.world
+    if world and world.mp_coop and world.mp_coop.competitive then return end
     session:showRemoteBlueprint(tonumber(f.peer), {room = f.room, x = tonumber(f.x) or 0,
         y = tonumber(f.y) or 0, w = tonumber(f.w) or 0, h = tonumber(f.h) or 0})
   end
@@ -870,6 +879,12 @@ function MultiplayerLobby:_addMultiplayerMenu(ui, mode)
   local coop = MultiplayerLobby.hospitalEach(mode)
   self.mp_menu_bar = ui.menu_bar
   local menu = UIMenu()
+  menu:appendItem(_S.multiplayer_window.menu_chat, function()
+    local current = TheApp.ui
+    if not current:getWindow(UIMultiplayerChatInput) then
+      current:addWindow(UIMultiplayerChatInput(current))
+    end
+  end)
   menu:appendItem(_S.multiplayer_window.menu_players, function()
     local current = TheApp.ui -- the menu bar outlives a desync repair's load
     current:addWindow(UIMultiplayerPlayers(current))

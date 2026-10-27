@@ -18,7 +18,8 @@
 #      takes 2nd and the race is over; kim and max stay IN SYNC to the end;
 #      max's Progress Report shows his own hospital and, on a click, lou's;
 #      the mouse finds nothing of the rivals' hospitals (people, doors), only
-#      the player's own and the evil handyman in it
+#      the player's own and the evil handyman in it; nobody sees a rival's
+#      room outline
 # With MP_REFEREE=1 the server also runs its headless referee, and a 5th
 # check needs it to agree with the players to the end.
 # Exits 0 only if all checks behave as expected.
@@ -163,8 +164,11 @@ ok_v = bool(riv_l and riv_m and riv_l.group(1) == '0' and riv_l.group(3) == '0' 
             and riv_l.group(5) == '0' and riv_l.group(7) == 'true'
             and riv_m.group(1) == '0' and riv_m.group(3) == '0' and int(riv_m.group(4)) > 0
             and riv_m.group(5) == '0' and int(riv_m.group(6)) > 0)
-print(f"   rivals hidden: lou {riv_l.group(0)[4:] if riv_l else '-'}; max {riv_m.group(0)[4:] if riv_m else '-'}")
-ok3 = ok3 and ok_v
+# kim draws a cardiogram: the rivals do not see its outline.
+outlines = sum(text.count("showing reserved area of player") for text in (k, l, m))
+print(f"   rivals hidden: lou {riv_l.group(0)[4:] if riv_l else '-'}; max {riv_m.group(0)[4:] if riv_m else '-'}; "
+      f"rivals' room outlines shown: {outlines}")
+ok3 = ok3 and ok_v and outlines == 0
 fail |= not ok3
 
 if with_referee:

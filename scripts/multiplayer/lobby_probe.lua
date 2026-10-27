@@ -340,6 +340,12 @@ local function run()
     if event == "chat" then
       log(string.format("CHAT IN at step %d: %s%s: %s", TheApp.mp_session and TheApp.mp_session.step or -1,
           tostring(f.name), f.to and " (private)" or "", tostring(f.text)))
+      -- The colour of its bar in the chat lines (the sender's).
+      local window = TheApp.ui and TheApp.ui:getWindow(UIMultiplayerChat)
+      local line = window and window.lines[#window.lines]
+      if line and line.colour then
+        log(string.format("CHAT COLOUR: %s %s", tostring(f.name), table.concat(line.colour, ",")))
+      end
     end
   end)
   -- MP_TRACE_HIT=1: log who turns clicks on the map on or off.
@@ -352,6 +358,15 @@ local function run()
     end
   end
   -- What the adviser tells this player goes into the log too.
+  if Audio.playOwnAnnouncement and not Audio.mp_probe_announce then
+    Audio.mp_probe_announce = Audio.playOwnAnnouncement
+    Audio.playOwnAnnouncement = function(audio, path, ...)
+      local handle = Audio.mp_probe_announce(audio, path, ...)
+      log(string.format("ANNOUNCED: %s (sound %s, handle %s)", path:match("[^/\\]+$"),
+          tostring(audio.own_sounds and audio.own_sounds[path]), tostring(handle)))
+      return handle
+    end
+  end
   if not UIAdviser.mp_probe_say then
     UIAdviser.mp_probe_say = UIAdviser.say
     UIAdviser.say = function(adviser, speech, ...)
@@ -1491,6 +1506,17 @@ local function run()
           session:issue({kind = "probe_" .. a})
         elseif a == "patients" then
           session:issue({kind = "probe_patients", n = tonumber(entry.arg)})
+        elseif a == "enterchat" then
+          -- Enter while a room is being drawn: the chat opens (the editor
+          -- would take Enter as its checkmark otherwise).
+          local dlg = UIEditRoom(world.ui, TheApp.rooms.gp)
+          world.ui:addWindow(dlg)
+          world.ui:onKeyDown("return", {})
+          local input = world.ui:getWindow(UIMultiplayerChatInput)
+          log(string.format("UI: Enter with a room editor open at step %d: chat %s, editor %s",
+              session.step, input and "opened" or "not opened", dlg.phase))
+          if input then input:close() end
+          dlg:close()
         elseif a == "chat" then
           -- In-game chat with the real keys: Enter, the text, Tab <n> times
           -- (who it is for), Enter. Argument: "<tabs>:<text>".

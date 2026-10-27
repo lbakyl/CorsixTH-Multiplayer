@@ -18,7 +18,9 @@
 #      the room the leaver was furnishing is taken over (room_takeover)
 #   5. rooms: both draw a room on the same spot in the same hour (one wins
 #      on both machines), the other player sees the reserved outline, a
-#      later room elsewhere, a window -> IN SYNC, same rooms on both
+#      later room elsewhere, a window -> IN SYNC, same rooms on both; the
+#      drawer's own outline stays blue after the checkmark; Enter with a
+#      room editor open opens the chat
 #   6. rooms drawn where people stand (busy hospital): they are asked to
 #      walk out and the build is retried -> IN SYNC, same rooms on both
 #   7. faxes: a VIP fax refused by clicking in the fax window, a second one
@@ -129,6 +131,9 @@ run_probe() { # name, then extra VAR=value assignments
   local name=$1; shift
   local dir="$out/$name"
   mkdir -p "$dir/config" "$dir/saves"
+  # MP_AUDIO=1: sound on (the dummy driver), for the spoken announcements.
+  local audio=false
+  for a in "$@"; do [[ $a == MP_AUDIO=1 ]] && audio=true; done
   cat > "$dir/config.txt" <<EOF
 theme_hospital_install = [[$game_data]]
 savegames = [[$dir/saves]]
@@ -137,10 +142,10 @@ fullscreen = false
 width = 800
 height = 600
 language = [[English]]
-audio = false
+audio = $audio
 play_music = false
 play_sounds = false
-play_announcements = false
+play_announcements = $audio
 movies = false
 play_intro = false
 play_demo = false
@@ -167,11 +172,11 @@ run_probe mallory MP_ROLE=join MP_ROOM=ward MP_JOIN_PASSWORD=guess & pids+=($!)
 run_probe carol MP_ROLE=host MP_ROOM=cheat MP_STEPS=400 & pids+=($!)
 sleep 1
 run_probe dave MP_ROLE=join MP_ROOM=cheat MP_STEPS=400 MP_UI_SCRIPT="50:cheat" & pids+=($!)
-run_probe erin MP_ROLE=host MP_ROOM=leave MP_STEPS=800 MP_UI_SCRIPT="100:buy:bench;250:players;600:players" & pids+=($!)
+run_probe erin MP_ROLE=host MP_ROOM=leave MP_STEPS=800 MP_AUDIO=1 MP_UI_SCRIPT="100:buy:bench;250:players;600:players" & pids+=($!)
 sleep 1
 run_probe frank MP_ROLE=join MP_ROOM=leave MP_STEPS=800 MP_FURNISH_PACE=40 \
   MP_UI_SCRIPT="200:furnishroom:gp:5:5;300:quit" & pids+=($!)
-run_probe gina MP_ROLE=host MP_ROOM=build MP_STEPS=900 MP_DRAW_EVERY=4   MP_UI_SCRIPT="100:room:gp:5:5:window;400:buy:bench" & pids+=($!)
+run_probe gina MP_ROLE=host MP_ROOM=build MP_STEPS=900 MP_DRAW_EVERY=4   MP_UI_SCRIPT="50:enterchat;100:room:gp:5:5:window;400:buy:bench" & pids+=($!)
 sleep 1
 run_probe hugo MP_ROLE=join MP_ROOM=build MP_STEPS=900   MP_UI_SCRIPT="100:room:pharmacy:4:4;300:room:toilets:4:4" & pids+=($!)
 run_probe ivan MP_ROLE=host MP_ROOM=crowd MP_STEPS=1200 MP_SCENARIO=busy & pids+=($!)
@@ -180,7 +185,7 @@ run_probe judy MP_ROLE=join MP_ROOM=crowd MP_STEPS=1200 MP_SCENARIO=busy   MP_UI
 run_probe kate MP_ROLE=host MP_ROOM=fax MP_STEPS=1300 MP_UI_SCRIPT="100:vip;400:vip" & pids+=($!)
 sleep 1
 run_probe liam MP_ROLE=join MP_ROOM=fax MP_STEPS=1300 MP_DRAW_EVERY=2   MP_UI_SCRIPT="160:answerfax:personality:2" & pids+=($!)
-run_probe mira MP_ROLE=host MP_ROOM=coop MP_COOP=1 MP_STEPS=1200 \
+run_probe mira MP_ROLE=host MP_ROOM=coop MP_COOP=1 MP_LEVEL=2 MP_STEPS=1200 \
   MP_UI_SCRIPT="20:openhospital;60:buy:bench;80:hire:Doctor;200:givemoney:5000;250:loan;260:priceup;270:research:cure;280:heatup;330:acceptoffer;400:bonus:Doctor;410:raise:Doctor;500:buyplot" & pids+=($!)
 sleep 1
 run_probe nico MP_ROLE=join MP_ROOM=coop MP_STEPS=1200 MP_DRAW_EVERY=3 \
@@ -205,12 +210,12 @@ sleep 1
 run_probe yuki MP_ROLE=join MP_ROOM=refer MP_STEPS=1100 \
   MP_UI_SCRIPT="30:openhospital;180:acceptoffer;200:hire:Nurse;300:sendstaff:Nurse:3000;500:patients:3;540:referpatient;700:notreatfax;720:answerfax:information:4" & pids+=($!)
 
-# Research sharing (co-op): the host's hospital discovers two things (test
+# Research sharing (co-op, level 5: much to research): the host's hospital discovers two things (test
 # command) and offers them for $5,000; the other player accepts in the fax.
 # Then one more, offered free, is declined. Also in-game chat (to all, then
 # Tab to the other player) and money requests from the bank manager ($7,500
 # paid, $2,000 declined).
-run_probe kim MP_ROLE=host MP_ROOM=research MP_COOP=1 MP_LEVEL=2 MP_STEPS=900 \
+run_probe kim MP_ROLE=host MP_ROOM=research MP_COOP=1 MP_LEVEL=5 MP_STEPS=900 \
   MP_UI_SCRIPT="20:openhospital;100:learn;104:learn;108:learn;112:learn;116:learn;120:learn;124:learn;128:learn;150:shareresearch:5000;190:askmoney:7500;200:chat:0:hello everyone;230:chat:1:just for you;500:learn;540:shareresearch:0;600:askmoney:2000" & pids+=($!)
 sleep 1
 run_probe lea MP_ROLE=join MP_ROOM=research MP_STEPS=900 \
@@ -388,8 +393,10 @@ listed = (len(lists4) == 2 and re.search(r'erin\|[^|]*\|[^|]*\|you', lists4[0]) 
           and re.search(r'erin\|[^|]*\|\d+ ms\|you', lists4[1]) is not None)
 # frank left while furnishing a room by hand: erin's game takes it over.
 taken4 = re.search(r'room_takeover -> ok', e) is not None
-ok4 = told and alone and listed and taken4 and result('erin').startswith('IN SYNC through step 800')
-print(f"4. Player leaves:           told: {told}; carried on alone to step 800: {alone}; room taken over: {taken4}; player list: {listed} {lists4[-1] if lists4 else ''}")
+# ... and said aloud (the sound loaded and played).
+spoken4 = re.search(r'ANNOUNCED: mp_player_left\.wav \(sound 0, handle [1-9]', e) is not None
+ok4 = told and alone and listed and taken4 and spoken4 and result('erin').startswith('IN SYNC through step 800')
+print(f"4. Player leaves:           told: {told}; spoken: {spoken4}; carried on alone to step 800: {alone}; room taken over: {taken4}; player list: {listed} {lists4[-1] if lists4 else ''}")
 fail |= not ok4
 
 g, h = log('gina'), log('hugo')
@@ -397,9 +404,15 @@ rooms_g = re.search(r'rooms built: (.*)', g); rooms_h = re.search(r'rooms built:
 rooms_g = rooms_g.group(1).split() if rooms_g else []; rooms_h = rooms_h.group(1).split() if rooms_h else []
 saw = 'showing reserved area of player 1: gp' in h and 'showing reserved area of player 2: toilets' in g
 built = sorted(r.split('@')[0] for r in rooms_g)
+# The own outline stays blue after the checkmark, until the room is built;
+# Enter with a room editor open opens the chat.
+kept = re.search(r'UI: outline of gp after the checkmark: (\d+) of (\d+) tiles blue', g)
+kept = bool(kept and kept.group(1) == kept.group(2))
+enter = 'UI: Enter with a room editor open at step 50: chat opened' in g
 ok5 = (result('gina').startswith('IN SYNC') and result('hugo').startswith('IN SYNC')
-       and rooms_g == rooms_h and built == ['gp', 'toilets'] and saw)
-print(f"5. Rooms:                   {result('gina')}; built on both: {rooms_g == rooms_h} {rooms_g}; reserved outlines seen: {saw}")
+       and rooms_g == rooms_h and built == ['gp', 'toilets'] and saw and kept and enter)
+print(f"5. Rooms:                   {result('gina')}; built on both: {rooms_g == rooms_h} {rooms_g}; reserved outlines seen: {saw}; "
+      f"own outline kept: {kept}; Enter opens the chat: {enter}")
 fail |= not ok5
 
 i, j = log('ivan'), log('judy')
@@ -490,11 +503,14 @@ know_k = re.findall(r'hospital (\d) research: (.*)', kl)
 know_l = re.findall(r'hospital (\d) research: (.*)', ll)
 r1 = dict(know_k).get('1', '?').split(';')[0]
 r2 = dict(know_k).get('2', '?').split(';')[0]
+offered19 = re.search(r'UI: offered research (\S+) for \$5000', kl)
+offered19 = len(offered19.group(1).split(',')) if offered19 else None
 okres = (result('kim').startswith('IN SYNC through step 900') and result('lea').startswith('IN SYNC through step 900')
          and ck == applied('lea') and kinds_k.count('offer_research') == 2 and kinds_k.count('fax_choice') == 4 and kinds_k.count('probe_learn') == 9 and kinds_k.count('ask_money') == 2
-         # eight discoveries (every drug is at 100% here): more than the six
-         # an offer's fax names one by one ("and 2 more")
-         and paid is not None and paid.group(1) == '8' and paid.group(2) == '5000'
+         # all that was offered (eight discoveries and more on level 5): more
+         # than the six an offer's fax names one by one ("and 5 more")
+         and paid is not None and offered19 is not None and int(paid.group(1)) == offered19 > 6
+         and paid.group(2) == '5000'
          and 'UI: declined the research offer' in ll and know_k == know_l and len(r1.split(',')) == len(r2.split(',')) + 1
          and 'chat seen: kim: hello everyone | kim (to you): just for you [private]' in ll
          and 'money request of hospital 1 to hospital 2: paid $7500' in kl

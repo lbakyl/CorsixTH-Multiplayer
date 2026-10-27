@@ -187,6 +187,19 @@ class sound_player {
   //! \return The sound handle
   uint32_t play(size_t iIndex, double dVolume, int loops);
 
+  //! Loads a sound that is not in the sound_archive (a whole WAV file in
+  //! memory, decoded at once so the data need not stay).
+  //!
+  //! \return Its number for play_extra, or -1 if it could not be loaded.
+  int add_extra_sound(const uint8_t* data, size_t length);
+
+  //! Plays a sound loaded with add_extra_sound.
+  //!
+  //! \param iIndex Number from add_extra_sound.
+  //! \param dVolume Volume, in the range 0.0 to 1.0.
+  //! \return The sound handle
+  uint32_t play_extra(size_t iIndex, double dVolume);
+
   //! Plays the sound effect in the sound_archive with the given index with
   //! volume attenuation based on the distance from the given position to the
   //! camera.
@@ -257,7 +270,7 @@ class sound_player {
   static sound_player* singleton;
   static void on_channel_finished(void* userdata, MIX_Track*);
 
-  uint32_t play_raw(size_t iIndex, float volume, int loops);
+  uint32_t play_raw(MIX_Audio* audio, float volume, int loops);
 
   //! Returns the channel that the handle is playing on or -1 if it is not
   //! playing.
@@ -265,6 +278,7 @@ class sound_player {
 
   MIX_Audio** sounds;
   size_t sound_count;
+  std::vector<MIX_Audio*> extra_sounds;
   int camera_x;
   int camera_y;
   float camera_radius;

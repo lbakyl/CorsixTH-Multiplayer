@@ -22,8 +22,8 @@ SOFTWARE. --]]
 --! command): the server relays CHAT lines, to everybody or to one player.
 --!
 --! UIMultiplayerChat shows the last lines at the top left of the game view,
---! each for a while, and opens the input line on Enter (when no other window
---! is waiting for Enter). UIMultiplayerChatInput is that line: Tab chooses
+--! each for a while on a bar in the sender's colour, and opens the input line
+--! on Enter. UIMultiplayerChatInput is that line: Tab chooses
 --! who it is for (everybody, then each other player), remembered for next
 --! time; Enter sends, Escape closes.
 class "UIMultiplayerChat" (Window)
@@ -33,6 +33,22 @@ local UIMultiplayerChat = _G["UIMultiplayerChat"]
 
 local SHOW_MS = 30000 -- how long a line stays
 local LINES = 6
+
+-- The bar behind a player's lines, by peer (dark enough for the white font);
+-- bots are grey, private lines get a purple mark at the start.
+local PLAYER_COLOURS = {
+  {35, 65, 150}, {150, 35, 35}, {30, 115, 45}, {160, 90, 10}, {20, 110, 125}, {125, 35, 115},
+}
+local BOT_COLOUR, NOTICE_COLOUR, PRIVATE_MARK = {75, 75, 75}, {30, 30, 40}, {180, 90, 255}
+
+--! The colour of a player's chat lines.
+--!param peer (integer) the sender's peer number
+--!param bot (boolean) the sender is a computer player
+function UIMultiplayerChat.colourOf(peer, bot)
+  if bot then return BOT_COLOUR end
+  if not peer then return NOTICE_COLOUR end
+  return PLAYER_COLOURS[(peer - 1) % #PLAYER_COLOURS + 1]
+end
 
 -- Milliseconds. (SDL is a module, not a global: rawget(_G, "SDL") was always
 -- nil, the clock always 0, and chat lines never went away.)
@@ -58,10 +74,13 @@ function UIMultiplayerChat:hitTest()
   return false
 end
 
---! Add a line: {text, private}.
-function UIMultiplayerChat:add(text, private)
+--! Add a line.
+--!param private (boolean) only for this player (or sent by them to one)
+--!param colour ({r, g, b} or nil) the sender's colour (UIMultiplayerChat.colourOf)
+function UIMultiplayerChat:add(text, private, colour)
   if type(text) == "userdata" then text = require("TH").stringProxy._unwrap(text) end -- a game string
-  self.lines[#self.lines + 1] = {text = tostring(text), private = private, at = now()}
+  self.lines[#self.lines + 1] = {text = tostring(text), private = private, at = now(),
+      colour = colour or NOTICE_COLOUR}
   while #self.lines > 20 do table.remove(self.lines, 1) end
 end
 
@@ -77,19 +96,20 @@ function UIMultiplayerChat:draw(canvas, x, y)
   local ly = y + 28 * s -- below the menu bar
   for _, line in ipairs(shown) do
     local w = math.min(560, 12 + 7 * #line.text) * s
-    canvas:drawRect(line.private and canvas:mapRGB(70, 30, 104) or canvas:mapRGB(30, 30, 40),
-        x + 6 * s, ly, w, 16 * s)
+    local c = line.colour
+    canvas:drawRect(canvas:mapRGB(c[1], c[2], c[3]), x + 6 * s, ly, w, 16 * s)
+    if line.private then
+      canvas:drawRect(canvas:mapRGB(PRIVATE_MARK[1], PRIVATE_MARK[2], PRIVATE_MARK[3]),
+          x + 6 * s, ly, 3 * s, 16 * s)
+    end
     self.font:draw(canvas, line.text, x + 10 * s, ly + 3 * s)
     ly = ly + 18 * s
   end
 end
 
---! Enter: open the input line, unless a dialog is waiting for Enter (its
---! handler runs too). The game screen's own Alt+Enter does not count.
+--! Enter: open the input line. In multiplayer Enter is the chat's alone (see
+--! UI:onKeyDown); a dialog confirms with its button or keypad Enter.
 function UIMultiplayerChat:openInput()
-  for _, handler in ipairs(self.ui.key_handlers["return"] or {}) do
-    if handler.window ~= self and handler.window ~= self.ui then return end
-  end
   if self.ui:getWindow(UIMultiplayerChatInput) or not TheApp.mp_session then return end
   self.ui:addWindow(UIMultiplayerChatInput(self.ui))
 end

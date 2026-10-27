@@ -314,9 +314,9 @@ function UIEditRoom:_issueBuildRoom()
         x = rect.x, y = rect.y, w = rect.w, h = rect.h,
         door_x = door.floor_x, door_y = door.floor_y, door_wall = door.orig_wall,
         windows = builder.encodeWindows(builder.windowsOf(self))})
-    session:showRemoteBlueprint(session.peer_id, rect)
     self.ui:playSound("buildclk.wav")
     builder.hide(self.world, entry)
+    session:showRemoteBlueprint(session.peer_id, rect)
     return
   end
   local hospital_index = 1
@@ -330,10 +330,13 @@ function UIEditRoom:_issueBuildRoom()
       -- The player places the furniture once the room is built (scripted
       -- tests can ask for the automatic placement instead).
       furnish = self.mp_auto_furnish and 0 or 1})
-  session:showRemoteBlueprint(session.peer_id, rect)
   self.mp_issued = true
   self.ui:playSound("buildclk.wav")
+  local reserved = {x = rect.x, y = rect.y, w = rect.w, h = rect.h}
   self:close()
+  -- The blue floor stays until the room is built (people may first have to
+  -- walk out of it); closing the editor cleared its own.
+  session:showRemoteBlueprint(session.peer_id, reserved)
 end
 
 --! A function requests that the humanoids leave the room’s perimeter and

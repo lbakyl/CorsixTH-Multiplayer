@@ -51,8 +51,10 @@ referee build cannot run bots (the button is not shown there).
   extinguisher for its corridors.
 - **Talks**: a greeting in the second to fourth month (friendly in co-op and
   shared games, fiery in a race), and answers to the chat after a typing
-  pause: always when written to privately or by name, otherwise now and then
-  (less often with more bots). The answer depends on a few words (hello,
+  pause: when written to privately or by name (at most every 10 seconds),
+  otherwise seldom (one line in seven, at most every 3 minutes, less often
+  with more bots), so the people's own chat stays readable. Its lines are
+  grey in the players' chat. The answer depends on a few words (hello,
   thanks, how are you, a question, insults, winning, money, bot; a few Czech
   ones too). Bots do not answer each other.
 - **Offers** (staff, patients, research, money requests): after 3 to 8

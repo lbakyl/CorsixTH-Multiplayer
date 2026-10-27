@@ -358,6 +358,35 @@ function Audio:playSound(name, where, is_announcement, played_callback, played_c
   end
 end
 
+--! Play a sound file of CorsixTH's own (not in the game's sound archive),
+--! at the announcements' volume when the announcements are on.
+--!param path (string) full path of a WAV file
+--!return the sound's handle, if it plays
+function Audio:playOwnAnnouncement(path)
+  if self.not_loaded or not self.app.config.play_announcements then return end
+  -- Without the game's sound archive (a demo, say) a player of its own.
+  local sound_fx = self.sound_fx
+  if not sound_fx then
+    self.own_player = self.own_player or TH.soundEffects()
+    sound_fx = self.own_player
+  end
+  if not sound_fx.addExtraSound then return end -- (an older program)
+  -- The sound effects are made again when the language changes.
+  if self.own_sounds_fx ~= sound_fx then
+    self.own_sounds_fx, self.own_sounds = sound_fx, {}
+  end
+  local index = self.own_sounds[path]
+  if index == nil then
+    local file = io.open(path, "rb")
+    local data = file and file:read("*a")
+    if file then file:close() end
+    index = data and sound_fx:addExtraSound(data) or false
+    if not index then print("Notice: could not play " .. path) end
+    self.own_sounds[path] = index
+  end
+  if index then return sound_fx:playExtra(index, self.app.config.announcement_volume) end
+end
+
 --! Pause or unpause a playing sound
 --!param sound (table) The `sound` table returned by `Audio:playSound`.
 function Audio:togglePauseSound(sound)

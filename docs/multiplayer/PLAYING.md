@@ -94,7 +94,9 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   the others wait and tells them why.
 - **Rooms:** after the walls, door and windows, you place the furniture as
   usual; the other players see the room fill up. While you draw a room, the
-  others see its outline in blue (the space is reserved). While furnishing
+  others see its outline in blue (the space is reserved; in a race your
+  rivals do not). After the checkmark the floor stays blue until the walls
+  go up, also while people first walk out of the area. While furnishing
   you can buy extra objects and pick up and move the ones you placed.
 - **Editing rooms:** the edit room button, then click one of your rooms.
   Everybody inside walks out first (the adviser says so); then the editor
@@ -126,12 +128,14 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   the research and the price, and they accept or reject it. On acceptance
   they pay you and get what they still lack; you keep your research. No
   answer within 20 game days counts as a rejection.
-- **Chat:** press **Enter** and type; **Tab** chooses who it is for (all
-  players, or one), and the game remembers it for next time; **Enter**
-  sends, **Escape** cancels. Messages show at the top left for a few
-  seconds; private ones in purple. (If a window is waiting for Enter, such
-  as an information box, Enter goes to it: close it first.) Players on an
-  older server get private lines as public ones.
+- **Chat:** press **Enter** (or **MULTIPLAYER**, **SEND A MESSAGE**) and
+  type; **Tab** chooses who it is for (all players, or one), and the game
+  remembers it for next time; **Enter** sends, **Escape** cancels. In
+  multiplayer Enter always opens the chat, also while you draw a room
+  (confirm it with the checkmark). Messages show at the top left for 30
+  seconds on a bar in the sender's colour (each player has one; computer
+  players are grey); private ones have a purple mark at the start. Players
+  on an older server get private lines as public ones.
 - **Asking for money (co-op):** the bank manager (click your balance at the
   bottom), **Ask a player**: set the amount ($500 to $50,000) and **Ask**.
   The other player gets a coin icon; its fax shows the amount and your
@@ -140,7 +144,9 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 - **Players:** the **MULTIPLAYER** menu, **PLAYERS** lists everybody in the
   game: their ping (average of the last 10 seconds), whether they are still
   connected (or have not answered for a while, or are behind), and their
-  hospital's value, balance and reputation.
+  hospital's value, balance and reputation. When a player leaves, the
+  announcer says "Warning! A player has left the game." (with the
+  announcements on).
 - If an action cannot be done (somebody stands in the way, a candidate is
   gone), the adviser tells you why.
 
@@ -199,7 +205,8 @@ or more than half of its patients have died.
   final standings. MULTIPLAYER > PLAYERS shows each place. In the Progress
   Report, click another player's name to see how their hospital is doing.
   You cannot look into a rival's hospital: clicking their staff, patients,
-  machines or doors does nothing.
+  machines or doors does nothing, and you do not see the outlines of the
+  rooms they draw.
 
 ## Dirty tricks (competitive race)
 

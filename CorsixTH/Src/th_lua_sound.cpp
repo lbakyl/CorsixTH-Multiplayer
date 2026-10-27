@@ -328,6 +328,30 @@ int l_soundfx_is_playing(lua_State* L) {
   return 1;
 }
 
+int l_soundfx_add_extra_sound(lua_State* L) {
+  sound_player* pEffects = luaT_testuserdata<sound_player>(L);
+  size_t length;
+  const char* data = luaL_checklstring(L, 2, &length);
+  int index = pEffects->add_extra_sound(
+      reinterpret_cast<const uint8_t*>(data), length);
+  if (index < 0) {
+    lua_pushnil(L);
+    lua_pushstring(L, SDL_GetError());
+    return 2;
+  }
+  lua_pushinteger(L, index);
+  return 1;
+}
+
+int l_soundfx_play_extra(lua_State* L) {
+  sound_player* pEffects = luaT_testuserdata<sound_player>(L);
+  uint32_t handle =
+      pEffects->play_extra(static_cast<size_t>(luaL_checkinteger(L, 2)),
+                           luaL_checknumber(L, 3));
+  lua_pushinteger(L, handle);
+  return 1;
+}
+
 int l_soundfx_set_camera(lua_State* L) {
   sound_player* pEffects = luaT_testuserdata<sound_player>(L);
   pEffects->set_camera(static_cast<int>(luaL_checkinteger(L, 2)),
@@ -374,6 +398,8 @@ void lua_register_sound(const lua_register_state* pState) {
     lcb.add_function(l_soundfx_set_archive, "setSoundArchive",
                      lua_metatable::sound_archive);
     lcb.add_function(l_soundfx_play, "play");
+    lcb.add_function(l_soundfx_add_extra_sound, "addExtraSound");
+    lcb.add_function(l_soundfx_play_extra, "playExtra");
     lcb.add_function(l_soundfx_toggle_pause, "togglePause");
     lcb.add_function(l_soundfx_stop, "stop");
     lcb.add_function(l_soundfx_is_playing, "isPlaying");

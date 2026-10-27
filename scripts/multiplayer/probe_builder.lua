@@ -511,6 +511,14 @@ function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at, by_
   dlg:confirm()
   log(string.format("UI: drew %s at %d,%d size %dx%d%s (editor %s)", room_id, x, y, w, h,
       with_window and " with a window" or "", dlg.phase))
+  -- Until the room is built its floor stays blue (layer 4, value 24).
+  local blue, th = 0, world.map.th
+  for ty = y, y + h - 1 do
+    for tx = x, x + w - 1 do
+      if th:getCell(tx, ty, 4) == 24 then blue = blue + 1 end
+    end
+  end
+  log(string.format("UI: outline of %s after the checkmark: %d of %d tiles blue", room_id, blue, w * h))
   return true
 end
 

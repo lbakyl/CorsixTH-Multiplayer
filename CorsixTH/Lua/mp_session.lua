@@ -945,8 +945,10 @@ local function placement_allowed(world, hospital, object_type, x, y, orientation
   -- anybody on the map.)
   local saved_hit_test = ui.do_world_hit_test
   ui.hospital, config.blocking_off_areas = hospital, 2 -- (the default rule on every peer)
+  UIPlaceObjects.mp_checking = true
   local ok, result = pcall(function()
     local dlg = UIPlaceObjects(ui, {{object = object_type, qty = 1}})
+    UIPlaceObjects.mp_checking = nil
     dlg:setOrientation(orientation)
     dlg:setBlueprintCell(x, y)
     local good = dlg.object_blueprint_good
@@ -954,6 +956,7 @@ local function placement_allowed(world, hospital, object_type, x, y, orientation
     Window.close(dlg) -- (not UIPlaceObjects.close: it refunds an object not placed)
     return good
   end)
+  UIPlaceObjects.mp_checking = nil
   ui.hospital, config.blocking_off_areas = saved_hospital, saved_blocking
   ui.do_world_hit_test = saved_hit_test
   if not ok then error(result, 0) end

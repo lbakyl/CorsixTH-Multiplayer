@@ -651,6 +651,7 @@ multiplayer_window = {
   menu_caption = "  MULTIPLAYER  ",
   menu_trade = "  TRADE WITH OTHER PLAYERS  ",
   menu_research = "  SHARE RESEARCH  ",
+  menu_chat = "  SEND A MESSAGE (OR PRESS ENTER)  ",
   menu_players = "  PLAYERS  ",
   menu_sabotage = "  DIRTY TRICKS  ",
   -- Player list (in game)

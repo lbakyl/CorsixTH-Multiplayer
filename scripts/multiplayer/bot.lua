@@ -6,8 +6,8 @@
 -- person: it builds the rooms the level has one after the other, hires the
 -- staff they need and opens the hospital, so that for the first year or so
 -- it looks like somebody playing. It also talks: a greeting in the second to
--- fourth month, answers to the chat, and a word when somebody sends it
--- something. In co-op it accepts what the others offer (staff, patients,
+-- fourth month, answers when spoken to (and seldom otherwise), and a word
+-- when somebody sends it something. In co-op it accepts what the others offer (staff, patients,
 -- research, money requests); in a competitive race it refuses all of it and
 -- plays a dirty trick now and then (the first one in months 7 to 12).
 --
@@ -234,7 +234,7 @@ function Bot.new(lobby)
   self.fiery = self.mode == "competitive"
   self.outbox = {}         -- {at = real time, text =, to = peer or nil, fn = optional}
   self.offers_seen = {}    -- message number -> true
-  self.last_reply = 0
+  self.last_reply = -1000
   self.next_think = 0
   self.world = nil
   return self
@@ -315,15 +315,18 @@ function Bot:onChat(f)
   local private = f.to ~= nil
   local first = my_name:lower():match("(%a+)$") or my_name:lower()
   local named = text:lower():find(first, 1, true) ~= nil
-  -- Several bots in a room: each answers a public line now and then.
+  -- A line to the bot (private, or with its name in it) gets an answer;
+  -- other lines only seldom, so the people's own chat stays readable. Several
+  -- bots in a room share that.
   local bots = 0
   for _, p in pairs(self.lobby.players or {}) do
     if p.bot == "1" then bots = bots + 1 end
   end
-  if not (private or named) then
-    if rand() > 0.6 / math.max(1, bots) then return end
+  if private or named then
+    if self:now() - self.last_reply < 10 then return end
+  else
+    if self:now() - self.last_reply < 180 or rand() > 0.15 / math.max(1, bots) then return end
   end
-  if self:now() - self.last_reply < 6 and not private then return end
   self.last_reply = self:now()
   local kind = reply_kind(text)
   local line = pick(REPLIES[kind][self.fiery and "fiery" or "friendly"]):format(name)

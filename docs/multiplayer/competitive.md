@@ -98,6 +98,8 @@ done (`spendMoney`, "Dirty tricks"). Prices in `sabotage.PRICES`.
   outside your own (no staff or patient windows, door queues, bottom panel
   details or hover cursor). The evil handyman in your own hospital stays
   clickable (his `hospital` is yours). Co-op teams still see each other.
+- Rivals' room outlines are not shown (`MultiplayerLobby:_onSHOW` drops
+  their blueprint notes in a race).
 - Sounds of a hospital (sack, calls to a room, repairs, cheers, VIPs and so
   on) play only for its own player (`World:isUIHospital`); every peer still
   runs the code around them.
