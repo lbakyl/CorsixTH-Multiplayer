@@ -144,6 +144,36 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 - If an action cannot be done (somebody stands in the way, a candidate is
   gone), the adviser tells you why.
 
+## Levels
+
+**One shared hospital** plays the campaign levels 1 to 12, as in single
+player. **A hospital each** (co-op and the race) has five levels of its own,
+on Theme Hospital's multiplayer maps. Each takes its diseases, rooms and
+research from a campaign level, so level 1 is the smallest:
+
+| Level | Money | Diseases | Rooms (research or later in brackets) |
+|---|---|---|---|
+| 1 | $40,000 | 6 | GP, general diagnosis, ward, psychiatry, pharmacy, inflation |
+| 2 | $50,000 | 12 | as level 1, research (cardiogram, operating theatre, slack tongue, X-ray) |
+| 3 | $50,000 | 15 | as level 2, training, operating theatre (scanner, fracture clinic) |
+| 4 | $60,000 | 26 | as level 3, cardiogram, fracture clinic (ultrascan, hair restoration, electrolysis, blood machine, decontamination) |
+| 5 | $70,000 | 33 | as level 4 (also DNA fixer, jelly vat) |
+
+To win, a hospital needs all of these at once (and no loan):
+
+| Level | Reputation | Balance | Hospital value | Cured | Cure rate |
+|---|---|---|---|---|---|
+| 1 | 550 | $20,000 | plot + $40,000 | 40 | 40% |
+| 2 | 600 | $50,000 | plot + $70,000 | 100 | 45% |
+| 3 | 650 | $100,000 | plot + $110,000 | 200 | 50% |
+| 4 | 700 | $200,000 | plot + $150,000 | 350 | 55% |
+| 5 | 750 | $350,000 | plot + $200,000 | 500 | 60% |
+
+The value goal is what the biggest starting plot on the map is worth plus
+the amount above, rounded up to $5,000; the Progress Report (F8) shows the
+exact figure. A hospital fails a year end if it is more than $20,000 in debt
+or more than half of its patients have died.
+
 ## Winning and losing
 
 - **One shared hospital:** the single-player rules. When the hospital meets

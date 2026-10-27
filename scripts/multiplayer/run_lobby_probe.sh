@@ -185,7 +185,7 @@ run_probe mira MP_ROLE=host MP_ROOM=coop MP_COOP=1 MP_STEPS=1200 \
 sleep 1
 run_probe nico MP_ROLE=join MP_ROOM=coop MP_STEPS=1200 MP_DRAW_EVERY=3 \
   MP_UI_SCRIPT="30:openhospital;60:buy:plant;90:hire:Nurse;200:staffwindow:Nurse;300:sendstaff:Nurse;350:loan;360:heatup;370:heatup;520:buyplot:other;600:sendhome" & pids+=($!)
-run_probe olga MP_ROLE=host MP_ROOM=events MP_COOP=1 MP_STEPS=1600   MP_UI_SCRIPT="20:openhospital;100:emergency:2;400:vip:2" & pids+=($!)
+run_probe olga MP_ROLE=host MP_ROOM=events MP_COOP=1 MP_LEVEL=2 MP_STEPS=1600   MP_UI_SCRIPT="20:openhospital;100:emergency:2;400:vip:2" & pids+=($!)
 sleep 1
 run_probe paul MP_ROLE=join MP_ROOM=events MP_STEPS=1600 MP_DRAW_EVERY=3   MP_UI_SCRIPT="30:openhospital;130:answerfax:emergency:1;430:answerfax:personality:1" & pids+=($!)
 # Epidemic (co-op): one starts in player 2's hospital (test command); player
@@ -210,7 +210,7 @@ run_probe yuki MP_ROLE=join MP_ROOM=refer MP_STEPS=1100 \
 # Then one more, offered free, is declined. Also in-game chat (to all, then
 # Tab to the other player) and money requests from the bank manager ($7,500
 # paid, $2,000 declined).
-run_probe kim MP_ROLE=host MP_ROOM=research MP_COOP=1 MP_STEPS=900 \
+run_probe kim MP_ROLE=host MP_ROOM=research MP_COOP=1 MP_LEVEL=2 MP_STEPS=900 \
   MP_UI_SCRIPT="20:openhospital;100:learn;104:learn;108:learn;112:learn;116:learn;120:learn;124:learn;128:learn;150:shareresearch:5000;190:askmoney:7500;200:chat:0:hello everyone;230:chat:1:just for you;500:learn;540:shareresearch:0;600:askmoney:2000" & pids+=($!)
 sleep 1
 run_probe lea MP_ROLE=join MP_ROOM=research MP_STEPS=900 \

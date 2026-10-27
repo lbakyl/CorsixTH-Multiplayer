@@ -921,8 +921,19 @@ function builder.register_handlers()
     return true
   end
   -- An emergency for hospital `target`.
+  -- An emergency of the first disease the hospital knows (on most levels a
+  -- random one may not be discovered yet, and the game skips it then).
   MultiplayerSession.default_handlers.probe_emergency = function(w, cmd)
-    local err = w.hospitals[cmd.target or 1]:createEmergency()
+    local h = w.hospitals[cmd.target or 1]
+    local emergency
+    for _, d in ipairs(w.available_diseases) do
+      if not emergency and h.disease_casebook[d.id] and h.disease_casebook[d.id].discovered then
+        local disease = TheApp.diseases[d.id]
+        emergency = {disease = disease, victims = math.min(3, disease.emergency_number), bonus = 1000,
+            percentage = 0.75, killed_emergency_patients = 0, cured_emergency_patients = 0}
+      end
+    end
+    local err = h:createEmergency(emergency)
     return err == nil, err
   end
   -- The first room of type `room` in this hospital is destroyed, as by an
