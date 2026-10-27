@@ -68,6 +68,15 @@ function levels.apply(config, campaign, level)
   for _, key in ipairs(FROM_CAMPAIGN) do
     config[key] = campaign[key]
   end
+  -- Every level but the first has the training room from the start (with
+  -- its projector, lecture chairs, skeleton and bookcase): the staff to hire
+  -- are few, so training must begin early. (object numbers: TheApp.objects)
+  if levels.clamp(level) > 1 then
+    for _, thob in ipairs({36, 37, 56, 60}) do
+      local spec = config.objects and config.objects[thob]
+      if spec then spec.StartAvail, spec.AvailableForLevel = 1, 1 end
+    end
+  end
   -- (a multiplayer map's level number is no campaign town: `town` is used)
   config.town = {StartCash = def.cash, StartRep = 500, InterestRate = 100, OverdraftDiff = 200}
   local g = def.goals

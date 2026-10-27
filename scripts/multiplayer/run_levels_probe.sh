@@ -6,7 +6,8 @@
 # on it and the host logs what the level has. Checks, per level:
 #   * the diseases, rooms and research of its campaign level (1, 3, 5, 8, 11):
 #     level 1 has no research department, X-ray or cardiogram at all; each
-#     level adds rooms; the expensive late rooms only on the last levels
+#     level adds rooms; the expensive late rooms only on the last levels;
+#     the training room from the start on every level but the first
 #   * the starting money and the goals: reputation, balance, hospital value
 #     (above the plot's own worth), patients cured and cure rate, all rising
 #     from level to level
@@ -102,7 +103,10 @@ for level in range(1, 6):
     goals = {k: int(v) for k, v in (g.split('=') for g in lv.group(6).split())}
     must, must_not = WANT[level]
     cur = (int(lv.group(2)), len(rooms), goals)
+    # Training from the start on every level but the first.
+    training = 'training' in lv.group(4).split(',')
     ok = (lv.group(1) == str(level) and must <= rooms and not must_not & rooms
+          and training == (level > 1) and (level > 1 or 'training' not in rooms)
           and set(goals) == {'reputation', 'balance', 'value', 'num_cured', 'percentage_cured'}
           and goals['value'] > int(lv.group(3)))
     if prev:

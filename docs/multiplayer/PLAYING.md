@@ -155,13 +155,15 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 **One shared hospital** plays the campaign levels 1 to 12, as in single
 player. **A hospital each** (co-op and the race) has five levels of its own,
 on Theme Hospital's multiplayer maps. Each takes its diseases, rooms and
-research from a campaign level, so level 1 is the smallest:
+research from a campaign level, so level 1 is the smallest. From level 2 on
+the training room is there from the start (there are few staff to hire, so
+training should begin early):
 
 | Level | Money | Diseases | Rooms (research or later in brackets) |
 |---|---|---|---|
 | 1 | $40,000 | 6 | GP, general diagnosis, ward, psychiatry, pharmacy, inflation |
-| 2 | $50,000 | 12 | as level 1, research (cardiogram, operating theatre, slack tongue, X-ray) |
-| 3 | $50,000 | 15 | as level 2, training, operating theatre (scanner, fracture clinic) |
+| 2 | $50,000 | 12 | as level 1, research, training (cardiogram, operating theatre, slack tongue, X-ray) |
+| 3 | $50,000 | 15 | as level 2, operating theatre (scanner, fracture clinic) |
 | 4 | $60,000 | 26 | as level 3, cardiogram, fracture clinic (ultrascan, hair restoration, electrolysis, blood machine, decontamination) |
 | 5 | $70,000 | 33 | as level 4 (also DNA fixer, jelly vat) |
 
