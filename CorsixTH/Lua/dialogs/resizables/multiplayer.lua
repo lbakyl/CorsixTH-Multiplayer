@@ -268,10 +268,19 @@ function UIMultiplayer:buttonMode()
   end
   self.new_mode = next_mode
   self.mode_button.panel_for_sprite:setLabel(MultiplayerLobby.modeLabel(self.new_mode))
+  self.new_level = math.min(self.new_level, self:_levelCount())
+  self.level_button.panel_for_sprite:setLabel(_S.multiplayer_window.level:format(self.new_level))
+end
+
+--! How many levels the chosen mode has: the campaign's 12 for one shared
+--! hospital, the multiplayer levels (mp_levels) for a hospital each.
+function UIMultiplayer:_levelCount()
+  if MultiplayerLobby.hospitalEach(self.new_mode) then return corsixth.require("mp_levels").COUNT end
+  return 12
 end
 
 function UIMultiplayer:buttonLevel()
-  self.new_level = self.new_level % 12 + 1
+  self.new_level = self.new_level % self:_levelCount() + 1
   self.level_button.panel_for_sprite:setLabel(_S.multiplayer_window.level:format(self.new_level))
 end
 

@@ -101,7 +101,8 @@ Gameplay code (`CorsixTH/Lua/`):
 | `dialogs/resizables/multiplayer_trade.lua` | `UIMultiplayerTrade`: co-op trade window |
 | `cosmetic_random.lua` | `math.cosmetic_random` for cosmetic choices |
 | `world.lua` | Lockstep in `World:onTick`/`_advanceHours`; co-op hospitals, `getUIHospital`, `getTileHospital`, co-op opening countdowns |
-| `map.lua` | Loads original multiplayer levels (`"net20"` … `"net44"`) |
+| `map.lua` | Loads original multiplayer maps (`"net20"` … `"net44"`) |
+| `mp_levels.lua` | The five levels with a hospital each: what each takes from a campaign level, starting money, goals |
 | `dialogs/edit_room.lua`, `place_objects.lua`, `place_staff.lua`, `furnish_corridor.lua`, `hire_staff.lua`, `watch.lua`, `fullscreen/fax.lua`, `message.lua`, `bottom_panel.lua` | Player actions turned into commands; fax numbering and game-hour timeouts |
 
 **Everything multiplayer is gated on `TheApp.mp_session`** (and co-op on
@@ -125,6 +126,7 @@ Tests and tools (`scripts/multiplayer/` unless noted):
 | `run_lobby_probe.sh` | **Main integration test.** A local server (or `MP_EXTERNAL_SERVER`) and pairs of real games going through the main menu and lobby window. 11 checks, ~5 min; `MP_REFEREE=1` adds the referee and 4 checks (referee agrees, repair in shared and co-op games, rejoin) |
 | `run_ingame_probe.sh` | Two games connected directly (no server). 5 checks |
 | `run_bot_probe.sh` | Computer players (bots) in a co-op room and a race, with the referee. 7 checks |
+| `run_levels_probe.sh` | The five levels of a game with a hospital each (`mp_levels.lua`): rooms, research, money and goals of each. 5 checks |
 | `run_sync_probe.sh` | Harness-level determinism checks. 7 checks |
 | `run_sp_regression.sh` | Single player, two builds, 3 game years, fingerprints must match |
 | `setup_debian13.sh` | Build environment for Debian 13 |

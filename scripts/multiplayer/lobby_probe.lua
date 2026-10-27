@@ -1098,6 +1098,24 @@ local function run()
           end
           log(string.format("UI: hospitals at step %d (%s, month %d): %s", session.step, d:tostring(),
               d:monthOfGame(), table.concat(parts, " ")))
+        elseif a == "level" then
+          -- What the level has: diseases, rooms there at the start, rooms
+          -- that come later (research or automatic), and the goals.
+          local hosp = world.ui.hospital
+          local now, later = {}, {}
+          for id, disc in pairs(hosp.room_discoveries) do
+            if disc.is_discovered then now[#now + 1] = id else later[#later + 1] = id end
+          end
+          table.sort(now)
+          table.sort(later)
+          local goals = {}
+          for _, group in pairs(world.endconditions.win_goals) do
+            for crit, goal in pairs(group) do goals[#goals + 1] = crit .. "=" .. tostring(goal.win_value) end
+          end
+          table.sort(goals)
+          log(string.format("UI: level at step %d: level %s; diseases %d; balance %d; rooms now: %s; later: %s; goals: %s",
+              session.step, tostring(world.map.level_config.mp_level), #world.available_diseases,
+              math.floor(hosp.balance), table.concat(now, ","), table.concat(later, ","), table.concat(goals, " ")))
         elseif a == "race" then
           -- Competitive: each hospital's place, and whether the race is over.
           local parts = {}

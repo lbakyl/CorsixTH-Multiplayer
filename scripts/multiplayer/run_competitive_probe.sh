@@ -3,7 +3,7 @@
 #
 # Competitive multiplayer (a hospital each, a race to the level's goals, with
 # dirty tricks), through a local relay server, three scripted players in one
-# room "race" (kim hosts, lou and max join). Checks:
+# room "race" on level 2 (kim hosts, lou and max join). Checks:
 #   1. dirty tricks are commands: kim sends an evil handyman (level 3) to lou
 #      and an emergency (level 3) to max, max an epidemic (level 1) to kim;
 #      a second emergency for max is refused at once (one is on)
@@ -84,7 +84,7 @@ EOF
 }
 
 pids=()
-run_probe kim MP_ROLE=host MP_ROOM=race MP_MODE=competitive MP_PLAYERS=3 MP_STEPS=1400 \
+run_probe kim MP_ROLE=host MP_ROOM=race MP_MODE=competitive MP_PLAYERS=3 MP_LEVEL=2 MP_STEPS=1400 \
   MP_UI_SCRIPT="20:openhospital;100:sabotage:handyman:3:2;150:sabotage:emergency:3:3;160:sabotage:emergency:1:3;1100:goals:2:win;1110:wincheck;1200:goals:3:lose;1210:yearend;1260:yearend;1300:race;1310:players" & pids+=($!)
 sleep 1
 run_probe lou MP_ROLE=join MP_ROOM=race MP_STEPS=1400 \

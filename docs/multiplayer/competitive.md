@@ -112,7 +112,7 @@ hospital clash now, and the cancelled event is that hospital's.
 ## Tests
 
 `scripts/multiplayer/run_competitive_probe.sh BIN DATA` (three scripted
-players; `MP_REFEREE=1` adds the headless referee and a 4th check):
+players on level 2; `MP_REFEREE=1` adds the headless referee and a 5th check):
 1. tricks as commands; a second emergency refused at once;
 2. the evil handyman arrives, drops litter, wears the cardiogram machine
    down, is thrown out and works for the buyer;

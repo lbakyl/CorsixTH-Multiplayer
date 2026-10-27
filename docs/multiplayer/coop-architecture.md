@@ -13,6 +13,16 @@ for that, the rules new code must follow, and what is still missing.
   Hospital's original multiplayer maps (`LEVEL.L20`–`L44`, configs
   `NET*.SAM`; map ids `net20`–`net44`). `Hospital:getPlayerIndex()` returns
   `player_index`. There are no computer hospitals in co-op.
+- **Five levels (`mp_levels.lua`).** The original `NET*.SAM` files open every
+  disease and room from the start with a reputation goal only, so
+  `Map:load` takes from a campaign level (1, 3, 5, 8, 11 for levels 1-5)
+  the diseases and when they come, the rooms and machines, what can be
+  researched, the emergencies and the patient rate (`popn`, per hospital:
+  `World:_prepareSpawnDates` multiplies by the players), and sets the
+  starting money and the goals: reputation, balance, hospital value (above
+  what the biggest starting plot is worth), patients cured and cure rate.
+  A hospital loses (team in trouble, or out of a race) below -$20,000 or
+  when more than half its patients die.
 - **Each peer looks at its own hospital.** `world.mp_local_index` and
   `World:getUIHospital()` give the hospital this machine's player runs;
   `ui.hospital` is that one. `World:getLocalPlayerHospital()` stays

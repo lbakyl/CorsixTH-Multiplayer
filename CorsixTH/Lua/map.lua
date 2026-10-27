@@ -177,7 +177,8 @@ function Map:load(level, difficulty, level_name, map_file, level_intro, map_edit
   end
 
   -- Load CorsixTH base configuration for all levels.
-  local base_config = loadfile(self.app:getFullPath({"Lua", "base_config.lua"}))
+  local base_config_path = self.app:getFullPath({"Lua", "base_config.lua"})
+  local base_config = loadfile(base_config_path)
   if not base_config then
     return nil, _S.errors.missing_corsixth_file:format("base_config.lua")
   end
@@ -213,8 +214,9 @@ function Map:load(level, difficulty, level_name, map_file, level_intro, map_edit
       self.level_config = result
     end
   elseif type(level) == "string" and level:match("^net%d%d$") then
-    -- One of Theme Hospital's original multiplayer levels ("net20" ... "net44":
-    -- LEVEL.L20 with NET20.SAM etc.), used by multiplayer co-op.
+    -- One of Theme Hospital's original multiplayer maps ("net20" ... "net44":
+    -- LEVEL.L20 with NET20.SAM etc.), used by multiplayer co-op and
+    -- competitive. What the level has comes from a campaign level (mp_levels).
     local errors, result, _
     local digits = level:sub(4)
     self.level_number = level
@@ -225,6 +227,13 @@ function Map:load(level, difficulty, level_name, map_file, level_intro, map_edit
     _, objects = self.th:load(data)
     errors, result = self:_loadNetLevelConfig(digits, base_config)
     if errors then return nil, errors end
+    local mp_levels = corsixth.require("mp_levels")
+    local mp_level = tonumber(digits:sub(2)) + 1
+    local campaign
+    errors, campaign = self:_loadOriginalCampaignLevel("full",
+        mp_levels.LEVELS[mp_levels.clamp(mp_level)].campaign, loadfile(base_config_path)())
+    if errors then return nil, errors end
+    mp_levels.apply(result, campaign, mp_level)
     self.level_config = result
     self.level_name = level_name or self:_netLevelName(digits) or level:upper()
   elseif map_editor then
@@ -275,6 +284,9 @@ function Map:load(level, difficulty, level_name, map_file, level_intro, map_edit
   end
 
   self:_fixTiles()
+  if self.level_config.mp_level then
+    corsixth.require("mp_levels").setValueGoal(self)
+  end
   return objects
 end
 

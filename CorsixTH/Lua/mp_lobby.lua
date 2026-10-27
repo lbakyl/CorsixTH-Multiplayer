@@ -799,11 +799,12 @@ end
 
 -- Starting and ending the game ------------------------------------------------
 
---! The original multiplayer level for a co-op room: LEVEL.L<players><n>
---! with NET<players><n>.SAM, n = room level 1..5 -> 0..4.
+--! The level for a room with a hospital each: the original multiplayer map
+--! LEVEL.L<players><n>, n = room level 1..5 -> 0..4, with what the level has
+--! from mp_levels.
 function MultiplayerLobby.coopLevelId(players, level)
   players = math.max(2, math.min(4, players))
-  return string.format("net%d%d", players, ((tonumber(level) or 1) - 1) % 5)
+  return string.format("net%d%d", players, corsixth.require("mp_levels").clamp(level) - 1)
 end
 
 -- Lists of game definitions that App:loadLuaFolder() fills in directory
