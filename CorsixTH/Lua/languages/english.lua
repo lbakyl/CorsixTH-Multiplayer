@@ -587,12 +587,30 @@ multiplayer_window = {
   sabotage_emergency = "Emergency",
   sabotage_rats = "Rat attack",
   sabotage_level = "L%d  $%d",
-  sabotage_help = {
-    handyman = "Looks like their handyman. L1 does no work, L2 also drops litter, L3 also wears machines down until they nearly break. Thrown out with the sack button, he comes to work for you.",
-    epidemic = "Contagious patients of one disease arrive at their hospital: 2 (L1), 4 (L2) or 7 (L3).",
-    emergency = "An emergency they cannot refuse: 3 (L1), 6 (L2) or 10 (L3) patients by helicopter. L3 may bring a disease they have not discovered.",
-    rats = "5 (L1), 10 (L2) or 20 (L3) rats move into their hospital. Each one costs them a reputation point a day until they shoot it.",
+  sabotage_levels = {
+    handyman = {
+      "A handyman who looks like theirs but does no work, for 4 months. If they find him and sack him, he comes to work for you.",
+      "Like L1, and he drops litter in their corridors twice a day, for 3 months.",
+      "Like L2, and every 3 days he pretends to repair a machine, leaving it nearly broken. Stays 2 months.",
+    },
+    epidemic = {
+      "2 contagious patients of one disease arrive at their hospital.",
+      "4 contagious patients of one disease arrive at their hospital.",
+      "7 contagious patients of one disease arrive at their hospital.",
+    },
+    emergency = {
+      "An emergency they cannot refuse: 3 patients by helicopter, with a disease they know.",
+      "An emergency they cannot refuse: 6 patients by helicopter, with a disease they know.",
+      "An emergency they cannot refuse: 10 patients by helicopter, maybe with a disease they have not discovered.",
+    },
+    rats = {
+      "5 rats move in. Each costs them a reputation point a day (up to 60 days) until shot.",
+      "10 rats move in. Each costs them a reputation point a day (up to 60 days) until shot.",
+      "20 rats move in. Each costs them a reputation point a day (up to 60 days) until shot.",
+    },
   },
+  sabotage_pick = "Click a level to see what it does. Click it again to buy it.",
+  sabotage_again = "Click L%d again to buy it for $%d.",
   sabotage_next = "Next rival",
   sabotage_close = "Close",
   sabotage_sent = "Ordered. You pay when it is done.",
@@ -608,6 +626,7 @@ multiplayer_window = {
   sabotage_arrived = "Your evil handyman has started work at %s.",
   sabotage_caught = "You threw out a handyman who was not yours: %s sent him. He goes back to them.",
   sabotage_caught_owner = "%s caught your evil handyman. He comes back to work for you.",
+  sabotage_went_home = "Your evil handyman's time at %s is up. He has gone home.",
   sabotage_refused = "That dirty trick cannot be done: %s.",
   sabotage_emergency_fax = {
     "An emergency has been sent your way, and you cannot refuse it.",

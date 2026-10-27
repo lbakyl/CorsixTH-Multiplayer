@@ -15,7 +15,8 @@
 #   4. the race: lou's hospital reaches the goals (test command) and takes
 #      1st place, lou answers "Back to the lobby" and leaves alone; max fails
 #      the goals at two year ends and is out (3rd); kim, the last one racing,
-#      takes 2nd and the race is over; kim and max stay IN SYNC to the end
+#      takes 2nd and the race is over; kim and max stay IN SYNC to the end;
+#      max's Progress Report shows his own hospital and, on a click, lou's
 # With MP_REFEREE=1 the server also runs its headless referee, and a 5th
 # check needs it to agree with the players to the end.
 # Exits 0 only if all checks behave as expected.
@@ -90,7 +91,7 @@ run_probe lou MP_ROLE=join MP_ROOM=race MP_STEPS=1400 \
   MP_UI_SCRIPT="30:openhospital;60:discover:cardiogram;80:room:cardiogram:4:4;250:sabotage:rats:2:3;950:kickevil;1150:answerfax:information:1:wait" & pids+=($!)
 sleep 1
 run_probe max MP_ROLE=join MP_ROOM=race MP_STEPS=1400 \
-  MP_UI_SCRIPT="40:openhospital;200:sabotage:epidemic:1:1;240:race;600:race;650:shootrat;1300:race" & pids+=($!)
+  MP_UI_SCRIPT="40:openhospital;200:sabotage:epidemic:1:1;240:race;600:race;650:shootrat;700:progress;710:progress:2;1300:race" & pids+=($!)
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 python3 - "$out" "${MP_REFEREE:-0}" <<'PY'
@@ -148,6 +149,12 @@ print(f"4. The race:                lou left at step {ended(l)}; standings kim: 
       f"max: {race_m.group(1) if race_m else '-'}; {result('kim')} / {result('max')}")
 players = re.search(r'UI: players at step \d+: (.*)', k)
 print(f"   players window: {players.group(1) if players else '-'}")
+own_report = re.search(r'UI: progress report at step 700: own (\d+), names enabled (\d+), showing (\d+)', m)
+lou_report = re.search(r'UI: progress report at step 710: own \d+, names enabled \d+, showing (\d+) .*', m)
+ok_p = bool(own_report and own_report.groups() == ('3', '3', '3') and lou_report and lou_report.group(1) == '2')
+print(f"   progress report (max): {own_report.group(0)[4:] if own_report else '-'}; "
+      f"{lou_report.group(0)[4:] if lou_report else '-'}")
+ok3 = ok3 and ok_p
 fail |= not ok3
 
 if with_referee:

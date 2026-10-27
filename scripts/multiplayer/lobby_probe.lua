@@ -990,7 +990,10 @@ local function run()
           local trick, level, to = entry.arg:match("^(%a+):(%d+):(%d+)$")
           local win = UIMultiplayerSabotage(world.ui, world.hospitals[tonumber(to)])
           world.ui:addWindow(win)
-          win:buy(trick, tonumber(level))
+          -- Two clicks, as a person: the first shows what it does.
+          win:choose(trick, tonumber(level))
+          shot("sabotage-" .. trick)
+          win:choose(trick, tonumber(level))
           log(string.format("UI: dirty trick %s level %s against hospital %s at step %d: %s", trick, level, to,
               session.step, tostring(win.status_panel and win.status_panel.label)))
           win:close()
@@ -1479,6 +1482,26 @@ local function run()
           if window.selectIndex then window:selectIndex(1) end
           shot("screen-" .. name_ .. page)
           window:close()
+        elseif a == "progress" then
+          -- The Progress Report, looking at hospital <arg> (a click on its
+          -- name): which names can be clicked, the selected one's goals.
+          local pr_window = UIProgressReport(world.ui)
+          world.ui:addWindow(pr_window)
+          local enabled = 0
+          for _, b in ipairs(pr_window.buttons) do
+            if b.enabled and b.panel_for_sprite and b.panel_for_sprite.x == 265 then enabled = enabled + 1 end
+          end
+          pr_window.selected = tonumber(entry.arg) or pr_window.selected
+          local values = {}
+          for _, c in ipairs(pr_window.crit_data) do
+            values[#values + 1] = c.name .. "=" ..
+                math.floor(world.endconditions:getAttribute(world.hospitals[pr_window.selected], c.name))
+          end
+          log(string.format("UI: progress report at step %d: own %d, names enabled %d, showing %d (%s): %s",
+              session.step, pr_window.own, enabled, pr_window.selected, world.hospitals[pr_window.selected].name,
+              table.concat(values, " ")))
+          shot("progress-" .. pr_window.selected)
+          pr_window:close()
         elseif a == "researchboard" then
           -- The research blackboard, with "Share research" next to the total.
           local board = UIResearch(world.ui)

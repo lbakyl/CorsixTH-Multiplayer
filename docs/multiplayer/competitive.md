@@ -65,6 +65,9 @@ done (`spendMoney`, "Dirty tricks"). Prices in `sabotage.PRICES`.
     (`sabotage.fakeRepairTick`). When that is over the machine is worn down
     to two uses (`sabotage.damage`: smoke, the repair call) and he walks
     out. He gives up after 200 hours if he cannot get there.
+  - He stays `sabotage.STAY_DAYS` (120, 90 or 60 game days for L1, L2, L3,
+    counted from when he was sent), then goes home (`sabotage.goHome`:
+    despawns like a sacked member of staff; only the sender is told).
   - Thrown out: `fire_staff` on him (the sack button, by the hospital he is
     in) -> `sabotage.throwOut`: `MultiplayerSession.transferStaff` to the
     owner, where he arrives as an ordinary handyman (on the payroll). He
@@ -87,6 +90,16 @@ done (`spendMoney`, "Dirty tricks"). Prices in `sabotage.PRICES`.
   day and ends the attack after 60 days. Shooting is the existing
   `shoot_rat` command (a click). In the original rules rats only run from
   hole to hole and are a target for the rat-catching award; they do no harm.
+
+## Window and Progress Report
+
+- DIRTY TRICKS: the first click on a level shows what it does in a box
+  (`sabotage_levels`), a second click buys it.
+- Progress Report (any multiplayer game with a hospital each): it opens on
+  the player's own hospital (not hospital 1), and the other players' names
+  can be clicked to see their goal bars, share of the town and patient
+  happiness, thirst and warmth. The criteria tooltips still give the
+  player's own values; the warnings are only for the own hospital.
 
 ## Fixed on the way
 
