@@ -335,6 +335,12 @@ function Room:onHumanoidEnter(humanoid)
     end
     return
   end
+  if class.is(humanoid, Handyman) and humanoid.mp_saboteur then
+    -- Multiplayer: a rival's evil handyman, come to "repair" the machine
+    -- (mp_sabotage.lua does the rest).
+    self.humanoids[humanoid] = true
+    return
+  end
   if class.is(humanoid, Handyman) then
     -- Handymen can always enter a room (to repair stuff, water plants, etc.)
     self.humanoids[humanoid] = true

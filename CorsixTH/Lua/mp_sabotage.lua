@@ -59,7 +59,7 @@ local MAX_RATS = 30 -- attack rats alive in one hospital, at most
 -- The evil handyman's habits, in game hours (one tick each; 50 in a day).
 sabotage.LITTER_EVERY = 25    -- level 2 and 3: litter twice a day
 sabotage.DAMAGE_EVERY = 150   -- level 3: a machine every three days
-local DAMAGE_WALK_HOURS = 120 -- gives up walking to a machine after this
+local DAMAGE_GIVE_UP_HOURS = 200 -- gives up a machine he cannot get to
 
 local handlers = MultiplayerSession.default_handlers
 
@@ -219,26 +219,28 @@ function sabotage.tick(handyman)
     end
   end
 
-  -- Level 3: off to a machine's room every few days; it is worn down when he
-  -- gets there (or after a while, in case the way is blocked).
+  -- Level 3: every few days he "repairs" a machine, like any handyman on a
+  -- call: into its room, the repair at the machine, out again. It is worn
+  -- down to nearly broken when he walks away.
   if s.level >= 3 then
     if s.machine then
-      if standing or s.hours - s.walk_started > DAMAGE_WALK_HOURS then
-        local machine = world:getEntityById(s.machine)
-        if machine and not machine.to_destroy then sabotage.damage(machine) end
-        s.machine = nil
-        s.next_damage = s.hours + sabotage.DAMAGE_EVERY
-        s.next_move = s.hours + math.random(10, 30)
-      end
+      sabotage.fakeRepairTick(handyman, standing)
       return
     elseif s.hours >= (s.next_damage or sabotage.DAMAGE_EVERY) then
       local machine = sabotage.pickMachine(world, hospital)
-      local room = machine and machine:getRoom()
-      local ex, ey
-      if room then ex, ey = room:getEntranceXY(false) end
-      if ex then
-        s.machine, s.walk_started = machine.mp_id, s.hours
-        walk_to(handyman, ex, ey)
+      if machine then
+        local ux, uy = machine:getRepairTile()
+        s.machine, s.walk_started, s.repairing = machine.mp_id, s.hours, nil
+        handyman:setDynamicInfoText(_S.dynamic_info.staff.actions.going_to_repair
+            :format(machine.object_type.name))
+        local room = handyman:getRoom()
+        if room then
+          handyman:setNextAction(room:createLeaveAction())
+          handyman:queueAction(WalkAction(ux, uy):setIsEntering(true))
+        else
+          handyman:setNextAction(WalkAction(ux, uy):setIsEntering(true))
+        end
+        handyman:queueAction(IdleAction())
         return
       end
       s.next_damage = s.hours + sabotage.DAMAGE_EVERY
@@ -250,6 +252,63 @@ function sabotage.tick(handyman)
     local tx, ty = sabotage.corridorTile(world, hospital)
     if tx then walk_to(handyman, tx, ty) end
     s.next_move = s.hours + math.random(20, 60)
+  end
+end
+
+--! An evil handyman on his way to "repair" a machine (one game hour; level
+--! 3). At its repair tile he waits until nobody uses it, keeps patients out
+--! as a real repair does, plays the repair; when that is over the machine
+--! is worn down and he walks out.
+function sabotage.fakeRepairTick(handyman, standing)
+  local s = handyman.mp_saboteur
+  local world = handyman.world
+  local machine = world:getEntityById(s.machine)
+  local room = machine and not machine.to_destroy and machine:getRoom()
+  if s.repairing and standing then
+    -- The repair is over.
+    if room then
+      sabotage.damage(machine)
+      room:unlockRoomOnRepair()
+      room:tryAdvanceQueue()
+    end
+    sabotage.leaveMachine(handyman)
+    return
+  end
+  if not room or (not s.repairing and s.hours - s.walk_started > DAMAGE_GIVE_UP_HOURS) then
+    log(string.format("handyman #%d gave up on machine #%d", handyman.mp_id, s.machine))
+    sabotage.leaveMachine(handyman)
+    return
+  end
+  local ux, uy = machine:getRepairTile()
+  if s.repairing or not standing then return end
+  if handyman.tile_x ~= ux or handyman.tile_y ~= uy then
+    -- Not there (a blocked way, or a save from before): walk on.
+    handyman:setNextAction(WalkAction(ux, uy):setIsEntering(true))
+    handyman:queueAction(IdleAction())
+    return
+  end
+  local patient = room:getPatient()
+  if machine.user or (patient and not patient:isLeaving()) then return end
+  s.repairing = true
+  room:lockRoomOnRepair()
+  local repair = UseObjectAction(machine):setProlongedUsage(false)
+  repair.min_length = 20
+  handyman:setNextAction(repair)
+  handyman:queueAction(IdleAction())
+  log(string.format("handyman #%d repairing machine #%d", handyman.mp_id, machine.mp_id))
+end
+
+--! Done with a machine (or given up): out of its room, back to his round.
+function sabotage.leaveMachine(handyman)
+  local s = handyman.mp_saboteur
+  s.machine, s.repairing = nil, nil
+  s.next_damage = s.hours + sabotage.DAMAGE_EVERY
+  s.next_move = s.hours + math.random(10, 30)
+  handyman:setDynamicInfoText("")
+  local room = handyman:getRoom()
+  if room then
+    handyman:setNextAction(room:createLeaveAction())
+    handyman:queueAction(IdleAction())
   end
 end
 
@@ -293,6 +352,14 @@ function sabotage.throwOut(world, handyman, by)
   local s = handyman.mp_saboteur
   local owner = world.hospitals[s.owner]
   log(string.format("handyman #%d thrown out of hospital %d", handyman.mp_id, world:getHospitalIndex(by)))
+  -- Caught in the middle of a "repair": the room lets patients in again.
+  local machine = s.repairing and s.machine and world:getEntityById(s.machine)
+  local room = machine and machine:getRoom()
+  if room then
+    room:unlockRoomOnRepair()
+    room:tryAdvanceQueue()
+  end
+  handyman:setDynamicInfoText("")
   handyman.mp_saboteur = nil
   local ok, why = MultiplayerSession.transferStaff(world, by, owner, handyman)
   if not ok then

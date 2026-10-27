@@ -57,10 +57,14 @@ done (`spendMoney`, "Dirty tricks"). Prices in `sabotage.PRICES`.
     target's building (`sabotage.corridorTile`), standing between walks.
   - Level 2+: litter (`World:newLitter`, trash) on his corridor tile every
     25 hours (twice a game day).
-  - Level 3+: every 150 hours he walks to the room of the target's machine
-    with the most uses left (`sabotage.pickMachine`, game order) and wears
-    it down to two uses (`sabotage.damage`: smoke, the repair call); after
-    120 hours he does it even if he did not get there.
+  - Level 3+: every 150 hours he "repairs" the target's machine with the
+    most uses left (`sabotage.pickMachine`, game order), like a handyman on
+    a call: into the room (`Room:onHumanoidEnter` lets him in without
+    answering calls), to its repair tile, waits until nobody uses it, locks
+    the room as a repair does and plays the repair
+    (`sabotage.fakeRepairTick`). When that is over the machine is worn down
+    to two uses (`sabotage.damage`: smoke, the repair call) and he walks
+    out. He gives up after 200 hours if he cannot get there.
   - Thrown out: `fire_staff` on him (the sack button, by the hospital he is
     in) -> `sabotage.throwOut`: `MultiplayerSession.transferStaff` to the
     owner, where he arrives as an ordinary handyman (on the payroll). He
