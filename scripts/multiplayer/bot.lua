@@ -432,7 +432,44 @@ function Bot:roomCost(room_type)
   return cost
 end
 
---! Draw the next room (furnished automatically). Returns the type tried.
+--! Is this tile free floor of this hospital (no room, no object on it)?
+function Bot:freeTile(x, y)
+  local world = self.world
+  local th = world.map.th
+  local mw, mh = th:size()
+  if x < 1 or y < 1 or x > mw or y > mh then return false end
+  if not world.ui.hospital:isInHospital(x, y) or world:getRoom(x, y) or world:getObject(x, y) then return false end
+  local flags = th:getCellFlags(x, y)
+  return flags.buildable and flags.passable
+end
+
+--! Would a w x h room fit at x, y with free floor below it and to its
+--! right (where its door goes)? It may stand against other walls.
+function Bot:roomFits(x, y, w, h)
+  for tx = x, x + w do
+    for ty = y, y + h do
+      -- The room itself, the row below it and the column to its right.
+      if not self:freeTile(tx, ty) then return false end
+    end
+  end
+  return true
+end
+
+--! The nearest place for a packed w x h room (see Bot:roomFits).
+function Bot:packedSpot(cx, cy, w, h)
+  for r = 0, 40 do
+    for dy = -r, r do
+      for dx = -r, r do
+        if math.max(math.abs(dx), math.abs(dy)) == r and self:roomFits(cx + dx, cy + dy, w, h) then
+          return cx + dx, cy + dy
+        end
+      end
+    end
+  end
+end
+
+--! Draw the next room (furnished automatically). Returns the type drawn,
+--! or nil and why not ("money", "space": it needs more land, "done").
 function Bot:buildNextRoom()
   local hospital = self.world.ui.hospital
   for _, room_type in ipairs(self:roomPlan()) do
@@ -440,21 +477,62 @@ function Bot:buildNextRoom()
     if hospital:countRoomOfType(room_type.id, 1) == 0 and tries < 3 then
       if hospital.balance - self:roomCost(room_type) < RESERVE then return nil, "money" end
       self.room_tries[room_type.id] = tries + 1
-      local size = math.min(7, math.max(5, (room_type.minimum_size or 4) + 1))
-      local w, h = size, size
+      local min = room_type.minimum_size or 4
       local ax, ay = self:anchor()
-      local drawn = false
-      while not drawn and w >= (room_type.minimum_size or 4) do
-        local ok, res = pcall(builder.ui_room, self.world, ax, ay, room_type.id, w, h, true, log)
-        drawn = ok and res
-        if not ok then log("could not draw " .. room_type.id .. ": " .. tostring(res)) break end
-        if not drawn then w, h = w - 1, h - 1 end
+      local size = math.min(7, math.max(5, min + 1))
+      -- The size it would like with room around it, then smaller, then
+      -- packed against other walls.
+      local x, y, w
+      for s = size, min, -1 do
+        if not x then
+          x, y = builder.find_free_rect(self.world, ax, ay, s, s, 40)
+          w = s
+        end
       end
-      if drawn then return room_type end
-      self.room_tries[room_type.id] = 3 -- no space for it: give up on that one
+      for s = size, min, -1 do
+        if not x then
+          x, y = self:packedSpot(ax, ay, s, s)
+          w = s
+        end
+      end
+      if x then
+        local ok, res = pcall(builder.ui_room, self.world, ax, ay, room_type.id, w, w, true, log, {x, y})
+        if not ok then log("could not draw " .. room_type.id .. ": " .. tostring(res)) end
+        if ok and res then return room_type end
+      else
+        log(string.format("no space for a %s (%dx%d)", room_type.id, min, min))
+        return nil, "space"
+      end
     end
   end
   return nil, "done"
+end
+
+--! Buy the cheapest plot of land it may buy (on its side of the map) if it
+--! can afford it and still keep money for a room.
+function Bot:buyPlot()
+  local world = self.world
+  local th, hospital = world.map.th, world.ui.hospital
+  local me = world:getHospitalIndex(hospital)
+  local best, best_price
+  for plot = 1, th:getPlotCount() do
+    local side = world.mp_coop and MultiplayerSession.plotSide(world, plot)
+    if (not side or side == me) and th:isParcelPurchasable(plot, hospital:getPlayerIndex()) then
+      local price = world.map:getParcelPrice(plot)
+      if not best or price < best_price then best, best_price = plot, price end
+    end
+  end
+  if not best then
+    log("no land left to buy")
+    return false
+  end
+  if hospital.balance - best_price < 3 * RESERVE then
+    log(string.format("plot %d costs $%d: not enough money yet", best, best_price))
+    return false
+  end
+  log(string.format("buying plot %d for $%d", best, best_price))
+  TheApp.mp_session:issue({kind = "buy_plot", plot = best})
+  return true
 end
 
 --! Where to build from: the reception desk, or the middle of the hospital.
@@ -719,12 +797,22 @@ function Bot:think()
       plan.room = self:later(rand(10, 20))
     elseif why == "money" then
       plan.room = self:later(5)
+    elseif why == "space" then
+      -- More land, as a person would buy when the building is full.
+      plan.room = self:later(self:buyPlot() and 3 or 15)
     else
+      plan.rooms_done = true
       plan.room = self:later(30)
     end
   end
 
-  if hospital.opened and day >= plan.extra_day and EXTRAS[plan.extras] then
+  -- Benches and plants once the main rooms stand (they would take a small
+  -- plot's room space otherwise).
+  local rooms = 0
+  for _, r in pairs(world.rooms) do
+    if r.hospital == hospital and r.is_active then rooms = rooms + 1 end
+  end
+  if hospital.opened and (rooms >= 4 or plan.rooms_done) and day >= plan.extra_day and EXTRAS[plan.extras] then
     local id, upto = EXTRAS[plan.extras][1], EXTRAS[plan.extras][2]
     local have = 0
     for _, e in ipairs(world.entities) do

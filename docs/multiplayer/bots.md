@@ -39,7 +39,11 @@ referee build cannot run bots (the button is not shown there).
   GP's office first, then pharmacy, general diagnosis, ward, psychiatry, staff
   room, toilets, the diagnosis machines and whatever else the level has
   (not the training room). Rooms are drawn next to the desk with a window and
-  furnished automatically; a room with no space is given up.
+  furnished automatically, with free floor around them if possible, else
+  packed against other walls (free floor below and to the right, where the
+  door goes). When nothing fits it buys the cheapest plot of land on its side
+  of the map (keeping $9,000); a room that still does not fit after three
+  tries is given up. Corridor furniture waits until four rooms stand.
 - **Hires** what its rooms need (specialists when the room needs one and the
   list has one), a handyman from 3 rooms and another from 8.
 - **Opens** the hospital once it has a staffed desk, a GP's office and a
