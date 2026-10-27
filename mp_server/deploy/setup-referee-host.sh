@@ -76,8 +76,11 @@ url="https://github.com/$REPO/releases/download/$RELEASE/CorsixTH-Multiplayer-$S
 curl -fsSL "$url" | tar xz -C "$R"
 mv "$R/CorsixTH-Multiplayer" "$R/game"
 ln -s game "$R/CorsixTH" # referee.lua loads <source>/CorsixTH/CorsixTH.lua
-cp "$BASE/src/scripts/multiplayer/referee.lua" "$BASE/src/scripts/multiplayer/probe_builder.lua" \
-  "$R/scripts/multiplayer/"
+# The referee, and the bots (computer players) a room owner adds, if this
+# release has them.
+for f in referee.lua probe_builder.lua bot.lua; do
+  if [[ -f "$BASE/src/scripts/multiplayer/$f" ]]; then cp "$BASE/src/scripts/multiplayer/$f" "$R/scripts/multiplayer/"; fi
+done
 chown -R root:corsixth "$BASE/referee" "$BASE/src" && chmod -R g+rX,o= "$BASE/referee"
 missing=$(LD_LIBRARY_PATH="$R/game/lib" ldd "$R/game/corsix-th" | grep "not found" || true)
 [[ -z "$missing" ]] || die "the game binary misses libraries: $missing"
