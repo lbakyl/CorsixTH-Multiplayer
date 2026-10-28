@@ -1588,6 +1588,14 @@ end
 -- Called immediately prior to the ingame month changing.
 -- returns true if the game was killed due to the player losing
 function World:onEndMonth()
+  -- Multiplayer checks the level's goals at the end of every month (single
+  -- player: months 3, 6 and 9, PlayerHospital:onEndMonth), so a hospital
+  -- that reaches them hears it soon; December's check is at the year end,
+  -- after the year's awards (World:onEndYear).
+  if self.app.mp_session and self.game_date:monthOfYear() ~= 12 then
+    self:checkIfGameWon()
+  end
+
   -- Also possibly change world spawn rate according to the level configuration.
   local index = 0
   local popn = self.map.level_config.popn
@@ -1861,6 +1869,16 @@ function World:_mpRaceCheckOver()
   self.ui.bottom_panel:openLastMessage()
 end
 
+--! Multiplayer: the video for a player whose game ends ("win" or "lose").
+--! A race is won by reaching the goals, or by being the last one racing when
+--! all the others are out; otherwise the game ends after a win (the team's
+--! or the shared hospital's).
+function World:mpEndMovie(hosp)
+  if not (self.mp_coop and self.mp_coop.competitive) then return "win" end
+  if hosp and (hosp.mp_place_how == "won" or hosp.mp_place == 1) then return "win" end
+  return "lose"
+end
+
 --! The player list's text for a hospital's place in a competitive game, or nil.
 function World:mpPlaceText(hosp)
   if not (hosp and hosp.mp_place) then return nil end
@@ -2037,7 +2055,7 @@ function World:loseGame(player_no, reason, limit)
       message[2] = _S.information.level_lost[2]
       message[3] = _S.information.level_lost[reason]:format(limit)
     end
-    self.app.mp_session:finish(message)
+    self.app.mp_session:finish(message, "lose")
     return
   end
   if player_no == 1 then -- TODO: Multiplayer
@@ -2112,7 +2130,7 @@ function World:onEndYear()
       if _S.information.level_lost[lost.reason] then
         message[3] = _S.information.level_lost[lost.reason]:format(lost.limit)
       end
-      self.app.mp_session:finish(message)
+      self.app.mp_session:finish(message, "lose")
     end
   end
   for i, hosp in ipairs(self.mp_coop and {} or self.hospitals) do -- see checkIfGameWon

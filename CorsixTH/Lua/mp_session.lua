@@ -1663,8 +1663,10 @@ end
 --! same step: a fax answer or the level lost). It ends between steps (see
 --! World:onTick), never in the middle of one; the player goes back to the
 --! main menu with `message` and into the lobby of the same server.
-function MultiplayerSession:finish(message)
-  self.finish_request = self.finish_request or {message = message}
+--!param message (table) lines for the main menu
+--!param movie (string) [optional] "win" or "lose": the video to play first
+function MultiplayerSession:finish(message, movie)
+  self.finish_request = self.finish_request or {message = message, movie = movie}
 end
 
 function MultiplayerSession:finishGame()
@@ -1673,13 +1675,25 @@ function MultiplayerSession:finishGame()
   local back_to_lobby = self.lobby and not self.lobby.is_referee
   local app = TheApp
   app:loadMainMenu(request.message)
-  if back_to_lobby and app.ui then
-    local menu = app.ui:getWindow(UIMainMenu)
-    if menu and menu.buttonMultiplayer then
-      menu:buttonMultiplayer()
-      local lobby_window = app.ui:getWindow(UIMultiplayer)
-      if lobby_window then lobby_window:buttonConnect() end
+  local function reconnect()
+    if back_to_lobby and app.ui then
+      local menu = app.ui:getWindow(UIMainMenu)
+      if menu and menu.buttonMultiplayer then
+        menu:buttonMultiplayer()
+        local lobby_window = app.ui:getWindow(UIMultiplayer)
+        if lobby_window then lobby_window:buttonConnect() end
+      end
     end
+  end
+  -- The win or lose video, as in single player; back to the lobby after it
+  -- (a server hangs up on a connection that says nothing for 15 seconds).
+  local movies = back_to_lobby and app.moviePlayer
+  if movies and request.movie == "win" then
+    movies:playWinLevelMovie(reconnect)
+  elseif movies and request.movie == "lose" then
+    movies:playLoseMovie(reconnect)
+  else
+    reconnect()
   end
 end
 

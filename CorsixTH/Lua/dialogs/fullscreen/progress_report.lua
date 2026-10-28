@@ -61,56 +61,22 @@ function UIProgressReport:UIProgressReport(ui)
   -- looked at too.
   local others_shown = world.mp_coop ~= nil
 
-  -- Get the localised name for the month
-  local function get_month_string(num)
-    num = math.fmod(num, 12)
-    if num == 0 then num = 12 end
-    return _S.months[num]
-  end
-
   -- Collect which criteria to show here, draw columns in draw
-  -- Add the icons for the criteria
+  -- Add the icons for the criteria. Their tooltips follow the selected
+  -- hospital (UIProgressReport:criterionTooltip).
   local x = 263
   local crit_data = world.endconditions:generateReportTable(hospital)
   for _, crit_table in ipairs(crit_data) do
     crit_table.visible = true
-    local crit_name = crit_table.name
-    local res_value = crit_table.win_value
-    local cur_value = world.endconditions:getAttribute(hospital, crit_name)
     if crit_table.lose_value then
       crit_table.red = true
-      res_value = crit_table.lose_value
-    end
-    -- FIXME: res_value and cur_value are depersisted as floating points, using
-    -- string.format("%.0f", x) is not suitable due to %d (num) param in _S string
-    local tooltip, direction
-    if crit_table.two_tooltips then
-      direction = crit_table.win_value and "over" or "under"
-      tooltip = _S.tooltip.status[direction][crit_name]
-    else
-      tooltip = _S.tooltip.status[crit_name]
-    end
-    if crit_table.formats == 2 then
-      tooltip = tooltip:format(math.floor(res_value), math.floor(cur_value))
-    elseif crit_table.formats == 3 then
-      tooltip = tooltip:format(math.floor(res_value) / 1000,
-          math.floor(cur_value) / 1000)
-    elseif crit_table.formats == 4 then -- Criterion months_played
-      -- Years are shown starting at 2000
-      if math.fmod(res_value, 12) == 0 then -- For whole years, use years_played string
-        tooltip = _S.tooltip.status[direction].years_played
-            :format(math.floor(res_value / 12) + 2000, math.floor((cur_value - 1) / 12) + 2000)
-      else
-        tooltip = tooltip:format(get_month_string(res_value), math.floor(res_value / 12) + 2000,
-          get_month_string(cur_value), math.floor((cur_value - 1) / 12) + 2000)
-      end
-    else
-      tooltip = tooltip:format(math.floor(res_value))
     end
     if not crit_table.icon_file then -- Icons from QData/Rep02V
       self:addPanel(crit_table.icon, x, 240)
     end
-    self:makeTooltip(tooltip, x, 180, x + 30, 180 + 90)
+    self:makeDynamicTooltip(--[[persistable:progress_report_criterion_tooltip]] function()
+      return self:criterionTooltip(crit_table)
+    end, x, 180, x + 30, 180 + 90)
     x = x + 30
   end
   self.crit_data = crit_data
@@ -147,6 +113,56 @@ function UIProgressReport:UIProgressReport(ui)
   self.warning = self:addPanel(7, 252, 295)
   self.warning.visible = false
   -- TODO: 6 gray
+end
+
+-- Get the localised name for the month
+local function get_month_string(num)
+  num = math.fmod(num, 12)
+  if num == 0 then num = 12 end
+  return _S.months[num]
+end
+
+--! The tooltip of a win or lose criterion, for the selected hospital.
+function UIProgressReport:criterionTooltip(crit_table)
+  local world = self.ui.app.world
+  local hospital = world.hospitals[self.selected] or self.ui.hospital
+  local crit_name = crit_table.name
+  local res_value = crit_table.lose_value or crit_table.win_value
+  local cur_value = world.endconditions:getAttribute(hospital, crit_name)
+  local S = _S.multiplayer_window
+  if self.selected ~= self.own and S.goal_other[crit_name] then
+    -- Another player's hospital (multiplayer): the original texts say "you".
+    local kind = crit_table.lose_value and S.goal_limit or S.goal_target
+    return S.goal_other[crit_name]:format(hospital.name, math.floor(cur_value), kind,
+        math.floor(res_value))
+  end
+  -- FIXME: res_value and cur_value are depersisted as floating points, using
+  -- string.format("%.0f", x) is not suitable due to %d (num) param in _S string
+  local tooltip, direction
+  if crit_table.two_tooltips then
+    direction = crit_table.win_value and "over" or "under"
+    tooltip = _S.tooltip.status[direction][crit_name]
+  else
+    tooltip = _S.tooltip.status[crit_name]
+  end
+  if crit_table.formats == 2 then
+    tooltip = tooltip:format(math.floor(res_value), math.floor(cur_value))
+  elseif crit_table.formats == 3 then
+    tooltip = tooltip:format(math.floor(res_value) / 1000,
+        math.floor(cur_value) / 1000)
+  elseif crit_table.formats == 4 then -- Criterion months_played
+    -- Years are shown starting at 2000
+    if math.fmod(res_value, 12) == 0 then -- For whole years, use years_played string
+      tooltip = _S.tooltip.status[direction].years_played
+          :format(math.floor(res_value / 12) + 2000, math.floor((cur_value - 1) / 12) + 2000)
+    else
+      tooltip = tooltip:format(get_month_string(res_value), math.floor(res_value / 12) + 2000,
+        get_month_string(cur_value), math.floor((cur_value - 1) / 12) + 2000)
+    end
+  else
+    tooltip = tooltip:format(math.floor(res_value))
+  end
+  return tooltip
 end
 
 function UIProgressReport:close()

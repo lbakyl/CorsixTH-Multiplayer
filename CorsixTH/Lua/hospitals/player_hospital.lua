@@ -568,12 +568,15 @@ function PlayerHospital:onEndMonth()
   -- Check if a player has won the level at months 3, 6 and 9. The annual report
   -- window will perform this check at month 12 when it has been closed.
   -- If the offer is declined then the next check is at month 6 and the annual report.
+  -- (Multiplayer checks at the end of every month: World:onEndMonth.)
   local check_months = {
     [3] = not self.win_declined,
     [6] = true,
     [9] = not self.win_declined
   }
-  if check_months[self.world.game_date:monthOfYear()] then self.world:checkIfGameWon() end
+  if not self.world.app.mp_session and check_months[self.world.game_date:monthOfYear()] then
+    self.world:checkIfGameWon()
+  end
 
   Hospital.onEndMonth(self)
 end

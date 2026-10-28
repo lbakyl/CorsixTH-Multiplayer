@@ -186,6 +186,13 @@ or more than half of its patients have died.
 
 ## Winning and losing
 
+The level's goals are checked at the end of every month (single player:
+only at the end of March, June, September and December), so a hospital that
+reaches them hears it within a month. Failing them is checked at the year
+end. When the game ends and you go back to the lobby, the original win or
+lose video plays first (if your Theme Hospital data has the videos and
+they are switched on).
+
 - **One shared hospital:** the single-player rules. When the hospital meets
   the level's goals, everybody gets the win fax: **Back to the lobby** ends
   the game for everybody (whoever answers first decides), **Keep playing**

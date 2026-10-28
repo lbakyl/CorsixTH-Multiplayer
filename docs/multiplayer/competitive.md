@@ -20,7 +20,8 @@ co-op and shared games are unchanged.
 ## The race (world.lua)
 
 - `World:checkIfGameWon` calls `World:_mpRaceCheck` in a competitive game
-  (end of months 3/6/9 and at each year end, like co-op).
+  (at the end of every month, like co-op; December's at the year end, after
+  the awards: `World:onEndMonth`, `World:onEndYear`).
 - A hospital that reaches the goals gets `mp_place` (1, 2, ...) and
   `mp_place_how = "won"`; its player alone gets an information fax with
   `mp_leave_game` (back to the lobby: `UIFax:choice` finishes only on that

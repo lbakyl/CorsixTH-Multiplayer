@@ -332,8 +332,8 @@ int l_soundfx_add_extra_sound(lua_State* L) {
   sound_player* pEffects = luaT_testuserdata<sound_player>(L);
   size_t length;
   const char* data = luaL_checklstring(L, 2, &length);
-  int index = pEffects->add_extra_sound(
-      reinterpret_cast<const uint8_t*>(data), length);
+  int index =
+      pEffects->add_extra_sound(reinterpret_cast<const uint8_t*>(data), length);
   if (index < 0) {
     lua_pushnil(L);
     lua_pushstring(L, SDL_GetError());
@@ -345,9 +345,8 @@ int l_soundfx_add_extra_sound(lua_State* L) {
 
 int l_soundfx_play_extra(lua_State* L) {
   sound_player* pEffects = luaT_testuserdata<sound_player>(L);
-  uint32_t handle =
-      pEffects->play_extra(static_cast<size_t>(luaL_checkinteger(L, 2)),
-                           luaL_checknumber(L, 3));
+  uint32_t handle = pEffects->play_extra(
+      static_cast<size_t>(luaL_checkinteger(L, 2)), luaL_checknumber(L, 3));
   lua_pushinteger(L, handle);
   return 1;
 }

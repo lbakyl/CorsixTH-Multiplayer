@@ -874,7 +874,7 @@ function builder.register_handlers()
       return EndConditions.mp_probe_check(self, hospital)
     end
   end
-  -- Run the level's win check now (normally at the end of months 3, 6, 9).
+  -- Run the level's win check now (normally at the end of every month).
   MultiplayerSession.default_handlers.probe_wincheck = function(w)
     w:checkIfGameWon()
     return true

@@ -288,7 +288,9 @@ function UIFax:choice(choice_number)
   elseif choice == "return_to_main_menu" then
     if TheApp.mp_session then
       -- Multiplayer: the game ends for everybody, back to the lobby.
-      TheApp.mp_session:finish({_S.multiplayer_window.level_won_end})
+      local world = self.ui.app.world
+      TheApp.mp_session:finish({_S.multiplayer_window.level_won_end},
+          world:mpEndMovie(world:getUIHospital()))
     else
       self.ui.app.moviePlayer:playWinMovie()
       self.ui.app:loadMainMenu()
@@ -298,7 +300,7 @@ function UIFax:choice(choice_number)
     -- lobby); the others race on. (The server's referee never leaves.)
     local session = TheApp.mp_session
     if session and not session.observer and self.ui.app.world:getUIHospital() == hospital then
-      session:finish({_S.multiplayer_window.race_left_end})
+      session:finish({_S.multiplayer_window.race_left_end}, self.ui.app.world:mpEndMovie(hospital))
     end
   elseif choice == "stay_on_level" then
     hospital.win_declined = true

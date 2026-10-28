@@ -244,8 +244,10 @@ function MoviePlayer:playWinMovie()
 end
 
 --! Play the movie for winning the level
-function MoviePlayer:playWinLevelMovie()
-  self:playMovie(self.win_level_movie, true)
+--!param callback (function) [optional] What to do after the movie ends (or
+--! at once without it)
+function MoviePlayer:playWinLevelMovie(callback)
+  self:playMovie(self.win_level_movie, true, callback)
 end
 
 --! Plays the level advance movie, which is going to the next level on the game board
@@ -272,12 +274,16 @@ function MoviePlayer:playAdvanceMovie(level)
 end
 
 --! Plays one of the lose scenario movies at random
-function MoviePlayer:playLoseMovie()
+--!param callback (function) [optional] What to do after the movie ends (or
+--! at once without it)
+function MoviePlayer:playLoseMovie(callback)
   if #self.lose_movies > 0 then
     local lose_movie_index = math.cosmetic_random(#self.lose_movies)
     local filename = self.lose_movies[lose_movie_index]
-    self:playMovie(filename, true)
+    self:playMovie(filename, true, callback)
     self.refresh_overlay = loseMovieOverlay(self, lose_movie_index)
+  elseif callback then
+    callback()
   end
 end
 
