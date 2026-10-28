@@ -54,7 +54,10 @@ local heights = {connect = 190, rooms = 435, room = 300}
 function UIMultiplayer:UIMultiplayer(ui, status)
   local lobby = TheApp.mp_lobby
   self.view = view_of(lobby)
-  self:UIResizable(ui, WIDTH, heights[self.view], col.bg)
+  -- A server that turned this game version away says where to get its own.
+  self.download = self.view == "connect" and lobby and MultiplayerLobby.downloadOffer(lobby.error)
+      or nil
+  self:UIResizable(ui, WIDTH, heights[self.view] + (self.download and 35 or 0), col.bg)
   self.esc_closes = true
   self.resizable = false
   self.modal_class = "main menu"
@@ -139,6 +142,14 @@ function UIMultiplayer:_buildConnect()
   self.name_box = textbox(self, 155, 75, WIDTH - 175, name, 15, {"alpha", "numbers", "misc"}, T.name)
   button(self, 20, 150, 180, S.connect, self.buttonConnect, T.connect)
   button(self, WIDTH - 200, 150, 180, S.back, self.close)
+  if self.download then
+    local release = self.download.release ~= "" and self.download.release or S.server_version
+    button(self, 20, 185, WIDTH - 40, S.download:format(release), self.buttonDownload, T.download)
+  end
+end
+
+function UIMultiplayer:buttonDownload()
+  openURL(self.download.url)
 end
 
 function UIMultiplayer:buttonConnect()
@@ -451,7 +462,8 @@ function UIMultiplayer:onTick()
     if lobby.version ~= self.seen_version then
       self.seen_version = lobby.version
       local status = lobby.error and lobby.error.text or nil
-      if view_of(lobby) ~= self.view then
+      local download = self.view == "connect" and MultiplayerLobby.downloadOffer(lobby.error)
+      if view_of(lobby) ~= self.view or (download and not self.download) then
         self:rebuild(status)
         return
       end

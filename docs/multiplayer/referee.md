@@ -34,6 +34,25 @@ Hospital data and LuaSocket.
 | `CORSIXTH_MP_REFEREE_LUA_CPATH`, `..._LUA_PATH` | where LuaSocket is, if not in the standard paths |
 | `CORSIXTH_MP_REFEREE_WORKDIR` | configs and logs, one folder per game (default `/tmp/corsixth-referee`) |
 
+### Only the referee's build may connect
+
+With a referee, the server turns away every player whose game code is not the
+referee's, right at `HELLO` (they could make rooms, but nobody could referee
+them or add bots to them). It compares only the Lua code checksum, the last
+part of the build id, so the language does not count. The refusal names the
+release to get; the lobby window shows "Other game version: get
+mp-test-6d85201a on GitHub", and newer games also offer a button that opens
+the release page.
+
+| Variable | Meaning |
+|---|---|
+| `CORSIXTH_MP_RELEASE` | the release players must get, e.g. `mp-test-6d85201a` (`setup-referee-host.sh` writes it) |
+| `CORSIXTH_MP_RELEASE_URL` | its download page (default: the GitHub release page of `CORSIXTH_MP_RELEASE`) |
+| `CORSIXTH_MP_BUILD` | the checksum players must have; default: computed from `<CORSIXTH_MP_REFEREE_SOURCE>/CorsixTH/Lua` at start; `any`: let every build in |
+
+The server log says `players must have build <checksum> (<release>)` at
+start, and `refused: build ...` for each player turned away.
+
 Example on the dev VM (see `README.md`, section 6, for the build):
 
 ```

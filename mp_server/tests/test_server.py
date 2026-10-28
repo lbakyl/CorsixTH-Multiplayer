@@ -1,8 +1,10 @@
 import asyncio
+import zlib
 
 import pytest
 
-from corsixth_mp import pacing, server as srv
+from corsixth_mp import builds, pacing, server as srv
+from corsixth_mp.builds import BuildCheck
 from corsixth_mp.protocol import decode, encode
 
 
@@ -726,3 +728,59 @@ def test_bot_of_another_build_or_on_a_plain_server(run):
         assert "another build" in (await ann.expect("CHAT", name="server"))["text"]
         assert not server.rooms["r"].bots_pending
     run_with_bots(other)
+
+
+def test_other_builds_are_turned_away_with_the_release():
+    check = BuildCheck(checksum="210d8203", release="mp-test-6d85201a",
+                       url="https://github.com/lbakyl/CorsixTH-Multiplayer/releases/tag/mp-test-6d85201a")
+
+    async def main():
+        server = srv.Server(build_check=check)
+        port = await server.start("127.0.0.1", 0)
+        try:
+            r, w = await asyncio.open_connection("127.0.0.1", port)
+            w.write(encode("HELLO", proto=1, name="Leo",
+                           build="v0.70.1-dev269-sv269-lua5.5-mp1-english-0e1f2a3b").encode() + b"\n")
+            fields = decode((await r.readline()).decode())[1]
+            assert fields["code"] == "build_mismatch" and fields["need"] == "210d8203"
+            assert fields["release"] == "mp-test-6d85201a" and fields["url"] == check.url
+            assert "mp-test-6d85201a" in fields["text"] and len(fields["text"]) <= 52
+            assert await r.readline() == b""  # and the server hangs up
+            assert not server.players
+            # The same release in another language may play.
+            c = await Client.connect(port, "Lea", build="v0.70.1-dev269-sv269-lua5.5-mp1-german-210d8203")
+            await c.close()
+            # Referees and bots are checked against their room, as before.
+            r, w = await asyncio.open_connection("127.0.0.1", port)
+            w.write(encode("HELLO", proto=1, name="x", build="b-0e1f2a3b", role="referee", room="r",
+                           token="t").encode() + b"\n")
+            assert decode((await r.readline()).decode())[1]["code"] == "not_referee"
+            w.close()
+        finally:
+            await server.close()
+    asyncio.run(main())
+
+
+def test_build_check_settings(tmp_path):
+    (tmp_path / "CorsixTH" / "Lua" / "dialogs").mkdir(parents=True)
+    (tmp_path / "CorsixTH" / "Lua" / "app.lua").write_bytes(b"return 1\r\n")
+    (tmp_path / "CorsixTH" / "Lua" / "dialogs" / "a.lua").write_bytes(b"return 2\n")
+    (tmp_path / "CorsixTH" / "Lua" / "notes.txt").write_bytes(b"not code")
+    referee = srv.RefereeConfig(binary="corsix-th", source=str(tmp_path), data="")
+    # As MultiplayerLobby.buildId: paths sorted, CR removed, joined with NUL.
+    expected = "%08x" % zlib.crc32(b"app.lua\0return 1\n\0dialogs/a.lua\0return 2\n")
+    assert builds.lua_checksum(tmp_path / "CorsixTH" / "Lua") == expected
+
+    check = BuildCheck.from_env({"CORSIXTH_MP_RELEASE": "mp-test-6d85201a"}, referee)
+    assert check.checksum == expected and check.release == "mp-test-6d85201a"
+    assert check.url == "https://github.com/lbakyl/CorsixTH-Multiplayer/releases/tag/mp-test-6d85201a"
+    assert check.accepts(f"v0.70.1-sv269-lua5.5-mp1-english-{expected}")
+    assert not check.accepts("v0.70.1-sv269-lua5.5-mp1-english-00000000")
+    assert not check.accepts(expected + "x")
+    assert BuildCheck.from_env({}, None) is None  # no referee, nothing to compare with
+    assert BuildCheck.from_env({"CORSIXTH_MP_BUILD": "any"}, referee) is None
+    forced = BuildCheck.from_env({"CORSIXTH_MP_BUILD": "210D8203"}, None)
+    assert forced.checksum == "210d8203" and forced.url == ""
+    assert "210d8203" in forced.refusal()["text"] and "url" not in forced.refusal()
+    with pytest.raises(ValueError):
+        BuildCheck.from_env({"CORSIXTH_MP_BUILD": "latest"}, referee)

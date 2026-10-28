@@ -31,6 +31,7 @@ import time
 from dataclasses import dataclass, field
 
 from . import pacing
+from .builds import BuildCheck
 from .referee import RefereeConfig, start_bot, start_referee
 from .protocol import (MAX_LINE_BYTES, PROTOCOL_VERSION, ProtocolError, command_peer, command_step,
                        decode, encode, is_game_line, parse_step_report)
@@ -214,8 +215,11 @@ class Room:
 class Server:
     def __init__(self, motd: str = "", max_connections: int = MAX_CONNECTIONS,
                  max_per_address: int = MAX_PER_ADDRESS,
-                 referee: RefereeConfig | None = None, max_bots: int = MAX_BOTS) -> None:
+                 referee: RefereeConfig | None = None, max_bots: int = MAX_BOTS,
+                 build_check: BuildCheck | None = None) -> None:
         self.referee_config = referee
+        # Only this game build may connect (None: any; builds.py).
+        self.build_check = build_check
         self.max_bots = max_bots
         self.port = 0
         self.max_connections = max_connections
@@ -368,10 +372,20 @@ class Server:
         name = f.get("name", "").strip()[:MAX_NAME] or f"Player {player.pid}"
         player.name = name
         player.build = f.get("build", "")
+        if self.build_check is not None and not self.build_check.accepts(player.build):
+            log.info("player %d (%r) refused: build %s, this server needs %s", player.pid, name,
+                     player.build, self.build_check.checksum)
+            player.send(encode("ERROR", **self.build_check.refusal()))
+            return False
         player.send(encode("WELCOME", proto=PROTOCOL_VERSION, id=player.pid,
                            server=SERVER_VERSION, motd=self.motd or None))
         log.info("player %d is %r, build %s", player.pid, name, player.build)
         return True
+
+    def _check_own_build(self, who: str, build: str) -> None:
+        if self.build_check is not None and not self.build_check.accepts(build):
+            log.warning("%s runs build %s, but players must have %s (CORSIXTH_MP_BUILD?)", who,
+                        build, self.build_check.checksum)
 
     def _referee_hello(self, player: Player, f: dict[str, str]) -> bool:
         """The room's headless referee connects (started by this server)."""
@@ -381,6 +395,7 @@ class Server:
             self._error(player, "not_referee", "Unknown room or token")
             return False
         player.name, player.build, player.is_referee = "referee", f.get("build", ""), True
+        self._check_own_build("referee", player.build)
         if player.build != room.build:
             log.warning("room %r: referee build %s differs from the room's %s; no referee",
                         room.name, player.build, room.build)
@@ -704,6 +719,7 @@ class Server:
             return False
         name, proc = room.bots_pending.pop(token)
         player.name, player.build, player.is_bot, player.bot_proc = name, f.get("build", ""), True, proc
+        self._check_own_build(name, player.build)
         if player.build != room.build:
             log.warning("room %r: %r runs build %s, the room %s", room.name, name, player.build,
                         room.build)
@@ -1183,9 +1199,13 @@ def main(argv: list[str] | None = None) -> None:
         referee = RefereeConfig.from_env()
         if referee:
             log.info("headless referee enabled: %s", referee.binary)
+        build_check = BuildCheck.from_env(referee=referee)
+        if build_check:
+            log.info("players must have build %s (%s)", build_check.checksum,
+                     build_check.release or "no release named")
         server = Server(motd=args.motd, max_connections=args.max_connections,
                         max_per_address=args.max_per_address, referee=referee,
-                        max_bots=args.max_bots)
+                        max_bots=args.max_bots, build_check=build_check)
         await server.start(args.host, args.port)
         # Stop cleanly on SIGTERM (docker stop) as well as Ctrl+C.
         stop = asyncio.Event()

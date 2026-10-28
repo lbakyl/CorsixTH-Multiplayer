@@ -88,8 +88,9 @@ missing=$(LD_LIBRARY_PATH="$R/game/lib" ldd "$R/game/corsix-th" | grep "not foun
 say "Settings (/etc/corsixth-mp.env) and the service"
 cat > /etc/corsixth-mp.env <<EOF
 # Written by setup-referee-host.sh for $RELEASE. The referee build must match
-# the players' build.
+# the players' build: players of other builds are told to get this release.
 CORSIXTH_MP_MOTD=$MOTD
+CORSIXTH_MP_RELEASE=$RELEASE
 CORSIXTH_MP_REFEREE_BINARY=$R/game/corsix-th
 CORSIXTH_MP_REFEREE_SOURCE=$R
 CORSIXTH_MP_REFEREE_DATA=$BASE/thdata/themehos

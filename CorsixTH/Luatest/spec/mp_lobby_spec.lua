@@ -118,6 +118,24 @@ describe("MultiplayerLobby", function()
     assert.is_true(t.closed)
   end)
 
+  it("offers the release a server asks for, but only from GitHub", function()
+    local lobby, t = make_lobby()
+    local url = "https://github.com/lbakyl/CorsixTH-Multiplayer/releases/tag/mp-test-6d85201a"
+    t.inbox = {"ERROR code=build_mismatch need=210d8203 release=mp-test-6d85201a text=Other%20game" ..
+        "%20version url=" .. url}
+    lobby:poll()
+    assert.equal("closed", lobby.state)
+    assert.same({release = "mp-test-6d85201a", url = url}, MultiplayerLobby.downloadOffer(lobby.error))
+    assert.is_nil(MultiplayerLobby.downloadOffer(nil))
+    assert.is_nil(MultiplayerLobby.downloadOffer({code = "protocol", url = url}))
+    assert.is_nil(MultiplayerLobby.downloadOffer({code = "build_mismatch"}))
+    for _, bad in ipairs({"http://github.com/x", "https://github.com.evil.example/x",
+        'https://github.com/x" & calc & "', "https://github.com/x;rm", "https://github.com/x$(id)",
+        "https://github.com/x y", "file:///etc/passwd"}) do
+      assert.is_nil(MultiplayerLobby.downloadOffer({code = "build_mismatch", url = bad}), bad)
+    end
+  end)
+
   it("lets the owner add and remove bots where the server runs them", function()
     local lobby, t = make_lobby()
     t.inbox = {"WELCOME id=1 proto=1", "JOINED bots=1 max=4 mode=coop owner=0 peer=2 room=r",

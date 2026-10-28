@@ -153,6 +153,16 @@ function MultiplayerLobby.parseAddress(address)
   return host, port
 end
 
+--! What to download after a server turned this game version away (ERROR
+--! build_mismatch naming the release it needs): {release, url}, or nil. Only
+--! GitHub pages are offered, as the address goes to the web browser (openURL).
+function MultiplayerLobby.downloadOffer(err)
+  if not err or err.code ~= "build_mismatch" then return nil end
+  local url = err.url
+  if type(url) ~= "string" or not url:match("^https://github%.com/[%w%-%._/]+$") then return nil end
+  return {release = err.release or "", url = url}
+end
+
 --! Identity of this game build: version, savegame version, Lua runtime and a
 --! checksum of all Lua game code (line endings ignored, so a Windows and a
 --! Linux install of the same code match). Players must have the same build,
