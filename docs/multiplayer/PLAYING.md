@@ -13,9 +13,11 @@ It is a test version: expect rough edges, and please report what you find.
 - **Your own Theme Hospital game data** (GOG, EA or the original CD). It is
   not included and must never be shared.
 - **The multiplayer build of this fork**, the same one as everybody you play
-  with. The server only lets players with the same build into a room.
-- **A server address** (`host:port`, port 47800 by default). The test
-  server is `eu1.bachelor-tech.com:47800` (it runs the newest release).
+  with. A server with a referee only lets in the build it runs; it tells
+  you which release to download.
+- **A server address** (`host:port`, port 47800 by default).
+  `eu1.bachelor-tech.com:47800` runs the newest stable release,
+  `eu2.bachelor-tech.com:47800` the newest test build.
   Anybody can run one; see [vps-guide.md](vps-guide.md).
 
 ## Get the game

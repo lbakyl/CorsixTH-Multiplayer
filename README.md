@@ -18,9 +18,9 @@ This is a fork of CorsixTH, not an official CorsixTH release. Single player work
    - **Linux** (x86_64, Ubuntu 24.04, Linux Mint 22 or newer): unpack `...-linux-x86_64.tar.gz` and start `CorsixTH-Multiplayer/CorsixTH-Multiplayer.sh`.
    - **macOS** (Apple Silicon, macOS 26 Tahoe or newer): unzip `...-macos-arm64.zip` and move `CorsixTH.app` to Applications. The app is not notarized by Apple: the first time, open **System Settings > Privacy & Security** and click **Open Anyway**.
 2. **Theme Hospital's game data** is needed, as for CorsixTH: the original CD, or a download from [GOG.com](https://www.gog.com/game/theme_hospital) or [EA](https://www.ea.com/games/theme/theme-hospital). The first start asks for its folder.
-3. **Main menu > Multiplayer**: enter the server address `eu1.bachelor-tech.com:47800` (the test server) and your name, then **Connect**.
+3. **Main menu > Multiplayer**: enter the server address `eu1.bachelor-tech.com:47800` (it runs the newest stable release; `eu2.bachelor-tech.com:47800` runs the newest test build) and your name, then **Connect**.
 4. **Create a room** (one shared hospital, or a hospital each; the level; how many players; a password if you like) or **join** one. When everybody is ready, the room's owner starts the game. The lobby measures everybody's connection and sets the top speed that stays smooth.
-5. Everybody in a game must run the **same release**.
+5. Everybody in a game must run the **same release**. A server only lets in the release it runs, and tells you which one to download.
 
 The full guide, with co-op, trading, saving and what to do if something goes wrong: [docs/multiplayer/PLAYING.md](docs/multiplayer/PLAYING.md). To run your own server (one command on a Debian or Ubuntu server): [docs/multiplayer/vps-guide.md](docs/multiplayer/vps-guide.md).
 
