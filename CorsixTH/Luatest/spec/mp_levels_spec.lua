@@ -35,11 +35,12 @@ local DISEASES = {
   {id = "tv_personalities", expertise_id = 22, contagious = true, emergency_number = 14},
   {id = "slack_tongue", expertise_id = 7, emergency_number = 18},
   {id = "spare_ribs", expertise_id = 18, contagious = true, emergency_number = 4},
+  {id = "fractured_bones", expertise_id = 9, emergency_number = 16},
 }
-local PHASES = { -- what the level's phases may bring, by expertise id
-  [16] = 1, [15] = 1, [2] = 1, [13] = 1, [29] = 1, [33] = 1,
-  [4] = 2, [22] = 2, [32] = 2, [24] = 2,
-  [7] = 3, [9] = 3, [18] = 3, [19] = 3,
+local FROM = { -- the month from which an emergency may bring a disease, by expertise id
+  [16] = 2, [15] = 2, [13] = 2, [29] = 2, [33] = 2, [2] = 2, [4] = 2, [22] = 2,
+  [18] = 4, [19] = 4,
+  [7] = 6, [9] = 6,
 }
 
 -- A world with `players` hospitals, enough of one for levels.onEndDay.
@@ -48,7 +49,7 @@ local function fake_world(players, discovered)
     available_diseases = {}, spawn_points = {{x = 1, y = 1}}, hospitals = {},
     mp_coop = {players = players}, game_date = Date(1, 1, 1), entities = {},
     map = {level_config = {mp_events = "emergency"}},
-    emergencies = {}, epidemics = {}, rats = {},
+    emergencies = {}, epidemics = {}, rats = {}, told = {},
   }
   _G.TheApp = {diseases = {}}
   for _, d in ipairs(DISEASES) do
@@ -75,7 +76,10 @@ local function fake_world(players, discovered)
       hospital.disease_casebook[d.id] = {discovered = not discovered or discovered[index][d.id] or false}
     end
     function hospital:hasReceptionDesk() return true end
+    function hospital:getHeliportSpawnPosition() return 1, 1 end
+    hospital.research = {discoverDisease = function(_, d) hospital.disease_casebook[d.id].discovered = true end}
     function hospital:createEmergency(e)
+      assert(self.disease_casebook[e.disease.id].discovered, "emergency of an undiscovered disease")
       world.emergencies[#world.emergencies + 1] = {hospital = self.index, month = world.game_date:monthOfGame(),
           day = world.game_date:dayOfMonth(), emergency = e}
     end
@@ -108,8 +112,10 @@ describe("Multiplayer levels", function()
     math.randomseed(42)
     saved_spawn, saved_session, saved_strings = _G.SpawnAction, _G.MultiplayerSession, _G._S
     _G.SpawnAction = function() return {} end
-    _G.MultiplayerSession = {tellPlayer = function() end}
-    _G._S = {multiplayer_window = {level_rats_notice = "rats"}}
+    _G.MultiplayerSession = {tellPlayer = function() end, tellOthers = function(world, _, text)
+      world.told[#world.told + 1] = {text = text, month = world.game_date:monthOfGame()}
+    end}
+    _G._S = {multiplayer_window = {level_rats_notice = "rats", level_slack_tongue_warning = "slack"}}
     corsixth.require = function() end
   end)
   after_each(function()
@@ -157,13 +163,13 @@ describe("Multiplayer levels", function()
     assert.equal(0, staff[0].Month)
     assert.equal(2, staff[0].ConsRate)
     assert.equal(0, staff[0].JrRate)
-    assert.equal(8, staff[0].Doctors) -- 2 per hospital and 2
+    assert.equal(14, staff[0].Doctors) -- 4 per hospital and 2
     for i = 0, #staff do
       if staff[i].Month >= 8 then
         assert.equal(1, staff[i].JrRate)
         assert.equal(0, staff[i].ConsRate)
       end
-      assert.truthy(staff[i].Nurses >= 4 and staff[i].Receptionists >= 1)
+      assert.truthy(staff[i].Nurses >= 9 and staff[i].Receptionists >= 1)
     end
     -- Patients: few in the first year, more from month 13.
     assert.equal(2, config.popn[0].Change)
@@ -175,49 +181,93 @@ describe("Multiplayer levels", function()
     assert.is_nil(plain.mp_events)
   end)
 
-  it("sends emergencies twice a month in the first year, by turns, easy ones first", function()
+  -- The level's random emergencies, and the May slack tongue ones apart.
+  local function split(world)
+    local random, slack = {}, {}
+    for _, e in ipairs(world.emergencies) do
+      if e.month == 5 and e.day == 5 and e.emergency.disease.expertise_id == 7 then
+        slack[#slack + 1] = e
+      else
+        random[#random + 1] = e
+      end
+    end
+    return random, slack
+  end
+
+  it("sends emergencies four times a month in the first year, by turns", function()
     local world = fake_world(2)
     play(world, 30) -- month 1: time to build
     assert.equal(0, #world.emergencies)
     play(world, 335)
-    assert.equal(22, #world.emergencies) -- months 2 to 12
+    local random = split(world)
     local per_month = {}
-    for i, e in ipairs(world.emergencies) do
+    for i, e in ipairs(random) do
       per_month[e.month] = (per_month[e.month] or 0) + 1
       assert.equal(2 - i % 2, e.hospital) -- hospitals 1, 2, 1, 2, ...
-      local phase = PHASES[e.emergency.disease.expertise_id]
-      assert.truthy(phase, "disease of no phase")
-      if e.month < 5 then assert.equal(1, phase) end
-      if e.month >= 8 then assert.equal(3, phase) end
-      assert.truthy(e.emergency.victims >= 2 and e.emergency.victims <= e.emergency.disease.emergency_number)
-      assert.truthy(e.emergency.percentage >= 0.5 and e.emergency.percentage <= 0.65)
+      local from = FROM[e.emergency.disease.expertise_id]
+      assert.truthy(from and from <= e.month, "disease too early: " .. e.emergency.disease.id)
+      assert.truthy(e.emergency.victims >= 1 and e.emergency.victims <= e.emergency.disease.emergency_number)
+      assert.truthy(not (e.month == 5 and e.day <= 5), "none in May before the slack tongues")
     end
-    for month = 2, 12 do assert.equal(2, per_month[month]) end
+    for month = 2, 12 do
+      if month == 5 then
+        assert.truthy(per_month[5] >= 3 and per_month[5] <= 4)
+      else
+        assert.equal(4, per_month[month], "month " .. month)
+      end
+    end
     play(world, 365)
-    assert.equal(22, #world.emergencies) -- none in the second year
+    assert.equal(#random, #split(world)) -- none in the second year
   end)
 
-  it("gives an emergency only for a known disease, and to a hospital that is free", function()
-    -- Hospital 2 knows only the uncommon cold.
-    local world = fake_world(2, {{uncommon_cold = true, king_complex = true, slack_tongue = true},
-        {uncommon_cold = true}})
-    play(world, 365)
-    for _, e in ipairs(world.emergencies) do
-      if e.hospital == 2 then assert.equal("uncommon_cold", e.emergency.disease.id) end
-      -- Hospital 1 gets the newest phase it knows.
-      if e.hospital == 1 and e.month >= 8 then assert.equal("slack_tongue", e.emergency.disease.id) end
-    end
-    -- Hospital 1 busy with an emergency: both of a month go to hospital 2.
-    world = fake_world(2)
+  it("brings undiscovered diseases too, and makes them known", function()
+    -- Nothing discovered at all (createEmergency asserts the disease is known by then).
+    local world = fake_world(2, {{}, {}})
+    play(world, 120)
+    local kinds = {}
+    for _, e in ipairs(world.emergencies) do kinds[e.emergency.disease.id] = true end
+    -- February to April: more than pharmacy cases (inflation, psychiatry or theatre).
+    assert.truthy(kinds.bloaty_head or kinds.king_complex or kinds.tv_personalities or kinds.spare_ribs)
+  end)
+
+  it("gives an emergency to a hospital that is free", function()
+    -- Hospital 1 busy with an emergency: all of them go to hospital 2.
+    local world = fake_world(2)
     world.hospitals[1].emergency = {}
     play(world, 90)
-    assert.truthy(#world.emergencies >= 4)
+    assert.truthy(#world.emergencies >= 8)
     for _, e in ipairs(world.emergencies) do assert.equal(2, e.hospital) end
     -- Nobody free: the emergency is skipped, not queued.
     world = fake_world(2)
     world.hospitals[1].emergency, world.hospitals[2].epidemic = {}, {}
     play(world, 90)
     assert.equal(0, #world.emergencies)
+  end)
+
+  it("sends slack tongues to every hospital in May, announced in March", function()
+    local world = fake_world(3, {{}, {}, {}})
+    play(world, 151) -- to the end of May
+    local _, slack = split(world)
+    assert.equal(3, #slack)
+    local got = {}
+    for _, e in ipairs(slack) do
+      got[e.hospital] = true
+      assert.truthy(e.emergency.victims >= 4 and e.emergency.victims <= 6)
+    end
+    assert.truthy(got[1] and got[2] and got[3])
+    assert.equal(1, #world.told)
+    assert.equal(3, world.told[1].month)
+    assert.equal("slack", world.told[1].text)
+    -- A hospital busy in May gets it when it is free (until July).
+    world = fake_world(2)
+    world.hospitals[2].emergency = {}
+    play(world, 130) -- 10 May
+    for _, e in ipairs(world.emergencies) do assert.equal(1, e.hospital) end
+    world.hospitals[2].emergency = nil
+    play(world, 1)
+    local last = world.emergencies[#world.emergencies]
+    assert.equal(2, last.hospital)
+    assert.equal(7, last.emergency.disease.expertise_id)
   end)
 
   it("sends epidemics to every hospital in waves from month 14", function()

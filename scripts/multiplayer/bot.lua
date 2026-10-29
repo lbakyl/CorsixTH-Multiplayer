@@ -380,6 +380,38 @@ function Bot:answerOffers()
   end
 end
 
+--! Answer this hospital's emergency faxes: accept if it has the treatment
+--! room and somebody to work in it, else refuse (a fax left alone refuses
+--! itself after 16 days, which some levels punish).
+function Bot:answerEmergencies()
+  local panel = self.world.ui and self.world.ui.bottom_panel
+  if not panel then return end
+  local mine = self.world.ui.hospital
+  for _, icon in ipairs(panel:allMessageIcons()) do
+    if icon.type == "emergency" and icon.hospital == mine and icon.mp_id and not self.offers_seen[icon.mp_id]
+        and mine.emergency then
+      self.offers_seen[icon.mp_id] = true
+      local rooms = mine.emergency.disease.treatment_rooms
+      local room = rooms and rooms[#rooms]
+      local can = false
+      if room then
+        local _, required_staff = self.world:getRoomNameAndRequiredStaffName(room)
+        can = mine:countRoomOfType(room, 1) > 0 and mine:countStaffOfCategory(required_staff) > 0
+      end
+      local msg = icon.mp_id
+      local delay = 2 + rand() * 4
+      log(string.format("emergency fax #%s (%s): %s in %.1f s", tostring(msg), tostring(mine.emergency.disease.id),
+          can and "accept" or "refuse", delay))
+      self:say(nil, delay, nil, function()
+        local session = TheApp.mp_session
+        if session and not session.held then
+          session:issue({kind = "fax_choice", msg = msg, choice = can and 1 or 2})
+        end
+      end)
+    end
+  end
+end
+
 --! Money arrived from another player (give_money, seen as it happens).
 function Bot:moneyReceived(from_index, amount)
   local _, name = self:playerOfHospital(from_index)
@@ -752,6 +784,7 @@ function Bot:think()
   local plan = self.plan
   local day = self:gameDay()
   self:answerOffers()
+  self:answerEmergencies()
 
   if day >= plan.greet and not plan.greeted then
     plan.greeted = true

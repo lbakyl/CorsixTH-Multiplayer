@@ -94,6 +94,8 @@ function Helicopter:spawnPatient()
   patient:setDisease(hospital.emergency.disease)
   patient.diagnosis_progress = 1
   patient.is_emergency = self.spawned_patients
+  -- (They keep counting for this hospital's emergency if referred elsewhere.)
+  patient.emergency_hospital = hospital
   patient:setDiagnosed()
   patient:setMood("emergency", "activate")
   hospital.emergency_patients[self.spawned_patients] = patient

@@ -188,18 +188,23 @@ To win, a hospital needs all of these at once (and no loan):
 | 6 | 550 | $60,000 | plot + $80,000 | 150 | 40% |
 
 **Level 6, Emergency!** (2 to 4 players). In the first year (months 2 to
-12) an emergency comes twice a month, to each hospital in turn (a hospital
-busy with an emergency or epidemic, or not open yet, is skipped): first ones
-the pharmacy or the inflation room can cure, from month 5 psychiatry cases
-too, from month 8 slack tongues, broken bones and operating theatre cases.
-Only diseases the hospital has already discovered are sent. Refusing an
-emergency, or leaving its fax unanswered, costs 15 reputation. Fewer patients
-walk in during that year; more come from month 13. From month 14 an epidemic
-starts in every hospital every two to three months. Rats are more frequent,
-and every month or two a swarm moves into one of the hospitals. Many
-consultants are for hire at first; from month 9 every doctor for hire is a
-junior. A hospital fails a year end only when more than 70% of its patients
-died (the other levels: half).
+12) an emergency comes four times a month, to each hospital in turn (a
+hospital busy with an emergency or epidemic, or not open yet, is skipped):
+pharmacy, inflation and psychiatry cases from February, operating theatre
+cases from April, slack tongues and broken bones (both need research) from
+June. In May every hospital gets slack tongue patients (announced in
+March), so research the Slack Tongue Clinic early. An emergency's disease
+counts as discovered for the hospital it comes to. Emergency patients can be
+referred to another player's hospital (the patient's Refer button): they
+still count for the emergency of the hospital that accepted it. Refusing an
+emergency, or leaving its fax unanswered, costs 15 reputation; bots accept
+the ones they can cure and refuse the others. Fewer patients walk in during
+that year; more come from month 13. From month 14 an epidemic starts in every
+hospital every two to three months. Rats are more frequent, and every month
+or two a swarm moves into one of the hospitals. Staff for hire: 4 doctors per
+player and 2 more each month, many of them consultants at first; from month 9
+every doctor for hire is a junior. A hospital fails a year end only when more
+than 70% of its patients died (the other levels: half).
 
 The value goal is what the biggest starting plot on the map is worth plus
 the amount above, rounded up to $5,000; the Progress Report (F8) shows the

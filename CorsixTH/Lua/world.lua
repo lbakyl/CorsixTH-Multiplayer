@@ -1497,9 +1497,10 @@ function World:onEndDay()
     else
       -- For the player hospital (multiplayer co-op: the one whose turn it is).
       local control = self.map.level_config.emergency_control
+      local failed
       if control[0].Mean or control[0].Random then
         -- The level uses random emergencies, so just create one.
-        local_hospital:createEmergency()
+        failed = local_hospital:createEmergency()
       else
         local next_em = self.next_emergency
         -- Find out which disease the emergency patients have.
@@ -1512,7 +1513,7 @@ function World:onEndDay()
         end
         if not disease then
           -- Unknown disease! Create a random one instead.
-          local_hospital:createEmergency()
+          failed = local_hospital:createEmergency()
         else
           local emergency = {
             disease = disease,
@@ -1522,9 +1523,13 @@ function World:onEndDay()
             killed_emergency_patients = 0,
             cured_emergency_patients = 0,
           }
-          local_hospital:createEmergency(emergency)
+          failed = local_hospital:createEmergency(emergency)
         end
       end
+      -- One that cannot start (disease not discovered there, no staffed
+      -- desk) is dropped. Multiplayer co-op: then on to the next, which the
+      -- start would otherwise have scheduled. (Single player stays as it was.)
+      if failed and self.mp_coop then self:nextEmergency() end
     end
   end
 

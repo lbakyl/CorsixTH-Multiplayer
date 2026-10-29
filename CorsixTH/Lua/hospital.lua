@@ -1205,9 +1205,18 @@ function Hospital:resolveEmergency()
   self.world:nextEmergency()
 end
 
+--! The emergency an emergency patient belongs to: the one of the hospital the
+--! helicopter brought them to, also after a referral to another hospital
+--! (multiplayer co-op). Nil for other patients, or when it is over.
+function Hospital:emergencyOf(patient)
+  if not patient.is_emergency then return nil end
+  return (patient.emergency_hospital or self).emergency
+end
+
 --! Determine if all of the patients in the emergency have been cured or killed.
 --! If they have end the emergency timer.
 function Hospital:checkEmergencyOver()
+  if not self.emergency then return end -- (over already)
   local killed = self.emergency.killed_emergency_patients
   local cured = self.emergency.cured_emergency_patients
   if killed + cured >= self.emergency.victims then
@@ -1679,8 +1688,9 @@ function Hospital:humanoidDeath(patient)
   self:changeReputation("death", patient.disease)
   self:updatePercentages()
 
-  if patient.is_emergency then
-    self.emergency.killed_emergency_patients = self.emergency.killed_emergency_patients + 1
+  local emergency = self:emergencyOf(patient)
+  if emergency then
+    emergency.killed_emergency_patients = emergency.killed_emergency_patients + 1
   end
 end
 
@@ -1962,8 +1972,9 @@ function Hospital:updateCuredCounts(patient)
   local casebook = self.disease_casebook[patient.disease.id]
   casebook.recoveries = casebook.recoveries + 1
 
-  if patient.is_emergency then
-    self.emergency.cured_emergency_patients = self.emergency.cured_emergency_patients + 1
+  local emergency = self:emergencyOf(patient)
+  if emergency then
+    emergency.cured_emergency_patients = emergency.cured_emergency_patients + 1
   end
 
   self:msgCured()
@@ -1987,8 +1998,9 @@ function Hospital:updateNotCuredCounts(patient, reason)
   end
 
   -- though not killed allows timer to close early
-  if patient.is_emergency then
-    self.emergency.killed_emergency_patients = self.emergency.killed_emergency_patients + 1
+  local emergency = self:emergencyOf(patient)
+  if emergency then
+    emergency.killed_emergency_patients = emergency.killed_emergency_patients + 1
   end
 end
 

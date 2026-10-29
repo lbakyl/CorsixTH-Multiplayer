@@ -148,11 +148,14 @@ end
 
 -- Level 6, "Emergency!" -------------------------------------------------------
 --
--- Year one is the emergency season: twice a month the helicopter brings
--- emergency patients to the hospitals in turn, easy ones (pharmacy,
--- inflation) first, then psychiatry, then the ones that need research or the
--- operating theatre. Fewer patients walk in meanwhile. From the second year
--- epidemics come in waves, every two or three months to every hospital.
+-- Year one is the emergency season: four times a month the helicopter brings
+-- emergency patients to the hospitals in turn: pharmacy, inflation and
+-- psychiatry cases from month 2, operating theatre cases from April, slack
+-- tongues and broken bones (research first) from June. In May every hospital
+-- gets a slack tongue emergency (announced in March), so the clinic must be
+-- researched quickly. An emergency's disease counts as discovered for the
+-- hospital it comes to. Fewer patients walk in meanwhile. From the second
+-- year epidemics come in waves, every two or three months to every hospital.
 -- Rats are about all the time. Plenty of consultants to hire at first, only
 -- juniors from month 9. Refusing an emergency costs reputation; losing
 -- patients to emergencies is forgiven more than on the other levels.
@@ -164,14 +167,22 @@ end
 --! `from` on: how many victims, the share that must be saved, and the bonus
 --! per patient saved.
 local EMERGENCY_PHASES = {
-  -- uncommon cold, transparency, bloaty head, sleeping illness, the squits, gut rot
-  {from = 2, illnesses = {16, 15, 2, 13, 29, 33}, min = 2, max = 4, win = 50, bonus = 400},
-  -- king complex, tv personalities, heaped piles, corrugated ankles
-  {from = 5, illnesses = {4, 22, 32, 24}, min = 3, max = 5, win = 60, bonus = 700},
-  -- slack tongue, broken bones, spare ribs, kidney beans
-  {from = 8, illnesses = {7, 9, 18, 19}, min = 3, max = 6, win = 65, bonus = 1000},
+  -- pharmacy: uncommon cold, transparency, sleeping illness, the squits, gut rot;
+  -- inflation: bloaty head; psychiatry: king complex, tv personalities
+  {from = 2, illnesses = {16, 15, 13, 29, 33, 2, 4, 22}, min = 2, max = 4, win = 50, bonus = 500},
+  -- operating theatre: spare ribs, kidney beans
+  {from = 4, illnesses = {18, 19}, min = 1, max = 3, win = 50, bonus = 1500},
+  -- slack tongue clinic, fracture clinic (both researched)
+  {from = 6, illnesses = {7, 9}, min = 3, max = 6, win = 60, bonus = 1000},
 }
 local EMERGENCY_LAST_MONTH = 12
+--! Days of each month that bring an emergency: one in each range.
+local EMERGENCY_DAYS = {{3, 8}, {10, 15}, {17, 22}, {24, 28}}
+--! The slack tongue emergency every hospital gets in May (expertise id 7),
+--! announced at the start of March. A hospital busy then gets it as soon as
+--! it is free (until the end of July). No other emergencies in May before it.
+local SLACK_TONGUE = {illness = 7, month = 5, day = 5, until_month = 7, warn_month = 3,
+    min = 4, max = 6, win = 60, bonus = 1000}
 local EPIDEMIC_FIRST_MONTH = 14
 local EPIDEMIC_DAYS = {60, 90}       -- between waves
 local EPIDEMIC_PATIENTS = {2, 3}     -- per hospital and wave
@@ -188,8 +199,8 @@ local function staffLevels(players)
     local juniors_only = month >= 8
     result[i - 1] = {
       Month = month,
-      Doctors = 2 * players + 2,
-      Nurses = players + math.random(1, players + 1),
+      Doctors = 4 * players + 2,
+      Nurses = 3 * players + math.random(0, players),
       Handymen = math.random(1, players + 1),
       Receptionists = math.random(1, players),
       ShrkRate = 3, SurgRate = 3, RschRate = 4,
@@ -237,36 +248,50 @@ local function between(range)
   return math.random(range[1], range[2])
 end
 
---! An emergency of month `month` for `hospital`: of the newest phase with a
---! disease it has discovered (it must know what it is treating), or nil.
-local function pickEmergency(world, hospital, month)
-  for p = #EMERGENCY_PHASES, 1, -1 do
-    local phase = EMERGENCY_PHASES[p]
+--! An emergency for `hospital`, of disease `disease` (the victims, share to
+--! save and bonus from `spec`: a phase or SLACK_TONGUE).
+local function makeEmergency(disease, spec)
+  local most = math.min(spec.max, TheApp.diseases[disease.id].emergency_number or spec.max)
+  return {
+    disease = disease,
+    victims = math.random(math.min(spec.min, most), most),
+    bonus = spec.bonus,
+    percentage = spec.win / 100,
+    killed_emergency_patients = 0,
+    cured_emergency_patients = 0,
+  }
+end
+
+local function diseaseOf(world, illness)
+  for _, disease in ipairs(world.available_diseases) do
+    if disease.expertise_id == illness then return disease end
+  end
+end
+
+--! An emergency of month `month`: any disease of the phases begun by then.
+local function pickEmergency(world, month)
+  local candidates = {}
+  for _, phase in ipairs(EMERGENCY_PHASES) do
     if phase.from <= month then
-      local candidates = {}
       for _, illness in ipairs(phase.illnesses) do
-        for _, disease in ipairs(world.available_diseases) do
-          local casebook = hospital.disease_casebook[disease.id]
-          if disease.expertise_id == illness and casebook and casebook.discovered then
-            candidates[#candidates + 1] = disease
-          end
-        end
-      end
-      if #candidates > 0 then
-        local disease = candidates[math.random(1, #candidates)]
-        local most = math.min(phase.max, TheApp.diseases[disease.id].emergency_number or phase.max)
-        return {
-          disease = disease,
-          victims = math.random(math.min(phase.min, most), most),
-          bonus = phase.bonus,
-          percentage = phase.win / 100,
-          killed_emergency_patients = 0,
-          cured_emergency_patients = 0,
-        }
+        local disease = diseaseOf(world, illness)
+        if disease then candidates[#candidates + 1] = {disease, phase} end
       end
     end
   end
-  return nil
+  if #candidates == 0 then return nil end
+  local pick = candidates[math.random(1, #candidates)]
+  return makeEmergency(pick[1], pick[2])
+end
+
+--! Start `emergency` in `hospital` if it can take one (helipad, staffed
+--! desk): its disease becomes known there first, so it can be treated.
+--!return (boolean) whether it started
+local function startEmergency(hospital, emergency)
+  if not (hospital:getHeliportSpawnPosition() and hospital:hasReceptionDesk(true)) then return false end
+  local casebook = hospital.disease_casebook[emergency.disease.id]
+  if casebook and not casebook.discovered then hospital.research:discoverDisease(emergency.disease) end
+  return not hospital:createEmergency(emergency)
 end
 
 local function busy(hospital)
@@ -279,11 +304,25 @@ local function sendEmergency(world, month)
   for _ = 1, world.mp_coop.players do
     local hospital = world:_coopTurn("level_emergency")
     if not busy(hospital) then
-      local emergency = pickEmergency(world, hospital, month)
-      if emergency and not hospital:createEmergency(emergency) then return true end
+      local emergency = pickEmergency(world, month)
+      if emergency and startEmergency(hospital, emergency) then return true end
     end
   end
   return false
+end
+
+--! The May slack tongue emergency to every hospital still waiting for it
+--! that can take it now.
+local function sendSlackTongue(world, state)
+  local disease = diseaseOf(world, SLACK_TONGUE.illness)
+  if not disease then state.slack_pending = {} return end
+  for index = 1, world.mp_coop.players do
+    local hospital = world.hospitals[index]
+    if state.slack_pending[index] and not busy(hospital) and
+        startEmergency(hospital, makeEmergency(disease, SLACK_TONGUE)) then
+      state.slack_pending[index] = nil
+    end
+  end
 end
 
 --! A contagious disease for an epidemic in `hospital`: one it has discovered
@@ -336,7 +375,6 @@ local function ratSwarm(world)
     if hospital:spawnRat() then spawned = spawned + 1 end
   end
   if spawned > 0 then
-    corsixth.require("mp_session")
     MultiplayerSession.tellPlayer(world, hospital, _S.multiplayer_window.level_rats_notice)
   end
   return spawned
@@ -345,22 +383,39 @@ end
 --! The level's events, at the end of every day (World:onEndDay).
 function levels.onEndDay(world)
   if world.map.level_config.mp_events ~= "emergency" or not world.mp_coop then return end
+  corsixth.require("mp_session")
   local state = world.mp_level_events
   if not state then
     state = {days_to_wave = nil, days_to_rats = between(RAT_SWARM_DAYS)}
     world.mp_level_events = state
   end
   local date = world.game_date
-  local month = date:monthOfGame()
-  -- Twice a month, on two days chosen at the start of the month.
+  local month, day = date:monthOfGame(), date:dayOfMonth()
+  -- Four times a month, on days chosen at the start of the month.
   if state.month ~= month then
     state.month = month
-    state.emergency_days = {math.random(3, 12), math.random(17, 26)}
+    state.emergency_days = {}
+    for i, range in ipairs(EMERGENCY_DAYS) do state.emergency_days[i] = math.random(range[1], range[2]) end
+    if month == SLACK_TONGUE.warn_month then
+      MultiplayerSession.tellOthers(world, nil, _S.multiplayer_window.level_slack_tongue_warning)
+    end
   end
-  if month >= EMERGENCY_PHASES[1].from and month <= EMERGENCY_LAST_MONTH then
-    local day = date:dayOfMonth()
-    if day == state.emergency_days[1] or day == state.emergency_days[2] then
-      sendEmergency(world, month)
+  -- The slack tongue emergency of May, to every hospital.
+  if month == SLACK_TONGUE.month and day == SLACK_TONGUE.day then
+    state.slack_pending = {}
+    for index = 1, world.mp_coop.players do state.slack_pending[index] = true end
+  end
+  if state.slack_pending then
+    if month > SLACK_TONGUE.until_month then
+      state.slack_pending = nil
+    else
+      sendSlackTongue(world, state)
+    end
+  end
+  if month >= EMERGENCY_PHASES[1].from and month <= EMERGENCY_LAST_MONTH and
+      not (month == SLACK_TONGUE.month and day <= SLACK_TONGUE.day) then
+    for _, d in ipairs(state.emergency_days) do
+      if day == d then sendEmergency(world, month) end
     end
   end
   if month >= EPIDEMIC_FIRST_MONTH then

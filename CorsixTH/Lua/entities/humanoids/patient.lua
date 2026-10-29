@@ -317,7 +317,7 @@ function Patient:treatDisease()
   hospital:updatePercentages()
   hospital:paySupplierForDrug(self.disease.id)
   if self.is_emergency then
-    hospital:checkEmergencyOver()
+    (self.emergency_hospital or hospital):checkEmergencyOver()
   end
 end
 
@@ -568,7 +568,7 @@ function Patient:goHome(reason, disease_id)
 
   -- allow timer to end early and after going_home is set
   if self.is_emergency then
-    hosp:checkEmergencyOver()
+    (self.emergency_hospital or hosp):checkEmergencyOver()
   end
 
   local room = self:getRoom()

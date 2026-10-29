@@ -650,7 +650,12 @@ local function run()
               icon = candidate
             end
           end
-          if icon then
+          if not icon and entry.arg == "wait" and (entry.retries or 0) < 80 and entry.hour < target - 100 then
+            -- acceptoffer:wait: look again every 100 hours until it comes.
+            entry.retries = (entry.retries or 0) + 1
+            entry.hour = entry.hour + 100
+            done[i] = nil
+          elseif icon then
             if not icon.fax then icon:openMessage() end
             shot("offer-" .. icon.message.mp_offer.kind)
             local w = icon.fax
@@ -663,15 +668,26 @@ local function run()
           end
         elseif a == "referpatient" then
           -- Open this hospital's first free patient's window and press Refer.
+          -- referpatient:emergency: an emergency patient, waiting until one is
+          -- there (every 100 hours).
           local patient
           for _, p in ipairs(world.ui.hospital.patients) do
-            if not patient and MultiplayerSession.referable(p) and not p.mp_offer then patient = p end
+            if not patient and MultiplayerSession.referable(p) and not p.mp_offer and
+                (entry.arg ~= "emergency" or p.is_emergency) then
+              patient = p
+            end
           end
-          if patient then
+          if not patient and entry.arg == "emergency" and (entry.retries or 0) < 80 and
+              entry.hour < target - 100 then
+            entry.retries = (entry.retries or 0) + 1
+            entry.hour = entry.hour + 100
+            done[i] = nil
+          elseif patient then
             local w = UIPatient(world.ui, patient)
             world.ui:addWindow(w)
             shot("patient-refer")
-            log(string.format("UI: referred patient #%d at step %d", patient.mp_id, session.step))
+            log(string.format("UI: referred %spatient #%d at step %d", patient.is_emergency and "emergency " or "",
+                patient.mp_id, session.step))
             w:referPatient()
             w:close()
           else

@@ -1823,12 +1823,13 @@ function handlers.offer_staff(world, cmd)
 end
 
 --! Can this patient be referred to another hospital? (They must be free to
---! leave: not in a room, not leaving, not an emergency or infected patient.)
+--! leave: not in a room, not leaving, not an infected patient. Emergency
+--! patients may go: they keep counting for their own hospital's emergency,
+--! Hospital:emergencyOf.)
 local function referable(patient)
   if patient.going_home or patient.going_to_die or patient.dead or patient.mp_in_transit then
     return false, "the patient is leaving"
   end
-  if patient.is_emergency then return false, "emergency patients stay" end
   if patient.infected then return false, "infected patients stay" end
   if patient:getRoom() then return false, "the patient is in a room" end
   return true
