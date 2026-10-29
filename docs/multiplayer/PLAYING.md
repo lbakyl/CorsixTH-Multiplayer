@@ -155,6 +155,10 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   hospital's value, balance and reputation. When a player leaves, the
   announcer says "Warning! A player has left the game." (with the
   announcements on).
+- **Epidemics:** if you cover one up, a watch appears at the bottom left.
+  Its syringe button starts **vaccination mode**: click the infected patients
+  and a nurse vaccinates them. While it is on, other patients cannot be
+  clicked; end it with the syringe button again, **Esc** or a right-click.
 - If an action cannot be done (somebody stands in the way, a candidate is
   gone), the adviser tells you why.
 

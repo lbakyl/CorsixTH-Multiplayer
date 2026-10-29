@@ -829,8 +829,7 @@ function GameUI:onMouseUp(code, x, y)
       end
     elseif button == "right" then
       --Right click turns vaccination mode off
-      local watch = TheApp.ui:getWindow(UIWatch)
-      watch:toggleVaccinationMode()
+      self:endVaccinationMode()
     end
   end
 
@@ -841,6 +840,30 @@ function GameUI:onMouseUp(code, x, y)
   end
 
   return UI.onMouseUp(self, code, x, y)
+end
+
+--! End vaccination mode if it is on (right-click, Esc).
+--!return (boolean) whether it was on
+function GameUI:endVaccinationMode()
+  local epidemic = self.hospital and self.hospital.epidemic
+  local looks_on = self.cursor == self.app.gfx:loadMainCursor("epidemic_hover")
+  if not (epidemic and (epidemic.vaccination_mode_active or looks_on)) then return false end
+  local watch
+  for _, window in ipairs(self.windows or {}) do
+    if class.is(window, UIWatch) and window.count_type == "epidemic" then watch = window end
+  end
+  if watch then
+    watch:setVaccinationMode(false)
+  else
+    epidemic:turnOffVaccinationMode()
+  end
+  return true
+end
+
+--! Esc ends vaccination mode first, then closes windows.
+function GameUI:closeWindow()
+  if self:endVaccinationMode() then return true end
+  return UI.closeWindow(self)
 end
 
 --! Process SDL_EVENT_PINCH_BEGIN.

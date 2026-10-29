@@ -89,7 +89,9 @@ function Patient:onClick(ui, button)
       if isValidEpidemicTarget(epidemic) then
           if not epidemic.timer.closed then
             if (TheApp and TheApp.mp_session and not TheApp.mp_session.applying) then
-              TheApp.mp_session:issue({kind = "mark_vaccinate", patient = self.mp_id})
+              if self.infected and not self.vaccinated and not self.marked_for_vaccination then
+                TheApp.mp_session:issue({kind = "mark_vaccinate", patient = self.mp_id})
+              end
             else
               epidemic:markForVaccination(self)
             end

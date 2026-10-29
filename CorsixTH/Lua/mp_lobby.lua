@@ -743,6 +743,14 @@ end
 function MultiplayerLobby.showOwnWatches(world, ui)
   local mine = ui.hospital
   local shown = {}
+  -- Vaccination mode is this screen's (the save has the saver's): off, and
+  -- the cursor and the watch's button too.
+  for _, hospital in ipairs(world.hospitals or {}) do
+    if hospital.epidemic then hospital.epidemic.vaccination_mode_active = false end
+  end
+  if ui.app and ui.app.gfx and ui.cursor == ui.app.gfx:loadMainCursor("epidemic_hover") then
+    ui:setCursor(ui.default_cursor)
+  end
   for i = #(ui.windows or {}), 1, -1 do
     local window = ui.windows[i]
     if class.is(window, UIWatch) then
@@ -774,6 +782,7 @@ function MultiplayerLobby.showOwnWatches(world, ui)
       window = nil
     end
     if kind == "epidemic" and epidemic then epidemic.watch = window end
+    if kind == "epidemic" and window and window.end_button then window.end_button:setToggleState(false) end
   end
 end
 

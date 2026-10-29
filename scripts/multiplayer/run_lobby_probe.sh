@@ -195,12 +195,13 @@ run_probe olga MP_ROLE=host MP_ROOM=events MP_COOP=1 MP_LEVEL=2 MP_STEPS=1600   
 sleep 1
 run_probe paul MP_ROLE=join MP_ROOM=events MP_STEPS=1600 MP_DRAW_EVERY=3   MP_UI_SCRIPT="30:openhospital;130:answerfax:emergency:1;430:answerfax:personality:1" & pids+=($!)
 # Epidemic (co-op): one starts in player 2's hospital (test command); player
-# 2 covers it up, marks the infected for vaccination, the countdown runs in
+# 2 covers it up, turns vaccination mode on and off (the watch's syringe
+# button, Esc, a right-click), marks the infected for vaccination, the countdown runs in
 # the simulation on both machines, the inspector's result fax comes (early
 # when the cover-up ends early: an infected patient left, or none are left).
 run_probe ella MP_ROLE=host MP_ROOM=epi MP_COOP=1 MP_SCENARIO=busy MP_STEPS=7500   MP_UI_SCRIPT="20:openhospital" & pids+=($!)
 sleep 1
-run_probe finn MP_ROLE=join MP_ROOM=epi MP_SCENARIO=busy MP_STEPS=7500   MP_UI_SCRIPT="30:openhospital;300:epidemic;320:answerfax:epidemy:2:wait;400:vaccinate;600:answerfax:report:1:wait" & pids+=($!)
+run_probe finn MP_ROLE=join MP_ROOM=epi MP_SCENARIO=busy MP_STEPS=7500   MP_UI_SCRIPT="30:openhospital;300:epidemic;320:answerfax:epidemy:2:wait;360:vaccmode;365:vaccmode;370:vaccmode;375:vaccmode:esc;380:vaccmode;385:vaccmode:right;400:vaccinate;600:answerfax:report:1:wait" & pids+=($!)
 
 # Offers (co-op): patients referred from the patient window and from a
 # "no treatment" fax, a nurse offered for $3,000; offers accepted and declined in the
@@ -543,7 +544,15 @@ kinds_e = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in ce if x.endswi
 oke = (result('ella').startswith('IN SYNC through step 7500') and result('finn').startswith('IN SYNC through step 7500')
        and ce == applied('finn') and 'probe_epidemic' in kinds_e and 'mark_vaccinate' in kinds_e
        and kinds_e.count('fax_choice') >= 2 and 'clicked choice 1 of report fax' in fl)
-print(f"18. Co-op epidemic:         {result('finn')}; cover up, vaccination, result fax: {oke}; commands {' '.join(kinds_e)}")
+# Vaccination mode by the watch's syringe button (on, off, on), Esc (off), the
+# button (on) and a right-click (off); the cursor follows.
+modes = re.findall(r'UI: vaccmode (\w+) at step \d+: mode (\w+) .*cursor (\w+)', fl)
+okv = modes == [('button', 'true', 'epidemic_hover'), ('button', 'false', 'default'),
+                ('button', 'true', 'epidemic_hover'), ('esc', 'false', 'default'),
+                ('button', 'true', 'epidemic_hover'), ('right', 'false', 'default')]
+oke = oke and okv
+print(f"18. Co-op epidemic:         {result('finn')}; cover up, vaccination, result fax: {oke}; commands {' '.join(kinds_e)}; "
+      f"vaccination mode by button, Esc and right-click: {okv}")
 fail |= not oke
 
 nl, ol = log('nell'), log('otto')

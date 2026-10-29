@@ -803,6 +803,50 @@ local function run()
             end
             log(string.format("UI: marked %d infected patients for vaccination at step %d", n, session.step))
           end
+        elseif a == "vaccmode" then
+          -- vaccmode[:right|esc|look]: click the epidemic watch's syringe
+          -- button (or right-click the map, press Esc, or only look) with real
+          -- mouse/key events,
+          -- as a person does; log whether vaccination mode is on (retried
+          -- until the cover up runs).
+          local ui = world.ui
+          local watch
+          for _, w in ipairs(ui.windows) do
+            if class.is(w, UIWatch) and w.count_type == "epidemic" then watch = w end
+          end
+          local epidemic = ui.hospital.epidemic
+          if not watch and (entry.retries or 0) < 60 then
+            entry.retries = (entry.retries or 0) + 1
+            entry.hour = entry.hour + 100
+            done[i] = nil
+          elseif watch then
+            local sc = TheApp.gfx:getUIScale()
+            if entry.arg == "look" then -- luacheck: ignore 542 (only the log line below)
+            elseif entry.arg == "right" then
+              local sx, sy = math.floor(ui.app.config.width / 2), math.floor(ui.app.config.height / 2)
+              ui:onMouseMove(sx, sy, 0, 0)
+              ui:onMouseDown(3, sx, sy)
+              ui:onMouseUp(3, sx, sy)
+            elseif entry.arg == "esc" then
+              ui:onKeyDown("Escape", {})
+              ui:onKeyUp("Escape", {})
+            else
+              local bx = math.floor((watch.x + 4 + 13) * sc)
+              local by = math.floor((watch.y + 14) * sc)
+              ui:onMouseMove(bx, by, 0, 0)
+              ui:onMouseDown(1, bx, by)
+              ui:onMouseUp(1, bx, by)
+            end
+            local cursor = "other"
+            if ui.cursor == ui.app.gfx:loadMainCursor("epidemic_hover") then cursor = "epidemic_hover"
+            elseif ui.cursor == ui.default_cursor then cursor = "default" end
+            log(string.format("UI: vaccmode %s at step %d: mode %s (this epidemic %s, watch's %s), cursor %s",
+                entry.arg ~= "" and entry.arg or "button", session.step,
+                tostring(epidemic and epidemic.vaccination_mode_active),
+                tostring(epidemic), tostring(watch.hospital.epidemic), cursor))
+          else
+            log("UI: vaccmode: no epidemic watch")
+          end
         elseif a == "notreatfax" then
           session:issue({kind = "probe_notreat"})
         elseif a == "sendstaff" then

@@ -178,12 +178,32 @@ function UIWatch:onWorldTick()
   end
 end
 
---[[! Toggles vaccination mode by toggling the button then
-toggling the mode in the current epidemic.]]
+--[[! The syringe button: vaccination mode on, or off when it is on or looks
+on (the vaccination cursor). In multiplayer a repair loads the epidemic from
+the shared save with the mode off while this screen may still show it: a
+plain toggle then turned it on again instead of ending it.]]
 function UIWatch:toggleVaccinationMode()
   local epidemic = self.hospital.epidemic
-  self.end_button:toggle()
-  epidemic:toggleVaccinationMode()
+  if not epidemic then return end
+  local looks_on = self.ui.cursor == self.ui.app.gfx:loadMainCursor("epidemic_hover")
+  self:setVaccinationMode(not (epidemic.vaccination_mode_active or looks_on))
+end
+
+--[[! Vaccination mode on or off: the button, the epidemic and the cursor
+agree. Turning it on, the adviser says how it works.
+!param on (boolean) ]]
+function UIWatch:setVaccinationMode(on)
+  local epidemic = self.hospital.epidemic
+  if self.end_button then self.end_button:setToggleState(on) end
+  if not epidemic then return end
+  if on then
+    if not epidemic.vaccination_mode_active then epidemic:toggleVaccinationMode() end
+    if self.ui.adviser then
+      self.ui.adviser:say({text = _S.multiplayer_window.vaccination_mode_hint, priority = 10})
+    end
+  else
+    epidemic:turnOffVaccinationMode()
+  end
 end
 
 --[[! During an emergency - Cycles through the patient dialogs of all the emergency patients
