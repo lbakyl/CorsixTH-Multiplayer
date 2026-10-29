@@ -201,8 +201,9 @@ local function staffLevels(players)
       Month = month,
       Doctors = 4 * players + 2,
       Nurses = 3 * players + math.random(0, players),
-      Handymen = math.random(1, players + 1),
-      Receptionists = math.random(1, players),
+      -- (The list is shared: at least one receptionist and handyman each.)
+      Handymen = players + math.random(0, players),
+      Receptionists = players + math.random(0, players),
       ShrkRate = 3, SurgRate = 3, RschRate = 4,
       -- One in two doctors a consultant at first (none junior); then all junior.
       ConsRate = juniors_only and 0 or 2,
