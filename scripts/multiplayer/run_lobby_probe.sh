@@ -246,11 +246,13 @@ run_probe abi MP_ROLE=join MP_ROOM=cardio MP_STEPS=700 MP_SCENARIO=none & pids+=
 # A destroyed room cleared away and built again: a GP's office is destroyed
 # (test command), its player confirms "clear it away and build it again"
 # with the remove option off, the room editor opens on the old outline and
-# the office is built there again.
-run_probe nell MP_ROLE=host MP_ROOM=wreck MP_STEPS=700 MP_SCENARIO=none \
-  MP_UI_SCRIPT="20:openhospital;40:buy:reception_desk;60:room:gp:5:5;300:crash:gp;330:rebuildcrashed;500:buyinroom:radiator:gp" & pids+=($!)
+# the office is built there again. Then a pharmacy with windows is destroyed
+# and repaired: built again where it was, same door and windows, for the
+# price of a new one (no clearing fee).
+run_probe nell MP_ROLE=host MP_ROOM=wreck MP_STEPS=900 MP_SCENARIO=none \
+  MP_UI_SCRIPT="20:openhospital;40:buy:reception_desk;60:room:gp:5:5;300:crash:gp;330:rebuildcrashed;500:buyinroom:radiator:gp;520:room:pharmacy:4:4:window;600:crash:pharmacy;620:repaircrashed:pharmacy" & pids+=($!)
 sleep 1
-run_probe otto MP_ROLE=join MP_ROOM=wreck MP_STEPS=700 MP_SCENARIO=none & pids+=($!)
+run_probe otto MP_ROLE=join MP_ROOM=wreck MP_STEPS=900 MP_SCENARIO=none & pids+=($!)
 # Save and continue: a co-op game saves at step 300 (File > Save) and ends;
 # then the same two players continue it from the lobby, the other one
 # hosting this time (each gets their own hospital back by name).
@@ -559,17 +561,27 @@ nl, ol = log('nell'), log('otto')
 first_gp = re.search(r'UI: drew gp at (\d+),(\d+) size', nl)
 built_n, built_o = (re.search(r'rooms built: (.*)', x) for x in (nl, ol))
 built_n, built_o = (m.group(1) if m else '-' for m in (built_n, built_o))
-same_spot = first_gp is not None and built_n == f"gp@{first_gp.group(1)},{first_gp.group(2)}"
+same_spot = first_gp is not None and f"gp@{first_gp.group(1)},{first_gp.group(2)}" in built_n.split()
 removed = any('remove_crashed_room -> ok' in x for x in applied('nell'))
 # (Then a radiator bought in the corridor shop goes into the working office.)
 radiator = re.search(r'UI: put a radiator into gp #\d+ at (\d+),(\d+)', nl)
 placed_in = radiator is not None and sum(1 for x in applied('nell') if 'place_object -> ok' in x) == 2
-ok20 = (result('nell').startswith('IN SYNC through step 700') and result('otto').startswith('IN SYNC through step 700')
+# The repaired pharmacy: same outline, door and windows; paid its price, nothing more.
+before = re.search(r'UI: repairing crashed room #\d+ \(pharmacy\) at step \d+: (\S+ \S+) door (\S+) windows (\S+); '
+                   r'balance (\d+), price (\d+)', nl)
+after = re.search(r'UI: repaired room #\d+ \(pharmacy\) at (\S+ \S+): crashed false, built true, door (\S+) '
+                  r'windows (\S+), objects \d+; balance (\d+)', nl)
+repaired = bool(before and after and before.group(1) == after.group(1) and before.group(2) == after.group(2)
+                and before.group(3) == after.group(3) and before.group(3) != 'nil'
+                and int(before.group(4)) - int(after.group(4)) == int(before.group(5)))
+ok20 = (result('nell').startswith('IN SYNC through step 900') and result('otto').startswith('IN SYNC through step 900')
         and applied('nell') == applied('otto') and 'probe_crash' in ' '.join(applied('nell')) and removed
-        and 'on the old outline: true' in nl and same_spot and built_n == built_o and placed_in)
+        and 'on the old outline: true' in nl and same_spot and 'gp@' in built_n and built_n == built_o and placed_in
+        and repaired)
 print(f"20. Destroyed room rebuilt: {result('nell')}; cleared away: {removed}; editor on the old outline: "
       f"{'on the old outline: true' in nl}; built again on the same spot, on both: {same_spot and built_n == built_o} ({built_n}); "
-      f"radiator put into it: {placed_in}")
+      f"radiator put into it: {placed_in}; repaired where it was (door, windows, its price): {repaired}"
+      f"{' $' + before.group(5) if before else ''}")
 fail |= not ok20
 
 def ended(text):

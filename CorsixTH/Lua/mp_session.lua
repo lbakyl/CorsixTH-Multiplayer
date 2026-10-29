@@ -2630,7 +2630,18 @@ function handlers.remove_crashed_room(world, cmd)
   if not room or not room.crashed then return false, "no such room" end
   local hospital = hospital_of(world, cmd)
   if room.hospital ~= hospital then return false, "not ours" end
-  local cost = room:calculateRemovalCost()
+  -- repair=1: no clearing fee; the room is built again where it was (same
+  -- door and windows) by a build_room command, at the price of a new one.
+  local repair
+  if tonumber(cmd.repair) == 1 then
+    repair = corsixth.require("mp_room_builder").repairCommand(world, room)
+    if not repair then return false, "cannot repair this room" end
+    local progress = hospital.research.research_progress[room.room_info]
+    if not world.free_build_mode and hospital.balance < progress.build_cost then
+      return false, "not enough money"
+    end
+  end
+  local cost = repair and 0 or room:calculateRemovalCost()
   -- Soot can only be removed with the option on (Litter:remove); it must
   -- not depend on each player's own setting.
   local config = TheApp.config
@@ -2641,8 +2652,15 @@ function handlers.remove_crashed_room(world, cmd)
   if not ok then error(err, 0) end
   world:resetSideObjects()
   world.rooms[room.id] = nil
-  hospital:spendMoney(cost, _S.transactions.remove_room)
+  if cost ~= 0 then hospital:spendMoney(cost, _S.transactions.remove_room) end
   local session = TheApp.mp_session
+  if repair then
+    if session and cmd.peer == session.peer_id and not session.observer then
+      repair.hospital = world:getHospitalIndex(hospital)
+      session:issue(repair)
+    end
+    return true
+  end
   local ui = world.ui
   if tonumber(cmd.rebuild) == 1 and session and cmd.peer == session.peer_id and not session.observer
       and ui and not ui:getWindow(UIEditRoom) then

@@ -777,17 +777,32 @@ function GameUI:onMouseUp(code, x, y)
             self.edit_room = room
             room:tryToEdit()
           elseif MultiplayerSession.actionsAreCommands() then
-            -- Multiplayer: a destroyed room can always be cleared away and
-            -- built again (whatever this player's own option says): for the
-            -- removal cost, then the room editor opens on the same spot.
-            local room_cost = room:calculateRemovalCost()
+            -- Multiplayer: a destroyed room can be repaired (built again where
+            -- it is, at the price of a new one with its furniture) or cleared
+            -- away (for the removal cost), whatever this player's own option
+            -- says. First the repair is offered; No offers clearing it away.
+            local clear_cost = room:calculateRemovalCost()
+            local hospital_index = room.world:getHospitalIndex(self.hospital)
+            local offer_clear = --[[persistable:mp_clear_destroyed_room_offer]] function()
+              self:addWindow(UIConfirmDialog(self, false,
+                  _S.multiplayer_window.clear_destroyed_room:format(clear_cost),
+                  --[[persistable:mp_clear_destroyed_room_confirm_dialog]] function()
+                    TheApp.mp_session:issue({kind = "remove_crashed_room", room = room.id,
+                        hospital = hospital_index})
+                  end))
+            end
             self:setEditRoom(false)
-            self:addWindow(UIConfirmDialog(self, false,
-                _S.multiplayer_window.rebuild_destroyed_room:format(room_cost),
-                --[[persistable:mp_rebuild_destroyed_room_confirm_dialog]] function()
-                  TheApp.mp_session:issue({kind = "remove_crashed_room", room = room.id, rebuild = 1,
-                      hospital = room.world:getHospitalIndex(self.hospital)})
-                end))
+            if corsixth.require("mp_room_builder").repairCommand(room.world, room) then
+              local price = self.hospital.research.research_progress[room.room_info].build_cost
+              self:addWindow(UIConfirmDialog(self, false,
+                  _S.multiplayer_window.repair_destroyed_room:format(price),
+                  --[[persistable:mp_repair_destroyed_room_confirm_dialog]] function()
+                    TheApp.mp_session:issue({kind = "remove_crashed_room", room = room.id, repair = 1,
+                        hospital = hospital_index})
+                  end, offer_clear))
+            else
+              offer_clear()
+            end
           else
             if self.app.config.remove_destroyed_rooms then
               local room_cost = room:calculateRemovalCost()

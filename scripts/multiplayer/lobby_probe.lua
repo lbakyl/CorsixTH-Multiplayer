@@ -772,6 +772,53 @@ local function run()
           else
             log("UI: no crashed room")
           end
+        elseif a == "repaircrashed" then
+          -- repaircrashed:<room>: a destroyed room of this type is repaired
+          -- (the answer Yes to the first question); repaircheck looks at it
+          -- 80 hours later.
+          local found
+          for _, candidate in pairs(world.rooms) do
+            if candidate.crashed and candidate.hospital == world.ui.hospital and
+                candidate.room_info.id == entry.arg and (not found or candidate.id < found.id) then
+              found = candidate
+            end
+          end
+          if found then
+            local rb = corsixth.require("mp_room_builder")
+            local shape = rb.repairCommand(world, found)
+            local price = world.ui.hospital.research.research_progress[found.room_info].build_cost
+            log(string.format("UI: repairing crashed room #%d (%s) at step %d: %d,%d %dx%d door %s,%s,%s windows %s; " ..
+                "balance %d, price %d", found.id, found.room_info.id, session.step, found.x, found.y, found.width,
+                found.height, tostring(shape and shape.door_x), tostring(shape and shape.door_y),
+                tostring(shape and shape.door_wall), tostring(shape and shape.windows),
+                math.floor(world.ui.hospital.balance), price))
+            session:issue({kind = "remove_crashed_room", room = found.id, repair = 1,
+                hospital = world:getHospitalIndex(world.ui.hospital)})
+            ui_script[#ui_script + 1] = {hour = session.step + 80, action = "repaircheck",
+                arg = string.format("%s:%d:%d", found.room_info.id, found.x, found.y)}
+          else
+            log("UI: no crashed " .. tostring(entry.arg))
+          end
+        elseif a == "repaircheck" then
+          local id, x, y = entry.arg:match("^([%w_]+):(%d+):(%d+)$")
+          local room
+          for _, candidate in pairs(world.rooms) do
+            if candidate.room_info.id == id and candidate.x == tonumber(x) and candidate.y == tonumber(y) then
+              room = candidate
+            end
+          end
+          if room then
+            local shape = corsixth.require("mp_room_builder").repairCommand(world, room)
+            local objects = 0
+            for _ in pairs(room.objects) do objects = objects + 1 end
+            log(string.format("UI: repaired room #%d (%s) at %d,%d %dx%d: crashed %s, built %s, door %s,%s,%s " ..
+                "windows %s, objects %d; balance %d", room.id, id, room.x, room.y, room.width, room.height,
+                tostring(room.crashed or false), tostring(room.is_active or false), tostring(shape and shape.door_x),
+                tostring(shape and shape.door_y), tostring(shape and shape.door_wall), tostring(shape and shape.windows),
+                objects, math.floor(world.ui.hospital.balance)))
+          else
+            log("UI: no repaired " .. tostring(id))
+          end
         elseif a == "rebuildfinish" then
           -- The editor opened on the old outline: build the room there again.
           local id, x, y, w, h = entry.arg:match("^([%w_]+):(%d+):(%d+):(%d+):(%d+)$")

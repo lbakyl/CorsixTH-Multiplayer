@@ -485,6 +485,8 @@ multiplayer_window = {
   chat_private_in = "%s (to you): %s",
   chat_private_out = "To %s: %s",
   rebuild_destroyed_room = "This room was destroyed. Clear it away for $%d and build it again?",
+  repair_destroyed_room = "This room was destroyed. Repair it for $%d, the price of a new one with its furniture? (No: clear it away instead.)",
+  clear_destroyed_room = "Clear the destroyed room away for $%d? The space is then free for something else.",
   -- Asking for money (bank manager)
   ask_money = "Ask a player",
   ask_caption = "Ask %s for money",

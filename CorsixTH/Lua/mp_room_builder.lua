@@ -100,6 +100,52 @@ function builder.windowCell(win, x, y, w, h)
   return wx, wy, wall
 end
 
+--! The windows in a built room's walls, as builder.windowsOf records them.
+function builder.windowsOfRoom(world, room)
+  local map = world.map.th
+  local x, y, w, h = room.x, room.y, room.width, room.height
+  local windows = {}
+  local function check(cx, cy, layer, wall)
+    if world:getWallSetFromBlockId(map:getCell(cx, cy, layer)) == "window_tiles" then
+      windows[#windows + 1] = {cx, cy, wall}
+    end
+  end
+  for cx = x, x + w - 1 do
+    check(cx, y, 2, "north")
+    check(cx, y + h, 2, "north")
+  end
+  for cy = y, y + h - 1 do
+    check(x, cy, 3, "west")
+    check(x + w, cy, 3, "west")
+  end
+  table.sort(windows, function(a, b)
+    if a[1] ~= b[1] then return a[1] < b[1] end
+    if a[2] ~= b[2] then return a[2] < b[2] end
+    return a[3] < b[3]
+  end)
+  return windows
+end
+
+--! A build_room command that builds `room` again where it is: its type,
+--! outline, door and windows (a destroyed room repaired). Nil if its door is
+--! not known: a room with swing doors built before rooms remembered theirs.
+function builder.repairCommand(world, room)
+  local x, y, w, h = room.x, room.y, room.width, room.height
+  local door_x, door_y, door_wall
+  local drawn = room.mp_door
+  if drawn and drawn.x == x and drawn.y == y and drawn.w == w and drawn.h == h then
+    door_x, door_y, door_wall = drawn.door_x, drawn.door_y, drawn.door_wall
+  elseif room.door and not room.door2 and room.door.tile_x then
+    door_x, door_y, door_wall = builder.windowCell({room.door.tile_x, room.door.tile_y, room.door.direction},
+        x, y, w, h)
+  else
+    return nil
+  end
+  return {kind = "build_room", room = room.room_info.id, x = x, y = y, w = w, h = h,
+      door_x = door_x, door_y = door_y, door_wall = door_wall,
+      windows = builder.encodeWindows(builder.windowsOfRoom(world, room))}
+end
+
 -- Values the room editor paints on the overlay layer (4) in front of a door
 -- or window it is placing (see door_floor_blueprint_markers in edit_room.lua).
 local OVERLAY_LAYER, FIRST_MARKER, LAST_MARKER = 4, 25, 36
@@ -349,6 +395,8 @@ local function try_build(world, hospital, cmd)
     return fail("unexpected phase " .. tostring(dlg.phase))
   end
   local room = dlg.room
+  -- The door as drawn, to build the room again the same way (a repair).
+  room.mp_door = {x = x, y = y, w = w, h = h, door_x = cmd.door_x, door_y = cmd.door_y, door_wall = cmd.door_wall}
   if tonumber(cmd.furnish) == 1 and dlg.phase == "objects" then
     -- Furnished by hand: keep the editor (see builder.placeObject), without
     -- a blueprint on the map until its player's machine shows it.
