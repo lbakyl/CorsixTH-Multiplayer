@@ -402,6 +402,40 @@ local function run()
     -- The same test setup runs on every peer (and on the server's referee).
     desk_x, desk_y = builder.start_game(world, session, scenario, log)
   end
+  -- MP_LOG_EVENTS=1: log the level's events as they happen (emergencies,
+  -- epidemic patients) and each month's state of every hospital. Logging
+  -- only, on this peer: nothing in the game changes.
+  if os.getenv("MP_LOG_EVENTS") == "1" then
+    local function where(hosp)
+      return string.format("%s hospital %d", world.game_date:tostring(), world:getHospitalIndex(hosp))
+    end
+    local create, add = Hospital.createEmergency, Hospital.addToEpidemic
+    Hospital.createEmergency = function(hosp, e, ...)
+      local failed = create(hosp, e, ...)
+      log(string.format("EVENT: emergency %s: %s x%s %s", where(hosp), e and e.disease.id or "random",
+          tostring(e and e.victims), failed or "started"))
+      return failed
+    end
+    Hospital.addToEpidemic = function(hosp, patient, ...)
+      log(string.format("EVENT: epidemic patient %s: %s", where(hosp), patient.disease.id))
+      return add(hosp, patient, ...)
+    end
+    local end_month = World.onEndMonth
+    World.onEndMonth = function(w, ...)
+      local parts = {}
+      for h = 1, w.mp_coop.players do
+        local hosp = w.hospitals[h]
+        local rats = 0
+        for _, e in ipairs(w.entities) do
+          if class.is(e, Rat) and e.hospital == hosp then rats = rats + 1 end
+        end
+        parts[#parts + 1] = string.format("%d: rep %d rats %d epidemic %s cured %d died %d", h, hosp.reputation,
+            rats, hosp.epidemic and hosp.epidemic.disease.id or "-", hosp.num_cured, hosp.num_deaths)
+      end
+      log("EVENT: month end " .. w.game_date:tostring() .. "; " .. table.concat(parts, "; "))
+      return end_month(w, ...)
+    end
+  end
   -- Test runs: one lockstep step per tick, whatever the shared speed (a
   -- player's own speed setting does not change a multiplayer game).
   if fast then session.unpaced, session.steps_per_tick = true, 1 end

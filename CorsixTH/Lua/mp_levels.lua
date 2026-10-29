@@ -394,6 +394,7 @@ function levels.onEndDay(world)
   -- Four times a month, on days chosen at the start of the month.
   if state.month ~= month then
     state.month = month
+    state.waiting = 0
     state.emergency_days = {}
     for i, range in ipairs(EMERGENCY_DAYS) do state.emergency_days[i] = math.random(range[1], range[2]) end
     if month == SLACK_TONGUE.warn_month then
@@ -412,10 +413,15 @@ function levels.onEndDay(world)
       sendSlackTongue(world, state)
     end
   end
+  -- An emergency nobody can take on its day (each hospital has one at a
+  -- time) waits for the first hospital that is free, until the month ends.
   if month >= EMERGENCY_PHASES[1].from and month <= EMERGENCY_LAST_MONTH and
       not (month == SLACK_TONGUE.month and day <= SLACK_TONGUE.day) then
     for _, d in ipairs(state.emergency_days) do
-      if day == d then sendEmergency(world, month) end
+      if day == d then state.waiting = (state.waiting or 0) + 1 end
+    end
+    while (state.waiting or 0) > 0 and sendEmergency(world, month) do
+      state.waiting = state.waiting - 1
     end
   end
   if month >= EPIDEMIC_FIRST_MONTH then

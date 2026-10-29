@@ -237,10 +237,21 @@ describe("Multiplayer levels", function()
     play(world, 90)
     assert.truthy(#world.emergencies >= 8)
     for _, e in ipairs(world.emergencies) do assert.equal(2, e.hospital) end
-    -- Nobody free: the emergency is skipped, not queued.
+    -- Nobody free: the emergencies wait for a free hospital, until the month ends.
     world = fake_world(2)
     world.hospitals[1].emergency, world.hospitals[2].epidemic = {}, {}
-    play(world, 90)
+    play(world, 47) -- to 16 February: the first two of February waiting
+    assert.equal(0, #world.emergencies)
+    world.hospitals[2].epidemic = nil
+    play(world, 1) -- (fake emergencies do not keep a hospital busy)
+    assert.truthy(#world.emergencies >= 2) -- (and the 17th may be a day of its own)
+    for _, e in ipairs(world.emergencies) do assert.equal(2, e.hospital) end
+    -- Not taken by the end of the month: dropped, not carried into the next.
+    world = fake_world(2)
+    world.hospitals[1].emergency, world.hospitals[2].emergency = {}, {}
+    play(world, 60) -- to 1 March
+    world.hospitals[1].emergency = nil
+    play(world, 1)
     assert.equal(0, #world.emergencies)
   end)
 
