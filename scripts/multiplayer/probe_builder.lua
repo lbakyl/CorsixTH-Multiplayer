@@ -518,7 +518,15 @@ function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at, by_
       if th:getCell(tx, ty, 4) == 24 then blue = blue + 1 end
     end
   end
-  log(string.format("UI: outline of %s after the checkmark: %d of %d tiles blue", room_id, blue, w * h))
+  -- ... and its walls, door and windows stay drawn (the editor's pictures).
+  local session = TheApp.mp_session
+  local own = session and session.remote_blueprints[session.peer_id]
+  local walls = 0
+  for _, column in pairs(own and own.walls or {}) do
+    if column.setTile then walls = walls + 1 else for _ in pairs(column) do walls = walls + 1 end end
+  end
+  log(string.format("UI: outline of %s after the checkmark: %d of %d tiles blue, %d wall pieces",
+      room_id, blue, w * h, walls))
   return true
 end
 

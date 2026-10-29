@@ -332,7 +332,11 @@ function UIEditRoom:_issueBuildRoom()
       furnish = self.mp_auto_furnish and 0 or 1})
   self.mp_issued = true
   self.ui:playSound("buildclk.wav")
-  local reserved = {x = rect.x, y = rect.y, w = rect.w, h = rect.h}
+  -- The outline's walls, door and windows stay too: the session takes them
+  -- from the editor (closing it would remove them) and removes them with the
+  -- blue floor.
+  local reserved = {x = rect.x, y = rect.y, w = rect.w, h = rect.h, walls = self.blueprint_wall_anims}
+  self.blueprint_wall_anims = {}
   self:close()
   -- The blue floor stays until the room is built (people may first have to
   -- walk out of it); closing the editor cleared its own.

@@ -858,14 +858,31 @@ local function paint_rect(world, rect, value)
   end
 end
 
+--! Take a reserved outline's wall pictures (the room editor's wall, door and
+--! window animations, by x and y) off the map.
+local function remove_walls(walls)
+  for _, column in pairs(walls) do
+    if column.setTile then
+      column:setTile(nil)
+    else
+      for _, anim in pairs(column) do anim:setTile(nil) end
+    end
+  end
+end
+
 --! Show (or with w = 0, remove) another player's room outline as a blue
---! floor on this player's map.
+--! floor on this player's map. This player's own outline may also bring the
+--! editor's walls (rect.walls), shown until it is removed.
 function MultiplayerSession:showRemoteBlueprint(peer, rect)
   local old = self.remote_blueprints[peer]
-  if old then paint_rect(self.world, old, 0) end
+  if old then
+    paint_rect(self.world, old, 0)
+    if old.walls then remove_walls(old.walls) end
+  end
   self.remote_blueprints[peer] = nil
   if rect and (rect.w or 0) > 0 and (rect.h or 0) > 0 then
-    self.remote_blueprints[peer] = {x = rect.x, y = rect.y, w = rect.w, h = rect.h, room = rect.room}
+    self.remote_blueprints[peer] = {x = rect.x, y = rect.y, w = rect.w, h = rect.h, room = rect.room,
+        walls = rect.walls}
     paint_rect(self.world, rect, BLUE_FLOOR)
     if peer ~= self.peer_id then
       self.log(string.format("showing reserved area of player %d: %s at %d,%d size %dx%d",
@@ -874,6 +891,22 @@ function MultiplayerSession:showRemoteBlueprint(peer, rect)
   end
   -- Overlapping outlines were partly cleared; paint the others again.
   for _, other in pairs(self.remote_blueprints) do paint_rect(self.world, other, BLUE_FLOOR) end
+end
+
+--! Run fn() with the outlines of showRemoteBlueprint off the map: they are
+--! no part of the game, and a save would keep them there for good. The blue
+--! floors come back afterwards; the own outline's walls do not.
+function MultiplayerSession:withoutBlueprints(fn)
+  for _, rect in pairs(self.remote_blueprints) do
+    paint_rect(self.world, rect, 0)
+    if rect.walls then
+      remove_walls(rect.walls)
+      rect.walls = nil
+    end
+  end
+  local ok, err = pcall(fn)
+  for _, rect in pairs(self.remote_blueprints) do paint_rect(self.world, rect, BLUE_FLOOR) end
+  if not ok then error(err, 0) end
 end
 
 --! Default fingerprint: an ordered projection of gameplay state (not a save).
@@ -1290,6 +1323,15 @@ function handlers.open_hospital(world, cmd)
   return true
 end
 
+--! A race: the blue floor of a rival's room being furnished is not shown
+--! here (its walls are up for everybody; what goes in is its player's).
+local function hide_rivals_floor(world, cmd)
+  local session = TheApp.mp_session
+  if session and cmd.peer ~= session.peer_id and world.mp_coop and world.mp_coop.competitive then
+    paint_rect(world, cmd, 0)
+  end
+end
+
 --! Build a room the player drew: {room, x, y, w, h, door_x, door_y,
 --! door_wall, windows, furnish}. If people stand in the area they are asked
 --! to walk out and the command is retried a few steps later (on every peer
@@ -1322,6 +1364,7 @@ function handlers.build_room(world, cmd)
         not builder.show(world, entry) then
       session:issue({kind = "room_finish", room = room.id, auto = 1})
     end
+    hide_rivals_floor(world, cmd)
   end
   return true
 end
@@ -1436,6 +1479,7 @@ function handlers.room_rebuild(world, cmd)
   builder.releaseArea(world, cmd.x, cmd.y, cmd.w, cmd.h)
   if ok then
     builder.showAgain(world, entry)
+    hide_rivals_floor(world, cmd)
   else
     builder.startRedraw(world, entry, cmd)
   end

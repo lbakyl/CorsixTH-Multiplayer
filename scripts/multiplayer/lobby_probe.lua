@@ -1142,9 +1142,22 @@ local function run()
               if not ui:_isRivals(r.door) then doors_shown = doors_shown + 1 end
             end
           end
+          -- Rivals' rooms being furnished: their floor is not blue here.
+          local furnished, blue = 0, 0
+          for _, f in pairs(world.mp_furnishing or {}) do
+            if f.peer ~= session.peer_id then
+              furnished = furnished + 1
+              for ty = f.y, f.y + f.h - 1 do
+                for tx = f.x, f.x + f.w - 1 do
+                  if world.map.th:getCell(tx, ty, 4) ~= 0 then blue = blue + 1 end
+                end
+              end
+            end
+          end
           log(string.format("UI: rivals at step %d: own hidden %d of %d; rivals shown %d of %d; " ..
-              "rival doors shown %d of %d; evil handyman shown %s", session.step, own_hidden, own,
-              rival_shown, rival, doors_shown, doors, evil))
+              "rival doors shown %d of %d; evil handyman shown %s; rival rooms being furnished %d, " ..
+              "blue tiles %d", session.step, own_hidden, own, rival_shown, rival, doors_shown, doors, evil,
+              furnished, blue))
         elseif a == "level" then
           -- What the level has: diseases, rooms there at the start, rooms
           -- that come later (research or automatic), and the goals.

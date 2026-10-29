@@ -59,7 +59,9 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
    shared hospital**, **A hospital each** (co-op) or **Competitive race**
    (click the button to cycle through them), the level and the number of
    players (or a saved game with **Continue**, see below), then **Create**.
-   When everybody has pressed **Ready**, press **Start game**.
+   When everybody has pressed **Ready**, press **Start game**. If you leave
+   the room (or a game ends), your choices are still there for the next
+   room, until you **Disconnect**.
 3. **To join:** pick the room in the list, type its password, **Join**, then
    **Ready**.
 
@@ -97,8 +99,9 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 - **Rooms:** after the walls, door and windows, you place the furniture as
   usual; the other players see the room fill up. While you draw a room, the
   others see its outline in blue (the space is reserved; in a race your
-  rivals do not). After the checkmark the floor stays blue until the walls
-  go up, also while people first walk out of the area. While furnishing
+  rivals do not). After the checkmark the blue floor and the walls, door
+  and windows you drew stay until the walls go up, also while people first
+  walk out of the area. While furnishing
   you can buy extra objects and pick up and move the ones you placed.
 - **Editing rooms:** the edit room button, then click one of your rooms.
   Everybody inside walks out first (the adviser says so); then the editor
@@ -217,7 +220,8 @@ they are switched on).
   Report, click another player's name to see how their hospital is doing.
   You cannot look into a rival's hospital: clicking their staff, patients,
   machines or doors does nothing, and you do not see the outlines of the
-  rooms they draw.
+  rooms they draw, nor the blue floor of a room they are furnishing (its
+  walls you do see).
 
 ## Dirty tricks (competitive race)
 

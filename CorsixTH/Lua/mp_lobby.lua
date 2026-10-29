@@ -708,13 +708,16 @@ function MultiplayerLobby:serviceSaves(session)
   if session.local_save and session.step >= session.local_save.at then
     local kind = session.local_save.kind
     session.local_save = nil
-    local ok, err = pcall(self._writeLocalSave, self, session, kind)
+    local ok, err = pcall(session.withoutBlueprints, session, function()
+      self:_writeLocalSave(session, kind)
+    end)
     if not ok then self.log("multiplayer: could not save: " .. tostring(err)) end
   end
   if session.save_at and session.step >= session.save_at then
     session.save_at = nil
     local persist = require("persist")
-    local data = assert(persist.compress(SaveGame()))
+    local data
+    session:withoutBlueprints(function() data = assert(persist.compress(SaveGame())) end)
     local text = MultiplayerLobby.toBase64(data)
     local parts = 0
     for i = 1, #text, MultiplayerLobby.SAVE_CHUNK do

@@ -40,6 +40,10 @@ local builder = {}
 local fixed_config = {
   enable_avg_contents = false, -- would add optional objects chosen with pairs()
   blocking_off_areas = 2,      -- default rule for rooms that block corridors
+  -- The editor's clicks (door, windows, each object put down) are heard by
+  -- the player who made them, when they made them; not again on every peer
+  -- when the command runs.
+  play_sounds = false,
 }
 
 --! Encode a window list {{x, y, wall}, ...} as "x,y,wall;..." for a command.

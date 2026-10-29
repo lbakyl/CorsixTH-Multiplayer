@@ -51,6 +51,10 @@ end
 
 local heights = {connect = 190, rooms = 435, room = 300}
 
+-- The new room's settings as last sent with Create: shown again when the
+-- player leaves the room or a game ends, forgotten on Disconnect.
+local last_room_form = nil
+
 function UIMultiplayer:UIMultiplayer(ui, status)
   local lobby = TheApp.mp_lobby
   self.view = view_of(lobby)
@@ -211,13 +215,15 @@ function UIMultiplayer:_buildRooms()
 
   y = y + 35
   label(self, 20, y, 110, S.new_room)
-  self.room_name_box = textbox(self, 135, y, WIDTH - 155, (lobby.name or "My") .. "'s room", 20,
+  local form = last_room_form or {}
+  if form.password then self.password_box:setText(form.password) end
+  self.room_name_box = textbox(self, 135, y, WIDTH - 155, form.room or (lobby.name or "My") .. "'s room", 20,
       {"alpha", "numbers", "misc"})
   y = y + 30
-  self.new_mode = "shared"
-  self.new_level = 1
-  self.new_max = 2
-  self.mode_button = button(self, 20, y, 160, S.mode_shared, self.buttonMode, T.mode)
+  self.new_mode = form.mode or "shared"
+  self.new_level = form.level or 1
+  self.new_max = form.max or 2
+  self.mode_button = button(self, 20, y, 160, MultiplayerLobby.modeLabel(self.new_mode), self.buttonMode, T.mode)
   self.level_button = button(self, 185, y, 90, S.level:format(self.new_level), self.buttonLevel, T.level)
   self.max_button = button(self, 280, y, WIDTH - 300, S.players:format(self.new_max), self.buttonMax, T.players)
   -- New game, or one of the saved multiplayer games (newest first).
@@ -346,12 +352,15 @@ function UIMultiplayer:selectContinue(wanted)
 end
 
 function UIMultiplayer:buttonCreate()
+  last_room_form = {room = self.room_name_box.text, password = self.password_box.text,
+      mode = self.new_mode, level = self.new_level, max = self.new_max}
   self.lobby:createRoom({room = self.room_name_box.text, password = self.password_box.text,
       max = self.new_max, mode = self.new_mode, level = self.new_level, difficulty = "full",
       continue_save = self.saves and self.saves[self.continue_index]})
 end
 
 function UIMultiplayer:buttonDisconnect()
+  last_room_form = nil
   self.lobby:disconnect()
   self:rebuild()
 end

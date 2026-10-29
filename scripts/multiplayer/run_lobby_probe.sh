@@ -19,8 +19,8 @@
 #   5. rooms: both draw a room on the same spot in the same hour (one wins
 #      on both machines), the other player sees the reserved outline, a
 #      later room elsewhere, a window -> IN SYNC, same rooms on both; the
-#      drawer's own outline stays blue after the checkmark; Enter with a
-#      room editor open opens the chat
+#      drawer's own outline stays blue (with its walls) after the
+#      checkmark; Enter with a room editor open opens the chat
 #   6. rooms drawn where people stand (busy hospital): they are asked to
 #      walk out and the build is retried -> IN SYNC, same rooms on both
 #   7. faxes: a VIP fax refused by clicking in the fax window, a second one
@@ -406,8 +406,8 @@ saw = 'showing reserved area of player 1: gp' in h and 'showing reserved area of
 built = sorted(r.split('@')[0] for r in rooms_g)
 # The own outline stays blue after the checkmark, until the room is built;
 # Enter with a room editor open opens the chat.
-kept = re.search(r'UI: outline of gp after the checkmark: (\d+) of (\d+) tiles blue', g)
-kept = bool(kept and kept.group(1) == kept.group(2))
+kept = re.search(r'UI: outline of gp after the checkmark: (\d+) of (\d+) tiles blue, (\d+) wall pieces', g)
+kept = bool(kept and kept.group(1) == kept.group(2) and int(kept.group(3)) > 0)
 enter = 'UI: Enter with a room editor open at step 50: chat opened' in g
 ok5 = (result('gina').startswith('IN SYNC') and result('hugo').startswith('IN SYNC')
        and rooms_g == rooms_h and built == ['gp', 'toilets'] and saw and kept and enter)
