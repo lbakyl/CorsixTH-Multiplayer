@@ -829,7 +829,8 @@ function MultiplayerSession.traceRandomDraws(on)
     real_random = math.random
     draws.n = 0
     local getinfo = debug.getinfo
-    math.random = function(...)
+    -- (rawset: luacheck keeps the standard library read-only.)
+    rawset(math, "random", function(...)
       local n = draws.n + 1
       draws.n = n
       local i = (n - 1) % DRAWS + 1
@@ -839,9 +840,9 @@ function MultiplayerSession.traceRandomDraws(on)
       draws.src[i] = info and info.short_src or "?"
       draws.line[i] = info and info.currentline or 0
       return real_random(...)
-    end
+    end)
   elseif not on and real_random then
-    math.random = real_random
+    rawset(math, "random", real_random)
     real_random = nil
   end
 end
