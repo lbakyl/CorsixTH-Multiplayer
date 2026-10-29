@@ -155,6 +155,11 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   hospital's value, balance and reputation. When a player leaves, the
   announcer says "Warning! A player has left the game." (with the
   announcements on).
+- **Destroyed rooms** (an earthquake, or a machine used until it blew up):
+  click the room. The game asks whether to **repair** it: it is built again
+  where it was, with the same door and windows and its furniture, for the
+  price of a new one. Say No and it offers to **clear it away** (for the
+  removal cost) so the space is free for something else.
 - **Epidemics:** if you cover one up, a watch appears at the bottom left.
   Its syringe button starts **vaccination mode**: click the infected patients
   and a nurse vaccinates them. While it is on, other patients cannot be
