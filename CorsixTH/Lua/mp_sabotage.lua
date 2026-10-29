@@ -494,10 +494,21 @@ function sabotage.ratAttack(world, target, level)
 end
 
 -- Days an attack rat keeps running before it goes back into a hole for good.
-local RAT_DAYS = 60
+local RAT_DAYS = 30
+-- Reputation lost a day: a point for every few attack rats alive, at most a
+-- few points (a point per rat was up to 1200 for one level 3 attack).
+local RATS_PER_POINT = 5
+local MAX_RAT_POINTS = 3
 
---! Each day: every attack rat still alive costs its hospital a reputation
---! point (from Hospital:onEndDay). After RAT_DAYS the attack wears off.
+--! Each day: the attack rats still alive cost their hospital a reputation
+--! point for every RATS_PER_POINT of them, at most MAX_RAT_POINTS (from
+--! Hospital:onEndDay). After RAT_DAYS the attack wears off.
+--! The reputation `count` attack rats cost in a day.
+function sabotage.ratPoints(count)
+  if count <= 0 then return 0 end
+  return math.min(MAX_RAT_POINTS, math.ceil(count / RATS_PER_POINT))
+end
+
 function sabotage.dailyRats(hospital)
   for _, entity in ipairs(hospital.world.entities) do
     if entity.mp_attack_rat and entity.hospital == hospital then
@@ -507,7 +518,7 @@ function sabotage.dailyRats(hospital)
   end
   local count = sabotage.countRats(hospital.world, hospital)
   if count > 0 then
-    hospital:unconditionalChangeReputation(-count)
+    hospital:unconditionalChangeReputation(-sabotage.ratPoints(count))
     if hospital.world.game_date:dayOfMonth() == 1 then
       MultiplayerSession.tellPlayer(hospital.world, hospital, S().sabotage_rats_reminder:format(count))
     end

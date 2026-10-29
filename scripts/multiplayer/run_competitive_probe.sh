@@ -136,7 +136,9 @@ rep_before = re.search(r'UI: race at step 240: .*reputation (\d+)', m)
 rep_after = re.search(r'UI: race at step 600: .*reputation (\d+)', m)
 shot = re.search(r'step \d+: peer 3 #\d+ shoot_rat -> ok', k)
 ok_r = bool(rats and int(rats.group(1)) == 10 and rep_before and rep_after
-            and int(rep_after.group(1)) < int(rep_before.group(1)) - 40 and shot)
+            # ten rats: 2 points a day (sabotage.ratPoints) for about a week; a
+            # point per rat was 70 and more
+            and 5 < int(rep_before.group(1)) - int(rep_after.group(1)) < 30 and shot)
 print(f"3. Rat attack:              rats: {rats.group(1) if rats else 0}; max's reputation {rep_before.group(1) if rep_before else '-'} -> "
       f"{rep_after.group(1) if rep_after else '-'}; a rat shot: {bool(shot)}")
 fail |= not ok_r

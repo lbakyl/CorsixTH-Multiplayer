@@ -87,8 +87,9 @@ done (`spendMoney`, "Dirty tricks"). Prices in `sabotage.PRICES`.
   tries spots over the whole map and seldom hits a small hospital), then
   5/10/20 rats (`spawnRat`) with `mp_attack_rat`. Such a rat runs on to
   another hole instead of going in (`Rat:_arrive`); `sabotage.dailyRats`
-  (from `Hospital:onEndDay`) takes a reputation point per live attack rat a
-  day and ends the attack after 60 days. Shooting is the existing
+  (from `Hospital:onEndDay`) takes a reputation point a day for every 5 live
+  attack rats, at most 3 (`sabotage.ratPoints`; a point per rat was up to
+  1200 for one level 3 attack), and ends the attack after 30 days. Shooting is the existing
   `shoot_rat` command (a click). In the original rules rats only run from
   hole to hole and are a target for the rat-catching award; they do no harm.
 
