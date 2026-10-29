@@ -127,6 +127,7 @@ function MultiplayerSession:MultiplayerSession(params)
   self.peer_name = params.peer_name
   self.send_diagnostics = params.send_diagnostics
   self.observer = params.observer
+  MultiplayerSession.traceRandomDraws(true) -- (until MultiplayerLobby:_endSession)
   self.held = false         -- stopped by the server while it repairs a desync
   self.load_data = nil      -- {step, data}: the shared save to load (see App:onTick)
   self.save_at = nil        -- the referee sends its save once at this step
@@ -813,6 +814,60 @@ end
 
 --! A description of the game state for comparing two games after a desync:
 --! date, money, rooms, and every entity (id, kind, tile) in entity order.
+-- The random draws journal. A desync in which only the random numbers differ
+-- (one game drew a number the others did not) shows nothing in the state.
+-- While a multiplayer game runs, every math.random call notes where it came
+-- from (the last DRAWS of them); a desync's diagnostics carry that list, and
+-- the games' lists side by side in the server log show the extra draw.
+local DRAWS = 2000
+local draws = {step = {}, src = {}, line = {}, n = 0}
+local real_random
+
+--! Start (on = true) or stop noting where random numbers are drawn.
+function MultiplayerSession.traceRandomDraws(on)
+  if on and not real_random then
+    real_random = math.random
+    draws.n = 0
+    local getinfo = debug.getinfo
+    math.random = function(...)
+      local n = draws.n + 1
+      draws.n = n
+      local i = (n - 1) % DRAWS + 1
+      local info = getinfo(2, "Sl")
+      local session = TheApp and TheApp.mp_session
+      draws.step[i] = session and session.step or -1
+      draws.src[i] = info and info.short_src or "?"
+      draws.line[i] = info and info.currentline or 0
+      return real_random(...)
+    end
+  elseif not on and real_random then
+    math.random = real_random
+    real_random = nil
+  end
+end
+
+--! The journal, oldest first: "step file:line" (xN for repeats in a row).
+function MultiplayerSession.randomDraws()
+  local n = draws.n
+  local first = math.max(1, n - DRAWS + 1)
+  local out, last, count = {}, nil, 0
+  local function flush()
+    if last then out[#out + 1] = count > 1 and (last .. " x" .. count) or last end
+  end
+  for k = first, n do
+    local i = (k - 1) % DRAWS + 1
+    local entry = string.format("%d %s:%d", draws.step[i], tostring(draws.src[i]):match("[^/\\]*$"), draws.line[i])
+    if entry == last then
+      count = count + 1
+    else
+      flush()
+      last, count = entry, 1
+    end
+  end
+  flush()
+  return string.format("%d draws, the last %d: %s", n, n - first + 1, table.concat(out, ", "))
+end
+
 function MultiplayerSession.diagnostics(world)
   local parts = {"date " .. world.game_date:tostring()}
   for i, h in ipairs(world.hospitals) do
@@ -831,6 +886,7 @@ function MultiplayerSession.diagnostics(world)
     parts[#parts + 1] = string.format("%s:%s@%s,%s", tostring(e.mp_id), kind,
         tostring(e.tile_x), tostring(e.tile_y))
   end
+  parts[#parts + 1] = "random " .. MultiplayerSession.randomDraws()
   return table.concat(parts, "; ")
 end
 

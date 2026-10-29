@@ -727,6 +727,10 @@ local function run()
           else
             log("UI: no patient to refer")
           end
+        elseif a == "rngcheat" then
+          -- Test only: draw a random number in this game alone (a desync in
+          -- which only the random numbers differ; the draw journal shows it).
+          log("UI: drew a random number alone at step " .. session.step .. ": " .. math.random(1, 6))
         elseif a == "crash" then
           session:issue({kind = "probe_crash", room = entry.arg})
         elseif a == "removecrashed" then

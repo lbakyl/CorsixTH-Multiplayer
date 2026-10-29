@@ -1067,6 +1067,7 @@ function MultiplayerLobby:_endSession()
   local app = TheApp
   if app and app.mp_session and app.mp_session.lobby == self then
     app.mp_session = nil
+    MultiplayerSession.traceRandomDraws(false)
   end
   if self.saved_config and app then
     for k, v in pairs(self.saved_config) do app.config[k] = v end

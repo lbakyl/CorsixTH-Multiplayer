@@ -131,6 +131,22 @@ as above; the rejoining player has no game yet and counts as stopped. The
 `LOAD` line names the rejoined player among the `peers`, so every game waits
 for them again.
 
+### A desync in the random numbers only
+
+Sometimes two games differ only in their random numbers (`rng=` in the
+fingerprints): one game drew a number the others did not, and nothing else
+differs yet. While a multiplayer game runs, every `math.random` call notes its
+step and source line (the last 2,000, `MultiplayerSession.traceRandomDraws`);
+after a desync each game's diagnostics in the server log end with that list
+("random <n> draws, the last ..."). To see which line drew in one game only:
+
+```
+sudo journalctl -u corsixth-mp --since today | python3 scripts/multiplayer/compare_draws.py - "<room>"
+```
+
+It compares each game's list with the referee's; the extra (`+`) or missing
+(`-`) entry is the culprit.
+
 ## Tests
 
 - `mp_server/tests/test_server.py`: referee hello and token, catching up,
