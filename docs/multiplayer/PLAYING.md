@@ -90,8 +90,10 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   with a fast-forward sign (Agree or Decline); it does not pause the game.
   The speed changes once more than half of the players agree, the asker
   included (with two players the other one must agree; with three, one of
-  the other two). A vote nobody decides lapses after 30 seconds. Scripted
-  players agree by themselves. If the room lets only its owner set the
+  the other two). Bots do not vote: alone with bots you change the speed
+  at once, and two people with a bot must both agree. A vote nobody
+  decides lapses after 30 seconds. Scripted test players agree by
+  themselves. If the room lets only its owner set the
   speed, the owner changes it without a vote. A click takes effect a moment
   later at every speed, Slowest and pause included (about a tenth of a
   second on a good connection). A window that pauses your own game makes
@@ -101,7 +103,8 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   others see its outline in blue (the space is reserved; in a race your
   rivals do not). After the checkmark the blue floor and the walls, door
   and windows you drew stay until the walls go up, also while people first
-  walk out of the area. While furnishing
+  walk out of the area; the room window stays open meanwhile (it cannot be
+  cancelled then: cancel the room once it stands). While furnishing
   you can buy extra objects and pick up and move the ones you placed.
 - **Editing rooms:** the edit room button, then click one of your rooms.
   Everybody inside walks out first (the adviser says so); then the editor

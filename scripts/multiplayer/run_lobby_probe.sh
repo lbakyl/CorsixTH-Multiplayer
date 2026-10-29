@@ -22,7 +22,8 @@
 #      drawer's own outline stays blue (with its walls) after the
 #      checkmark; Enter with a room editor open opens the chat
 #   6. rooms drawn where people stand (busy hospital): they are asked to
-#      walk out and the build is retried -> IN SYNC, same rooms on both
+#      walk out and the build is retried -> IN SYNC, same rooms on both; the
+#      room editor stays up (waiting) until the room is built
 #   7. faxes: a VIP fax refused by clicking in the fax window, a second one
 #      left to time out (accepted), shown at different moments on the two
 #      screens -> IN SYNC, same decisions on both
@@ -427,11 +428,25 @@ bench_cmds = [x for x in applied('judy') if 'place_object' in x]
 bench_placed = any(x.endswith('place_object -> ok') for x in bench_cmds)
 bench_back = 'gave up' in ' '.join(bench_cmds) and 'objects to place: bench x1' in j
 bench_ok = bench_tried and not any('someone is in the way' in x for x in bench_cmds) and (bench_placed or bench_back)
+# The editor waits on the screen while people walk out (retries during a
+# wait), and goes when the room is built.
+waits, waited_over_retry, wait_from = 0, False, None
+for line in j.splitlines():
+    mstep = re.search(r'UI: room editor (.*) at step (\d+)', line)
+    if mstep:
+        if mstep.group(1) == 'mp_waiting (window up)':
+            wait_from = int(mstep.group(2))
+        elif wait_from is not None:
+            waits += 1
+            wait_from = None
+    elif wait_from is not None and re.search(r'build_room -> rejected: retry', line):
+        waited_over_retry = True
 ok6 = (result('ivan').startswith('IN SYNC') and result('judy').startswith('IN SYNC') and ri == rj
-       and drawn >= 1 and retries > 0 and bench_ok)
+       and drawn >= 1 and retries > 0 and bench_ok and waits >= 1 and waited_over_retry)
 print(f"6. Rooms over people:       {result('ivan')}; same rooms on both: {ri == rj}; drawn over people: {drawn}; retries while people left: {retries}; "
       f"bench where somebody stood: {'placed' if bench_placed else 'back in the list' if bench_back else 'LOST'} "
-      f"({sum(1 for x in bench_cmds if 'retry' in x)} retries)")
+      f"({sum(1 for x in bench_cmds if 'retry' in x)} retries); editor waited on the screen {waits} times, "
+      f"over a retry: {waited_over_retry}")
 for l in sorted(set(re.findall(r'step \d+: peer 2 #\d+ build_room -> .*', j))):
     print("   " + l)
 fail |= not ok6

@@ -2,9 +2,10 @@
 # Usage: bash scripts/multiplayer/run_bot_probe.sh BINARY GAME_DATA
 #
 # Computer players (bots) through a local relay server that runs them (and
-# the headless referee). Two rooms at once:
+# the headless referee). Three rooms at once:
 #   "team" (co-op): ann hosts and adds two bots by clicking empty places;
-#   "race" (competitive): bob hosts and adds one bot.
+#   "race" (competitive): bob hosts and adds one bot;
+#   "trio" (co-op): cid hosts and adds one bot, dee joins.
 # The bots run faster than a person would (MP_BOT_PACE=20: twenty times as
 # many building steps per game day, the greeting and first dirty trick
 # twenty times sooner; MP_BOT_FAST=1: answers at once). Checks:
@@ -19,6 +20,9 @@
 #   5. the chat: every bot greets the room; Bot Agnes answers ann's question; bots' lines are grey
 #   6. competitive: the bot plays a dirty trick on bob
 #   7. both rooms IN SYNC to the end, and the referee agrees (no repairs)
+#   8. speed changes: bots do not vote. ann, alone with bots, changes the
+#      speed at once (no vote); in "trio" cid asks for a new speed and it
+#      changes only once dee has agreed in the fax
 # Exits 0 only if all checks behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
@@ -47,7 +51,7 @@ port=$((47000 + RANDOM % 900))
 export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
 export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/headless"
 export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
-export MP_REFEREE_PROBE_SCENARIO="team=none;race=none"
+export MP_REFEREE_PROBE_SCENARIO="team=none;race=none;trio=none"
 MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 PYTHONPATH="$source_dir/mp_server" \
   python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
@@ -86,10 +90,15 @@ EOF
 pids=()
 run_probe ann MP_ROLE=host MP_ROOM=team MP_MODE=coop MP_PLAYERS=3 MP_ADD_BOTS=2 MP_SCENARIO=none \
   MP_STEPS=3000 MP_STALL_LIMIT=120 \
-  MP_UI_SCRIPT="20:openhospital;40:hire:Doctor;60:hire:Doctor;400:chat:0:Hello Agnes, how are you?;700:sendstaff:Doctor;900:givemoney:2000;1000:hospitals;2000:hospitals;2990:hospitals" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;40:hire:Doctor;60:hire:Doctor;400:chat:0:Hello Agnes, how are you?;700:sendstaff:Doctor;900:givemoney:2000;1000:hospitals;2000:hospitals;2900:speedother;2990:hospitals" & pids+=($!)
 run_probe bob MP_ROLE=host MP_ROOM=race MP_MODE=competitive MP_PLAYERS=2 MP_ADD_BOTS=1 MP_SCENARIO=none \
   MP_STEPS=3000 MP_STALL_LIMIT=120 \
   MP_UI_SCRIPT="20:openhospital;40:hire:Doctor;60:hire:Doctor;500:chat:0:I will crush you;700:sendstaff:Doctor;900:givemoney:2000;1000:hospitals;2000:hospitals;2990:hospitals" & pids+=($!)
+run_probe cid MP_ROLE=host MP_ROOM=trio MP_MODE=coop MP_PLAYERS=3 MP_ADD_BOTS=1 MP_SCENARIO=none \
+  MP_STEPS=600 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital;300:speedother" & pids+=($!)
+sleep 1
+run_probe dee MP_ROLE=join MP_ROOM=trio MP_SCENARIO=none MP_STEPS=600 MP_STALL_LIMIT=120 MP_VOTE=ask \
+  MP_UI_SCRIPT="30:openhospital;310:votefax:1" & pids+=($!)
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 sleep 2
 
@@ -172,7 +181,7 @@ distinct = len(set(g[0] for g in greets.values() if g)) > 1
 # The bots' lines in ann's chat are grey.
 colours = set(re.findall(r'CHAT COLOUR: (Bot [^ ]+) (\S+)', a + b))
 grey = bool(colours) and all(c == '75,75,75' for _, c in colours)
-ok5 = len(bots) == 3 and all(greets.values()) and bool(answer) and distinct and grey
+ok5 = len(bots) == 4 and all(greets.values()) and bool(answer) and distinct and grey
 print(f"5. Chat:                    first lines: {greets}; Bot Agnes's answer to ann: {answer[:1]}; bots grey: {grey} {sorted(colours)}")
 fail |= not ok5
 
@@ -188,6 +197,19 @@ ok7 = (result('ann').startswith('IN SYNC') and result('bob').startswith('IN SYNC
        and int(confirmed.get('team', 0)) > 2500 and int(confirmed.get('race', 0)) > 2500)
 print(f"7. In sync:                 ann {result('ann')}; bob {result('bob')}; referee differs {differ}, repairs {repaired}, confirmed {confirmed}")
 fail |= not ok7
+c, d = log('cid'), log('dee')
+alone_votes = re.findall(r'speed vote \d+ for ([\w ]+): (\w+)', a)
+alone_set = [s for s, r in applied(a, 1, 'set_speed') if r == 'ok' and int(s) >= 2900]
+answered = d.find('UI: answered the speed vote fax with 1')
+agreed = d.find('speed vote 1 for ')
+trio_votes = {n: re.findall(r'speed vote \d+ for ([\w ]+): (\w+)', t) for n, t in (('cid', c), ('dee', d))}
+ok8 = (not alone_votes and bool(alone_set) and answered >= 0 and agreed > answered
+       and all(v and v[0][1] == 'agreed' for v in trio_votes.values())
+       and result('cid').startswith('IN SYNC') and result('dee').startswith('IN SYNC'))
+print(f"8. Speed and bots:          ann alone with bots: votes {alone_votes}, speed set at step {alone_set[:1]}; "
+      f"trio: dee answered the fax before the vote ended: {answered >= 0 and agreed > answered}; votes {trio_votes}; "
+      f"cid {result('cid')}; dee {result('dee')}")
+fail |= not ok8
 for name, text in sorted(bots.items()):
     errors = [l for l in text.splitlines() if 'ERROR' in l or 'could not' in l]
     if errors: print(f"   {name} problems: {errors[:5]}")

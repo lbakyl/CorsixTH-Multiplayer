@@ -285,11 +285,16 @@ function MultiplayerSession:requestSpeed(speed)
   return true
 end
 
---! How many players play (and vote on a new speed): the referee does not.
+--! How many players vote on a new speed: the people playing. The referee
+--! does not play, and bots do not vote (they would agree to anything, and
+--! with a bot one player could outvote another). Alone with bots, a player
+--! sets the speed at once.
 function MultiplayerSession:voterCount()
+  local players = self.lobby and self.lobby.players or {}
   local n = 0
   for _, p in ipairs(self.peers or {}) do
-    if p ~= 0 then n = n + 1 end
+    local player = players[p]
+    if p ~= 0 and not (player and player.bot == "1") then n = n + 1 end
   end
   return n
 end
@@ -872,17 +877,19 @@ end
 
 --! Show (or with w = 0, remove) another player's room outline as a blue
 --! floor on this player's map. This player's own outline may also bring the
---! editor's walls (rect.walls), shown until it is removed.
+--! editor's walls (rect.walls), shown until it is removed, and the editor
+--! waiting for the room (rect.editor), closed then.
 function MultiplayerSession:showRemoteBlueprint(peer, rect)
   local old = self.remote_blueprints[peer]
   if old then
     paint_rect(self.world, old, 0)
     if old.walls then remove_walls(old.walls) end
+    if old.editor and old.editor.phase == "mp_waiting" then old.editor:close() end
   end
   self.remote_blueprints[peer] = nil
   if rect and (rect.w or 0) > 0 and (rect.h or 0) > 0 then
     self.remote_blueprints[peer] = {x = rect.x, y = rect.y, w = rect.w, h = rect.h, room = rect.room,
-        walls = rect.walls}
+        walls = rect.walls, editor = rect.editor}
     paint_rect(self.world, rect, BLUE_FLOOR)
     if peer ~= self.peer_id then
       self.log(string.format("showing reserved area of player %d: %s at %d,%d size %dx%d",
@@ -895,7 +902,8 @@ end
 
 --! Run fn() with the outlines of showRemoteBlueprint off the map: they are
 --! no part of the game, and a save would keep them there for good. The blue
---! floors come back afterwards; the own outline's walls do not.
+--! floors come back afterwards; the own outline's walls and waiting editor
+--! do not.
 function MultiplayerSession:withoutBlueprints(fn)
   for _, rect in pairs(self.remote_blueprints) do
     paint_rect(self.world, rect, 0)
@@ -903,6 +911,8 @@ function MultiplayerSession:withoutBlueprints(fn)
       remove_walls(rect.walls)
       rect.walls = nil
     end
+    if rect.editor and rect.editor.phase == "mp_waiting" then rect.editor:close() end
+    rect.editor = nil
   end
   local ok, err = pcall(fn)
   for _, rect in pairs(self.remote_blueprints) do paint_rect(self.world, rect, BLUE_FLOOR) end
@@ -1183,15 +1193,18 @@ end
 
 --! Show this player the fax for the open vote if they may still answer it
 --! (or answer it at once: a scripted player, session.auto_agree "yes" or
---! "no"). Runs when the vote opens or ends, and again whenever the screen
---! may have lost the fax (a load or a repair).
+--! "no"; a bot, session.abstains, does not vote). Runs when the vote opens
+--! or ends, and again whenever the screen may have lost the fax (a load or a
+--! repair).
 function MultiplayerSession:syncVote(world)
   local vote = world and world.mp_vote
   local key = vote and vote.id or false
   if self.vote_shown == key then return end
   self.vote_shown = key
   remove_vote_faxes(world)
-  if not vote or self.observer or vote.yes[self.peer_id] or vote.no[self.peer_id] then return end
+  if not vote or self.observer or self.abstains or vote.yes[self.peer_id] or vote.no[self.peer_id] then
+    return
+  end
   if self.auto_agree then
     self:issue({kind = "speed_vote_answer", vote = vote.id, agree = self.auto_agree == "no" and 0 or 1})
     return

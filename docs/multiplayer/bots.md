@@ -65,8 +65,9 @@ referee build cannot run bots (the button is not shown there).
   months 7 to 12 on a person's open hospital (never on another bot); then one
   of the four tricks every 60 to 120 days, at a level it can afford while
   keeping $6,000. Half the time it drops a hint in the chat a little later.
-- It agrees to every speed vote and closes the windows that would pause its
-  game (annual report, information, pay rises).
+- It does not vote on speed changes (only people do, see
+  `MultiplayerSession:voterCount`) and closes the windows that would pause
+  its game (annual report, information, pay rises).
 
 ## Test
 

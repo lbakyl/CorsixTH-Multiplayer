@@ -914,8 +914,8 @@ local function run()
     if event == "chat" then bot:onChat(f) end
   end)
   local session = TheApp.mp_session
-  -- It agrees to every speed vote.
-  if session then session.auto_agree = "yes" end
+  -- Speed votes are for the people (MultiplayerSession:voterCount).
+  if session then session.abstains = true end
 
   local next_tick
   while not finished and lobby.state == "in_game" and not lobby.transport.closed do

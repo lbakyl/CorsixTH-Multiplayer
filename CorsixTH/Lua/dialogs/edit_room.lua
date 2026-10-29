@@ -128,6 +128,13 @@ function UIEditRoom:_mpDeleteUnbuilt()
 end
 
 function UIEditRoom:close(...)
+  if self.phase == "mp_waiting" then
+    -- Its drawing is off the map already (_mpWaitForBuild).
+    self.phase = "closed"
+    self.ui.edit_room = false
+    self.ui:setCursor(self.ui.default_cursor)
+    return UIPlaceObjects.close(self, ...)
+  end
   if self.phase == "objects" and self:_mpLeaveFurnishing() then return end
   if self:_mpDeleteUnbuilt() then return end
   if MultiplayerSession.actionsAreCommands() and not self.mp_issued and not self.room then
@@ -142,6 +149,17 @@ function UIEditRoom:close(...)
       self:cancel()
     end
   end
+  self:_removeWallPictures()
+  self.phase = "closed"
+  -- No longer editing a room
+  self.ui.edit_room = false
+  self:setBlueprintRect(1, 1, 0, 0)
+  self.ui:tutorialStep(3, {4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}, 1) -- not all of these links may be needed, but to be safe...
+  return UIPlaceObjects.close(self, ...)
+end
+
+--! Take the editor's wall, door and window pictures off the map.
+function UIEditRoom:_removeWallPictures()
   for k, obj in pairs(self.blueprint_wall_anims) do
     if obj.setTile then
       obj:setTile(nil)
@@ -152,12 +170,22 @@ function UIEditRoom:close(...)
     end
     self.blueprint_wall_anims[k] = nil
   end
-  self.phase = "closed"
-  -- No longer editing a room
-  self.ui.edit_room = false
+end
+
+--! Multiplayer, after the checkmark: the editor's drawing leaves the map as
+--! on closing (the session shows the outline meanwhile, see _issueBuildRoom),
+--! but the window stays up, inert, with the waiting cursor until the room is
+--! built, as single player's editor waits while people walk out of the area.
+--! The session closes it then (MultiplayerSession:showRemoteBlueprint).
+function UIEditRoom:_mpWaitForBuild()
+  while self.phase ~= "walls" do
+    self:cancel()
+  end
+  self:_removeWallPictures()
   self:setBlueprintRect(1, 1, 0, 0)
-  self.ui:tutorialStep(3, {4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}, 1) -- not all of these links may be needed, but to be safe...
-  return UIPlaceObjects.close(self, ...)
+  self.phase = "mp_waiting"
+  self.confirm_button:enable(false)
+  self.ui:setCursor(self.ui.waiting_cursor)
 end
 
 --[[ Called when building/editing of the room is about to stop because another
@@ -205,6 +233,12 @@ end
 function UIEditRoom:cancel()
   if self.confirm_dialog_open then
     -- Don't do anything as long as the confirm dialog is open.
+    return
+  end
+  if self.phase == "mp_waiting" then
+    -- Multiplayer: the room is on its way to every peer; it cannot be taken
+    -- back here (cancel it once it stands).
+    self.ui:playSound("wrong2.wav")
     return
   end
   if self.phase == "walls" then
@@ -333,13 +367,14 @@ function UIEditRoom:_issueBuildRoom()
   self.mp_issued = true
   self.ui:playSound("buildclk.wav")
   -- The outline's walls, door and windows stay too: the session takes them
-  -- from the editor (closing it would remove them) and removes them with the
-  -- blue floor.
-  local reserved = {x = rect.x, y = rect.y, w = rect.w, h = rect.h, walls = self.blueprint_wall_anims}
+  -- from the editor (clearing its drawing would remove them) and removes
+  -- them with the blue floor, closing the waiting editor then.
+  local reserved = {x = rect.x, y = rect.y, w = rect.w, h = rect.h, walls = self.blueprint_wall_anims,
+      editor = self}
   self.blueprint_wall_anims = {}
-  self:close()
+  self:_mpWaitForBuild()
   -- The blue floor stays until the room is built (people may first have to
-  -- walk out of it); closing the editor cleared its own.
+  -- walk out of it); clearing the editor's drawing cleared its own.
   session:showRemoteBlueprint(session.peer_id, reserved)
 end
 
@@ -1676,7 +1711,7 @@ function UIEditRoom:onCursorWorldPositionChange(x, y)
       end
     end
   else
-    if self.phase ~= "clear_area" and self.phase ~= "objects" then
+    if self.phase ~= "clear_area" and self.phase ~= "objects" and self.phase ~= "mp_waiting" then
       ui:setCursor(ui.app.gfx:loadMainCursor("resize_room"))
     end
     local cell_x, cell_y, wall = self:screenToWall(self.x + x, self.y + y)

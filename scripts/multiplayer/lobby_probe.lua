@@ -418,6 +418,7 @@ local function run()
   local quit = false
   local speed_seen = {}
   local seen_blueprints = {}
+  local editor_seen = "none"
   local presses = {} -- {wait = ticks, paused = only count while paused}
   local last_speed = world:getCurrentSpeed()
   local repairs = session.restarts or 0
@@ -475,6 +476,20 @@ local function run()
           table.concat(shown, ","), table.concat(watches, ",")))
     end
     if TheApp.world ~= world then log("LEVEL ENDED at step " .. session.step) break end
+    -- The room editor on this screen: each change of its phase, and whether
+    -- its window is up.
+    -- (A new room's editor is a window; a room's being furnished or edited
+    -- is ui.edit_room too, also while hidden.)
+    local ed_window = world.ui:getWindow(UIEditRoom)
+    local ed = ed_window or (class.is(world.ui.edit_room, UIEditRoom) and world.ui.edit_room)
+    local ed_now = "none"
+    if ed then
+      ed_now = tostring(ed.phase) .. (ed_window and " (window up)" or " (no window)")
+    end
+    if ed_now ~= editor_seen then
+      editor_seen = ed_now
+      log(string.format("UI: room editor %s at step %d", ed_now, session.step))
+    end
     for peer, r in pairs(session.remote_blueprints) do
       local key = string.format("%d:%s:%d,%d", peer, tostring(r.room), r.x, r.y)
       if peer ~= session.peer_id and not seen_blueprints[key] then
