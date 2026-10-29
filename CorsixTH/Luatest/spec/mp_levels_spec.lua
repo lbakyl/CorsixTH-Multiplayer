@@ -39,7 +39,7 @@ local DISEASES = {
 }
 local FROM = { -- the month from which an emergency may bring a disease, by expertise id
   [16] = 2, [15] = 2, [13] = 2, [29] = 2, [33] = 2, [2] = 2, [4] = 2, [22] = 2,
-  [18] = 4, [19] = 4,
+  [18] = 5, [19] = 5,
   [7] = 6, [9] = 6,
 }
 
@@ -220,6 +220,34 @@ describe("Multiplayer levels", function()
     end
     play(world, 365)
     assert.equal(#random, #split(world)) -- none in the second year
+  end)
+
+  it("makes pharmacy cases rare, and theatre cases common from May", function()
+    local ROOM = {[16] = "pharmacy", [15] = "pharmacy", [13] = "pharmacy", [29] = "pharmacy", [33] = "pharmacy",
+        [2] = "inflation", [4] = "psychiatry", [22] = "psychiatry", [18] = "theatre", [19] = "theatre",
+        [7] = "clinics", [9] = "clinics"}
+    local early, late = {total = 0}, {total = 0}
+    for seed = 1, 20 do
+      math.randomseed(seed)
+      local world = fake_world(4)
+      play(world, 365)
+      for _, e in ipairs(split(world)) do
+        local count = e.month >= 5 and late or early
+        local room = ROOM[e.emergency.disease.expertise_id]
+        count[room] = (count[room] or 0) + 1
+        count.total = count.total + 1
+      end
+    end
+    -- February to April: about 20 % pharmacy, no theatre yet.
+    assert.truthy((early.pharmacy or 0) / early.total < 0.3, "pharmacy early " .. (early.pharmacy or 0))
+    assert.is_nil(early.theatre)
+    assert.truthy((early.inflation or 0) + (early.psychiatry or 0) > 0.6 * early.total)
+    -- From May: about 10 % pharmacy, the theatre the most common kind.
+    assert.truthy((late.pharmacy or 0) / late.total < 0.15, "pharmacy late " .. (late.pharmacy or 0))
+    assert.truthy(late.theatre / late.total > 0.25, "theatre " .. late.theatre)
+    for room, n in pairs(late) do
+      if room ~= "total" then assert.truthy(n <= late.theatre, room) end
+    end
   end)
 
   it("brings undiscovered diseases too, and makes them known", function()

@@ -190,8 +190,9 @@ To win, a hospital needs all of these at once (and no loan):
 **Level 6, Emergency!** (2 to 4 players). In the first year (months 2 to
 12) an emergency comes four times a month, to each hospital in turn (a
 hospital busy with an emergency or epidemic, or not open yet, is skipped):
-pharmacy, inflation and psychiatry cases from February, operating theatre
-cases from April, slack tongues and broken bones (both need research) from
+inflation and psychiatry cases from February (a few for the pharmacy, the
+easy ones), operating theatre cases from May (then the most common kind),
+slack tongues and broken bones (both need research) from
 June. In May every hospital gets slack tongue patients (announced in
 March), so research the Slack Tongue Clinic early. An emergency's disease
 counts as discovered for the hospital it comes to. Emergency patients can be

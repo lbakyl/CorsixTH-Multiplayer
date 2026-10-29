@@ -150,8 +150,9 @@ end
 --
 -- Year one is the emergency season: four times a month the helicopter brings
 -- emergency patients to the hospitals in turn: pharmacy, inflation and
--- psychiatry cases from month 2, operating theatre cases from April, slack
--- tongues and broken bones (research first) from June. In May every hospital
+-- psychiatry cases from month 2 (pharmacy ones least, the easy ones),
+-- operating theatre cases from May, slack tongues and broken bones (research
+-- first) from June. In May every hospital
 -- gets a slack tongue emergency (announced in March), so the clinic must be
 -- researched quickly. An emergency's disease counts as discovered for the
 -- hospital it comes to. Fewer patients walk in meanwhile. From the second
@@ -163,17 +164,24 @@ end
 -- The events run in World:onEndDay (levels.onEndDay), so in the lockstep
 -- simulation of every peer, with the game's own random numbers.
 
---! The emergencies' diseases (expertise ids, diseases/*.lua), from month
---! `from` on: how many victims, the share that must be saved, and the bonus
---! per patient saved.
-local EMERGENCY_PHASES = {
-  -- pharmacy: uncommon cold, transparency, sleeping illness, the squits, gut rot;
-  -- inflation: bloaty head; psychiatry: king complex, tv personalities
-  {from = 2, illnesses = {16, 15, 13, 29, 33, 2, 4, 22}, min = 2, max = 4, win = 50, bonus = 500},
-  -- operating theatre: spare ribs, kidney beans
-  {from = 4, illnesses = {18, 19}, min = 1, max = 3, win = 50, bonus = 1500},
+--! The emergencies' diseases (expertise ids, diseases/*.lua) by the room
+--! that cures them: how many victims, the share that must be saved, and the
+--! bonus per patient saved.
+local EMERGENCY_KINDS = {
+  -- uncommon cold, transparency, sleeping illness, the squits, gut rot
+  pharmacy = {illnesses = {16, 15, 13, 29, 33}, min = 2, max = 4, win = 50, bonus = 500},
+  inflation = {illnesses = {2}, min = 2, max = 4, win = 50, bonus = 600}, -- bloaty head
+  psychiatry = {illnesses = {4, 22}, min = 2, max = 5, win = 50, bonus = 700}, -- king complex, tv personalities
+  theatre = {illnesses = {18, 19}, min = 1, max = 3, win = 50, bonus = 1500}, -- spare ribs, kidney beans
   -- slack tongue clinic, fracture clinic (both researched)
-  {from = 6, illnesses = {7, 9}, min = 3, max = 6, win = 60, bonus = 1000},
+  clinics = {illnesses = {7, 9}, min = 3, max = 6, win = 60, bonus = 1000},
+}
+--! How often each kind comes, from month `from` on (weights): the pharmacy
+--! is the easy one, so it comes least; the operating theatre from May.
+local EMERGENCY_PHASES = {
+  {from = 2, weights = {pharmacy = 2, inflation = 4, psychiatry = 4}},
+  {from = 5, weights = {pharmacy = 1, inflation = 2, psychiatry = 3, theatre = 4}},
+  {from = 6, weights = {pharmacy = 1, inflation = 2, psychiatry = 2, theatre = 3, clinics = 2}},
 }
 local EMERGENCY_LAST_MONTH = 12
 --! Days of each month that bring an emergency: one in each range.
@@ -269,20 +277,37 @@ local function diseaseOf(world, illness)
   end
 end
 
---! An emergency of month `month`: any disease of the phases begun by then.
+--! An emergency of month `month`: a kind by the weights of the phase begun
+--! last, then one of its diseases (kinds without one on the level left out).
 local function pickEmergency(world, month)
-  local candidates = {}
-  for _, phase in ipairs(EMERGENCY_PHASES) do
-    if phase.from <= month then
-      for _, illness in ipairs(phase.illnesses) do
-        local disease = diseaseOf(world, illness)
-        if disease then candidates[#candidates + 1] = {disease, phase} end
+  local phase
+  for _, p in ipairs(EMERGENCY_PHASES) do
+    if p.from <= month then phase = p end
+  end
+  if not phase then return nil end
+  local kinds, total = {}, 0
+  -- (In a fixed order: pairs() would not be the same on every computer.)
+  for _, name in ipairs({"pharmacy", "inflation", "psychiatry", "theatre", "clinics"}) do
+    local weight, kind = phase.weights[name], EMERGENCY_KINDS[name]
+    if weight then
+      local diseases = {}
+      for _, illness in ipairs(kind.illnesses) do
+        diseases[#diseases + 1] = diseaseOf(world, illness)
+      end
+      if #diseases > 0 then
+        kinds[#kinds + 1] = {kind = kind, weight = weight, diseases = diseases}
+        total = total + weight
       end
     end
   end
-  if #candidates == 0 then return nil end
-  local pick = candidates[math.random(1, #candidates)]
-  return makeEmergency(pick[1], pick[2])
+  if total == 0 then return nil end
+  local roll = math.random(1, total)
+  for _, k in ipairs(kinds) do
+    if roll <= k.weight then
+      return makeEmergency(k.diseases[math.random(1, #k.diseases)], k.kind)
+    end
+    roll = roll - k.weight
+  end
 end
 
 --! Start `emergency` in `hospital` if it can take one (helipad, staffed
