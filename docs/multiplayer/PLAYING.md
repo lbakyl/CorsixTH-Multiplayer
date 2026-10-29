@@ -161,8 +161,8 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 ## Levels
 
 **One shared hospital** plays the campaign levels 1 to 12, as in single
-player. **A hospital each** (co-op and the race) has five levels of its own,
-on Theme Hospital's multiplayer maps. Each takes its diseases, rooms and
+player. **A hospital each** (co-op and the race) has six levels of its own,
+on Theme Hospital's multiplayer maps (level 6 is a scenario, below). Each takes its diseases, rooms and
 research from a campaign level, so level 1 is the smallest. From level 2 on
 the training room is there from the start (there are few staff to hire, so
 training should begin early):
@@ -174,6 +174,7 @@ training should begin early):
 | 3 | $50,000 | 15 | as level 2, operating theatre (scanner, fracture clinic) |
 | 4 | $60,000 | 26 | as level 3, cardiogram, fracture clinic (ultrascan, hair restoration, electrolysis, blood machine, decontamination) |
 | 5 | $70,000 | 33 | as level 4 (also DNA fixer, jelly vat) |
+| 6 | $60,000 | 15 | as level 3, on the map EMERGENCY! |
 
 To win, a hospital needs all of these at once (and no loan):
 
@@ -184,6 +185,21 @@ To win, a hospital needs all of these at once (and no loan):
 | 3 | 650 | $100,000 | plot + $110,000 | 200 | 50% |
 | 4 | 700 | $200,000 | plot + $150,000 | 350 | 55% |
 | 5 | 750 | $350,000 | plot + $200,000 | 500 | 60% |
+| 6 | 550 | $60,000 | plot + $80,000 | 150 | 40% |
+
+**Level 6, Emergency!** (2 to 4 players). In the first year (months 2 to
+12) an emergency comes twice a month, to each hospital in turn (a hospital
+busy with an emergency or epidemic, or not open yet, is skipped): first ones
+the pharmacy or the inflation room can cure, from month 5 psychiatry cases
+too, from month 8 slack tongues, broken bones and operating theatre cases.
+Only diseases the hospital has already discovered are sent. Refusing an
+emergency, or leaving its fax unanswered, costs 15 reputation. Fewer patients
+walk in during that year; more come from month 13. From month 14 an epidemic
+starts in every hospital every two to three months. Rats are more frequent,
+and every month or two a swarm moves into one of the hospitals. Many
+consultants are for hire at first; from month 9 every doctor for hire is a
+junior. A hospital fails a year end only when more than 70% of its patients
+died (the other levels: half).
 
 The value goal is what the biggest starting plot on the map is worth plus
 the amount above, rounded up to $5,000; the Progress Report (F8) shows the

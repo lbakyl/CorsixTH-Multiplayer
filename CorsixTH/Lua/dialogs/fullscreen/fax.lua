@@ -234,6 +234,15 @@ function UIFax:choice(choice_number)
       self.ui:addWindow(UIWatch(self.ui, "emergency", hospital))
     end
   elseif choice == "refuse_emergency" then
+    -- Some multiplayer levels make refusing (or not answering) cost reputation.
+    local penalty = self.ui.app.world.map.level_config.mp_refused_emergency
+    if penalty and hospital.emergency then
+      hospital:changeReputation("emergency_refused", hospital.emergency.disease, penalty)
+      if self.ui.app.world.mp_coop then
+        MultiplayerSession.tellPlayer(self.ui.app.world, hospital,
+            _S.multiplayer_window.emergency_refused:format(-penalty))
+      end
+    end
     -- Multiplayer co-op asks the hospital whether an emergency is under way.
     if self.ui.app.world.mp_coop then hospital.emergency = nil end
     self.ui.app.world:nextEmergency()

@@ -213,12 +213,14 @@ function Map:load(level, difficulty, level_name, map_file, level_intro, map_edit
       end
       self.level_config = result
     end
-  elseif type(level) == "string" and level:match("^net%d%d$") then
+  elseif corsixth.require("mp_levels").parseLevelId(level) then
     -- One of Theme Hospital's original multiplayer maps ("net20" ... "net44":
     -- LEVEL.L20 with NET20.SAM etc.), used by multiplayer co-op and
     -- competitive. What the level has comes from a campaign level (mp_levels).
+    -- ("net42_6": level 6 on map 42.)
     local errors, result, _
-    local digits = level:sub(4)
+    local mp_levels = corsixth.require("mp_levels")
+    local players, digits, mp_level = mp_levels.parseLevelId(level)
     self.level_number = level
     self.difficulty = "full"
     local data
@@ -227,15 +229,15 @@ function Map:load(level, difficulty, level_name, map_file, level_intro, map_edit
     _, objects = self.th:load(data)
     errors, result = self:_loadNetLevelConfig(digits, base_config)
     if errors then return nil, errors end
-    local mp_levels = corsixth.require("mp_levels")
-    local mp_level = tonumber(digits:sub(2)) + 1
     local campaign
     errors, campaign = self:_loadOriginalCampaignLevel("full",
         mp_levels.LEVELS[mp_levels.clamp(mp_level)].campaign, loadfile(base_config_path)())
     if errors then return nil, errors end
-    mp_levels.apply(result, campaign, mp_level)
+    mp_levels.apply(result, campaign, mp_level, players)
     self.level_config = result
     self.level_name = level_name or self:_netLevelName(digits) or level:upper()
+    local intro = mp_levels.LEVELS[mp_levels.clamp(mp_level)].intro
+    self.level_intro = intro and _S.multiplayer_window[intro]
   elseif map_editor then
     local _
     -- We're being fed data by the map editor.

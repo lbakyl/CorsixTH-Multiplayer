@@ -1474,6 +1474,9 @@ function World:onEndDay()
   -- See if its time for an earthquake
   self.earthquake:onEndDay()
 
+  -- A multiplayer level with events of its own (mp_levels, level 6).
+  if self.map.level_config.mp_events then corsixth.require("mp_levels").onEndDay(self) end
+
   -- Maybe it's time for an emergency?
   if self.game_date:monthOfGame() == self.next_emergency_month and
       self.game_date:dayOfMonth() == self.next_emergency_day then

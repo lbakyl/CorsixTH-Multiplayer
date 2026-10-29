@@ -849,8 +849,7 @@ end
 --! LEVEL.L<players><n>, n = room level 1..5 -> 0..4, with what the level has
 --! from mp_levels.
 function MultiplayerLobby.coopLevelId(players, level)
-  players = math.max(2, math.min(4, players))
-  return string.format("net%d%d", players, corsixth.require("mp_levels").clamp(level) - 1)
+  return corsixth.require("mp_levels").levelId(players, level)
 end
 
 -- Lists of game definitions that App:loadLuaFolder() fills in directory

@@ -898,11 +898,15 @@ local function hasRatholeRoute(self)
 end
 
 local function dailyUpdateRats(self)
-  local max_rats = math.max(1, math.floor(self:getOwnedTileCount() / tiles_per_rat))
+  -- (A multiplayer level may have more rats: mp_levels, level 6.)
+  local level_rats = self.world.map.level_config.mp_rats or {}
+  local max_rats = math.max(1, math.floor(self:getOwnedTileCount() /
+      (level_rats.tiles_per_rat or tiles_per_rat)))
   if countActiveRats(self) >= max_rats then return end
 
   local litter = self.world.map.th:getLitterFraction(self:getPlayerIndex())
-  if math.random() < base_rat_spawn_chance + litter * litter_rat_spawn_chance then
+  if math.random() < (level_rats.chance or base_rat_spawn_chance) +
+      litter * (level_rats.litter or litter_rat_spawn_chance) then
     -- Clean hospitals normally have no ratholes. Add only enough for a rat to
     -- run between real holes when a spawn attempt succeeds.
     for _ = 1, 2 do
