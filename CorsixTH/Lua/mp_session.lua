@@ -1779,6 +1779,23 @@ end
 --! main menu with `message` and into the lobby of the same server.
 --!param message (table) lines for the main menu
 --!param movie (string) [optional] "win" or "lose": the video to play first
+--! Is this game ending for everybody: finishing already, or "Back to the
+--! lobby" (a fax answer) received and still to be applied? Another player's
+--! game can get there first and leave, and its "left" must not be announced.
+function MultiplayerSession:isEnding()
+  if self.finish_request then return true end
+  local panel = self.world and self.world.ui and self.world.ui.bottom_panel
+  for _, cmd in ipairs(self.pending) do
+    if cmd.kind == "fax_choice" and panel and panel.findMessageIcon then
+      local icon = panel:findMessageIcon(tonumber(cmd.msg))
+      local choices = icon and type(icon.message) == "table" and icon.message.choices
+      local chosen = choices and choices[tonumber(cmd.choice)]
+      if chosen and chosen.choice == "return_to_main_menu" then return true end
+    end
+  end
+  return false
+end
+
 function MultiplayerSession:finish(message, movie)
   self.finish_request = self.finish_request or {message = message, movie = movie}
 end

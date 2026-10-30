@@ -607,6 +607,9 @@ function MultiplayerLobby:_onLEFT(f)
   local session = TheApp and TheApp.mp_session
   if session and session.lobby == self then
     session:removePeer(tonumber(f.peer))
+    -- (Not when the game is ending for everybody: that player's game only got
+    -- there first.)
+    if session:isEnding() then return end
     session.notify((f.name or "A player") .. " has left the game.")
     -- Also said aloud: "Warning! A player has left the game."
     if not self.is_referee and TheApp.audio then
