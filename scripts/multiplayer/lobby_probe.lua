@@ -727,6 +727,23 @@ local function run()
           else
             log("UI: no patient to refer")
           end
+        elseif a == "watches" then
+          -- The countdown watches on this screen, and this hospital's
+          -- countdowns in the simulation (emergency, epidemic cover up).
+          local shown = {}
+          for _, w in ipairs(world.ui.windows) do
+            if class.is(w, UIWatch) then
+              shown[#shown + 1] = string.format("%s@%d open %d tick %d", w.count_type,
+                  world:getHospitalIndex(w.hospital), w.open_timer, w.tick_timer)
+            end
+          end
+          local h = world.ui.hospital
+          local e = h.mp_emergency_timer
+          local ep = h.epidemic and h.epidemic.timer
+          log(string.format("UI: watches at step %d: %s; emergency %s, timer %s; epidemic %s, timer %s", session.step,
+              #shown > 0 and table.concat(shown, ", ") or "none", tostring(h.emergency ~= nil),
+              e and string.format("open %d tick %d", e.open_timer, e.tick_timer) or "-",
+              tostring(h.epidemic ~= nil), ep and ep.open_timer and string.format("open %d", ep.open_timer) or "-"))
         elseif a == "rngcheat" then
           -- Test only: draw a random number in this game alone (a desync in
           -- which only the random numbers differ; the draw journal shows it).
