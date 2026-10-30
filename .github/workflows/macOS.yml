@@ -34,6 +34,11 @@ jobs:
           key: macos-app-prefix-${{ hashFiles('scripts/multiplayer/build_macos_app.sh') }}
       - name: Build the app
         run: bash scripts/multiplayer/build_macos_app.sh "$(git rev-parse --short=8 HEAD)"
+      - name: Videos (FFmpeg linked and bundled)
+        run: |
+          app=dist/CorsixTH-Multiplayer/CorsixTH.app
+          otool -L "$app/Contents/MacOS/CorsixTH" | grep -E "avcodec|avformat|swscale|swresample"
+          ls "$app/Contents/Frameworks" | grep -E "^libavcodec"
       - name: Smoke test (Lua modules, build checksum, LuaSocket to a local server)
         run: |
           PYTHONPATH=mp_server python3 -m corsixth_mp --host 127.0.0.1 --port 47800 --log-level INFO > server.log 2>&1 &

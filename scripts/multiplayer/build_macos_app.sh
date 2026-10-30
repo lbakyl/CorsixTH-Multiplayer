@@ -6,7 +6,8 @@
 # it is part of the multiplayer build id), so Lua 5.5 and the Lua modules the
 # game loads (LuaFileSystem, LPeg, LuaSocket) are built here and bundled, as
 # in build_linux_package.sh. SDL3 and SDL3_mixer are built from source (the
-# same versions as on Linux); FreeType, libpng, zstd and FluidSynth come from
+# same versions as on Linux), and a small FFmpeg for the videos; FreeType,
+# libpng, zstd and FluidSynth come from
 # Homebrew and are copied into the app with dylibbundler (CMake's
 # fixup_bundle cannot follow Homebrew's @rpath references). The modules go
 # into Contents/Resources next to CorsixTH.lua, not into its Lua folder: the
@@ -51,6 +52,22 @@ if [[ ! -f "$P/lib/libSDL3_mixer.dylib" ]]; then
     -DSDLMIXER_MP3_MPG123=OFF -DSDLMIXER_OPUS=OFF -DSDLMIXER_VORBIS_VORBISFILE=OFF -DSDLMIXER_WAVPACK=OFF
   cmake --build SDL_mixer/build -j"$jobs"
   cmake --install SDL_mixer/build
+fi
+
+# FFmpeg for the game's videos (intro, level won or lost, the end of a
+# multiplayer game): only what Theme Hospital's Smacker videos need (the same
+# major version as the Windows build, avcodec 62), shared, nothing taken from
+# Homebrew; bundled with the other libraries below.
+if [[ ! -f "$P/lib/libavcodec.dylib" ]]; then
+  [[ -d ffmpeg ]] || git clone -q --depth 1 --branch n8.0 https://github.com/FFmpeg/FFmpeg.git ffmpeg
+  (cd ffmpeg && ./configure --prefix="$P" --arch=arm64 --target-os=darwin --cc=clang \
+    --extra-cflags="-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET" \
+    --extra-ldflags="-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET" \
+    --enable-shared --disable-static --disable-programs --disable-doc --disable-network \
+    --disable-autodetect --disable-everything \
+    --enable-demuxer=smacker --enable-decoder=smackvid,smackaud --enable-protocol=file \
+    --enable-swscale --enable-swresample \
+    && make -j"$jobs" && make install)
 fi
 
 # 2. Lua 5.5 with LuaFileSystem, LPeg and LuaSocket.
@@ -100,7 +117,7 @@ fi
 cmake -S "$src" -B "$work/build" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -DCMAKE_PREFIX_PATH="$P;$brew_prefix" -DCMAKE_INSTALL_PREFIX="$work/stage" \
   -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
-  -DWITH_FIXUP_BUNDLE=OFF -DWITH_MOVIES=OFF -DWITH_UPDATE_CHECK=OFF -DWITH_MIDI_DEVICE=OFF -DWITH_LUAROCKS=OFF \
+  -DWITH_FIXUP_BUNDLE=OFF -DWITH_MOVIES=ON -DWITH_UPDATE_CHECK=OFF -DWITH_MIDI_DEVICE=OFF -DWITH_LUAROCKS=OFF \
   -DFETCH_SOUNDFONT=ON -DFETCH_UNICODE_FONT=ON -DWITH_FONT="" \
   -DLUA_INCLUDE_DIR="$P/include-cmake" -DLUA_LIBRARY="$P/lib/liblua.a" \
   -DCMAKE_EXE_LINKER_FLAGS="-Wl,-force_load,$P/lib/liblua.a"
