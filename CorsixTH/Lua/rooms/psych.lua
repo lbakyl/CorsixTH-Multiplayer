@@ -78,10 +78,32 @@ function PsychRoom:commandEnteringStaff(staff)
   return Room.commandEnteringStaff(self, staff, true)
 end
 
+--! The room's own object of a type and the tile it is used from, when
+--! findObjectNear finds none: it skips the tile the search starts on, so a
+--! doctor standing on the chair's tile (just up from it) found no chair.
+function PsychRoom:_ownObject(object_type_name)
+  -- (The first by tile, not by pairs(): the same one on every multiplayer peer.)
+  local found
+  for obj in pairs(self.objects) do
+    if obj.object_type.id == object_type_name and obj.tile_x and (not found or obj.tile_x < found.tile_x or
+        (obj.tile_x == found.tile_x and obj.tile_y < found.tile_y)) then
+      found = obj
+    end
+  end
+  if not found then return nil end
+  local x, y = found.tile_x, found.tile_y
+  local orientation = found.object_type.orientations and found.object_type.orientations[found.direction]
+  if orientation and orientation.use_position then
+    x, y = x + orientation.use_position[1], y + orientation.use_position[2]
+  end
+  return found, x, y
+end
+
 function PsychRoom:commandEnteringPatient(patient)
   local staff = self.staff_member
 
   local obj, ox, oy = self.world:findObjectNear(patient, "couch")
+  if not obj then obj, ox, oy = self:_ownObject("couch") end
   patient:walkTo(ox, oy)
   patient:queueAction(UseObjectAction(obj))
 
@@ -129,6 +151,7 @@ function PsychRoom:commandEnteringPatient(patient)
     end
   end
   obj, ox, oy = self.world:findObjectNear(staff, "comfortable_chair")
+  if not obj then obj, ox, oy = self:_ownObject("comfortable_chair") end
   staff:walkTo(ox, oy)
   staff:queueAction(UseObjectAction(obj):setLoopCallback(loop_callback))
 
