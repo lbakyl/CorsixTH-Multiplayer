@@ -617,6 +617,23 @@ int l_anim_draw(lua_State* L) {
   return 1;
 }
 
+//! setFloorMarker(r, g, b, a): the bar of animation::set_floor_marker
+//! (no arguments: none).
+int l_anim_set_floor_marker(lua_State* L) {
+  animation* pAnimation = luaT_testuserdata<animation>(L);
+  uint32_t colour = 0;
+  if (!lua_isnoneornil(L, 2)) {
+    colour = palette::pack_argb(
+        static_cast<uint8_t>(luaL_optinteger(L, 5, 0xFF)),
+        static_cast<uint8_t>(luaL_checkinteger(L, 2)),
+        static_cast<uint8_t>(luaL_checkinteger(L, 3)),
+        static_cast<uint8_t>(luaL_checkinteger(L, 4)));
+  }
+  pAnimation->set_floor_marker(colour);
+  lua_settop(L, 1);
+  return 1;
+}
+
 int l_anim_set_patient_effect(lua_State* L) {
   animation* pAnimation = luaT_testuserdata<animation>(L);
   animation_effect flags =
@@ -752,6 +769,7 @@ void lua_register_anims(const lua_register_state* pState) {
     lcb.add_function(l_anim_tick<animation>, "tick");
     lcb.add_function(l_anim_draw<animation>, "draw", lua_metatable::surface);
     lcb.add_function(l_anim_set_patient_effect, "setPatientEffect");
+    lcb.add_function(l_anim_set_floor_marker, "setFloorMarker");
   }
 
   // Duplicate AnimMetatable[1,2] to SpriteListMetatable[1,2]

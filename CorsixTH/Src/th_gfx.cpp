@@ -1191,6 +1191,31 @@ bool are_flags_set(uint32_t val, uint32_t flags) {
 
 animation::animation() { patient_effect_offset = rand(); }
 
+namespace {
+
+//! The bar of animation::set_floor_marker: a flat rounded bar with a dark
+//! rim, its top at the feet (x, y), slightly see-through.
+void draw_floor_marker(render_target* canvas, uint32_t colour, int x, int y,
+                       int scale) {
+  const int w = 18 * scale;
+  const int h = 4 * scale;
+  const int left = x - w / 2;
+  const uint32_t rim = palette::pack_argb(0xB0, 20, 20, 20);
+  canvas->fill_rect(rim, static_cast<float>(left), static_cast<float>(y),
+                    static_cast<float>(w), static_cast<float>(h + 2 * scale));
+  canvas->fill_rect(rim, static_cast<float>(left - scale),
+                    static_cast<float>(y + scale),
+                    static_cast<float>(w + 2 * scale), static_cast<float>(h));
+  canvas->fill_rect(colour, static_cast<float>(left + scale),
+                    static_cast<float>(y + scale),
+                    static_cast<float>(w - 2 * scale), static_cast<float>(h));
+  canvas->fill_rect(colour, static_cast<float>(left),
+                    static_cast<float>(y + 2 * scale), static_cast<float>(w),
+                    static_cast<float>(h - 2 * scale));
+}
+
+}  // namespace
+
 void animation::draw(render_target* canvas, const xy_pair& draw_pos) {
   if (are_flags_set(flags, thdf_alpha_50 | thdf_alpha_75)) return;
 
@@ -1200,6 +1225,11 @@ void animation::draw(render_target* canvas, const xy_pair& draw_pos) {
     sound_player* pSounds = sound_player::get_singleton();
     if (pSounds) pSounds->play_at(sound_to_play, x, y, 0);
     sound_to_play = 0;
+  }
+  // (A tile's position is its top corner; people stand 16 lower.)
+  if (floor_marker != 0) {
+    draw_floor_marker(canvas, floor_marker, x, y + 16 * scale_factor,
+                      scale_factor);
   }
   if (manager) {
     if (flags & thdf_crop) {

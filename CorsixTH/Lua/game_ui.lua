@@ -265,6 +265,9 @@ function GameUI:draw(canvas)
   if self.map_editor or not self.in_visible_diamond then
     canvas:fillBlack()
   end
+  -- Multiplayer co-op: whose patients and staff (a bar in the player's
+  -- colour, drawn by the engine just before each person).
+  local markers_by_engine = app.mp_session and MultiplayerSession.setFloorMarkers(self)
   local zoom = self:getEffectiveZoom()
   local dx = self.screen_offset_x +
       math.floor((0.5 - math.cosmetic_random()) * self.shake_screen_intensity * shake_screen_max_movement * 2)
@@ -278,8 +281,9 @@ function GameUI:draw(canvas)
     zoom = 1
     app.map:draw(canvas, dx, dy, scr_w, scr_h, 0, 0)
   end
-  -- Multiplayer co-op: whose patients and staff (a bar in the player's colour).
-  if app.mp_session then MultiplayerSession.drawMarkers(self, canvas, dx, dy, zoom) end
+  if app.mp_session and not markers_by_engine then
+    MultiplayerSession.drawMarkers(self, canvas, dx, dy, zoom)
+  end
   Window.draw(self, canvas, 0, 0) -- NB: not calling UI.draw on purpose
   self:drawTooltip(canvas)
   if self.simulated_cursor then

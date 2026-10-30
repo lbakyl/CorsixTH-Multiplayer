@@ -1023,7 +1023,37 @@ function MultiplayerSession.dressPatient(patient)
   patient:setLayer(1, MultiplayerSession.CLOTHES[(index - 1) % #MultiplayerSession.CLOTHES + 1])
 end
 
---! Draw the markers over the map (GameUI:draw, after the map).
+--! Before the map is drawn (GameUI:draw): give every person the bar of
+--! their hospital's colour (or none), drawn by the engine just before them,
+--! so that whoever stands in front covers it (TH.animation:setFloorMarker).
+--! Returns false if this game's engine cannot (then drawMarkers after the map).
+function MultiplayerSession.setFloorMarkers(ui)
+  local world = ui.app.world
+  local first = world and world.entities and world.entities[1]
+  if not (first and first.th and first.th.setFloorMarker) then return false end
+  local mode = MultiplayerSession.markers
+  local on = mode ~= "off" and TheApp.mp_session and world.mp_coop and world.mp_coop.players > 1
+  local cache = {}
+  for _, e in ipairs(world.entities) do
+    if e.humanoid_class and e.th then
+      local hospital = on and e.hospital
+      local c
+      if hospital and not (mode == "others" and hospital == ui.hospital) and
+          (class.is(e, Patient) or class.is(e, Staff)) then
+        c = cache[hospital]
+        if c == nil then
+          c = MultiplayerSession.markerColour(world, hospital) or false
+          cache[hospital] = c
+        end
+      end
+      if c then e.th:setFloorMarker(c[1], c[2], c[3], 0xE0) else e.th:setFloorMarker() end
+    end
+  end
+  return true
+end
+
+--! Draw the markers over the map (GameUI:draw, after the map; for an engine
+--! without setFloorMarker).
 --!param dx, dy the map's screen offset; zoom the map's zoom
 function MultiplayerSession.drawMarkers(ui, canvas, dx, dy, zoom)
   local mode = MultiplayerSession.markers

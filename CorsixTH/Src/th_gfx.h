@@ -581,6 +581,12 @@ class animation : public animation_base {
   void depersist(lua_persist_reader* reader);
 
   void set_patient_effect(animation_effect patient_effect);
+
+  //! Multiplayer: a bar in a player's colour on the floor at this person's
+  //! feet, drawn just before them (so whoever stands in front covers it).
+  //! Only a picture: set by the screen every frame, never saved.
+  //! @param colour packed ARGB (palette::pack_argb), 0 for none.
+  void set_floor_marker(uint32_t colour) { floor_marker = colour; }
   void set_animation_kind(animation_kind anim_kind);
   animation_kind get_animation_kind() { return anim_kind; }
 
@@ -603,6 +609,7 @@ class animation : public animation_base {
   int crop_column{};
   animation_kind anim_kind{animation_kind::normal};
   animation_effect patient_effect{animation_effect::none};
+  uint32_t floor_marker{0};  ///< see set_floor_marker (not persisted)
   //! Number of game_ticks to offset animation by so they aren't all
   //! running in sync.
   size_t patient_effect_offset;
