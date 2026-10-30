@@ -992,7 +992,7 @@ end
 -- game. MultiplayerSession.markers: "all", "others" or "off" (the bars).
 --------------------------------------------------------------------------------
 
-MultiplayerSession.markers = "all"
+MultiplayerSession.markers = "others" -- (a new sight: own people plain at first)
 
 -- Each hospital's colour, by hospital index: its patients wear it (the
 -- original game's four shirt colours, layer 1 of a patient's animation:

@@ -240,6 +240,53 @@ function UIMultiplayerTrade.drawSendIcon(canvas, ix, iy, s, w, h)
   canvas:drawRect(arrow, fx + 19 * s, fy + 12 * s, 1 * s, 4 * s)
 end
 
+--! Draw the purple "send to another player" button (size x size, 26 in the
+--! staff list, 24 in the patient window like its Close button; at ix, iy, UI
+--! scale s): a raised square like the offer icons, pressed in while held,
+--! with a person in a white coat and a gold arrow pointing away.
+function UIMultiplayerTrade.drawSendButton(canvas, ix, iy, s, size, pressed)
+  size = size or 26
+  local k = size >= 26 and 0 or -1 -- (the figure one pixel up and left at 24)
+  local function rect(c, rx, ry, w, h)
+    canvas:drawRect(canvas:mapRGB(c[1], c[2], c[3]), ix + rx * s, iy + ry * s, w * s, h * s)
+  end
+  local light, dark = {206, 168, 246}, {54, 12, 84}
+  local ring, face, shine = {124, 60, 184}, {148, 78, 208}, {172, 112, 228}
+  if pressed then
+    light, dark = dark, {184, 142, 228}
+    ring, face, shine = {100, 46, 156}, {120, 58, 176}, {120, 58, 176}
+  end
+  rect(dark, 0, 0, size, size)
+  rect(light, 0, 0, size - 1, 1)
+  rect(light, 0, 0, 1, size - 1)
+  rect(ring, 1, 1, size - 2, size - 2)
+  rect(face, 2, 2, size - 4, size - 4)
+  rect(shine, 2, 2, size - 4, 3)
+  local white, tint = {243, 243, 243}, {214, 196, 240}
+  local gold, edge = {246, 200, 64}, {170, 120, 20}
+  local d = (pressed and 1 or 0) + k
+  rect(white, 6 + d, 3 + d, 6, 6) -- head, rounded
+  rect(tint, 11 + d, 4 + d, 1, 4)
+  rect(face, 6 + d, 3 + d, 1, 1)
+  rect(face, 11 + d, 3 + d, 1, 1)
+  rect(face, 6 + d, 8 + d, 1, 1)
+  rect(face, 11 + d, 8 + d, 1, 1)
+  rect(white, 3 + d, 10 + d, 12, 3) -- shoulders
+  rect(face, 3 + d, 10 + d, 1, 1)
+  rect(face, 14 + d, 10 + d, 1, 1)
+  rect(white, 4 + d, 13 + d, 10, 9) -- coat, arms at the sides
+  rect(tint, 13 + d, 11 + d, 1, 11)
+  rect(ring, 6 + d, 14 + d, 1, 7)
+  rect(ring, 11 + d, 14 + d, 1, 7)
+  rect(face, 8 + d, 10 + d, 2, 3) -- collar
+  rect(edge, 15 + d, 17 + d, 6, 2) -- arrow
+  rect(gold, 15 + d, 16 + d, 6, 2)
+  rect(gold, 20 + d, 13 + d, 1, 8)
+  rect(gold, 21 + d, 14 + d, 1, 6)
+  rect(gold, 22 + d, 15 + d, 1, 4)
+  rect(edge, 23 + d, 16 + d, 1, 2)
+end
+
 --! Open the window (co-op only), optionally with a member of staff selected.
 function UIMultiplayerTrade.open(ui, staff)
   if not (TheApp.mp_session and ui.app.world and ui.app.world.mp_coop) then return end

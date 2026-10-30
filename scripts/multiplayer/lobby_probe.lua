@@ -1957,6 +1957,17 @@ local function run()
           log(string.format("UI: camera at the %s edge: offset %d,%d (step %d)", entry.arg,
               ui.screen_offset_x, ui.screen_offset_y, session.step))
           shot("edge-" .. entry.arg)
+        elseif a == "patientwin" then
+          -- The window of this player's first patient (its Refer button), shot.
+          local patient = world.ui.hospital.patients[1]
+          if patient then
+            local window = UIPatient(world.ui, patient)
+            world.ui:addWindow(window)
+            shot("patient-window")
+            window:close()
+          else
+            log("UI: no patient for the patient window at step " .. session.step)
+          end
         elseif a == "screen" then
           -- Open a window by its class name, take a screenshot, close it.
           -- "<class>:<page>" turns to that page first; a list of staff shows

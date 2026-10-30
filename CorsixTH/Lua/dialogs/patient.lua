@@ -98,15 +98,17 @@ function UIPatient:UIPatient(ui, patient)
   local world = ui.app.world
   if TheApp.mp_session and world.mp_coop and world.mp_coop.players > 1 and
       patient.hospital == ui.hospital and not self.mp_view_only then
-    -- A purple icon (like the offer icon) in the free place between the
-    -- close button and the queue button.
-    local icon = self:addColourPanel(147, 49, 24, 28, 48, 16, 74)
+    -- The staff list's purple send button, the size of the Close button
+    -- above it (MATROFTT's design), in the free place below that button.
+    local icon = self:addColourPanel(147, 49, 24, 24, 48, 16, 74)
     icon.custom_draw = --[[persistable:patient_refer_icon_draw]] function(panel, canvas, x, y)
       local s = TheApp.gfx:getUIScale()
+      local window = panel.window
       -- (Through _G: a saved game keeps no reference to other files' locals.)
-      _G.UIMultiplayerTrade.drawSendIcon(canvas, x + panel.x * s, y + panel.y * s, s)
+      _G.UIMultiplayerTrade.drawSendButton(canvas, x + panel.x * s, y + panel.y * s, s, 24,
+          window.refer_button ~= nil and window.active == window.refer_button)
     end
-    icon:makeButton(0, 0, 24, 28, nil, self.referPatient)
+    self.refer_button = icon:makeButton(0, 0, 24, 24, nil, self.referPatient)
         :setTooltip(_S.tooltip.multiplayer_window.refer_button)
   end
 end

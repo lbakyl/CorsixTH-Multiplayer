@@ -130,8 +130,8 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   original game's multiplayer; a patient sent to another hospital changes
   to that one's), its patients and staff have a small bar of it at their
   feet, and its player's chat lines are a darker shade of it. The
-  **MULTIPLAYER** menu, **PLAYER COLOURS** shows the bars for everybody,
-  only for the other players' people, or not at all. On the town map, land on
+  **MULTIPLAYER** menu, **PLAYER COLOURS** shows the bars only for the
+  other players' people (the default), for everybody, or not at all. On the town map, land on
   another player's side shows that player's name and "not for sale". The
   **MULTIPLAYER** menu, **TRADE WITH OTHER PLAYERS** sends money, or offers
   a member of staff, free or for a price up to $10,000 (the -$500 and +$500 buttons;
