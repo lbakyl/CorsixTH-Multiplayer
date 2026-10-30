@@ -166,6 +166,7 @@ end
 local shots_taken = {}
 local filming -- see the "film" action
 local held_room -- see the "holdroom" action
+local held_user -- see the "holduser" action
 --! Draw a frame and save it as <shot_dir>/<name>-<what>.png (once per what).
 local function shot(what)
   if not shot_dir or shots_taken[what] then return end
@@ -655,6 +656,22 @@ local function run()
     -- Joining a person's game: the anchor for room and object searches is
     -- their reception desk (or the first tile of this hospital).
     if not desk_x and #ui_script > 0 then desk_x, desk_y = builder.anchor(world) end
+    -- "holduser": while held, the object stays seen; then cancel the move.
+    if held_user and session.step % 5 == 0 then
+      local st, obj = held_user.staff, held_user.object
+      local now = st.user_of
+      log(string.format("UI: held %s at step %d: person seen %s, using %s, seen %s", st.humanoid_class,
+          session.step, tostring(st.th:isVisible()), now and now.object_type.id or "nothing",
+          tostring((now or obj).th:isVisible())))
+      if session.step >= held_user.until_step then
+        local win = world.ui:getWindow(UIPlaceStaff)
+        if win then win:close() end
+        log(string.format("UI: put back at step %d: person seen %s, using %s, its object seen %s",
+            session.step, tostring(st.th:isVisible()), st.user_of and st.user_of.object_type.id or "nothing",
+            st.user_of and tostring(st.user_of.th:isVisible()) or "-"))
+        held_user = nil
+      end
+    end
     -- "holdroom": count, every 20 steps, how much of the held room's floor
     -- is still blue (Argus: parts of a blueprint disappear into the floor).
     if held_room and session.step % 20 == 0 then
@@ -1569,6 +1586,24 @@ local function run()
             TheApp.mp_session:issue({kind = "buy_plot", plot = best})
           else
             log("UI: no plot to buy")
+          end
+        elseif a == "holduser" then
+          -- Pick up (right-click) a member of staff who is using an object
+          -- (a doctor at a desk), log whether they and the object are seen,
+          -- and cancel the move <arg> steps later (see "holdcheck").
+          local st
+          for _, s2 in ipairs(world.ui.hospital.staff) do
+            if not st and s2.user_of and s2.tile_x and not s2.fired then st = s2 end
+          end
+          if not st then
+            log("UI: nobody is using an object at step " .. session.step)
+          else
+            st:onClick(world.ui, "right")
+            local obj = st.user_of
+            held_user = {staff = st, object = obj, until_step = session.step + (tonumber(entry.arg) or 20)}
+            log(string.format("UI: holding %s using %s at step %d: person seen %s, object seen %s",
+                st.humanoid_class, obj.object_type.id, session.step, tostring(st.th:isVisible()),
+                tostring(obj.th:isVisible())))
           end
         elseif a == "movestaff" or a == "whereis" then
           -- movestaff: right-click the first member of staff of that class,

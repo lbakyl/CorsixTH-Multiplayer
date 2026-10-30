@@ -648,6 +648,7 @@ end
 function MultiplayerSession:afterStep(unchanged)
   self.step = self.step + 1
   local n = self.step
+  if self.hidden_staff then self:_keepUsedObjectsShown() end
   local fp = unchanged and self.last_fp or self.fingerprint(self.world)
   self.last_fp = fp
   -- What each person was doing at the last few steps: a desync is noticed a
@@ -2628,30 +2629,65 @@ MultiplayerSession.entityOf = entity_of
 --! Picture only (this machine): hide a member of staff this player picked
 --! up, until move_staff runs or the move is cancelled. Nothing in the game
 --! reads whether a person is visible; saves show them (lobby _writeLocalSave).
+--! Somebody using an object (a doctor at a desk) is drawn together with it,
+--! and the object itself is hidden meanwhile: it is shown on its own while
+--! they are hidden, else it would vanish with them (Argus).
 function MultiplayerSession:hideLocally(staff)
   self.hidden_staff = self.hidden_staff or {}
   if staff.th and not self.hidden_staff[staff] then
-    self.hidden_staff[staff] = true
+    local used = staff.user_of
+    used = used and used.th and used or nil
+    self.hidden_staff[staff] = {object = used}
     staff.th:makeInvisible()
+    if used then used.th:makeVisible() end
   end
 end
 
+--! After every step: a hidden member of staff goes on in the shared game,
+--! and what they do may show them again (keep them hidden), or move them to
+--! another object, or hide the one they use (keep it shown).
+function MultiplayerSession:_keepUsedObjectsShown()
+  for staff, entry in pairs(self.hidden_staff or {}) do
+    if staff.th then staff.th:makeInvisible() end
+    local used = staff.user_of
+    used = used and used.th and used or nil
+    if type(entry) == "table" then entry.object = used end
+    if used then used.th:makeVisible() end
+  end
+end
+
+--! The object a hidden member of staff is still using (shown on its own).
+local function shown_object(staff, entry)
+  local object = type(entry) == "table" and entry.object
+  if object and staff.user_of == object then return object end
+end
+
 function MultiplayerSession:showLocally(staff)
-  if self.hidden_staff and self.hidden_staff[staff] then
+  local entry = self.hidden_staff and self.hidden_staff[staff]
+  if entry then
     self.hidden_staff[staff] = nil
     if staff.th then staff.th:makeVisible() end
+    -- Still at it: the object is drawn with them again.
+    local object = shown_object(staff, entry)
+    if object then object.th:makeInvisible() end
   end
 end
 
 --! Run fn with every locally hidden member of staff shown (for a save).
 function MultiplayerSession:withHiddenShown(fn, ...)
   local hidden = {}
-  for staff in pairs(self.hidden_staff or {}) do
+  for staff, entry in pairs(self.hidden_staff or {}) do
     hidden[#hidden + 1] = staff
     staff.th:makeVisible()
+    local object = shown_object(staff, entry)
+    if object then object.th:makeInvisible() end
   end
   local results = {pcall(fn, ...)}
-  for _, staff in ipairs(hidden) do staff.th:makeInvisible() end
+  for _, staff in ipairs(hidden) do
+    staff.th:makeInvisible()
+    local object = shown_object(staff, self.hidden_staff[staff])
+    if object then object.th:makeVisible() end
+  end
   if not results[1] then error(results[2], 0) end
   return (table.unpack or unpack)(results, 2)
 end
