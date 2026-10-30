@@ -63,7 +63,10 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
    shared hospital**, **A hospital each** (co-op) or **Competitive race**
    (click the button to cycle through them), the level and the number of
    players (or a saved game with **Continue**, see below), then **Create**.
-   When everybody has pressed **Ready**, press **Start game**. If you leave
+   When everybody has pressed **Ready**, press **Start game**. You do not
+   need a full room: with a seat still empty (somebody could not make it),
+   **Start game** starts a game for the players who are there (two or more;
+   with a hospital each, the map is the one for that many). If you leave
    the room (or a game ends), your choices are still there for the next
    room, until you **Disconnect**.
 3. **To join:** pick the room in the list, type its password, **Join**, then
@@ -121,7 +124,12 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 - **Staff:** hire, fire, answer pay rises, and pick up and move them (right
   click, or the pick up button in their window), as usual.
 - **A hospital each (co-op):** each player runs their own hospital and can
-  look at, but not act on, the others' patients, staff and machines. The
+  look at, but not act on, the others' patients, staff and machines.
+  **Player colours:** every player's patients and staff have a small oval of
+  that player's colour (their colour in the chat) at their feet; the
+  **MULTIPLAYER** menu, **PLAYER COLOURS** shows them for everybody, only
+  for the other players' people, or not at all. On the town map, land on
+  another player's side shows that player's name and "not for sale". The
   **MULTIPLAYER** menu, **TRADE WITH OTHER PLAYERS** sends money, or offers
   a member of staff, free or for a price up to $10,000 (the -$500 and +$500 buttons;
   the other player pays it on accepting, if they can afford it); patients
@@ -164,6 +172,8 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   where it was, with the same door and windows and its furniture, for the
   price of a new one. Say No and it offers to **clear it away** (for the
   removal cost) so the space is free for something else.
+- **Emergencies and epidemics:** a click on the white face of the watch
+  shows one of the patients (a right-click goes on to the next one).
 - **Epidemics:** if you cover one up, a watch appears at the bottom left.
   Its syringe button starts **vaccination mode**: click the infected patients
   and a nurse vaccinates them. While it is on, other patients cannot be
@@ -245,7 +255,10 @@ they are switched on).
   level's goals is told so, and everybody hears who is still missing (the
   Goals column in MULTIPLAYER > PLAYERS shows it too). When the last
   hospital gets there, everybody gets the win fax (back to the lobby or keep
-  playing). A hospital that fails the goals at a year end is not thrown
+  playing). If a player leaves the game, their hospital stops counting for
+  the team's goals (everybody is told), so the others can still win; it
+  counts again when they rejoin (the same room, under the same name).
+  A hospital that fails the goals at a year end is not thrown
   out: it and the others are told, and they can help it with money or
   staff. If it still fails them at the next year end, the team loses and
   the game ends for everybody.

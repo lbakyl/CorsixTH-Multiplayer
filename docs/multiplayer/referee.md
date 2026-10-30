@@ -161,6 +161,22 @@ sudo journalctl -u corsixth-mp --since today | python3 scripts/multiplayer/compa
 It compares each game's list with the referee's; the extra (`+`) or missing
 (`-`) entry is the culprit.
 
+### A desync in people or money
+
+When the random numbers agree but people stand elsewhere or a balance
+differs, the draws show nothing. Every game also keeps, for the last few
+steps, each person's tile, action and target and each hospital's last five
+money transactions (`MultiplayerSession.stepDetail`), and after a desync sends
+those of the desync step itself ("AT STEP <n>: ..."), the same step in every
+report. To list what differs from the referee's game:
+
+```
+sudo journalctl -u corsixth-mp --since today | python3 scripts/multiplayer/compare_states.py - "<room>"
+```
+
+Fax answers are logged with what they answered (`fax_choice -> ok (mp_offer:
+mp_offer_accept)`), so a desync after one can be traced to it.
+
 ## Tests
 
 - `mp_server/tests/test_server.py`: referee hello and token, catching up,

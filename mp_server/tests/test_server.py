@@ -161,6 +161,26 @@ def test_start_needs_ready_and_owner(run):
     run(body)
 
 
+def test_start_with_a_seat_empty(run):
+    # A co-op room for 4 in which only 3 turned up: the owner starts anyway,
+    # and the game is for the 3 present (the map follows the peers).
+    async def body(server, port):
+        a = await Client.connect(port, "Alice")
+        b = await Client.connect(port, "Bob")
+        c = await Client.connect(port, "Carol")
+        a.send(encode("CREATE", room="four", password="", max=4, mode="coop", level=6))
+        await a.expect("JOINED")
+        for x in (b, c):
+            x.send(encode("JOIN", room="four", password=""))
+            await x.expect("JOINED")
+            x.send(encode("READY", ready=1))
+        a.send(encode("START"))
+        starts = [await x.expect("START") for x in (a, b, c)]
+        assert all(st["peers"] == "1,2,3" for st in starts)
+        assert len({st["seed"] for st in starts}) == 1
+    run(body)
+
+
 def test_relay_and_fingerprint_check(run):
     async def body(server, port):
         a, b = await two_players_in_room(port)
