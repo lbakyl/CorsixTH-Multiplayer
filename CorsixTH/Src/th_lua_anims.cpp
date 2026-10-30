@@ -623,11 +623,11 @@ int l_anim_set_floor_marker(lua_State* L) {
   animation* pAnimation = luaT_testuserdata<animation>(L);
   uint32_t colour = 0;
   if (!lua_isnoneornil(L, 2)) {
-    colour = palette::pack_argb(
-        static_cast<uint8_t>(luaL_optinteger(L, 5, 0xFF)),
-        static_cast<uint8_t>(luaL_checkinteger(L, 2)),
-        static_cast<uint8_t>(luaL_checkinteger(L, 3)),
-        static_cast<uint8_t>(luaL_checkinteger(L, 4)));
+    colour =
+        palette::pack_argb(static_cast<uint8_t>(luaL_optinteger(L, 5, 0xFF)),
+                           static_cast<uint8_t>(luaL_checkinteger(L, 2)),
+                           static_cast<uint8_t>(luaL_checkinteger(L, 3)),
+                           static_cast<uint8_t>(luaL_checkinteger(L, 4)));
   }
   pAnimation->set_floor_marker(colour);
   lua_settop(L, 1);
