@@ -1557,6 +1557,15 @@ function World:onEndDay()
   end
 end
 
+--! Multiplayer: a hospital meeting every goal but owing the bank does not win
+--! (as in single player); its player is told so at each check, else it looks
+--! as if the game forgot them.
+function World:_mpTellLoan(hosp)
+  if hosp.loan > 0 and self.endconditions:goalsMet(hosp) then
+    MultiplayerSession.tellPlayer(self, hosp, _S.multiplayer_window.goals_reached_loan:format(hosp.loan))
+  end
+end
+
 function World:checkIfGameWon()
   if self.mp_coop and self.mp_coop.competitive then return self:_mpRaceCheck() end
   -- Multiplayer co-op is a team game: the level is won once every hospital
@@ -1570,6 +1579,8 @@ function World:checkIfGameWon()
       if not hosp.mp_goals_reached and self.endconditions:checkEndGame(hosp) == "win" then
         hosp.mp_goals_reached = true
         newly[#newly + 1] = hosp
+      elseif not hosp.mp_goals_reached then
+        self:_mpTellLoan(hosp)
       end
       if not hosp.mp_goals_reached then missing[#missing + 1] = hosp.name end
     end
@@ -1805,6 +1816,8 @@ function World:_mpRaceCheck()
     local hosp = self.hospitals[i]
     if not hosp.mp_place and self.endconditions:checkEndGame(hosp) == "win" then
       self:_mpPlace(hosp, "won")
+    elseif not hosp.mp_place then
+      self:_mpTellLoan(hosp)
     end
   end
   self:_mpRaceCheckOver()

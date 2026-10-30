@@ -879,7 +879,16 @@ function builder.register_handlers()
       local outcome = w.mp_test_goals and w.mp_test_goals[w:getHospitalIndex(hospital)]
       if outcome == "win" then return "win" end
       if outcome == "lose" then return "balance", -20000 end
+      -- "met": every goal met; the real rule decides (a loan stops the win).
+      if outcome == "met" then return hospital.loan == 0 and "win" or "nothing" end
       return EndConditions.mp_probe_check(self, hospital)
+    end
+    EndConditions.mp_probe_met = EndConditions.goalsMet
+    EndConditions.goalsMet = function(self, hospital)
+      local w = hospital.world
+      local outcome = w.mp_test_goals and w.mp_test_goals[w:getHospitalIndex(hospital)]
+      if outcome == "met" or outcome == "win" then return true end
+      return EndConditions.mp_probe_met(self, hospital)
     end
   end
   -- Run the level's win check now (normally at the end of every month).

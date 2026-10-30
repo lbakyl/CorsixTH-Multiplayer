@@ -549,6 +549,7 @@ multiplayer_window = {
   -- Level goals (co-op: the team wins when every hospital has reached them)
   goals_reached_team = "Your hospital has reached this level's goals! Still to get there: %s.",
   goals_reached_other = "%s has reached this level's goals. Still to get there: %s.",
+  goals_reached_loan = "Your hospital meets all of this level's goals but still owes the bank $%d. Pay off the loan (click your money at the bottom) and it counts as having reached them.",
   goals_failed_team = "Your hospital has failed this level's goals. Recover by the end of next year, or the whole team loses. The other players can send you money or staff.",
   goals_failed_other = "%s has failed this level's goals. Help it recover by the end of next year (money or staff), or the whole team loses.",
   goals_recovered = "%s no longer fails this level's goals.",

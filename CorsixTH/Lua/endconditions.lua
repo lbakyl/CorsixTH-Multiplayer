@@ -128,6 +128,16 @@ function EndConditions:checkEndGame(hospital)
   return "nothing"
 end
 
+--! Does the hospital meet every goal of a win group, its loan aside? (A
+--! loan still open stops the win, checkEndGame.)
+--!param hospital (Hospital) The hospital of the tests.
+function EndConditions:goalsMet(hospital)
+  for _, tbl in pairs(self.win_goals or {}) do
+    if self:_checkWinGroup(hospital, tbl) == 1 then return true end
+  end
+  return false
+end
+
 --! Generate table for the Progress Report dialog and progress advice.
 --!param hospital (Hospital) The hospital of the tests.
 --!return report_table (table) Maximum five fields of
