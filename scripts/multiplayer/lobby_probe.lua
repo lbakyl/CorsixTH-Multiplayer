@@ -744,6 +744,11 @@ local function run()
               #shown > 0 and table.concat(shown, ", ") or "none", tostring(h.emergency ~= nil),
               e and string.format("open %d tick %d", e.open_timer, e.tick_timer) or "-",
               tostring(h.epidemic ~= nil), ep and ep.open_timer and string.format("open %d", ep.open_timer) or "-"))
+        elseif a == "straywatch" then
+          -- Test only: an emergency watch on this screen with no emergency
+          -- countdown behind it (as the stuck red watch); it must go away.
+          world.ui:addWindow(UIWatch(world.ui, "emergency", world.ui.hospital))
+          log("UI: opened a stray emergency watch at step " .. session.step)
         elseif a == "rngcheat" then
           -- Test only: draw a random number in this game alone (a desync in
           -- which only the random numbers differ; the draw journal shows it).

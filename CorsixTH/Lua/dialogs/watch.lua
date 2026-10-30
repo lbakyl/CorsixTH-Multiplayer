@@ -157,7 +157,26 @@ function UIWatch:onMouseMove(x, y, dx, dy)
   return Window:onMouseMove(x, y, dx, dy)
 end
 
+--! Multiplayer co-op: the countdown runs in the simulation and this window
+--! only shows it. Is that countdown over (or gone, e.g. after a repair)? Then
+--! the window must not stay on the screen (it stayed, completely red).
+function UIWatch:_mpCountdownGone()
+  local world = self.ui.app.world
+  if not (world and world.mp_coop) or not self.hospital then return false end
+  if self.count_type == "emergency" then
+    return not self.hospital.mp_emergency_timer
+  elseif self.count_type == "epidemic" then
+    local epidemic = self.hospital.epidemic
+    return not (epidemic and epidemic.timer and not epidemic.timer.closed)
+  end
+  return false
+end
+
 function UIWatch:onWorldTick()
+  if self:_mpCountdownGone() then
+    self:close()
+    return
+  end
   if self.tick_timer == 0 and self.open_timer >= 0 then -- Used for making a smooth animation
     self.tick_timer = self.tick_rate
     self.open_timer = self.open_timer - 1
