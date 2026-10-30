@@ -149,12 +149,11 @@ function UIMachine:onMouseDown(code, x, y)
       -- move to next machine
       local ui = self.ui
       local first_machine, next_machine = nil, self.machine
-      local next_room
       for _, entity in ipairs(ui.app.world.entities) do
-        -- is a machine and not a slave (e.g. operating_table_b)
-        if class.is(entity, Machine) and not entity.master then
-          next_room = entity:getRoom()
-          if next_room.is_active then
+        -- is a machine and not a slave (e.g. operating_table_b), of this
+        -- player's hospital (multiplayer: not the other players' machines)
+        if class.is(entity, Machine) and not entity.master and entity.hospital == ui.hospital then
+          if entity:getRoom().is_active then
             if not first_machine then
               first_machine = entity
             end
@@ -175,8 +174,8 @@ function UIMachine:onMouseDown(code, x, y)
         local sx, sy = ui.app.map:WorldToScreen(next_machine.tile_x, next_machine.tile_y)
         local dx, dy = next_machine.th:getPosition()
         ui:scrollMapTo(sx + dx, sy + dy)
-        -- switch machine window
-        ui:addWindow(UIMachine(ui, next_machine, next_room))
+        -- switch machine window (with the room of that machine)
+        ui:addWindow(UIMachine(ui, next_machine, next_machine:getRoom()))
         ui:playSound("camclick.wav")
         -- show machine info in dynamic info
         ui.bottom_panel:setDynamicInfo(next_machine:getDynamicInfo())
