@@ -1759,6 +1759,16 @@ local function run()
           local target, outcome = entry.arg:match("^(%d+):(%a+)$")
           session:issue({kind = "probe_goals", target = tonumber(target),
               outcome = outcome ~= "real" and outcome or nil})
+        elseif a == "teamstate" then
+          -- Each hospital: counted for the team's goals (not away), reached.
+          local parts = {}
+          for i = 1, world.mp_coop and world.mp_coop.players or 0 do
+            local h = world.hospitals[i]
+            parts[#parts + 1] = string.format("%d:%s%s", i, h.mp_player_away and "away" or "playing",
+                h.mp_goals_reached and ",reached" or "")
+          end
+          log(string.format("UI: team at step %d: %s; won %s", session.step, table.concat(parts, " "),
+              tostring(world.mp_team_won)))
         elseif a == "wincheck" or a == "yearend" then
           session:issue({kind = "probe_" .. a})
         elseif a == "patients" then

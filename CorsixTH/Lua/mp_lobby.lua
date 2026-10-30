@@ -744,7 +744,9 @@ function MultiplayerLobby:_onRESUME(f)
     end
   end
   -- Only a word from the adviser: the game goes on where it was.
-  if not self.is_referee and session.repair_why ~= "rejoin" then
+  -- (Not when somebody rejoins, nor when a saved game is continued: its
+  -- save is loaded the same way, without a hold.)
+  if not self.is_referee and session.repair_why == "desync" then
     session.notify("Your game got out of sync and was recovered successfully.")
   end
   session.repair_why = nil
@@ -864,6 +866,21 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
     -- (and this player's messages and countdowns, not the referee's)
     if app.ui.bottom_panel then app.ui.bottom_panel:showOwnMessages() end
     MultiplayerLobby.showOwnWatches(world, app.ui)
+    -- Co-op: a hospital nobody plays in this game (a saved game continued by
+    -- fewer players, or a player who left) does not count for the team's
+    -- goals (World:checkIfGameWon). Every peer loads the save at the same
+    -- step with the same players, so all mark the same hospitals.
+    if not world.mp_coop.competitive then
+      local present = {}
+      for _, p in ipairs(peers or session.peers or {}) do
+        local index = p ~= 0 and self.peer_hospital and self.peer_hospital[p]
+        if index then present[index] = true end
+      end
+      for i = 1, world.mp_coop.players do
+        local hospital = world.hospitals[i]
+        if hospital then hospital.mp_player_away = (not present[i]) or nil end
+      end
+    end
   end
   -- A continued or rejoined game's first game UI (no-op for the same menu bar).
   self:_addMultiplayerMenu(app.ui, MultiplayerLobby.worldMode(world))
