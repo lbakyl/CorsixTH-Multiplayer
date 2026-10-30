@@ -1666,6 +1666,9 @@ end
 
 function UIEditRoom:onCursorWorldPositionChange(x, y)
   local repaint = UIPlaceObjects.onCursorWorldPositionChange(self, x, y)
+  -- (Multiplayer: another player's editor, unseen here, does not follow this
+  -- machine's mouse: no cursor, door or window of it under this mouse.)
+  if not self:mpShownHere() then return repaint end
 
   local ui = self.ui
 

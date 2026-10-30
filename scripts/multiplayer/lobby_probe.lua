@@ -165,6 +165,7 @@ end
 
 local shots_taken = {}
 local filming -- see the "film" action
+local held_room -- see the "holdroom" action
 --! Draw a frame and save it as <shot_dir>/<name>-<what>.png (once per what).
 local function shot(what)
   if not shot_dir or shots_taken[what] then return end
@@ -654,6 +655,18 @@ local function run()
     -- Joining a person's game: the anchor for room and object searches is
     -- their reception desk (or the first tile of this hospital).
     if not desk_x and #ui_script > 0 then desk_x, desk_y = builder.anchor(world) end
+    -- "holdroom": count, every 20 steps, how much of the held room's floor
+    -- is still blue (Argus: parts of a blueprint disappear into the floor).
+    if held_room and session.step % 20 == 0 then
+      local blue, th = 0, world.map.th
+      for ty = held_room.y, held_room.y + held_room.h - 1 do
+        for tx = held_room.x, held_room.x + held_room.w - 1 do
+          if th:getCell(tx, ty, 4) == 24 then blue = blue + 1 end
+        end
+      end
+      log(string.format("UI: held blueprint blue %d of %d at step %d (editor %s)", blue,
+          held_room.w * held_room.h, session.step, tostring(held_room.dlg.phase)))
+    end
     -- "film": follow one walking person with the camera and take a
     -- screenshot every step (frames for a clip of the player colours).
     if filming and filming.left > 0 then
@@ -1812,6 +1825,26 @@ local function run()
           world.ui:onKeyDown(entry.arg, {})
           world.ui:onKeyUp(entry.arg, {})
           log(string.format("UI: pressed %s at step %d", entry.arg, session.step))
+        elseif a == "holdroom" then
+          -- Draw a room up to its windows and leave the editor open there.
+          local room_type = TheApp.rooms[entry.arg ~= "" and entry.arg or "psych"]
+          local w, h = 5, 5
+          local x, y = builder.find_free_rect(world, desk_x, desk_y, w, h, 40)
+          local dlg = UIEditRoom(world.ui, room_type)
+          world.ui:addWindow(dlg)
+          dlg:setBlueprintRect(x, y, w, h)
+          dlg:confirm()
+          for tx = x + 1, x + w - 2 do
+            dlg:setDoorBlueprint(tx, y + h - 1, "south")
+            if dlg.blueprint_door.valid then dlg:placeDoorBlueprint() break end
+          end
+          held_room = {dlg = dlg, x = x, y = y, w = w, h = h}
+          -- The mouse rests over the middle of it (where a player's would be).
+          look_at(x + 2, y + 2)
+          local sw, sh = TheApp.video:getRenderSize()
+          world.ui:onMouseMove(math.floor(sw / 2), math.floor(sh / 2), 0, 0)
+          log(string.format("UI: holding a %s at %d,%d in the %s phase (step %d)", room_type.id, x, y,
+              tostring(dlg.phase), session.step))
         elseif a == "film" then
           -- Follow a walking person (another player's if there is one) for
           -- <arg> steps; see above.

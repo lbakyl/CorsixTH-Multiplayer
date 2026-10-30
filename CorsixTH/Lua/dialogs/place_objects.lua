@@ -1151,6 +1151,16 @@ function UIPlaceObjects:calculateBestPlacementPosition(x, y)
   return bestx, besty, besto
 end
 
+--! Multiplayer: is this window on this machine's screen? (Editors of other
+--! players' rooms run on every machine, unseen.) Always true otherwise.
+function UIPlaceObjects:mpShownHere()
+  if not TheApp.mp_session then return true end
+  for _, window in ipairs(self.ui.windows or {}) do
+    if window == self then return true end
+  end
+  return false
+end
+
 function UIPlaceObjects:onCursorWorldPositionChange(x, y)
   local repaint = Window.onCursorWorldPositionChange(self, x, y)
   if not self.place_objects then -- We don't want to place objects because we are selecting new objects for adding in a room being built/edited
@@ -1159,6 +1169,10 @@ function UIPlaceObjects:onCursorWorldPositionChange(x, y)
   -- Multiplayer checks another player's object with a placement window of
   -- its own: it must not paint (and then wipe) the map under this mouse.
   if UIPlaceObjects.mp_checking then return repaint end
+  -- Nor may another player's editor, run on every machine but shown only on
+  -- theirs (it follows their mouse, not this one): its object under this
+  -- mouse, then wiped, cut holes into this player's own room blueprint.
+  if not self:mpShownHere() then return repaint end
 
   repaint = true
   if self.world.user_actions_allowed then
