@@ -164,6 +164,7 @@ local function lobby_window()
 end
 
 local shots_taken = {}
+local filming -- see the "film" action
 --! Draw a frame and save it as <shot_dir>/<name>-<what>.png (once per what).
 local function shot(what)
   if not shot_dir or shots_taken[what] then return end
@@ -653,6 +654,19 @@ local function run()
     -- Joining a person's game: the anchor for room and object searches is
     -- their reception desk (or the first tile of this hospital).
     if not desk_x and #ui_script > 0 then desk_x, desk_y = builder.anchor(world) end
+    -- "film": follow one walking person with the camera and take a
+    -- screenshot every step (frames for a clip of the player colours).
+    if filming and filming.left > 0 then
+      local e = filming.who
+      if e and e.tile_x then
+        local x, y = TheApp.map:WorldToScreen(e.tile_x, e.tile_y)
+        local px, py = e.th:getPosition()
+        world.ui:scrollMapTo(x + px, y + py)
+      end
+      filming.n = filming.n + 1
+      shot(string.format("film-%03d", filming.n))
+      filming.left = filming.left - 1
+    end
     for i, entry in ipairs(ui_script) do
       if not done[i] and session.step >= entry.hour then
         done[i] = true
@@ -1798,6 +1812,17 @@ local function run()
           world.ui:onKeyDown(entry.arg, {})
           world.ui:onKeyUp(entry.arg, {})
           log(string.format("UI: pressed %s at step %d", entry.arg, session.step))
+        elseif a == "film" then
+          -- Follow a walking person (another player's if there is one) for
+          -- <arg> steps; see above.
+          local who
+          for _, e in ipairs(world.entities) do
+            local act = e.humanoid_class and e.hospital and e.action_queue and e.action_queue[1]
+            if act and act.name == "walk" and (not who or e.hospital ~= world.ui.hospital) then who = e end
+          end
+          filming = {who = who, left = tonumber(entry.arg) or 40, n = 0}
+          log(string.format("UI: filming %s for %d steps (step %d)", who and who.humanoid_class or "nobody",
+              filming.left, session.step))
         elseif a == "shotview" then
           -- Centre the view on this player's first member of staff (the
           -- player colour bars, MultiplayerSession.drawMarkers) and take a
