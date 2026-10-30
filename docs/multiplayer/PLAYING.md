@@ -11,7 +11,11 @@ It is a test version: expect rough edges, and please report what you find.
 - **Windows or Linux** (64-bit), or **macOS 26 Tahoe or newer on Apple
   Silicon** (M1 or later). Players on all three can play together.
 - **Your own Theme Hospital game data** (GOG, EA or the original CD). It is
-  not included and must never be shared.
+  not included and must never be shared. Everybody in a game needs the same
+  edition: editions differ in their multiplayer maps and level settings, and
+  games with different ones drift apart. The servers eu1 and eu2 have the
+  GOG edition, and eu2 turns other editions away ("Your Theme Hospital files
+  differ from this server's").
 - **The multiplayer build of this fork**, the same one as everybody you play
   with. A server with a referee only lets in the build it runs; it tells
   you which release to download.
@@ -185,7 +189,9 @@ training should begin early):
 | 5 | $70,000 | 33 | as level 4 (also DNA fixer, jelly vat) |
 | 6 | $60,000 | 15 | as level 3, on the map EMERGENCY! |
 
-To win, a hospital needs all of these at once (and no loan):
+To win, a hospital needs all of these at once, and no bank loan (when it
+meets the goals but still owes the bank, the adviser says so: pay off the
+loan by clicking your money in the bottom bar):
 
 | Level | Reputation | Balance | Hospital value | Cured | Cure rate |
 |---|---|---|---|---|---|
