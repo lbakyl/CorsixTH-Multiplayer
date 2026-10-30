@@ -1773,12 +1773,6 @@ function MultiplayerSession.tellOthers(world, hospital, text)
   end
 end
 
---! End the multiplayer game for this player (every peer asks for it at the
---! same step: a fax answer or the level lost). It ends between steps (see
---! World:onTick), never in the middle of one; the player goes back to the
---! main menu with `message` and into the lobby of the same server.
---!param message (table) lines for the main menu
---!param movie (string) [optional] "win" or "lose": the video to play first
 --! Is this game ending for everybody: finishing already, or "Back to the
 --! lobby" (a fax answer) received and still to be applied? Another player's
 --! game can get there first and leave, and its "left" must not be announced.
@@ -1796,6 +1790,12 @@ function MultiplayerSession:isEnding()
   return false
 end
 
+--! End the multiplayer game for this player (every peer asks for it at the
+--! same step: a fax answer or the level lost). It ends between steps (see
+--! World:onTick), never in the middle of one; the player goes back to the
+--! main menu with `message` and into the lobby of the same server.
+--!param message (table) lines for the main menu
+--!param movie (string) [optional] "win" or "lose": the video to play first
 function MultiplayerSession:finish(message, movie)
   self.finish_request = self.finish_request or {message = message, movie = movie}
 end
