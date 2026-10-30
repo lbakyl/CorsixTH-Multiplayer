@@ -94,3 +94,67 @@ class BuildCheck:
         if self.url:
             fields["url"] = self.url
         return fields
+
+
+# The Theme Hospital data -----------------------------------------------------
+#
+# Editions of the original game differ in their level files: the GOG one and
+# older downloads have other multiplayer maps (LEVEL.L20 ... L44) and level
+# settings (NET00.SAM, FULL02-04.SAM), and games with different ones drift
+# apart. A server with a referee lets in only players whose level files are
+# the referee's, like the build. The game sends their identity in HELLO
+# ("data", MultiplayerLobby.dataId); older games send none and are let in.
+#
+#   CORSIXTH_MP_DATA  the data identity players must have (8 hex digits), "any"
+#                     for no check; default: computed from the referee's
+#                     Theme Hospital folder (CORSIXTH_MP_REFEREE_DATA)
+
+_LEVEL_FILE = re.compile(r"^(FULL\d\d\.SAM|NET\d\d\.SAM|LEVEL\.L\d+)$")
+
+
+def data_id(th_folder: str | os.PathLike[str]) -> str:
+    """CRC-32 of each FULLnn.SAM, NETnn.SAM and LEVEL.Ln file's upper-case
+    name and content, in name order (as MultiplayerLobby.dataId); "" if
+    there are none."""
+    root = pathlib.Path(th_folder)
+    levels = next((d for d in root.iterdir() if d.is_dir() and d.name.upper() == "LEVELS"), None) \
+        if root.is_dir() else None
+    if levels is None:
+        return ""
+    files = sorted((p.name.upper(), p) for p in levels.iterdir()
+                   if p.is_file() and _LEVEL_FILE.match(p.name.upper()))
+    if not files:
+        return ""
+    parts = [name.encode("ascii") + b"\0" + path.read_bytes() for name, path in files]
+    return "%08x" % zlib.crc32(b"\0".join(parts))
+
+
+@dataclass(frozen=True)
+class DataCheck:
+    data: str
+
+    @classmethod
+    def from_env(cls, env: dict[str, str] | None = None,
+                 referee: RefereeConfig | None = None) -> "DataCheck | None":
+        env = dict(os.environ if env is None else env)
+        wanted = env.get("CORSIXTH_MP_DATA", "").strip().lower()
+        if wanted == "any":
+            return None
+        if wanted:
+            if not re.fullmatch(r"[0-9a-f]{8}", wanted):
+                raise ValueError(f"CORSIXTH_MP_DATA must be 8 hex digits or 'any', not {wanted!r}")
+            return cls(data=wanted)
+        if referee is not None and referee.data:
+            found = data_id(referee.data)
+            return cls(data=found) if found else None
+        return None
+
+    def accepts(self, data: str) -> bool:
+        # (An older game sends no data identity: let in, as before.)
+        return not data or data.lower() == self.data
+
+    def refusal(self) -> dict[str, str]:
+        """ERROR fields for a player with other level files. The text fits
+        the lobby window's status line; newer games explain it more."""
+        return {"code": "data_mismatch", "text": "Your Theme Hospital files differ from this server's",
+                "need": self.data}

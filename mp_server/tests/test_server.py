@@ -784,3 +784,43 @@ def test_build_check_settings(tmp_path):
     assert "210d8203" in forced.refusal()["text"] and "url" not in forced.refusal()
     with pytest.raises(ValueError):
         BuildCheck.from_env({"CORSIXTH_MP_BUILD": "latest"}, referee)
+
+
+def test_theme_hospital_data_check(tmp_path):
+    levels = tmp_path / "Levels"
+    levels.mkdir()
+    (levels / "NET00.SAM").write_bytes(b"net\r\n")
+    (levels / "level.l20").write_bytes(b"map")
+    (levels / "NET2.DAT").write_bytes(b"names, not counted")
+    # As MultiplayerLobby.dataId: upper-case names in order, raw content, NUL between.
+    expected = "%08x" % zlib.crc32(b"LEVEL.L20\0map\0NET00.SAM\0net\r\n")
+    assert builds.data_id(tmp_path) == expected
+    assert builds.data_id(tmp_path / "missing") == ""
+    referee = srv.RefereeConfig(binary="corsix-th", source="", data=str(tmp_path))
+    check = builds.DataCheck.from_env({}, referee)
+    assert check.data == expected
+    assert check.accepts(expected) and check.accepts(expected.upper())
+    assert check.accepts("")  # an older game sends none
+    assert not check.accepts("00000000")
+    assert builds.DataCheck.from_env({"CORSIXTH_MP_DATA": "any"}, referee) is None
+    assert builds.DataCheck.from_env({}, None) is None
+
+    async def main():
+        server = srv.Server(data_check=check)
+        port = await server.start("127.0.0.1", 0)
+        try:
+            r, w = await asyncio.open_connection("127.0.0.1", port)
+            w.write(encode("HELLO", proto=1, name="Argus", build="b1", data="0e1f2a3b").encode() + b"\n")
+            fields = decode((await r.readline()).decode())[1]
+            assert fields["code"] == "data_mismatch" and fields["need"] == expected
+            assert len(fields["text"]) <= 52
+            assert await r.readline() == b""
+            r, w = await asyncio.open_connection("127.0.0.1", port)
+            w.write(encode("HELLO", proto=1, name="Jan", build="b1", data=expected).encode() + b"\n")
+            assert decode((await r.readline()).decode())[0] == "WELCOME"
+            w.close()
+            c = await Client.connect(port, "Old game")  # no data field
+            await c.close()
+        finally:
+            await server.close()
+    asyncio.run(main())

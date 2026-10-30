@@ -163,6 +163,36 @@ function MultiplayerLobby.downloadOffer(err)
   return {release = err.release or "", url = url}
 end
 
+--! Identity of the Theme Hospital data's level files. Editions differ (the
+--! GOG one and older downloads have other multiplayer maps and level
+--! settings), and games with different ones drift apart. CRC-32 of each
+--! FULLnn.SAM, NETnn.SAM and LEVEL.Ln file's name (upper case) and content, in
+--! name order, as the server computes it (mp_server/corsixth_mp/builds.py);
+--! "" if they cannot be read.
+function MultiplayerLobby.dataId(app)
+  app = app or TheApp
+  if MultiplayerLobby.cached_data_id then return MultiplayerLobby.cached_data_id end
+  local ok, id = pcall(function()
+    local TH = require("TH")
+    local files = app.fs:listFiles("Levels") or {}
+    local names = {}
+    for name in pairs(files) do
+      if name:match("^FULL%d%d%.SAM$") or name:match("^NET%d%d%.SAM$") or name:match("^LEVEL%.L%d+$") then
+        names[#names + 1] = name
+      end
+    end
+    if #names == 0 then return "" end
+    table.sort(names)
+    local parts = {}
+    for _, name in ipairs(names) do
+      parts[#parts + 1] = name .. "\0" .. assert(app.fs:readContents("Levels", name))
+    end
+    return string.format("%08x", TH.CRC32File(table.concat(parts, "\0")))
+  end)
+  MultiplayerLobby.cached_data_id = ok and id or ""
+  return MultiplayerLobby.cached_data_id
+end
+
 --! Identity of this game build: version, savegame version, Lua runtime and a
 --! checksum of all Lua game code (line endings ignored, so a Windows and a
 --! Linux install of the same code match). Players must have the same build,
@@ -232,7 +262,9 @@ function MultiplayerLobby:MultiplayerLobby(params)
   self.chat = {}
   self.version = 0          -- incremented whenever something visible changes
   self.listeners = {}
-  local hello = {proto = MultiplayerLobby.PROTOCOL, build = self.build, name = self.name}
+  local hello = {proto = MultiplayerLobby.PROTOCOL, build = self.build, name = self.name,
+      data = params.data or MultiplayerLobby.dataId()}
+  if hello.data == "" then hello.data = nil end
   -- Extra fields, e.g. role/room/token for the server's headless referee.
   for k, v in pairs(params.hello or {}) do hello[k] = v end
   self.is_referee = hello.role == "referee"

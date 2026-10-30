@@ -131,6 +131,20 @@ as above; the rejoining player has no game yet and counts as stopped. The
 `LOAD` line names the rejoined player among the `peers`, so every game waits
 for them again.
 
+### Only the referee's Theme Hospital data may connect
+
+Editions of Theme Hospital differ in their level files: the GOG version and
+older downloads have other multiplayer maps (`LEVEL.L20` ... `L44`) and level
+settings (`NET00.SAM`, `FULL02`-`04.SAM`), and games with both drift apart
+(desyncs the referee keeps repairing). The game sends a CRC-32 of its
+`FULLnn.SAM`, `NETnn.SAM` and `LEVEL.Ln` files in `HELLO` (`data`,
+`MultiplayerLobby.dataId`); a server with a referee computes the same over
+`CORSIXTH_MP_REFEREE_DATA` and refuses other data ("Your Theme Hospital files
+differ from this server's"; newer games explain it in a window). Older games
+send no `data` and are let in. `CORSIXTH_MP_DATA` sets the value (8 hex digits)
+or `any`. The GOG version is `899c66d0`. The server log says
+`players must have Theme Hospital data <id>` at start.
+
 ### A desync in the random numbers only
 
 Sometimes two games differ only in their random numbers (`rng=` in the

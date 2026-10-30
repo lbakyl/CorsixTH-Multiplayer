@@ -31,7 +31,7 @@ import time
 from dataclasses import dataclass, field
 
 from . import pacing
-from .builds import BuildCheck
+from .builds import BuildCheck, DataCheck
 from .referee import RefereeConfig, start_bot, start_referee
 from .protocol import (MAX_LINE_BYTES, PROTOCOL_VERSION, ProtocolError, command_peer, command_step,
                        decode, encode, is_game_line, parse_step_report)
@@ -216,10 +216,13 @@ class Server:
     def __init__(self, motd: str = "", max_connections: int = MAX_CONNECTIONS,
                  max_per_address: int = MAX_PER_ADDRESS,
                  referee: RefereeConfig | None = None, max_bots: int = MAX_BOTS,
-                 build_check: BuildCheck | None = None) -> None:
+                 build_check: BuildCheck | None = None,
+                 data_check: DataCheck | None = None) -> None:
         self.referee_config = referee
         # Only this game build may connect (None: any; builds.py).
         self.build_check = build_check
+        # Only players with the referee's Theme Hospital level files (builds.py).
+        self.data_check = data_check
         self.max_bots = max_bots
         self.port = 0
         self.max_connections = max_connections
@@ -376,6 +379,11 @@ class Server:
             log.info("player %d (%r) refused: build %s, this server needs %s", player.pid, name,
                      player.build, self.build_check.checksum)
             player.send(encode("ERROR", **self.build_check.refusal()))
+            return False
+        if self.data_check is not None and not self.data_check.accepts(f.get("data", "")):
+            log.info("player %d (%r) refused: Theme Hospital data %s, this server's %s", player.pid, name,
+                     f.get("data", ""), self.data_check.data)
+            player.send(encode("ERROR", **self.data_check.refusal()))
             return False
         player.send(encode("WELCOME", proto=PROTOCOL_VERSION, id=player.pid,
                            server=SERVER_VERSION, motd=self.motd or None))
@@ -1203,9 +1211,12 @@ def main(argv: list[str] | None = None) -> None:
         if build_check:
             log.info("players must have build %s (%s)", build_check.checksum,
                      build_check.release or "no release named")
+        data_check = DataCheck.from_env(referee=referee)
+        if data_check:
+            log.info("players must have Theme Hospital data %s", data_check.data)
         server = Server(motd=args.motd, max_connections=args.max_connections,
                         max_per_address=args.max_per_address, referee=referee,
-                        max_bots=args.max_bots, build_check=build_check)
+                        max_bots=args.max_bots, build_check=build_check, data_check=data_check)
         await server.start(args.host, args.port)
         # Stop cleanly on SIGTERM (docker stop) as well as Ctrl+C.
         stop = asyncio.Event()

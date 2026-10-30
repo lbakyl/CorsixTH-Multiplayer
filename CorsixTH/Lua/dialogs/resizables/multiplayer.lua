@@ -471,6 +471,11 @@ function UIMultiplayer:onTick()
     if lobby.version ~= self.seen_version then
       self.seen_version = lobby.version
       local status = lobby.error and lobby.error.text or nil
+      -- Theme Hospital files of another edition: say what to do (once).
+      if lobby.error and lobby.error.code == "data_mismatch" and lobby.data_help_shown ~= lobby.error then
+        lobby.data_help_shown = lobby.error
+        self.ui:addWindow(UIInformation(self.ui, {_S.multiplayer_window.data_mismatch_help}))
+      end
       local download = self.view == "connect" and MultiplayerLobby.downloadOffer(lobby.error)
       if view_of(lobby) ~= self.view or (download and not self.download) then
         self:rebuild(status)

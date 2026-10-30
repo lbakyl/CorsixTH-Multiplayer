@@ -47,6 +47,7 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 |---|---|
 | `WELCOME proto id server motd` | accepted |
 | `ERROR code text` | request refused; codes: `expected_hello`, `protocol`, `bad_room`, `room_exists`, `no_room`, `bad_password`, `build_mismatch`, `running`, `busy`, `room_full`, `in_room`, `not_owner`, `not_ready`, `not_enough`, `bad_speed`, `too_fast`, `bad_report`, `bad_command`, `unknown_verb`, `bad_message`, `not_referee` |
+| `ERROR code=data_mismatch text need` | answer to `HELLO` with `data` (the Theme Hospital level files' CRC-32, `MultiplayerLobby.dataId`) other than the server's referee's; the server then hangs up |
 | `ERROR code=build_mismatch text need release url` | answer to `HELLO` on a server that only lets in its referee's build (`referee.md`): `need` is the Lua code checksum it wants (the last part of the build id), `release` and `url` the release to get and its download page (both optional); the server then hangs up. The game offers `url` only if it is a `https://github.com/` page |
 | `ROOM room players max mode level locked state build_ok continue` | one per room after `LIST`, then `ROOMS_END count`; `continue=1` for a saved game |
 | `JOINED room peer owner mode level difficulty max continue date bots` | you are in the room as player `peer` (`continue`, `date`: a saved game; `bots=1`: this server can add bots) |
