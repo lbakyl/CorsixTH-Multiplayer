@@ -727,6 +727,16 @@ function MultiplayerLobby:_onRESUME(f)
   if not session then return end
   session.held = false
   self.log("multiplayer: resumed at step " .. tostring(f.step))
+  -- Back in a co-op game after leaving it: this hospital counts again for
+  -- the team's goals (MultiplayerSession:_markPlayerAway).
+  if session.rejoining then
+    session.rejoining = nil
+    local world = session.world
+    local hospital = world and world.hospitals[session.hospital_index or 0]
+    if hospital and hospital.mp_player_away then
+      session:issue({kind = "player_away", seat = session.hospital_index, away = 0})
+    end
+  end
   -- Only a word from the adviser: the game goes on where it was.
   if not self.is_referee and session.repair_why ~= "rejoin" then
     session.notify("Your game got out of sync and was recovered successfully.")
@@ -954,6 +964,14 @@ function MultiplayerLobby:_addMultiplayerMenu(ui, mode)
     menu:appendItem(_S.multiplayer_window.menu_research, function()
       UIMultiplayerResearch.open(TheApp.ui)
     end)
+    -- Player colours under the patients and staff (MultiplayerSession.drawMarkers).
+    local colours = UIMenu()
+    for _, choice in ipairs({"all", "others", "off"}) do
+      colours:appendCheckItem(_S.multiplayer_window["menu_colours_" .. choice],
+          MultiplayerSession.markers == choice, function() MultiplayerSession.markers = choice end,
+          "mp_colours")
+    end
+    menu:appendMenu(_S.multiplayer_window.menu_colours, colours)
   end
   if mode == "competitive" then
     menu:appendItem(_S.multiplayer_window.menu_sabotage, function()
@@ -1085,6 +1103,7 @@ function MultiplayerLobby:_beginGame(f)
   self.shared_speed = f.speed or "Normal"
   if resume then
     session.held = true -- until the shared save is loaded and the server resumes
+    session.rejoining = true
     self.log("multiplayer: rejoining; waiting for the shared save")
     return
   end

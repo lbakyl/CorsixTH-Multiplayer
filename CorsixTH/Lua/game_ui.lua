@@ -275,8 +275,11 @@ function GameUI:draw(canvas)
     canvas:scale(1)
   else
     self:setZoom(1, false)
+    zoom = 1
     app.map:draw(canvas, dx, dy, scr_w, scr_h, 0, 0)
   end
+  -- Multiplayer co-op: whose patients and staff (a bar in the player's colour).
+  if app.mp_session then MultiplayerSession.drawMarkers(self, canvas, dx, dy, zoom) end
   Window.draw(self, canvas, 0, 0) -- NB: not calling UI.draw on purpose
   self:drawTooltip(canvas)
   if self.simulated_cursor then

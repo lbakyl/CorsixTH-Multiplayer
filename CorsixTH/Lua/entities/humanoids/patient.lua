@@ -89,8 +89,15 @@ function Patient:onClick(ui, button)
       if isValidEpidemicTarget(epidemic) then
           if not epidemic.timer.closed then
             if (TheApp and TheApp.mp_session and not TheApp.mp_session.applying) then
-              if self.infected and not self.vaccinated and not self.marked_for_vaccination then
-                TheApp.mp_session:issue({kind = "mark_vaccinate", patient = self.mp_id})
+              -- Once per patient until it comes back (the mark shows a moment
+              -- later; a second click would be turned down).
+              local session = TheApp.mp_session
+              session.vaccinate_pending = session.vaccinate_pending or {}
+              local key = tostring(self.mp_id)
+              if self.infected and not self.vaccinated and not self.marked_for_vaccination and
+                  not session.vaccinate_pending[key] then
+                session.vaccinate_pending[key] = true
+                session:issue({kind = "mark_vaccinate", patient = self.mp_id})
               end
             else
               epidemic:markForVaccination(self)

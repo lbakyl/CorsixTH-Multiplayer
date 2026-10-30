@@ -172,10 +172,28 @@ function UIWatch:_mpCountdownGone()
   return false
 end
 
+--! Multiplayer: game hours a watch may stay completely red, beyond its last
+--! step (tick_rate hours, normally red too), before it closes by itself. The
+--! simulation's countdown ends it in time; this is only a safety net for a
+--! watch that lost track of it.
+UIWatch.MP_MAX_RED_HOURS = 48
+
 function UIWatch:onWorldTick()
   if self:_mpCountdownGone() then
     self:close()
     return
+  end
+  local world = self.ui.app.world
+  if world and world.mp_coop then
+    -- (A counter below 0 would never reach 0 again: stuck, all red.)
+    if self.tick_timer < 0 then self.tick_timer = 0 end
+    if self.open_timer <= 0 then
+      self.mp_red_hours = (self.mp_red_hours or 0) + 1
+      if self.mp_red_hours > (self.tick_rate or 0) + UIWatch.MP_MAX_RED_HOURS then
+        self:close()
+        return
+      end
+    end
   end
   if self.tick_timer == 0 and self.open_timer >= 0 then -- Used for making a smooth animation
     self.tick_timer = self.tick_rate
@@ -260,6 +278,19 @@ end
 function UIWatch:scrollToTimerEventPatient()
   self.ui:playSound("camclick.wav")
   local patient = self.lastCycledPatient
+  -- (One from before a multiplayer repair belongs to the old world.)
+  if patient and (patient.world ~= self.ui.app.world or not patient.tile_x) then
+    patient, self.lastCycledPatient = nil, nil
+  end
+  if not patient then
+    -- Nobody picked yet (a right-click picks): pick the first one and go
+    -- there, so a plain click (a Mac trackpad) shows the patients too.
+    self:cycleTimerEventPatient()
+    patient = self.lastCycledPatient
+    local dialog = patient and self.ui:getWindow(UIPatient)
+    if dialog and dialog.patient == patient then dialog:scrollToPatient() end
+    return
+  end
   if patient then
     -- Current open dialog
     local current_patient_dialog = self.ui:getWindow(UIPatient)

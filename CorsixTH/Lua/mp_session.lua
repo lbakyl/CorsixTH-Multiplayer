@@ -219,6 +219,9 @@ function MultiplayerSession:removePeer(peer)
   self.peers = remaining
   self.log(string.format("peer %d left after step %d", peer, self.step))
   self:takeOverRooms(self.world, peer)
+  self:_markPlayerAway(peer)
+  -- The outline they were drawing goes with them.
+  if self.remote_blueprints and self.remote_blueprints[peer] then self:showRemoteBlueprint(peer, nil) end
 end
 
 --! A player left: rooms they were furnishing or editing would stay closed.
@@ -240,6 +243,22 @@ function MultiplayerSession:takeOverRooms(world, peer)
   end
   table.sort(ids)
   for _, id in ipairs(ids) do self:issue({kind = "room_takeover", room = id, left = peer}) end
+end
+
+--! Co-op: a player left. Their hospital stops counting for the team's goals
+--! until they rejoin (World:checkIfGameWon), else the others could never win.
+--! The remaining player with the lowest number sends it as a command, so
+--! every peer marks it at the same step.
+function MultiplayerSession:_markPlayerAway(peer)
+  local world = self.world
+  if self.observer or not (world and world.mp_coop) or world.mp_coop.competitive then return end
+  local lowest
+  for _, p in ipairs(self.peers) do
+    if p ~= 0 and (not lowest or p < lowest) then lowest = p end
+  end
+  if lowest ~= self.peer_id then return end
+  local index = self.lobby and self.lobby.peer_hospital and self.lobby.peer_hospital[peer]
+  if index then self:issue({kind = "player_away", seat = index, away = 1}) end
 end
 
 --! The relay server found differing fingerprints at `step`.
@@ -383,6 +402,7 @@ function MultiplayerSession:restartAt(world, step, peers)
   end
   self.step = step
   self.pending = {}
+  self.vaccinate_pending = nil
   self.own_fps, self.peer_fps = {}, {}
   self.desync = nil
   self.desync_notice_at = nil
@@ -478,20 +498,46 @@ function MultiplayerSession:beforeStep()
       -- (still waiting for its retry; nothing to count or log)
     elseif ok then
       self.stats.applied = self.stats.applied + 1
+      local sound = MultiplayerSession.success_sounds[cmd.kind]
+      local ui = self.world and self.world.ui
+      if sound and cmd.peer == self.peer_id and ui then ui:playSound(sound) end
     else
       self.stats.rejected = self.stats.rejected + 1
       if cmd.peer == self.peer_id and not tostring(why):find("^retry ") then
         self:_tellRejected(cmd, why)
       end
     end
+    if why ~= "waiting" and cmd.kind == "mark_vaccinate" and cmd.peer == self.peer_id and
+        self.vaccinate_pending then
+      self.vaccinate_pending[tostring(cmd.patient)] = nil
+    end
     if why ~= "waiting" then
       self.applied_this_step = true
-      self.log(string.format("step %d: peer %d #%d %s -> %s", n, cmd.peer, cmd.seq,
-          tostring(cmd.kind), ok and "ok" or ("rejected: " .. tostring(why))))
+      self.log(string.format("step %d: peer %d #%d %s -> %s%s", n, cmd.peer, cmd.seq,
+          tostring(cmd.kind), ok and "ok" or ("rejected: " .. tostring(why)),
+          cmd.resolved and (" (" .. cmd.resolved .. ")") or ""))
     end
   end
   self:tickVote()
+  self:_dropStaleOutline()
 end
+
+--! This player's reserved outline (blue floor and walls) stays only while
+--! their room command is on its way or waiting for a retry. Once none is
+--! left (built, refused, given up, or lost in a repair), it goes.
+function MultiplayerSession:_dropStaleOutline()
+  local own = self.remote_blueprints and self.remote_blueprints[self.peer_id]
+  if not own then return end
+  for _, cmd in ipairs(self.pending) do
+    if cmd.peer == self.peer_id and (cmd.kind == "build_room" or cmd.kind == "room_rebuild") then return end
+  end
+  self:showRemoteBlueprint(self.peer_id, nil)
+  self.log("removed this player's outline: no room command for it any more")
+end
+
+--! Sounds for this player's own actions that only count once every peer has
+--! done them (the click itself could still be turned down).
+MultiplayerSession.success_sounds = {buy_plot = "cashreg.wav"}
 
 --! What the player is told when one of their own actions is turned down
 --! (by command kind, then by reason); the reason is shown otherwise.
@@ -514,6 +560,7 @@ MultiplayerSession.rejection_texts = {
                    ["the patient is leaving"] = "The patient is leaving.",
                    ["emergency patients stay"] = "Emergency patients cannot be referred.",
                    ["infected patients stay"] = "Infected patients cannot be referred."},
+  offer_research = {["nothing to share"] = "They have all of that research by now: nothing was offered."},
   buy_plot = {["another player's side"] = "That land is on another player's side of the map.",
               ["cannot buy this plot"] = "That land cannot be bought now."},
   move_staff = {["invalid position"] = "They cannot be placed there.",
@@ -559,6 +606,8 @@ end
 --! turns it down alike; only the player who asked sees the notice.
 function MultiplayerSession:_tellRejected(cmd, why)
   if cmd.kind == "place_object" then self:_returnObject(cmd) end
+  local ui = self.world and self.world.ui
+  if ui and MultiplayerSession.success_sounds[cmd.kind] then ui:playSound("wrong2.wav") end
   local texts = MultiplayerSession.rejection_texts[cmd.kind]
   local text = texts and texts[why]
   if not text and (why == "not ours" or why == "not our staff" or why == "not our patient" or
@@ -601,6 +650,13 @@ function MultiplayerSession:afterStep(unchanged)
   local n = self.step
   local fp = unchanged and self.last_fp or self.fingerprint(self.world)
   self.last_fp = fp
+  -- What each person was doing at the last few steps: a desync is noticed a
+  -- step or two late, and its report then shows the very step it happened.
+  self.details = self.details or {}
+  if self.world and self.world.entities then
+    self.details[n] = unchanged and self.details[n - 1] or MultiplayerSession.stepDetail(self.world)
+  end
+  self.details[n - MultiplayerSession.DETAIL_STEPS] = nil
   self.transport:send(string.format("S %d %d %s", self.peer_id, n, fp))
   local waiting = self.peer_fps[n]
   if waiting then
@@ -634,11 +690,48 @@ function MultiplayerSession:_reportDesync(step, why, peer, own, other)
   self.desync_notice_at = self.clock() + MultiplayerSession.DESYNC_NOTICE_MS
   if own then self.log("  local: " .. own) end
   if other then self.log("  peer:  " .. tostring(other)) end
-  -- For finding the cause: this game's state goes to the server's log.
+  -- For finding the cause: this game's state goes to the server's log, with
+  -- what everybody was doing at the desync step itself (the same step in
+  -- every player's report, so the reports can be compared line by line).
   if self.send_diagnostics and self.world then
     local ok, text = pcall(MultiplayerSession.diagnostics, self.world)
-    if ok then self.send_diagnostics(self.step, text) end
+    if ok then
+      local detail = self.details and self.details[step]
+      if detail then
+        text = text .. string.format("; AT STEP %d: %s", step, table.concat(detail, "; "))
+      end
+      self.send_diagnostics(self.step, text)
+    end
   end
+end
+
+-- Steps of stepDetail kept for a desync report.
+MultiplayerSession.DETAIL_STEPS = 8
+
+--! What every person is doing (their current action and its target tile)
+--! and every hospital's last money transactions: for desync reports, as a
+--! list of short strings in the same order in every game.
+function MultiplayerSession.stepDetail(world)
+  local out = {}
+  for i, h in ipairs(world.hospitals or {}) do
+    local tx = {}
+    for k = 1, math.min(5, #(h.transactions or {})) do
+      local t = h.transactions[k]
+      tx[#tx + 1] = string.format("%s%s %s", t.spend and "-" or "+", tostring(t.spend or t.receive),
+          tostring(t.desc))
+    end
+    out[#out + 1] = string.format("h%d bal=%s tx[%s]", i, tostring(h.balance), table.concat(tx, " | "))
+  end
+  for _, e in ipairs(world.entities) do
+    if e.humanoid_class then
+      local a = e.action_queue and e.action_queue[1]
+      local target = ""
+      if a and a.x and a.y then target = string.format(">%s,%s", tostring(a.x), tostring(a.y)) end
+      out[#out + 1] = string.format("%s:%s@%s,%s %s%s", tostring(e.mp_id), e.humanoid_class,
+          tostring(e.tile_x), tostring(e.tile_y), a and tostring(a.name) or "-", target)
+    end
+  end
+  return out
 end
 
 -- How long a desync waits for the server's repair before the player is told
@@ -889,6 +982,67 @@ function MultiplayerSession.diagnostics(world)
   end
   parts[#parts + 1] = "random " .. MultiplayerSession.randomDraws()
   return table.concat(parts, "; ")
+end
+
+--------------------------------------------------------------------------------
+-- Player colours on the map (co-op): a small bar in the player's colour under
+-- each of their patients and staff. Only drawn on this screen, never part of
+-- the game. MultiplayerSession.markers: "all", "others" or "off".
+--------------------------------------------------------------------------------
+
+MultiplayerSession.markers = "all"
+
+-- Bright versions of the chat colours (UIMultiplayerChat), by peer.
+local MARKER_COLOURS = {
+  {90, 140, 255}, {240, 70, 70}, {70, 205, 90}, {250, 165, 40}, {60, 210, 220}, {215, 90, 205},
+}
+
+--! The marker colour of a hospital: its player's chat colour, brighter.
+function MultiplayerSession.markerColour(world, hospital)
+  local index = world:getHospitalIndex(hospital)
+  if not index then return nil end
+  local session = TheApp and TheApp.mp_session
+  local lobby = session and session.lobby
+  local peer = index
+  for p, h in pairs(lobby and lobby.peer_hospital or {}) do
+    if h == index then peer = p end
+  end
+  return MARKER_COLOURS[(peer - 1) % #MARKER_COLOURS + 1]
+end
+
+--! Draw the markers over the map (GameUI:draw, after the map).
+--!param dx, dy the map's screen offset; zoom the map's zoom
+function MultiplayerSession.drawMarkers(ui, canvas, dx, dy, zoom)
+  local mode = MultiplayerSession.markers
+  local world = ui.app.world
+  if mode == "off" or not (TheApp.mp_session and world and world.mp_coop and world.mp_coop.players > 1) then
+    return
+  end
+  local map = ui.app.map
+  local scr_w, scr_h = canvas:getRenderSize()
+  local cache = {}
+  for _, e in ipairs(world.entities) do
+    local hospital = e.humanoid_class and e.tile_x and e.hospital
+    if hospital and not (mode == "others" and hospital == ui.hospital) and
+        (class.is(e, Patient) or class.is(e, Staff)) then
+      local colour = cache[hospital]
+      if colour == nil then
+        local c = MultiplayerSession.markerColour(world, hospital)
+        colour = c and canvas:mapRGB(c[1], c[2], c[3]) or false
+        cache[hospital] = colour
+      end
+      if colour then
+        local x, y = map:WorldToScreen(e.tile_x, e.tile_y)
+        local px, py = e.th:getPosition()
+        x, y = math.floor((x + px - dx) * zoom), math.floor((y + py - dy) * zoom)
+        local w, h = math.max(8, math.floor(12 * zoom)), math.max(2, math.floor(3 * zoom))
+        if x > -w and y > -h and x < scr_w + w and y < scr_h + h then
+          canvas:drawRect(canvas:mapRGB(20, 20, 20), x - math.floor(w / 2) - 1, y - 1, w + 2, h + 2)
+          canvas:drawRect(colour, x - math.floor(w / 2), y, w, h)
+        end
+      end
+    end
+  end
 end
 
 --! Tell the other players about the room outline this player is drawing
@@ -1389,6 +1543,8 @@ function handlers.open_hospital(world, cmd)
         break
       end
     end
+    -- The fanfare of the opening (as UIWatch:onCountdownEnd), for its player.
+    if world.ui.hospital == hospital then world.ui:playSound("fanfare.wav") end
   end
   return true
 end
@@ -1634,6 +1790,8 @@ function handlers.fax_choice(world, cmd)
   if choices[cmd.choice].enabled == false or choices[cmd.choice].choice == "disabled" then
     return false, "choice not available"
   end
+  -- For the command log (desync hunting): which message, which answer.
+  cmd.resolved = tostring(icon.type) .. ": " .. tostring(choices[cmd.choice].choice)
   local queued = icon.parent == nil
   icon:removeMessage(cmd.choice)
   if queued then panel:forgetQueuedIcon(icon) end
@@ -2383,6 +2541,21 @@ function MultiplayerSession.plotSide(world, plot)
     world.mp_plot_side = side
   end
   return world.mp_plot_side[plot]
+end
+
+--! A player is away (left) or back (rejoined): {seat (hospital index), away (1/0)}.
+function handlers.player_away(world, cmd)
+  local hospital = world.hospitals[tonumber(cmd.seat) or 0]
+  if not hospital or not world.mp_coop then return false, "no such hospital" end
+  local away = tonumber(cmd.away) == 1
+  if (hospital.mp_player_away or false) == away then return false, "no change" end
+  hospital.mp_player_away = away or nil
+  local S = _S.multiplayer_window
+  if world.mp_coop.players > 1 and not world.mp_coop.competitive then
+    MultiplayerSession.tellOthers(world, hospital,
+        (away and S.player_away_note or S.player_back_note):format(hospital.name))
+  end
+  return true
 end
 
 --! Buy a plot of land: {plot}. In co-op only plots on the buyer's side.

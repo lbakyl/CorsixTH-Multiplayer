@@ -37,6 +37,7 @@ def main():
     journals = {}
     for who, state in states.items():
         full = "".join(state["parts"][k] for k in sorted(state["parts"]))
+        full = full.split("; AT STEP ")[0]  # (compare_states.py reads that part)
         at = full.find("random ")
         if at < 0:
             continue

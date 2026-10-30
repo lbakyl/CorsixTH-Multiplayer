@@ -1573,19 +1573,23 @@ function World:checkIfGameWon()
   -- then each player hears when a hospital gets there, and who is missing.
   if self.mp_coop then
     if self.mp_team_won then return end
-    local newly, missing = {}, {}
+    local newly, missing, present = {}, {}, 0
     for i = 1, self.mp_coop.players do
       local hosp = self.hospitals[i]
-      if not hosp.mp_goals_reached and self.endconditions:checkEndGame(hosp) == "win" then
-        hosp.mp_goals_reached = true
-        newly[#newly + 1] = hosp
-      elseif not hosp.mp_goals_reached then
-        self:_mpTellLoan(hosp)
+      -- A hospital whose player left does not count (until they rejoin).
+      if not hosp.mp_player_away then
+        present = present + 1
+        if not hosp.mp_goals_reached and self.endconditions:checkEndGame(hosp) == "win" then
+          hosp.mp_goals_reached = true
+          newly[#newly + 1] = hosp
+        elseif not hosp.mp_goals_reached then
+          self:_mpTellLoan(hosp)
+        end
+        if not hosp.mp_goals_reached then missing[#missing + 1] = hosp.name end
       end
-      if not hosp.mp_goals_reached then missing[#missing + 1] = hosp.name end
     end
     local S = _S.multiplayer_window
-    if #missing == 0 then
+    if #missing == 0 and present > 0 then
       self.mp_team_won = true
       self:_mpTeamWon()
       return

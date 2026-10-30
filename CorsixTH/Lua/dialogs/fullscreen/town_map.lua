@@ -130,9 +130,19 @@ function UITownMap:onMouseUp(button, x, y)
     local width, height = map:size()
     if 0 <= tx and tx < width and 0 <= ty and ty < height then
       local plot = map:getCellFlags(tx + 1, ty + 1, flag_cache).parcelId
-      if plot ~= 0 and MultiplayerSession.actionsAreCommands() then
+      local world = self.ui.hospital.world
+      local side = plot ~= 0 and world.mp_coop and not world.mp_coop.competitive and
+          MultiplayerSession.plotSide(world, plot)
+      if side and world.hospitals[side] ~= self.ui.hospital then
+        -- Another player's side: theirs to buy (the command would be refused).
+        self.ui:playSound("Wrong2.wav")
+        if self.ui.adviser then
+          self.ui.adviser:say({text = MultiplayerSession.rejection_texts.buy_plot["another player's side"],
+              priority = 10})
+        end
+      elseif plot ~= 0 and MultiplayerSession.actionsAreCommands() then
+        -- (The till sounds when every peer has bought it: MultiplayerSession.success_sounds.)
         TheApp.mp_session:issue({kind = "buy_plot", plot = plot})
-        self.ui:playSound("cashreg.wav")
       elseif plot ~= 0 then
         if self.ui.hospital:purchasePlot(plot) then
           self.ui:playSound("cashreg.wav")
@@ -310,7 +320,14 @@ function UITownMap:draw(canvas, x, y)
     else
       tile_count = map:getParcelTileCount(self.hover_plot)
       local owner_num = map.th:getPlotOwner(self.hover_plot)
-      if owner_num == 0 then
+      -- Co-op: land on another player's side is theirs to buy.
+      local side = owner_num == 0 and world.mp_coop and not world.mp_coop.competitive and
+          MultiplayerSession.plotSide(world, self.hover_plot)
+      local others = side and world.hospitals[side] ~= self.ui.hospital and world.hospitals[side]
+      if others then
+        owner = others.name
+        price = _S.town_map.not_for_sale
+      elseif owner_num == 0 then
         owner = _S.town_map.for_sale
         price = world.free_build_mode and "$0" or
             ("$" .. map:getParcelPrice(self.hover_plot))
