@@ -344,6 +344,9 @@ def result(n):
     m = re.search(r'RESULT: (.*)', log(n)); return m.group(1) if m else 'no result'
 def applied(n):
     return [l for l in log(n).splitlines() if re.search(r'multiplayer: step \d+: peer', l)]
+def is_ok(line):
+    # (A fax answer is logged with what it answered: "-> ok (emergency: accept_emergency)".)
+    return re.search(r'-> ok( \(.*\))?$', line) is not None
 server = (out / 'server.log').read_text()
 fail = False
 
@@ -352,7 +355,7 @@ lobby = re.search(r'lobby: .*', a)
 paused_both = 'speed is now Pause' in a and 'speed is now Pause' in b
 unpaused = bool(re.search(r'\[bob\] UI: pressed P at step \d+ \(paused\)', b))
 slower_both = 'speed is now Slower' in a and 'speed is now Slower' in b
-ok_cmds = [x for x in applied('alice') if x.endswith('-> ok') and 'set_speed' not in x and 'speed_vote' not in x]
+ok_cmds = [x for x in applied('alice') if is_ok(x) and 'set_speed' not in x and 'speed_vote' not in x]
 speeds1 = [x for x in applied('alice') if 'set_speed -> ok' in x]
 votes1 = 'speed vote 1 for Slower: agreed' in a and 'speed vote 1 for Slower: agreed' in b
 # At step 600 the doctor's tick breaks in all games (probe_break, as a bug would): all
@@ -459,7 +462,7 @@ choices = [x for x in applied('kate') if 'fax_choice' in x]
 clicked = 'UI: clicked choice 2 of personality fax' in l
 ok7 = (result('kate').startswith('IN SYNC') and result('liam').startswith('IN SYNC')
        and applied('kate') == applied('liam') and clicked and len(choices) == 1
-       and choices[0].endswith('-> ok'))
+       and is_ok(choices[0]))
 print(f"7. Fax decisions:           {result('kate')}; refusal clicked: {clicked}; applied on both: {applied('kate') == applied('liam')} {choices}")
 fail |= not ok7
 
@@ -468,7 +471,7 @@ cm = applied('mira')
 kinds = [re.search(r'#\d+ (\w+) ->', x).group(1) for x in cm]
 # nico's try to buy a plot on mira's side is refused; everything else is ok.
 other8 = [x for x in cm if "buy_plot -> rejected: another player's side" in x]
-ok_all = len(other8) == 1 and all(x.endswith('-> ok') for x in cm if x not in other8)
+ok_all = len(other8) == 1 and all(is_ok(x) for x in cm if x not in other8)
 # mira buys a plot with entrance doors on it: they are made in the same
 # order on both machines (pairs order once differed).
 plot8 = re.search(r'UI: buying plot (\d+) \(\$\d+, (\d+) objects', m)
@@ -488,7 +491,7 @@ fail |= not ok8
 
 o, q = log('olga'), log('paul')
 co = applied('olga')
-okc = [x for x in co if x.endswith('-> ok')]
+okc = [x for x in co if is_ok(x)]
 kinds9 = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in okc)
 helicopter_crash = 'Traceback' in o or 'Traceback' in q
 ok9 = (result('olga').startswith('IN SYNC') and result('paul').startswith('IN SYNC') and co == applied('paul')
@@ -500,7 +503,7 @@ fail |= not ok9
 
 xl, yl = log('xavi'), log('yuki')
 cx = applied('xavi')
-okx = [x for x in cx if x.endswith('-> ok')]
+okx = [x for x in cx if is_ok(x)]
 kinds_x = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in okx)
 arrived_p = len(re.findall(r'referred patient #\d+ arrived', xl))
 arrived_s = len(re.findall(r'transferred staff #\d+ arrived', xl))
@@ -515,7 +518,7 @@ fail |= not okr
 
 kl, ll = log('kim'), log('lea')
 ck = applied('kim')
-kinds_k = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in ck if x.endswith('-> ok'))
+kinds_k = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in ck if is_ok(x))
 paid = re.search(r'research offer to hospital 2 accepted: (\d+) items for \$(\d+)', kl)
 know_k = re.findall(r'hospital (\d) research: (.*)', kl)
 know_l = re.findall(r'hospital (\d) research: (.*)', ll)
@@ -542,7 +545,7 @@ fail |= not okres
 
 el, fl = log('ella'), log('finn')
 ce = applied('ella')
-kinds_e = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in ce if x.endswith('-> ok'))
+kinds_e = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in ce if is_ok(x))
 oke = (result('ella').startswith('IN SYNC through step 7500') and result('finn').startswith('IN SYNC through step 7500')
        and ce == applied('finn') and 'probe_epidemic' in kinds_e and 'mark_vaccinate' in kinds_e
        and kinds_e.count('fax_choice') >= 2 and 'clicked choice 1 of report fax' in fl)
@@ -680,7 +683,7 @@ fail |= bool(resets24)
 
 w_, y_ = log('wade'), log('yara')
 cw = applied('wade')
-okw = [x for x in cw if x.endswith('-> ok')]
+okw = [x for x in cw if is_ok(x)]
 kinds10 = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in okw)
 m10 = re.search(r'rooms built: (.*)', w_)
 rooms10 = m10.group(1) if m10 else ''
@@ -716,9 +719,9 @@ fail |= not ok10
 
 ed, fl = log('ed'), log('flo')
 ce = applied('ed')
-kinds12 = sorted(set(re.search(r'#\d+ (\w+) ->', x).group(1) for x in ce if x.endswith('-> ok')))
+kinds12 = sorted(set(re.search(r'#\d+ (\w+) ->', x).group(1) for x in ce if is_ok(x)))
 # (A spot the probe tries for an object may be refused; it tries the next.)
-bad12 = [x for x in ce if not x.endswith('-> ok') and 'retry' not in x and 'room_object -> rejected' not in x]
+bad12 = [x for x in ce if not is_ok(x) and 'retry' not in x and 'room_object -> rejected' not in x]
 steps12 = re.findall(r'UI: edit (\S+) (ok|FAILED[^\n]*)', ed)
 failed12 = [f"{s} {r}" for s, r in steps12 if r != 'ok']
 want12 = ['room_buy', 'room_delete', 'room_edit', 'room_finish', 'room_object', 'room_pickup',
@@ -762,7 +765,7 @@ def at_load(text):
     return m and (m.group(1), re.sub(r"(\d)\.0(?!\d)", r"\1", m.group(2)))
 same_load = bool(saved_t and at_load(t2) and at_load(t2) == at_load(s2) == saved_t.group(2, 3))
 seats = bool(loaded_t and loaded_s and loaded_t.group(2) == 'TOM' and loaded_s.group(2) == 'SARA')
-after = [x for x in applied('tom-2') if x.endswith('-> ok')]
+after = [x for x in applied('tom-2') if is_ok(x)]
 kinds11 = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in after)
 # Tom saved with a stale room editor in his UI; after continuing he can
 # click on the whole map again.
@@ -799,7 +802,7 @@ if with_referee:
         repaired = 'REPAIRED' in hl and 'REPAIRED' in jl
         fixed = re.search(rf"room '{room}': repaired: everybody loads the referee's game at step (\d+) \((\d+) bytes", server)
         same = applied(host) == applied(join)
-        kinds = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in applied(host) if x.endswith('-> ok'))
+        kinds = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in applied(host) if is_ok(x))
         later = 'place_object' in kinds and 'hire' in kinds
         # The players hear about it only from the adviser, afterwards; no
         # popup (the referee's level introduction neither), the view kept.
@@ -835,17 +838,20 @@ if with_referee:
     after_u = [x for x in applied('uma') if int(re.search(r'step (\d+):', x).group(1)) > at]
     after_v = [x for x in applied('vera-back') if int(re.search(r'step (\d+):', x).group(1)) > at]
     kinds = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in after_u
-                   if x.endswith('-> ok') and 'set_speed' not in x and 'speed_vote' not in x)
+                   if is_ok(x) and 'set_speed' not in x and 'speed_vote' not in x)
     # (The game steps on while paused, so the steps go past 1500.)
     ok13 = (rejoined is not None and "room 'back': 'vera' rejoins as player 2" in server
             and result('uma').startswith('IN SYNC through step')
             and result('vera-back').startswith('IN SYNC through step')
-            and after_u == after_v and kinds == ['hire', 'place_object']
+            # (uma stops first: vera's game then marks uma away, one line more.)
+            and after_u == after_v[:len(after_u)] and kinds == ['hire', 'place_object', 'player_away']
+            # (Away while gone, counted again once back: MultiplayerSession:_markPlayerAway.)
+            and 'is back: their hospital counts' in u
             and int(confirmed_after('back')) >= 1400
             # (A player coming back is no desync: uma is not told about one.)
             and 'recovered successfully' not in u)
     print(f"16. Rejoin after a crash:   {result('uma')} / {result('vera-back')}; "
-          f"rejoined at step {at if rejoined else '-'}; commands after it on both: {after_u == after_v} {kinds}")
+          f"rejoined at step {at if rejoined else '-'}; commands after it on both: {after_u == after_v[:len(after_u)]} {kinds}")
     fail |= not ok13
 sys.exit(1 if fail else 0)
 PY

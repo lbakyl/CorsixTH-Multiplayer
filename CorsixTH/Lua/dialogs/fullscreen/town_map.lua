@@ -132,7 +132,7 @@ function UITownMap:onMouseUp(button, x, y)
       local plot = map:getCellFlags(tx + 1, ty + 1, flag_cache).parcelId
       local world = self.ui.hospital.world
       local side = plot ~= 0 and world.mp_coop and not world.mp_coop.competitive and
-          MultiplayerSession.plotSide(world, plot)
+          MultiplayerSession.plotSide(world, plot, self)
       if side and world.hospitals[side] ~= self.ui.hospital then
         -- Another player's side: theirs to buy (the command would be refused).
         self.ui:playSound("Wrong2.wav")
@@ -322,7 +322,7 @@ function UITownMap:draw(canvas, x, y)
       local owner_num = map.th:getPlotOwner(self.hover_plot)
       -- Co-op: land on another player's side is theirs to buy.
       local side = owner_num == 0 and world.mp_coop and not world.mp_coop.competitive and
-          MultiplayerSession.plotSide(world, self.hover_plot)
+          MultiplayerSession.plotSide(world, self.hover_plot, self)
       local others = side and world.hospitals[side] ~= self.ui.hospital and world.hospitals[side]
       if others then
         owner = others.name

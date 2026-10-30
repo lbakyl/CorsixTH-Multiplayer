@@ -2510,8 +2510,12 @@ end
 --! whose own land is nearest (centre to centre), the lower index on a tie.
 --! Worked out once, from the land owned the first time it is asked (the
 --! start of the game), and kept in the world (saved).
-function MultiplayerSession.plotSide(world, plot)
-  if not world.mp_plot_side then
+--!param peek (table) optional; only look (a screen's question): work it out
+--! without keeping it in the world (only the game decides when that is),
+--! but in peek.plot_sides, for the screen's next question
+function MultiplayerSession.plotSide(world, plot, peek)
+  local side = world.mp_plot_side or (peek and peek.plot_sides)
+  if not side then
     local th = world.map.th
     local w, h = th:size()
     local plots, own = {}, {}
@@ -2530,7 +2534,7 @@ function MultiplayerSession.plotSide(world, plot)
         end
       end
     end
-    local side = {}
+    side = {}
     for p, c in pairs(plots) do
       local px, py = c[1] / c[3], c[2] / c[3]
       local best, best_d
@@ -2544,9 +2548,9 @@ function MultiplayerSession.plotSide(world, plot)
       end
       side[p] = best
     end
-    world.mp_plot_side = side
+    if peek then peek.plot_sides = side else world.mp_plot_side = side end
   end
-  return world.mp_plot_side[plot]
+  return side[plot]
 end
 
 --! A player is away (left) or back (rejoined): {seat (hospital index), away (1/0)}.
