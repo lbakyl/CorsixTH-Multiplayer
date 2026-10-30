@@ -1798,6 +1798,16 @@ local function run()
           world.ui:onKeyDown(entry.arg, {})
           world.ui:onKeyUp(entry.arg, {})
           log(string.format("UI: pressed %s at step %d", entry.arg, session.step))
+        elseif a == "shotview" then
+          -- Centre the view on this player's first member of staff (the
+          -- player colour bars, MultiplayerSession.drawMarkers) and take a
+          -- screenshot; arg "others"/"off" sets the colour option first.
+          if entry.arg ~= "" then MultiplayerSession.markers = entry.arg end
+          local someone = world.ui.hospital.staff[1] or world.ui.hospital.patients[1]
+          if someone and someone.tile_x then look_at(someone.tile_x, someone.tile_y) end
+          log(string.format("UI: view on own staff, colours %s (step %d)", MultiplayerSession.markers,
+              session.step))
+          shot("view-" .. MultiplayerSession.markers)
         elseif a == "edge" then
           -- Scroll as far as the camera goes towards the top corner of the
           -- map ("top") or the right one ("right"), and take a screenshot.

@@ -1032,13 +1032,19 @@ function MultiplayerSession.drawMarkers(ui, canvas, dx, dy, zoom)
         cache[hospital] = colour
       end
       if colour then
+        -- (A tile's screen position is its top corner; people stand 16 lower.)
         local x, y = map:WorldToScreen(e.tile_x, e.tile_y)
         local px, py = e.th:getPosition()
-        x, y = math.floor((x + px - dx) * zoom), math.floor((y + py - dy) * zoom)
-        local w, h = math.max(8, math.floor(12 * zoom)), math.max(2, math.floor(3 * zoom))
+        x, y = math.floor((x + px - dx) * zoom), math.floor((y + py + 17 - dy) * zoom)
+        local w, h = math.max(10, math.floor(18 * zoom)), math.max(3, math.floor(4 * zoom))
         if x > -w and y > -h and x < scr_w + w and y < scr_h + h then
-          canvas:drawRect(canvas:mapRGB(20, 20, 20), x - math.floor(w / 2) - 1, y - 1, w + 2, h + 2)
-          canvas:drawRect(colour, x - math.floor(w / 2), y, w, h)
+          -- A flat oval of the player's colour with a dark rim, at the feet.
+          local dark = canvas:mapRGB(20, 20, 20)
+          local left = x - math.floor(w / 2)
+          canvas:drawRect(dark, left, y - 1, w, h + 2)
+          canvas:drawRect(dark, left - 1, y, w + 2, h)
+          canvas:drawRect(colour, left + 1, y, w - 2, h)
+          canvas:drawRect(colour, left, y + 1, w, h - 2)
         end
       end
     end
