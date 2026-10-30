@@ -37,7 +37,10 @@ local label_ttf_col = { -- slightly translucent
   alpha = 192,
 }
 
-local menu_item_height = 40
+-- 36 + 8: nine buttons (with Multiplayer) and the version lines fit in a
+-- 640x480 screen, the smallest the UI scale leaves.
+local menu_item_height = 36
+local menu_item_spacing = 8
 
 function UIMainMenu:UIMainMenu(ui)
 
@@ -73,7 +76,7 @@ function UIMainMenu:UIMainMenu(ui)
   local release_string = TheApp:getReleaseString()
   local num_lines = computeSize({TheApp:isUpdateCheckDisabledByConfig(), TheApp.config.debug, release_string}) -- see UIMainMenu:draw for how these are used
   local bottom_text_height = (line_height * num_lines)
-  self.height = top_padding + ((menu_item_height + 10) * #menu_items) + bottom_text_height
+  self.height = top_padding + ((menu_item_height + menu_item_spacing) * #menu_items) + bottom_text_height
 
   self:UIResizable(ui, 200, self.height, col_bg)
 
@@ -106,7 +109,7 @@ function UIMainMenu:addMenuItem(label, callback, tooltip, y_pos)
   self:addBevelPanel(20, y_pos, 160, menu_item_height, col_bg)
       :setLabel(label):makeButton(0, 0, 160, menu_item_height, nil, callback)
       :setTooltip(tooltip)
-  return y_pos + menu_item_height + 10
+  return y_pos + menu_item_height + menu_item_spacing
 end
 
 function UIMainMenu:getSavedWindowPositionName()
