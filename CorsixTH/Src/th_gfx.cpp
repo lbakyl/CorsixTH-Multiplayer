@@ -1194,11 +1194,13 @@ animation::animation() { patient_effect_offset = rand(); }
 namespace {
 
 //! The bar of animation::set_floor_marker: a flat rounded bar with a dark
-//! rim, its top at the feet (x, y), slightly see-through.
+//! rim just below the feet (x, y), wider than them so that it shows around
+//! them (the person is drawn over it), slightly see-through.
 void draw_floor_marker(render_target* canvas, uint32_t colour, int x, int y,
                        int scale) {
-  const int w = 18 * scale;
-  const int h = 4 * scale;
+  const int w = 28 * scale;
+  const int h = 6 * scale;
+  y += 3 * scale;
   const int left = x - w / 2;
   const uint32_t rim = palette::pack_argb(0xB0, 20, 20, 20);
   canvas->fill_rect(rim, static_cast<float>(left), static_cast<float>(y),

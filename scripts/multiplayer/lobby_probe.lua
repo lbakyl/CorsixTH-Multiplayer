@@ -1880,6 +1880,42 @@ local function run()
           world.ui:onMouseMove(math.floor(sw / 2), math.floor(sh / 2), 0, 0)
           log(string.format("UI: holding a %s at %d,%d in the %s phase (step %d)", room_type.id, x, y,
               tostring(dlg.phase), session.step))
+        elseif a == "markershot" then
+          -- For a picture of the player colour bars: the view on this
+          -- player's receptionist (most people) without bars, the same with
+          -- everybody hidden, and where each bar goes (screen x, y of the
+          -- feet, colour), for drawing them outside the game.
+          local someone = world.ui.hospital.staff[1]
+          if someone and someone.tile_x then look_at(someone.tile_x, someone.tile_y) end
+          local saved = MultiplayerSession.markers
+          MultiplayerSession.markers = "off"
+          for _, e in ipairs(world.entities) do
+            if e.th and e.th.setFloorMarker then e.th:setFloorMarker() end
+          end
+          shot("markers-" .. entry.arg .. "-people")
+          local hidden = {}
+          for _, e in ipairs(world.entities) do
+            if e.humanoid_class and e.th and e.th:isVisible() then
+              hidden[#hidden + 1] = e
+              e.th:makeInvisible()
+            end
+          end
+          shot("markers-" .. entry.arg .. "-empty")
+          for _, e in ipairs(hidden) do e.th:makeVisible() end
+          MultiplayerSession.markers = saved
+          local ui = world.ui
+          local zoom = ui:getEffectiveZoom()
+          for _, e in ipairs(world.entities) do
+            local h = e.humanoid_class and e.tile_x and e.hospital
+            if h and (class.is(e, Patient) or class.is(e, Staff)) then
+              local c = MultiplayerSession.markerColour(world, h)
+              local x, y = TheApp.map:WorldToScreen(e.tile_x, e.tile_y)
+              local px, py = e.th:getPosition()
+              log(string.format("MARKER %s %d %d %d %d %d", entry.arg,
+                  math.floor((x + px - ui.screen_offset_x) * zoom), math.floor((y + py + 16 - ui.screen_offset_y) * zoom),
+                  c[1], c[2], c[3]))
+            end
+          end
         elseif a == "film" then
           -- Follow a walking person (another player's if there is one) for
           -- <arg> steps; see above.
