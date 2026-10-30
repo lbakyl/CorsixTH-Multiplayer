@@ -3153,9 +3153,11 @@ function World:getRoomNameAndRequiredStaffName(room_id)
 end
 
 --! Gets a list of all the machines in the player's hospital.
+--! The machines of the hospital this player runs (the machine list; in
+--! multiplayer with a hospital each, this player's own, not hospital 1's).
 function World:getPlayerMachines()
   local world = self
-  local hosp = world:getLocalPlayerHospital()
+  local hosp = world:getUIHospital()
   local playerMachines = {}
 
   for _, entity in ipairs(world.entities) do
