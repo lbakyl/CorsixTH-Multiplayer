@@ -844,8 +844,9 @@ if with_referee:
             and result('uma').startswith('IN SYNC through step')
             and result('vera-back').startswith('IN SYNC through step')
             # (uma stops first: vera's game then marks uma away, one line more.)
-            and after_u == after_v[:len(after_u)] and kinds == ['hire', 'place_object', 'player_away']
-            # (Away while gone, counted again once back: MultiplayerSession:_markPlayerAway.)
+            and after_u == after_v[:len(after_u)] and kinds in (['hire', 'place_object'], ['hire', 'place_object', 'player_away'])
+            # (Away while gone, counted again once back: the shared save's load
+            # marks them back, MultiplayerLobby:_loadShared.)
             and 'is back: their hospital counts' in u
             and int(confirmed_after('back')) >= 1400
             # (A player coming back is no desync: uma is not told about one.)

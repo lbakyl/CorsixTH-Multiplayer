@@ -878,7 +878,14 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
       end
       for i = 1, world.mp_coop.players do
         local hospital = world.hospitals[i]
-        if hospital then hospital.mp_player_away = (not present[i]) or nil end
+        if hospital then
+          -- (Somebody back, e.g. rejoined: the others hear it.)
+          if hospital.mp_player_away and present[i] then
+            MultiplayerSession.tellOthers(world, hospital,
+                _S.multiplayer_window.player_back_note:format(hospital.name))
+          end
+          hospital.mp_player_away = (not present[i]) or nil
+        end
       end
     end
   end
