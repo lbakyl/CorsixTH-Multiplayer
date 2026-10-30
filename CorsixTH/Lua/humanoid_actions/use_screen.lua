@@ -86,6 +86,7 @@ local function action_use_screen_start(action, humanoid)
     humanoid:setLayer(0, 2)
     humanoid:setLayer(1, math.random(0, 3) * 2)
     humanoid:setLayer(2, 2)
+    MultiplayerSession.dressPatient(humanoid)
   elseif class == "Stripped Male Patient" then
     humanoid:setType "Standard Male Patient"
     anim, when_done = 1052, normal_state

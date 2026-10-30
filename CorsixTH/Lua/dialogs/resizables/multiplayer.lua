@@ -49,7 +49,7 @@ local function view_of(lobby)
   return "rooms"
 end
 
-local heights = {connect = 190, rooms = 435, room = 300}
+local heights = {connect = 225, rooms = 435, room = 300}
 
 -- The new room's settings as last sent with Create: shown again when the
 -- player leaves the room or a game ends, forgotten on Disconnect.
@@ -134,21 +134,36 @@ end
 
 -- Connect view ----------------------------------------------------------------
 
+--! The public servers offered on the connect view (eu2 is the default the
+--! first time: test builds are played there).
+UIMultiplayer.SERVERS = {
+  {label = "server_eu1", address = "eu1.bachelor-tech.com:47800"},
+  {label = "server_eu2", address = "eu2.bachelor-tech.com:47800"},
+}
+
 function UIMultiplayer:_buildConnect()
   local S, T = _S.multiplayer_window, _S.tooltip.multiplayer_window
   local config = TheApp.config
-  local address = (config.multiplayer_server ~= "" and config.multiplayer_server) or "127.0.0.1:47800"
+  local address = (config.multiplayer_server ~= "" and config.multiplayer_server) or
+      UIMultiplayer.SERVERS[2].address
   local name = (config.player_name ~= "" and config.player_name) or os.getenv("USER")
       or os.getenv("USERNAME") or "Player"
   label(self, 20, 45, 130, S.server)
   self.address_box = textbox(self, 155, 45, WIDTH - 175, address, 60, {"all"}, T.server)
   label(self, 20, 75, 130, S.name)
   self.name_box = textbox(self, 155, 75, WIDTH - 175, name, 15, {"alpha", "numbers", "misc"}, T.name)
-  button(self, 20, 150, 180, S.connect, self.buttonConnect, T.connect)
-  button(self, WIDTH - 200, 150, 180, S.back, self.close)
+  -- The public servers, one click each (the address can still be typed).
+  local half = math.floor((WIDTH - 185) / 2)
+  for i, server in ipairs(UIMultiplayer.SERVERS) do
+    button(self, 155 + (i - 1) * (half + 10), 108, half, S[server.label], function(window)
+      window.address_box:setText(server.address)
+    end, T[server.label])
+  end
+  button(self, 20, 185, 180, S.connect, self.buttonConnect, T.connect)
+  button(self, WIDTH - 200, 185, 180, S.back, self.close)
   if self.download then
     local release = self.download.release ~= "" and self.download.release or S.server_version
-    button(self, 20, 185, WIDTH - 40, S.download:format(release), self.buttonDownload, T.download)
+    button(self, 20, 220, WIDTH - 40, S.download:format(release), self.buttonDownload, T.download)
   end
 end
 

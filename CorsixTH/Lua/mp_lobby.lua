@@ -593,7 +593,13 @@ function MultiplayerLobby:_onCHAT(f)
     end
     local window = TheApp.ui and TheApp.ui:getWindow(UIMultiplayerChat)
     local sender = self.players[tonumber(f.peer)]
-    local colour = UIMultiplayerChat.colourOf(tonumber(f.peer), sender and sender.bot == "1")
+    -- (In a game with a hospital each: the colour of their hospital.)
+    local index = tonumber(f.peer)
+    local world = TheApp.world
+    if world and world.mp_coop and self.peer_hospital and self.peer_hospital[index] then
+      index = self.peer_hospital[index]
+    end
+    local colour = UIMultiplayerChat.colourOf(index, sender and sender.bot == "1")
     if window then window:add(text, private, colour) else session.notify(text) end
   end
   self:_changed("chat", f)

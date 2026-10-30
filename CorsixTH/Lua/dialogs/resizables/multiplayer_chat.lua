@@ -34,15 +34,19 @@ local UIMultiplayerChat = _G["UIMultiplayerChat"]
 local SHOW_MS = 30000 -- how long a line stays
 local LINES = 6
 
--- The bar behind a player's lines, by peer (dark enough for the white font);
--- bots are grey, private lines get a purple mark at the start.
+-- The bar behind a player's lines (dark enough for the white font), by their
+-- hospital in a game with a hospital each, else by peer: darker versions of
+-- the hospital colours (mustard, salmon, lavender, white: the patients'
+-- shirts and the staff bars, MultiplayerSession.markerColour). Bots are grey,
+-- private lines get a purple mark at the start.
 local PLAYER_COLOURS = {
-  {35, 65, 150}, {150, 35, 35}, {30, 115, 45}, {160, 90, 10}, {20, 110, 125}, {125, 35, 115},
+  {135, 98, 14}, {150, 62, 52}, {82, 66, 152}, {92, 104, 124}, {20, 110, 125}, {125, 35, 115},
 }
 local BOT_COLOUR, NOTICE_COLOUR, PRIVATE_MARK = {75, 75, 75}, {30, 30, 40}, {180, 90, 255}
 
 --! The colour of a player's chat lines.
---!param peer (integer) the sender's peer number
+--!param peer (integer) the sender's peer number (or, in a game with a
+--! hospital each, their hospital's number)
 --!param bot (boolean) the sender is a computer player
 function UIMultiplayerChat.colourOf(peer, bot)
   if bot then return BOT_COLOUR end

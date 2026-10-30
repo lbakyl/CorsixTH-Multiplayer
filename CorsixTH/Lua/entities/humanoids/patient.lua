@@ -125,6 +125,7 @@ end
 function Patient:setDisease(disease)
   self.disease = disease
   disease.initPatient(self)
+  MultiplayerSession.dressPatient(self)
   self.th:setPatientEffect(disease.effect or AnimationEffect.None)
   self.diagnosed = false
   self.diagnosis_progress = 0
@@ -248,6 +249,7 @@ function Patient:setHospital(hospital)
     self.hospital:removePatient(self)
   end
   Humanoid.setHospital(self, hospital)
+  MultiplayerSession.dressPatient(self) -- (multiplayer: the hospital's colour)
   if hospital.is_in_world and not self.is_debug and not self.is_emergency then
     self:setNextAction(SeekReceptionAction())
   end

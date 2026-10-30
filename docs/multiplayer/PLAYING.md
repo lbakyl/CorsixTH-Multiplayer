@@ -57,8 +57,8 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
 
 ## Play
 
-1. Main menu, **Multiplayer**. Enter the server address and your name, then
-   **Connect**.
+1. Main menu, **Multiplayer**. Click **EU1: stable** or **EU2: test builds**
+   (or type another server's address), enter your name, then **Connect**.
 2. **To host:** type a room name, and a password if you like. Choose **One
    shared hospital**, **A hospital each** (co-op) or **Competitive race**
    (click the button to cycle through them), the level and the number of
@@ -125,10 +125,13 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   click, or the pick up button in their window), as usual.
 - **A hospital each (co-op):** each player runs their own hospital and can
   look at, but not act on, the others' patients, staff and machines.
-  **Player colours:** every player's patients and staff have a small oval of
-  that player's colour (their colour in the chat) at their feet; the
-  **MULTIPLAYER** menu, **PLAYER COLOURS** shows them for everybody, only
-  for the other players' people, or not at all. On the town map, land on
+  **Player colours:** every hospital has a colour (hospital 1 mustard, 2
+  salmon, 3 lavender, 4 white): its patients wear shirts of it (as in the
+  original game's multiplayer; a patient sent to another hospital changes
+  to that one's), its patients and staff have a small bar of it at their
+  feet, and its player's chat lines are a darker shade of it. The
+  **MULTIPLAYER** menu, **PLAYER COLOURS** shows the bars for everybody,
+  only for the other players' people, or not at all. On the town map, land on
   another player's side shows that player's name and "not for sale". The
   **MULTIPLAYER** menu, **TRADE WITH OTHER PLAYERS** sends money, or offers
   a member of staff, free or for a price up to $10,000 (the -$500 and +$500 buttons;

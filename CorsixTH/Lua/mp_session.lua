@@ -986,28 +986,40 @@ end
 
 --------------------------------------------------------------------------------
 -- Player colours on the map (co-op): a small bar in the player's colour under
--- each of their patients and staff. Only drawn on this screen, never part of
--- the game. MultiplayerSession.markers: "all", "others" or "off".
+-- each of their patients and staff, and the patients in shirts of it
+-- (dressPatient). The bars are only drawn on this screen, never part of the
+-- game. MultiplayerSession.markers: "all", "others" or "off" (the bars).
 --------------------------------------------------------------------------------
 
 MultiplayerSession.markers = "all"
 
--- Bright versions of the chat colours (UIMultiplayerChat), by peer.
-local MARKER_COLOURS = {
-  {90, 140, 255}, {240, 70, 70}, {70, 205, 90}, {250, 165, 40}, {60, 210, 220}, {215, 90, 205},
-}
+-- Each hospital's colour, by hospital index: its patients wear it (the
+-- original game's four shirt colours, layer 1 of a patient's animation:
+-- 0 mustard, 2 white, 4 lavender, 6 salmon), its staff have a bar of it at
+-- their feet, and its player's chat lines a darker version of it
+-- (UIMultiplayerChat.colourOf).
+MultiplayerSession.CLOTHES = {0, 6, 4, 2}
+local MARKER_COLOURS = {{232, 186, 52}, {236, 130, 118}, {160, 146, 232}, {236, 236, 236}}
 
---! The marker colour of a hospital: its player's chat colour, brighter.
+--! The marker colour of a hospital.
 function MultiplayerSession.markerColour(world, hospital)
   local index = world:getHospitalIndex(hospital)
   if not index then return nil end
-  local session = TheApp and TheApp.mp_session
-  local lobby = session and session.lobby
-  local peer = index
-  for p, h in pairs(lobby and lobby.peer_hospital or {}) do
-    if h == index then peer = p end
-  end
-  return MARKER_COLOURS[(peer - 1) % #MARKER_COLOURS + 1]
+  return MARKER_COLOURS[(index - 1) % #MARKER_COLOURS + 1]
+end
+
+--! Multiplayer with a hospital each: dress a patient in their hospital's
+--! colour (the shirt; only what is drawn changes, alike on every machine).
+--! Patients without the shirt colours (the King, the invisible) stay as
+--! they are.
+function MultiplayerSession.dressPatient(patient)
+  local world = patient.world
+  if not (world and world.mp_coop and world.mp_coop.players > 1 and patient.hospital) then return end
+  local class = patient.humanoid_class
+  if class == "Elvis Patient" or class == "Invisible Patient" then return end
+  local index = world:getHospitalIndex(patient.hospital)
+  if not index then return end
+  patient:setLayer(1, MultiplayerSession.CLOTHES[(index - 1) % #MultiplayerSession.CLOTHES + 1])
 end
 
 --! Draw the markers over the map (GameUI:draw, after the map).
