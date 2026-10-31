@@ -342,6 +342,24 @@ navigateDoor = function(humanoid, x1, y1, dir)
     return
   end
 
+  -- A patient goes into a room only on a walk meant to enter it
+  -- (Room:createEnterAction). Any other walk that leads through a door went
+  -- somewhere a room has been built over since, e.g. where a reception desk
+  -- stood before it was moved (CorsixTH issue 3611): stop at the door. A
+  -- patient not past reception yet looks for a desk again; any other carries
+  -- on with what comes after the walk.
+  if is_entering_room and class.is(humanoid, Patient) and not action.is_entering then
+    humanoid:setTilePositionSpeed(x1, y1)
+    if not humanoid.has_passed_reception then
+      humanoid:setNextAction(IdleAction():setCount(1))
+      humanoid:queueAction(SeekReceptionAction())
+    end
+    if humanoid:getCurrentAction() == action then
+      humanoid:finishAction(action)
+    end
+    return
+  end
+
   door.queue:unexpect(humanoid)
   door:updateDynamicInfo()
 

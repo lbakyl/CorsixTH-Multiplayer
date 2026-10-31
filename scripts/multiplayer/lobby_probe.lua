@@ -166,6 +166,7 @@ end
 local shots_taken = {}
 local filming -- see the "film" action
 local held_room -- see the "holdroom" action
+local moved_from -- where the last object moved by "moveobject" stood
 local held_user -- see the "holduser" action
 --! Draw a frame and save it as <shot_dir>/<name>-<what>.png (once per what).
 local function shot(what)
@@ -1133,8 +1134,12 @@ local function run()
             log("UI: nobody standing in a free spot for " .. id)
           end
         elseif a == "room" then
+          -- opt "window": with windows; "overmoved": centred on where the
+          -- last object moved by moveobject stood.
           local id, rw, rh, opt = entry.arg:match("^([%w_]+):(%d+):(%d+):?(%a*)$")
-          builder.ui_room(world, desk_x, desk_y, id, tonumber(rw), tonumber(rh), opt == "window", log)
+          local at = opt == "overmoved" and moved_from and
+              {moved_from[1] - math.floor(tonumber(rw) / 2), moved_from[2] - math.floor(tonumber(rh) / 2)}
+          builder.ui_room(world, desk_x, desk_y, id, tonumber(rw), tonumber(rh), opt == "window", log, at)
         elseif a == "hire" then builder.ui_hire(world, desk_x, desk_y, entry.arg, log)
         elseif a == "pause" or a == "unpause" then
           presses[#presses + 1] = {wait = tonumber(entry.arg) or 0, paused = a == "unpause"}
@@ -1259,6 +1264,7 @@ local function run()
                 done[i] = false
                 entry.hour = session.step + 5
               else
+                moved_from = {obj.tile_x, obj.tile_y}
                 place:onMouseUp("left", 100000, 100000)
                 log(string.format("UI: moved %s #%d from %d,%d to %d,%d at step %d (spot valid: %s)", id, obj.mp_id,
                     obj.tile_x, obj.tile_y, x, y, session.step, tostring(valid)))
@@ -1675,6 +1681,21 @@ local function run()
           local tclass, stuck = entry.arg:match("^(%a+):?(%a*)$")
           session:issue({kind = "probe_tire", class = tclass, fatigue = 0.95, stuck = stuck == "stuck" and 1 or 0})
           log(string.format("UI: tired %s at step %d", entry.arg, session.step))
+        elseif a == "intruders" then
+          -- Patients of this hospital inside a room before passing
+          -- reception (CorsixTH issue 3611), and where the desks are.
+          local n, where = 0, {}
+          for _, e in ipairs(world.entities) do
+            local r2 = class.is(e, Patient) and e.hospital == world.ui.hospital and e.tile_x and e:getRoom()
+            if r2 and not e.has_passed_reception then
+              n = n + 1
+              where[#where + 1] = r2.room_info.id
+            end
+          end
+          local desks = {}
+          for _, d in ipairs(world.ui.hospital:getReceptionDesks()) do desks[#desks + 1] = d.tile_x .. "," .. d.tile_y end
+          log(string.format("UI: patients in rooms before reception at step %d: %d %s; desks %s", session.step, n,
+              table.concat(where, ","), table.concat(desks, " ")))
         elseif a == "stafflog" then
           -- Where this hospital's staff of class <arg> are, how tired, and
           -- their staff room flags.
