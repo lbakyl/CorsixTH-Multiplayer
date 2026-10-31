@@ -25,8 +25,9 @@ corsixth.require("mp_lobby")
 --! room, or wait in a room until the host starts the game.
 class "UIMultiplayer" (UIResizable)
 
----@type UIMultiplayer
-local UIMultiplayer = _G["UIMultiplayer"]
+---@class UIMultiplayer: UIResizable
+---@operator call: UIMultiplayer
+local UIMultiplayer = _G["UIMultiplayer"] ---@type UIMultiplayer
 
 local col = {
   bg             = Colours.PanelDefault,

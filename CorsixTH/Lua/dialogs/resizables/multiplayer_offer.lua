@@ -24,8 +24,9 @@ SOFTWARE. --]]
 --! 2 = decline); see MultiplayerSession.resolveOffer.
 class "UIMultiplayerOffer" (UIResizable)
 
----@type UIMultiplayerOffer
-local UIMultiplayerOffer = _G["UIMultiplayerOffer"]
+---@class UIMultiplayerOffer: UIResizable
+---@operator call: UIMultiplayerOffer
+local UIMultiplayerOffer = _G["UIMultiplayerOffer"] ---@type UIMultiplayerOffer
 
 -- Purple, like the icon.
 local col = {
@@ -181,8 +182,9 @@ end
 --! sends the referral straight away).
 class "UIMultiplayerChooseHospital" (UIResizable)
 
----@type UIMultiplayerChooseHospital
-local UIMultiplayerChooseHospital = _G["UIMultiplayerChooseHospital"]
+---@class UIMultiplayerChooseHospital: UIResizable
+---@operator call: UIMultiplayerChooseHospital
+local UIMultiplayerChooseHospital = _G["UIMultiplayerChooseHospital"] ---@type UIMultiplayerChooseHospital
 
 --! The other players' hospitals (index list).
 local function other_hospitals(ui)

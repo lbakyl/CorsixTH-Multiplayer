@@ -24,8 +24,9 @@ SOFTWARE. --]]
 --! command, and the other player accepts or declines it in a fax.
 class "UIMultiplayerResearch" (UIResizable)
 
----@type UIMultiplayerResearch
-local UIMultiplayerResearch = _G["UIMultiplayerResearch"]
+---@class UIMultiplayerResearch: UIResizable
+---@operator call: UIMultiplayerResearch
+local UIMultiplayerResearch = _G["UIMultiplayerResearch"] ---@type UIMultiplayerResearch
 
 local col = {
   bg             = Colours.PanelDefault,

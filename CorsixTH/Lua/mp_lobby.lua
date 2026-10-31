@@ -29,8 +29,9 @@ SOFTWARE. --]]
 
 class "MultiplayerLobby"
 
----@type MultiplayerLobby
-local MultiplayerLobby = _G["MultiplayerLobby"]
+---@class MultiplayerLobby
+---@operator call: MultiplayerLobby
+local MultiplayerLobby = _G["MultiplayerLobby"] ---@type MultiplayerLobby
 
 MultiplayerLobby.PROTOCOL = 1
 MultiplayerLobby.DEFAULT_PORT = 47800

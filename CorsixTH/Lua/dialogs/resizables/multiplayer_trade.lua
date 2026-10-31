@@ -23,8 +23,9 @@ SOFTWARE. --]]
 --! (give_money, offer_staff).
 class "UIMultiplayerTrade" (UIResizable)
 
----@type UIMultiplayerTrade
-local UIMultiplayerTrade = _G["UIMultiplayerTrade"]
+---@class UIMultiplayerTrade: UIResizable
+---@operator call: UIMultiplayerTrade
+local UIMultiplayerTrade = _G["UIMultiplayerTrade"] ---@type UIMultiplayerTrade
 
 local col = {
   bg             = Colours.PanelDefault,

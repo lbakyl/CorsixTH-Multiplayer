@@ -28,8 +28,9 @@ SOFTWARE. --]]
 --! time; Enter sends, Escape closes.
 class "UIMultiplayerChat" (Window)
 
----@type UIMultiplayerChat
-local UIMultiplayerChat = _G["UIMultiplayerChat"]
+---@class UIMultiplayerChat: Window
+---@operator call: UIMultiplayerChat
+local UIMultiplayerChat = _G["UIMultiplayerChat"] ---@type UIMultiplayerChat
 
 local SHOW_MS = 30000 -- how long a line stays
 local LINES = 6
@@ -129,8 +130,9 @@ end
 
 class "UIMultiplayerChatInput" (UIResizable)
 
----@type UIMultiplayerChatInput
-local UIMultiplayerChatInput = _G["UIMultiplayerChatInput"]
+---@class UIMultiplayerChatInput: UIResizable
+---@operator call: UIMultiplayerChatInput
+local UIMultiplayerChatInput = _G["UIMultiplayerChatInput"] ---@type UIMultiplayerChatInput
 
 local WIDTH = 480
 

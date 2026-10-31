@@ -40,8 +40,9 @@ SOFTWARE. --]]
 
 class "MultiplayerSession"
 
----@type MultiplayerSession
-local MultiplayerSession = _G["MultiplayerSession"]
+---@class MultiplayerSession
+---@operator call: MultiplayerSession
+local MultiplayerSession = _G["MultiplayerSession"] ---@type MultiplayerSession
 
 local function encode_value(v)
   return (tostring(v):gsub("[%%%s=]", function(c) return string.format("%%%02X", c:byte()) end))

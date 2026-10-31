@@ -24,8 +24,9 @@ SOFTWARE. --]]
 --! this game's own world (the same on every player's machine).
 class "UIMultiplayerPlayers" (UIResizable)
 
----@type UIMultiplayerPlayers
-local UIMultiplayerPlayers = _G["UIMultiplayerPlayers"]
+---@class UIMultiplayerPlayers: UIResizable
+---@operator call: UIMultiplayerPlayers
+local UIMultiplayerPlayers = _G["UIMultiplayerPlayers"] ---@type UIMultiplayerPlayers
 
 local col = {
   bg      = Colours.PanelDefault,

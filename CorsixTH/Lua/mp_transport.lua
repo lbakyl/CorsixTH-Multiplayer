@@ -28,8 +28,9 @@ SOFTWARE. --]]
 
 class "MultiplayerTransport"
 
----@type MultiplayerTransport
-local MultiplayerTransport = _G["MultiplayerTransport"]
+---@class MultiplayerTransport
+---@operator call: MultiplayerTransport
+local MultiplayerTransport = _G["MultiplayerTransport"] ---@type MultiplayerTransport
 
 local socket_ok, socket = pcall(require, "socket")
 

@@ -24,8 +24,9 @@ SOFTWARE. --]]
 --! mp_sabotage.lua); the price is paid when it is done.
 class "UIMultiplayerSabotage" (UIResizable)
 
----@type UIMultiplayerSabotage
-local UIMultiplayerSabotage = _G["UIMultiplayerSabotage"]
+---@class UIMultiplayerSabotage: UIResizable
+---@operator call: UIMultiplayerSabotage
+local UIMultiplayerSabotage = _G["UIMultiplayerSabotage"] ---@type UIMultiplayerSabotage
 
 local col = {
   bg      = Colours.PanelDefault,

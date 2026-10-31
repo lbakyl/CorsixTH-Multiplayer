@@ -23,8 +23,9 @@ SOFTWARE. --]]
 --! command, and the other player pays or declines it in a fax.
 class "UIMultiplayerAskMoney" (UIResizable)
 
----@type UIMultiplayerAskMoney
-local UIMultiplayerAskMoney = _G["UIMultiplayerAskMoney"]
+---@class UIMultiplayerAskMoney: UIResizable
+---@operator call: UIMultiplayerAskMoney
+local UIMultiplayerAskMoney = _G["UIMultiplayerAskMoney"] ---@type UIMultiplayerAskMoney
 
 local WIDTH = 420
 local BAR_X, BAR_W, BAR_Y = 20, 260, 40
