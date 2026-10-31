@@ -742,7 +742,7 @@ function UI:onKeyDown(rawchar, modifiers)
   -- the key.
   if not handled then
     local keyHandlers = self.key_handlers[key]
-    -- Multiplayer: Enter belongs to the chat, whatever else is open.
+    -- Multiplayer: the chat key belongs to the chat, whatever else is open.
     if keyHandlers and TheApp.mp_session then
       for _, handler in ipairs(keyHandlers) do
         if class.is(handler.window, UIMultiplayerChat) then

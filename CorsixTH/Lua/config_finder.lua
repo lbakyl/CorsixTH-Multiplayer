@@ -265,6 +265,7 @@ local function new_hotkeys_defaults()
     ingame_jukebox = "j",
     ingame_rotateobject = "space",
     ingame_patient_gohome = "h",
+    ingame_mp_chat = "y",
     ingame_storePosition_1 = {"alt", "1"},
     ingame_storePosition_2 = {"alt", "2"},
     ingame_storePosition_3 = {"alt", "3"},
@@ -981,6 +982,11 @@ param(hotkeys_values, 'ingame_poopStrings') .. [=[
 -- This sends a patient home. Also a good anime episode name.
 --]=] .. '\n' ..
 param(hotkeys_values, 'ingame_patient_gohome') .. [=[
+
+-----------------------------------Multiplayer---------------------------------
+-- This opens the chat line in a multiplayer game.
+--]=] .. '\n' ..
+param(hotkeys_values, 'ingame_mp_chat') .. [=[
 ]=]
 
   return table.concat(parts)

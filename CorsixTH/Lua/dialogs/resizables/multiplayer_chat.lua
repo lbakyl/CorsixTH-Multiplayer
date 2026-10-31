@@ -70,7 +70,7 @@ function UIMultiplayerChat:UIMultiplayerChat(ui)
   self.on_top = false
   self.lines = {}
   self.font = ui.app.gfx:loadFontAndSpriteTable("QData", "Font01V", nil, nil, { apply_ui_scale = true })
-  self:addKeyHandler("global_confirm", self.openInput)
+  self:addKeyHandler("ingame_mp_chat", self.openInput)
 end
 
 --! Never in the way of clicks on the map.
@@ -111,11 +111,20 @@ function UIMultiplayerChat:draw(canvas, x, y)
   end
 end
 
---! Enter: open the input line. In multiplayer Enter is the chat's alone (see
---! UI:onKeyDown); a dialog confirms with its button or keypad Enter.
+--! The chat key (ingame_mp_chat, Y by default): open the input line. In
+--! multiplayer the chat key is the chat's alone (see UI:onKeyDown).
 function UIMultiplayerChat:openInput()
   if self.ui:getWindow(UIMultiplayerChatInput) or not TheApp.mp_session then return end
-  self.ui:addWindow(UIMultiplayerChatInput(self.ui))
+  local input = UIMultiplayerChatInput(self.ui)
+  input.box.skip_key_text = true -- the letter of the key that opened it
+  self.ui:addWindow(input)
+end
+
+--! The chat key's name for the menu, e.g. "Y".
+function UIMultiplayerChat.keyLabel()
+  local key = TheApp.hotkeys and TheApp.hotkeys.ingame_mp_chat or "y"
+  if type(key) == "table" then key = table.concat(key, "+") end
+  return string.upper(tostring(key))
 end
 
 class "UIMultiplayerChatInput" (UIResizable)
@@ -140,11 +149,20 @@ function UIMultiplayerChatInput:UIMultiplayerChatInput(ui)
       :allowedInput({"alpha", "numbers", "misc"}):characterLimit(120)
   -- Tab (reserved by text boxes) chooses who the message is for.
   self.box.keyInput = --[[persistable:mp_chat_keyinput]] function(box, char, rawchar)
+    box.skip_key_text = nil -- the next key types as usual
     if char == "tab" then
       box.panel.window:nextTarget()
       return true
     end
     return _G["Textbox"].keyInput(box, char, rawchar) -- (a global class, not declared for luacheck)
+  end
+  -- The chat key's own letter arrives as text right after it opened the line.
+  self.box.textInput = --[[persistable:mp_chat_textinput]] function(box, text)
+    if box.skip_key_text then
+      box.skip_key_text = nil
+      return true
+    end
+    return _G["Textbox"].textInput(box, text)
   end
   self:_showTarget()
   self.box:setActive(true)

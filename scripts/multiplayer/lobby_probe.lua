@@ -1774,18 +1774,26 @@ local function run()
         elseif a == "patients" then
           session:issue({kind = "probe_patients", n = tonumber(entry.arg)})
         elseif a == "enterchat" then
-          -- Enter while a room is being drawn: the chat opens (the editor
-          -- would take Enter as its checkmark otherwise).
+          -- The chat key (Y, with its letter as text, as SDL sends it) while
+          -- a room is being drawn: the chat opens with an empty line, and
+          -- Enter stays the editor's (its checkmark).
           local dlg = UIEditRoom(world.ui, TheApp.rooms.gp)
           world.ui:addWindow(dlg)
-          world.ui:onKeyDown("return", {})
+          world.ui:onKeyDown("y", {})
+          world.ui:onTextInput("y")
           local input = world.ui:getWindow(UIMultiplayerChatInput)
-          log(string.format("UI: Enter with a room editor open at step %d: chat %s, editor %s",
-              session.step, input and "opened" or "not opened", dlg.phase))
+          local text = input and input.box.text
           if input then input:close() end
+          local enter = {}
+          for _, handler in ipairs(world.ui.key_handlers["return"] or {}) do
+            enter[#enter + 1] = class.type(handler.window) or "?"
+          end
+          log(string.format("UI: chat key with a room editor open at step %d: chat %s, text %q, editor %s; Enter for %s",
+              session.step, input and "opened" or "not opened", tostring(text), dlg.phase,
+              table.concat(enter, ",")))
           dlg:close()
         elseif a == "chat" then
-          -- In-game chat with the real keys: Enter, the text, Tab <n> times
+          -- In-game chat with the real keys: Y, the text, Tab <n> times
           -- (who it is for), Enter. Argument: "<tabs>:<text>".
           local tabs, text = entry.arg:match("^(%d+):(.*)$")
           -- (Enter goes to an open information box first, like the level
@@ -1793,7 +1801,8 @@ local function run()
           for i = #world.ui.windows, 1, -1 do
             if class.is(world.ui.windows[i], UIInformation) then world.ui.windows[i]:close() end
           end
-          world.ui:onKeyDown("return", {})
+          world.ui:onKeyDown("y", {})
+          world.ui:onTextInput("y")
           local input = world.ui:getWindow(UIMultiplayerChatInput)
           if input then
             input.box:setText(text)
@@ -1802,10 +1811,10 @@ local function run()
             log(string.format("UI: chat %q to %s at step %d", text, input.target_panel.label, session.step))
             world.ui:onKeyDown("return", {})
           else
-            -- Something else holds Enter (say which), so send the line as the
+            -- Something else holds the chat key (say which), so send the line as the
             -- input would: <tabs> picks the n-th other player.
             local holders = {}
-            for _, handler in ipairs(world.ui.key_handlers["return"] or {}) do
+            for _, handler in ipairs(world.ui.key_handlers["y"] or {}) do
               holders[#holders + 1] = class.type(handler.window) or tostring(handler.window)
             end
             local in_game, others = session.lobby, {}
@@ -1814,7 +1823,7 @@ local function run()
             end
             local to = others[tonumber(tabs)]
             if in_game then in_game:send("CHAT", {text = text, to = to and to.peer}) end
-            log(string.format("UI: no chat input opened (Enter held by %s); sent %q to %s at step %d",
+            log(string.format("UI: no chat input opened (Y held by %s); sent %q to %s at step %d",
                 table.concat(holders, ","), text, to and to.name or "all", session.step))
           end
         elseif a == "iconsample" then

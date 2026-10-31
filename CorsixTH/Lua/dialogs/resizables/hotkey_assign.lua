@@ -340,6 +340,7 @@ function UIHotkeyAssign:UIHotkeyAssign(ui, mode)
             "ingame_rotateobject",
             "ingame_sellPickedUpItem",
             "ingame_patient_gohome",
+            "ingame_mp_chat",
             "ingame_setTransparent",
             "ingame_toggleTransparent" }}}},
     {

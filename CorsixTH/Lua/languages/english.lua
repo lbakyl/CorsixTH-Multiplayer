@@ -670,7 +670,7 @@ multiplayer_window = {
   menu_colours_all = "  EVERYBODY'S PEOPLE  ",
   menu_colours_others = "  OTHER PLAYERS' PEOPLE  ",
   menu_colours_off = "  OFF  ",
-  menu_chat = "  SEND A MESSAGE (OR PRESS ENTER)  ",
+  menu_chat = "  SEND A MESSAGE (%1%)  ",
   menu_players = "  PLAYERS  ",
   menu_sabotage = "  DIRTY TRICKS  ",
   -- Player list (in game)
@@ -1097,6 +1097,7 @@ hotkey_window = {
   ingame_poopLog = "Dump Log",
   ingame_poopStrings = "Dump Strings",
   ingame_patient_gohome = "Send Home",
+  ingame_mp_chat = "Multiplayer Chat",
   ingame_sellPickedUpItem = "Sell Picked-up Item",
   ingame_storePosition_1 = "1",
   ingame_storePosition_2 = "2",

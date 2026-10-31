@@ -20,7 +20,8 @@
 #      on both machines), the other player sees the reserved outline, a
 #      later room elsewhere, a window -> IN SYNC, same rooms on both; the
 #      drawer's own outline stays blue (with its walls) after the
-#      checkmark; Enter with a room editor open opens the chat
+#      checkmark; the chat key (Y) with a room editor open opens the
+#      chat with an empty line, and Enter stays the editor's
 #   6. rooms drawn where people stand (busy hospital): they are asked to
 #      walk out and the build is retried -> IN SYNC, same rooms on both; the
 #      room editor stays up (waiting) until the room is built
@@ -412,14 +413,16 @@ rooms_g = rooms_g.group(1).split() if rooms_g else []; rooms_h = rooms_h.group(1
 saw = 'showing reserved area of player 1: gp' in h and 'showing reserved area of player 2: toilets' in g
 built = sorted(r.split('@')[0] for r in rooms_g)
 # The own outline stays blue after the checkmark, until the room is built;
-# Enter with a room editor open opens the chat.
+# The chat key (Y) with a room editor open opens the chat with an empty
+# line; Enter stays the editor's.
 kept = re.search(r'UI: outline of gp after the checkmark: (\d+) of (\d+) tiles blue, (\d+) wall pieces', g)
 kept = bool(kept and kept.group(1) == kept.group(2) and int(kept.group(3)) > 0)
-enter = 'UI: Enter with a room editor open at step 50: chat opened' in g
+enter = re.search(r'UI: chat key with a room editor open at step 50: chat opened, text "", editor \w+; Enter for (\S+)', g)
+enter = bool(enter and 'UIEditRoom' in enter.group(1).split(',') and 'UIMultiplayerChat' not in enter.group(1))
 ok5 = (result('gina').startswith('IN SYNC') and result('hugo').startswith('IN SYNC')
        and rooms_g == rooms_h and built == ['gp', 'toilets'] and saw and kept and enter)
 print(f"5. Rooms:                   {result('gina')}; built on both: {rooms_g == rooms_h} {rooms_g}; reserved outlines seen: {saw}; "
-      f"own outline kept: {kept}; Enter opens the chat: {enter}")
+      f"own outline kept: {kept}; Y opens the chat, Enter the editor's: {enter}")
 fail |= not ok5
 
 i, j = log('ivan'), log('judy')

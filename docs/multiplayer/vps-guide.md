@@ -10,7 +10,8 @@ CorsixTH game code.
 
 With the headless referee (desync repair and rejoin), the server does run a
 copy of each game and needs the game data: that setup is a different one,
-`mp_server/deploy/setup-referee-host.sh` (see `referee.md`).
+`mp_server/deploy/setup-referee-host.sh` (step by step: `SERVER-SETUP.md`;
+details: `referee.md`).
 
 ## Quick start
 

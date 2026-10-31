@@ -22,7 +22,7 @@ It is a test version: expect rough edges, and please report what you find.
 - **A server address** (`host:port`, port 47800 by default).
   `eu1.bachelor-tech.com:47800` runs the newest stable release,
   `eu2.bachelor-tech.com:47800` the newest test build.
-  Anybody can run one; see [vps-guide.md](vps-guide.md).
+  Anybody can run one; see [SERVER-SETUP.md](SERVER-SETUP.md).
 
 ## Get the game
 
@@ -151,12 +151,14 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   the research and the price, and they accept or reject it. On acceptance
   they pay you and get what they still lack; you keep your research. No
   answer within 20 game days counts as a rejection.
-- **Chat:** press **Enter** (or **MULTIPLAYER**, **SEND A MESSAGE**) and
+- **Chat:** press **Y** (or **MULTIPLAYER**, **SEND A MESSAGE**) and
   type; **Tab** chooses who it is for (all players, or one), and the game
-  remembers it for next time; **Enter** sends, **Escape** cancels. In
-  multiplayer Enter always opens the chat, also while you draw a room
-  (confirm it with the checkmark). Messages show at the top left for 30
-  seconds on a bar in the sender's colour (each player has one; computer
+  remembers it for next time; **Enter** sends, **Escape** cancels. Enter
+  keeps its usual jobs (finish a room, OK in a dialog, hire). To use
+  another key for the chat: **OPTIONS**, **Hotkeys**, **General In-Game
+  Keys**, **Multiplayer Chat** (or `ingame_mp_chat` in `hotkeys.txt`).
+  Messages show at the top left for 30 seconds on a bar in the sender's
+  colour (each player has one; computer
   players are grey); private ones have a purple mark at the start. Players
   on an older server get private lines as public ones.
 - **Asking for money (co-op):** the bank manager (click your balance at the

@@ -22,7 +22,7 @@ This is a fork of CorsixTH, not an official CorsixTH release. Single player work
 4. **Create a room** (one shared hospital, or a hospital each; the level; how many players; a password if you like) or **join** one. When everybody is ready, the room's owner starts the game. The lobby measures everybody's connection and sets the top speed that stays smooth.
 5. Everybody in a game must run the **same release**. A server only lets in the release it runs, and tells you which one to download.
 
-The full guide, with co-op, trading, saving and what to do if something goes wrong: [docs/multiplayer/PLAYING.md](docs/multiplayer/PLAYING.md). To run your own server (one command on a Debian or Ubuntu server): [docs/multiplayer/vps-guide.md](docs/multiplayer/vps-guide.md).
+The full guide, with co-op, trading, saving and what to do if something goes wrong: [docs/multiplayer/PLAYING.md](docs/multiplayer/PLAYING.md). To run your own server with the referee, like eu1 and eu2: [docs/multiplayer/SERVER-SETUP.md](docs/multiplayer/SERVER-SETUP.md).
 
 ### What's Working? ###
 The whole single player game of CorsixTH (you can complete the full campaign), and multiplayer for two to four players.

@@ -975,7 +975,7 @@ function MultiplayerLobby:_addMultiplayerMenu(ui, mode)
   local coop = MultiplayerLobby.hospitalEach(mode)
   self.mp_menu_bar = ui.menu_bar
   local menu = UIMenu()
-  menu:appendItem(_S.multiplayer_window.menu_chat, function()
+  menu:appendItem(_S.multiplayer_window.menu_chat:format(UIMultiplayerChat.keyLabel()), function()
     local current = TheApp.ui
     if not current:getWindow(UIMultiplayerChatInput) then
       current:addWindow(UIMultiplayerChatInput(current))
