@@ -73,15 +73,15 @@ function UIMultiplayerSabotage:UIMultiplayerSabotage(ui, target)
     local prices = sabotage.PRICES[kind]
     local x0 = 20 + NAME_W + 8
     local w = math.floor((WIDTH - 20 - x0 - 6 * (#prices - 1)) / #prices)
+    self.level_buttons = self.level_buttons or {}
+    self.level_buttons[kind] = {}
     for level in ipairs(prices) do
-      local price = sabotage.price(self.world, self.hospital, kind, level)
-      self:addBevelPanel(x0 + (level - 1) * (w + 6), y, w, 26, col.button)
-          :setLabel(S.sabotage_level:format(level, price))
+      self.level_buttons[kind][level] = self:addBevelPanel(x0 + (level - 1) * (w + 6), y, w, 26, col.button)
           :makeButton(0, 0, w, 26, nil, function() self:choose(kind, level) end)
-          :setTooltip(S.sabotage_levels[kind][level])
     end
     y = y + ROW
   end
+  self:_showLevels()
   self.info_y = y + 2
   self:addBevelPanel(20, self.info_y, WIDTH - 40, INFO_H, col.caption).lowered = true
   y = y + INFO_H + 10
@@ -93,6 +93,38 @@ function UIMultiplayerSabotage:UIMultiplayerSabotage(ui, target)
   self.status_panel.lowered = true
   self:addBevelPanel(WIDTH - 130, y + 42, 110, 30, col.button):setLabel(S.sabotage_close)
       :makeButton(0, 0, 110, 30, nil, self.close)
+end
+
+--! Each level's price for this player now, greyed out with the month it
+--! can first be bought on a level that unlocks the tricks month by month
+--! (level 7). Again when the month changes (onTick): prices change too.
+function UIMultiplayerSabotage:_showLevels()
+  local S = _S.multiplayer_window
+  local sabotage = MultiplayerSession.sabotage
+  local month = self.world.game_date:monthOfGame()
+  self.shown_month = month
+  for kind, buttons in pairs(self.level_buttons or {}) do
+    for level, button in ipairs(buttons) do
+      local from = sabotage.unlockMonth(self.world, kind, level)
+      local locked = from and month < from
+      if locked then
+        button.panel_for_sprite:setLabel(S.sabotage_level_locked:format(level, from))
+        button:setTooltip(S.sabotage_levels[kind][level] .. " " .. S.sabotage_locked_tooltip:format(from))
+      else
+        button.panel_for_sprite:setLabel(S.sabotage_level:format(level,
+            sabotage.price(self.world, self.hospital, kind, level)))
+        button:setTooltip(S.sabotage_levels[kind][level])
+      end
+      button:enable(not locked)
+    end
+  end
+end
+
+function UIMultiplayerSabotage:onTick()
+  if self.level_buttons and self.world.game_date:monthOfGame() ~= self.shown_month then
+    self:_showLevels()
+  end
+  return UIResizable.onTick(self)
 end
 
 --! The next rival after `current` (wrapping) that is still in the race.

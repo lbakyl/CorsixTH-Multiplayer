@@ -603,6 +603,8 @@ multiplayer_window = {
   sabotage_smear = "Smear campaign",
   sabotage_espionage = "Espionage",
   sabotage_level = "L%d  $%d",
+  sabotage_level_locked = "L%d  month %d",
+  sabotage_locked_tooltip = "On this level it can be bought from month %d of the game.",
   sabotage_levels = {
     handyman = {
       "A handyman who looks like theirs but does no work, for 4 months. If they find him and sack him, he comes to work for you.",
