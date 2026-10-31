@@ -49,7 +49,8 @@ local ourpath = debug.getinfo(1, "S").source:sub(2, -22)
 local serialize = serialize -- from utility
 
 local function pathconcat(a, b)
-  if a:sub(-1) == pathsep then
+  -- Don't pathsep if a was empty
+  if a:sub(-1) == pathsep or string.len(a) == 0 then
     return a .. b
   else
     return a .. pathsep .. b
@@ -74,6 +75,7 @@ local function find_config()
   local config_name = "config.txt"
 
   -- Check for config.path.txt
+  -- On Windows, ourpath may be empty
   local fi = io.open(pathconcat(ourpath, "config.path.txt"), "r")
   if fi then
     local contents = fi:read("*a")
@@ -163,6 +165,7 @@ local function new_config_defaults()
     machine_menu_button = true,
     enable_screen_shake = true,
     enable_announcer_subtitles = false,
+    enable_insurance_blue_banknote = true,
     autosave_frequency = 1,
     midi_api = nil,
     midi_port = nil,
@@ -573,6 +576,14 @@ param(config_values, 'enable_screen_shake') .. [=[
 param(config_values, 'enable_announcer_subtitles') .. [=[
 
 -------------------------------------------------------------------------------
+-- By default patient payments made via an insurance company feature a blue
+-- floating banknote animation, allowing for immediate visual distinction
+-- from payments made directly to the hospital. If you prefer the original
+-- display style, where all payments are in green, you can disable this option.
+--]=] .. '\n' ..
+param(config_values, 'enable_insurance_blue_banknote') .. [=[
+
+-------------------------------------------------------------------------------
 -- By default, the game autosaves every in-game month. If you would like to
 -- autosave more often, every week or every day, change this setting to 2 or 3.
 -- Please note that a typical save can take up to 1 megabyte or even more.
@@ -701,7 +712,7 @@ param(config_values, 'midi_sysex_master_volume') .. [=[
 -------------------------------------------------------------------------------
 -- Debug settings.
 -- If set to true more detailed information will be printed in the terminal
--- and a debug menu will be visible.
+-- and ingame menus for debug and cheats will be visible.
 --]=] .. '\n' ..
 param(config_values, 'debug') .. [=[
 

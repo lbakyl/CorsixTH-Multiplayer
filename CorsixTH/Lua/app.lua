@@ -28,12 +28,13 @@ local SDL = require("sdl")
 -- and add compatibility code in afterLoad functions
 -- Recommended: Also replace/Update the summary comment
 
-local SAVEGAME_VERSION = 269 -- Add patient costs inflation
+local SAVEGAME_VERSION = 270 -- Adjust random announcement delay
 
 class "App"
 
----@type App
-local App = _G["App"]
+---@class App
+---@operator call: App
+local App = _G["App"] ---@type App
 
 App.MIN_WINDOW_WIDTH = 640
 App.MIN_WINDOW_HEIGHT = 480
@@ -197,12 +198,12 @@ function App:init()
       notices[#notices + 1] = TH.freetype_font.getCopyrightNotice()
       font = self.gfx:loadLanguageFont("unicode", font:getSheet())
     end
-    notices = table.concat(notices)
-    if notices ~= "" then
+    local notices_text = table.concat(notices)
+    if notices_text ~= "" then
       self.video:startFrame()
       self.gfx:loadRaw("Load01V", 640, 480):draw(self.video,
         math.floor((scr_w - 640) / 2), math.floor((scr_h - 480) / 2))
-      font:drawWrapped(self.video, notices, 32,
+      font:drawWrapped(self.video, notices_text, 32,
         math.floor((scr_h + 400) / 2), math.floor(scr_w - 64), "center")
       self.video:endFrame()
     end
@@ -323,7 +324,7 @@ function App:init()
   -- Load additional Lua before world
   if good_install_folder then
     self.anims = self.gfx:loadAnimations("Data", "V")
-    self.animation_manager = AnimationManager(self.anims)
+    self.animation_manager = AnimationManager(self.anims) ---@type AnimationManager
     self.walls = self:loadLuaFolder("walls")
     corsixth.require("entity")
     corsixth.require("entities.humanoid")
@@ -609,14 +610,11 @@ function App:initMusicDir()
     return nil
   end
 
-  local operating_system = self.os
-  local corsixth_path = lfs.currentdir()
-  local conf_path = self.command_line["config-file"] or nil  -- Gets the path of the config file ('nil' if it's in CorsixTH's dir)
-  conf_path = conf_path:match("^(.-)[^" .. pathsep .. "]*$") -- Removes the config file name from the above path
+  local corsixth_path = self.os ~= "macos" and lfs.currentdir() or nil
+  local conf_path = self.command_line["config-file"]
 
-  if(operating_system == "macos") then
-    -- On macOS skip checking the game's directory, since it's difficult to obtain and/or open
-    corsixth_path = nil
+  if conf_path then -- Get folder path
+    conf_path = conf_path:match("^(.-)[^" .. pathsep .. "]*$")
   end
 
   -- Check corsixth's install directory first, then the config file directory
@@ -1181,7 +1179,7 @@ function App:fixConfig()
       if value:len() == 0 then -- If empty, use computer user's name,
         value = os.getenv("USER") or os.getenv("USERNAME")
       end
-      value = value:match('^%s*(.*%S)') or ""
+      value = value and value:match('^%s*(.*%S)') or ""
       if value:len() == 0 then -- unless that is also empty
         value = "PLAYER"
       end
@@ -1519,6 +1517,8 @@ function App:checkInstallFolder()
     local mac_app_dir = debug.getinfo(1).short_src:match("(.*)/Contents/.")
     local user_dir = os.getenv("HOME") or os.getenv("USERPROFILE")
     local win_home_dir = nil;
+    local config_path =
+        corsixth.require("config_finder").config_filename:match("(.*[/\\])")
     if os.getenv("HOMEDRIVE") and os.getenv("HOMEPATH") then
       win_home_dir = os.getenv("HOMEDRIVE") .. os.getenv("HOMEPATH")
       if win_home_dir == user_dir then win_home_dir = nil; end
@@ -1527,7 +1527,7 @@ function App:checkInstallFolder()
       user_dir,
       user_dir and (user_dir .. pathsep .. "Documents"),
       win_home_dir,
-      corsixth.require("config_finder").config_filename:match("(.*[/\\])"):sub(1, -2),
+      config_path and config_path:sub(1, -2) or "",
       mac_app_dir,
       mac_app_dir and mac_app_dir:match("(.*)/.*%.app"),
       "/Applications/Theme Hospital.app/Contents/Resources/game/Theme Hospital.app/" ..
@@ -1546,7 +1546,7 @@ function App:checkInstallFolder()
       if status then break end
       for _, folder in pairs(possible_folders) do
         local _
-        local path = dir .. pathsep .. folder
+        local path = (dir == "") and folder or (dir .. pathsep .. folder)
         if lfs.attributes(path, "mode") == "directory" and self:isThemeHospitalPath(path) then
           print("Game data found at: " .. path)
           print("This will be written to the config file")
@@ -1577,9 +1577,9 @@ function App:checkInstallFolder()
   check("Levels" .. pathsep .. "Level.L1")
   check("QData" .. pathsep .. "SPointer.dat")
   if #missing ~= 0 then
-    missing = table.concat(missing, ", ")
+    local missing_text = table.concat(missing, ", ")
     message = "Invalid Theme Hospital folder specified in config file, " ..
-        "as at least the following files are missing: " .. missing .. ".\n" ..
+        "as at least the following files are missing: " .. missing_text .. ".\n" ..
         message
     print(message)
     print("Trying to let the user select a new one.")

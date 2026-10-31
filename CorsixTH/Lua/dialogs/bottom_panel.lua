@@ -21,8 +21,9 @@ SOFTWARE. --]]
 --! The multi-purpose panel for launching dialogs / screens and dynamic information.
 class "UIBottomPanel" (Window)
 
----@type UIBottomPanel
-local UIBottomPanel = _G["UIBottomPanel"]
+---@class UIBottomPanel: Window
+---@operator call: UIBottomPanel
+local UIBottomPanel = _G["UIBottomPanel"] ---@type UIBottomPanel
 
 local MESSAGE_DOOR_FULLY_OPEN = 0
 local MESSAGE_DOOR_FULLY_SHUT = 22
@@ -489,7 +490,7 @@ function UIBottomPanel:addLocalMessage(type, message)
   return message_info.drawer_icon
 end
 
-function UIBottomPanel:_factoryIconWitdh()
+function UIBottomPanel:_factoryIconWidth()
   return FACTORY_ICON_WIDTH
 end
 
@@ -502,9 +503,9 @@ function UIBottomPanel:_initMessageWithDrawerIcon(message_info)
       -- If icon position found
       if this_icon_index ~= nil then
         -- Shift all icons that are on the right to the left
-        -- The '_factoryIconWitdh()' call is used for compatibility with 0.69 saves and older
+        -- The '_factoryIconWidth()' call is used for compatibility with 0.69 saves and older
         -- where FACTORY_ICON_WIDTH was not yet declared when the closure was created.
-        icon:setXLimit(1 + (i - 2) * self._factoryIconWitdh())
+        icon:setXLimit(1 + (i - 2) * self:_factoryIconWidth())
       elseif icon == this_icon then
         this_icon_index = i
       end

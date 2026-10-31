@@ -180,19 +180,21 @@ tooltip = {
   },
 
   options_window = {
+    language = "Velg %s som språk",
+    back = "Lukk vinduet med innstillinger",
+    language_dropdown_item = "Velg %s som språk",
+    select_language = "Velg språk",
+    folder = "Mappeinnstillinger",
+    customise = "¨Flere innstillinger", --todo: mer utfyllende beskrivelse? var "More settings you can change to customise your game play experience"
+    capture_mouse = "Slå av eller på låsing av musepeker i spillvinduet",
+  },
+  graphics_window = {
+    fullscreen = "Om spillet skal kjöre i fullskjerm eller vindusmodus",
     fullscreen_button = "Klikk for å gå i fullskjermmodus",
     width = "Skriv inn önsket skjermbredde",
     height = "Skriv inn önsket skjermhöyde",
-    language = "Velg %s som språk",
-    back = "Lukk vinduet med innstillinger",
-    fullscreen = "Om spillet skal kjöre i fullskjerm eller vindusmodus",
-    cancel = "Returner uten å endre opplösning",
     apply = "Bruk den innskrevne opplösningen",
-    language_dropdown_item = "Velg %s som språk",
-    select_language = "Velg språk",
-    folder_button = "Mappeinnstillinger",
-    customise_button = "¨Flere innstillinger", --todo: mer utfyllende beskrivelse? var "More settings you can change to customise your game play experience"
-    capture_mouse = "Slå av eller på låsing av musepeker i spillvinduet",
+    cancel = "Returner uten å endre opplösning",
   },
   audio_window = {
     audio_button = "Slå av eller på all lyd",
@@ -276,7 +278,6 @@ tooltip = {
     allow_user_actions_while_paused = " I Theme Hospital ville spilleren kun få lov til å bruke toppmenyen om spillet var satt til pause. Dette er standard i CorsixTH også, men ved å slå denne på, så er alle bevegelser lov",
     back = "Gå tilbake",
     play_intro = "Slå av eller på introfilmen. Den andre filminnstillingen må også være på for å spille av introfilmen hver ganger du starter spillet",
-    volume = "Om en fysisk volum ned-knapp åpner Medisinboka i spillet, så kan du slå på denne for å endre hurtigtasten til Shift+C",
     disable_fractured_bones_females = "På grunn av mangelfulle animasjoner har vi stilt standardoppsettet til å slå av kvinnelige benbrudd. For å tillate dette, slå denne av",
     alien_dna_only_by_emergency = "På grunn av manglende animasjoner har vi slått av pasienter med Utenomjordisk DNA slik at de bare kan komme fra nödstilfeller. For å tillate pasienter med Utenomjordisk DNA å gå til sykehuset, slå denne av.",
     enable_avg_contents = "Om du önsker at spillet skal huske hvilke objekter du vanligvis kjöper til hver rom (gjennomsnittlig), så bör du slå på denne",
@@ -833,19 +834,23 @@ menu_list_window = {
 }
 
 options_window = {
-  fullscreen = "Fullskjerm",
-  width = "Bredde",
-  height = "Höyde",
   back = "Tilbake",
-  cancel = "Avbryt",
   option_on = "På",
   option_off = "Av",
   caption = "Innstillinger",
   language = "Språk",
-  apply = "Bruk",
   folder = "Mapper",
   customise = "Tilpass",
   capture_mouse = "Lås musepeker",
+}
+graphics_window = {
+  fullscreen = "Fullskjerm",
+  width = "Bredde",
+  height = "Höyde",
+  option_on = "På",
+  option_off = "Av",
+  apply = "Bruk",
+  cancel = "Avbryt",
 }
 
 audio_window = {

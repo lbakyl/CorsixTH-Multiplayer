@@ -31,8 +31,9 @@ stored for future use anyway.
 --! Manages all things related to research for one hospital.
 class "ResearchDepartment"
 
----@type ResearchDepartment
-local ResearchDepartment = _G["ResearchDepartment"]
+---@class ResearchDepartment
+---@operator call: ResearchDepartment
+local ResearchDepartment = _G["ResearchDepartment"] ---@type ResearchDepartment
 
 --! A stable name for a table key, the same on every computer.
 local function stable_key(k)

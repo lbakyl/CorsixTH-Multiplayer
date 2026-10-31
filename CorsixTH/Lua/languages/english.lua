@@ -153,7 +153,11 @@ tooltip.casebook.cure_type.unknown = "You do not yet know how to treat this dise
 tooltip.research_policy.no_research = "No research is being carried out in this category at the moment"
 tooltip.research_policy.research_progress = "Progress towards the next discovery in this category: %1%/%2%"
 
-menu["player_count"] = "PLAYER COUNT"
+menu = {
+  player_count = "PLAYER COUNT",
+  cheats_title = "CHEATS",
+  cheats       = "  (%1%) CHEATS  ",
+}
 
 menu_file = {
   load =    "  (%1%) LOAD  ",
@@ -221,7 +225,6 @@ menu_debug = {
   make_debug_fax              = "  MAKE DEBUG FAX  ",
   make_debug_patient          = "  MAKE DEBUG PATIENT  ",
   make_debug_rat              = "  MAKE DEBUG RAT  ",
-  cheats                      = "  (%1%) CHEATS  ",
   lua_console                 = "  (%1%) LUA CONSOLE  ",
   debug_script                = "  (%1%) RUN DEBUG SCRIPT  ",
   calls_dispatcher            = "  CALLS DISPATCHER  ",
@@ -825,32 +828,38 @@ options_window = {
   option_off = "Off",
   option_enabled = "Enabled",
   option_disabled = "Disabled",
+  capture_mouse = "Capture Mouse",
+  right_mouse_scrolling = "Mouse Scrolling",
+  right_mouse_scrolling_option_middle = "Middle Button",
+  right_mouse_scrolling_option_right = "Right Button",
+  customise = "Customise",
+  folder = "Folders",
+  accessibility = "Accessibility",
+  language = "Game Language",
+  back = "Back",
+  autosave_frequency = "Autosave Frequency",
+  hotkey = "Hotkeys",
+  check_for_updates = "Check for Updates",
+  sound = "Sound",
+  graphics = "Graphics",
+}
+
+graphics_window = {
+  caption = "Graphics",
   fullscreen = "Fullscreen",
   window_size = "Window Size",
   original_aspect_ratio = "Original Aspect (4:3)",
   ui_scale = "UI Scale",
   scale_auto = "Auto",
   cursor_scale = "Cursor Scale",
-  capture_mouse = "Capture Mouse",
-  right_mouse_scrolling = "Mouse Scrolling",
-  right_mouse_scrolling_option_middle = "Middle Button",
-  right_mouse_scrolling_option_right = "Right Button",
   custom_window_size = "Custom...",
+  override_resolution = "Override Resolution",
   width = "Width",
   height = "Height",
-  customise = "Customise",
-  folder = "Folders",
-  language = "Game Language",
+  option_on = "On",
+  option_off = "Off",
   apply = "Apply",
   cancel = "Cancel",
-  back = "Back",
-  scroll_speed = "Scroll Speed",
-  shift_scroll_speed = "Shift Scroll Speed",
-  zoom_speed = "Zoom Speed",
-  autosave_frequency = "Autosave Frequency",
-  hotkey = "Hotkeys",
-  check_for_updates = "Check for Updates",
-  sound = "Sound",
 }
 
 autosave_frequency = {
@@ -866,6 +875,24 @@ tooltip.autosave_frequency = {
 }
 
 tooltip.options_window = {
+  capture_mouse = "Click to toggle capturing the cursor while in game",
+  right_mouse_scrolling = "Toggle the mouse button that is used to scroll the map",
+  customise = "More settings you can change to customise your game play experience",
+  folder = "Folder Options",
+  accessibility = "Accessibility Options",
+  language = "The language texts in the game will appear in",
+  select_language = "Select the game language",
+  language_dropdown_item = "Choose %s as language",
+  language_dropdown_no_font = "Select a font in the folders settings to enable this language",
+  back = "Close the Settings window",
+  autosave_frequency = "Set how often the game will make autosaves.",
+  hotkey = "Change keyboard hotkeys.",
+  check_for_updates = "Sets whether the game should look for updates on launch.",
+  sound = "Change audio settings",
+  graphics = "Change display settings",
+}
+
+tooltip.graphics_window = {
   fullscreen = "Whether the game should run in fullscreen or windowed mode",
   fullscreen_button = "Click to toggle fullscreen mode",
   window_size = "The window size the game should run in",
@@ -876,32 +903,11 @@ tooltip.options_window = {
   select_ui_scale = "Select a new user interface scale",
   cursor_scale = "Scale the cursor.",
   select_cursor_scale = "Select a new cursor scale",
-  capture_mouse = "Click to toggle capturing the cursor while in game",
-  right_mouse_scrolling = "Toggle the mouse button that is used to scroll the map",
+  override_resolution = "Specify a resolution to use instead of the native window resolution. When off the native monitor resolution is used instead.",
   width = "Enter desired window width",
   height = "Enter desired window height",
   apply = "Apply the entered window size",
   cancel = "Return without changing the window size",
-  customise_button = "More settings you can change to customise your game play experience",
-  folder_button = "Folder Options",
-  language = "The language texts in the game will appear in",
-  select_language = "Select the game language",
-  language_dropdown_item = "Choose %s as language",
-  language_dropdown_no_font = "Select a font in the folders settings to enable this language",
-  back = "Close the Settings window",
-  scroll_speed = "Set the scroll speed between 1 (slowest) to 10 (fastest). The default is 2.",
-  shift_scroll_speed = "Set the speed of scrolling while the shift key is pressed. 1 (slowest) to 10 (fastest). The default is 4.",
-  zoom_speed = "Set the camera zoom speed from 10 (slowest) to 1000 (fastest). The default is 80.",
-  autosave_frequency = "Set how often the game will make autosaves.",
-  apply_scrollspeed = "Apply the entered scroll speed.",
-  cancel_scrollspeed = "Return without changing the scroll speed.",
-  apply_shift_scrollspeed = "Apply the entered shift scroll speed.",
-  cancel_shift_scrollspeed = "Return without changing the shift scroll speed.",
-  apply_zoomspeed = "Apply the entered zoom speed.",
-  cancel_zoomspeed = "Return without changing the zoom speed.",
-  hotkey = "Change keyboard hotkeys.",
-  check_for_updates = "Sets whether the game should look for updates on launch.",
-  sound = "Change audio settings",
 }
 
 audio_window = {
@@ -953,8 +959,7 @@ customise_window = {
   enable_avg_contents = "Average Contents",
   remove_destroyed_rooms = "Remove destroyed rooms",
   machine_menu_button = "Machine menu button",
-  enable_screen_shake = "Screen Shake",
-  enable_announcer_subtitles = "Announcer Subtitles",
+  enable_insurance_blue_banknote = "Insurance Blue Banknote",
 }
 
 tooltip.customise_window = {
@@ -966,8 +971,7 @@ tooltip.customise_window = {
   enable_avg_contents = "If you would like the game to remember which extra objects you usually add while building rooms, turn this option on",
   remove_destroyed_rooms = "In the original Theme Hospital, exploded machines made rooms permanently unusable. If you would like to be able to remove destroyed rooms for a fee, turn this option on",
   machine_menu_button = "If you would like to have a machine menu button in bottom panel, turn this option on. Keep in mind that this button will not be available in small screen resolutions",
-  enable_screen_shake = "Earthquakes will cause the entire screen to shake. If you would prefer the screen to remain still, turn this option off",
-  enable_announcer_subtitles = "If you would like the game to display subtitles for your hospital's announcements, turn this option on",
+  enable_insurance_blue_banknote = "Patient payments made via an insurance company feature a blue floating banknote animation, allowing for immediate visual distinction from payments made directly to the hospital. If you prefer the original display style, where all payments are in green, you can disable this option",
   back = "Close this menu and go back to the Settings Menu",
 }
 
@@ -1139,6 +1143,29 @@ tooltip.hotkey_window = {
 
 font_location_window = {
   caption = "Choose font (%1%)",
+}
+
+accessibility_window = {
+  caption = "Accessibility Settings",
+  enable_screen_shake = "Screen Shake",
+  enable_announcer_subtitles = "Announcer Subtitles",
+  scroll_speed = "Scroll Speed",
+  shift_scroll_speed = "Shift Scroll Speed",
+  zoom_speed = "Zoom Speed",
+}
+
+tooltip.accessibility_window = {
+  enable_screen_shake = "Earthquakes will cause the entire screen to shake. If you would prefer the screen to remain still, turn this option off",
+  enable_announcer_subtitles = "If you would like the game to display subtitles for your hospital's announcements, turn this option on",
+  scroll_speed = "Set the scroll speed between 1 (slowest) to 10 (fastest). The default is 2.",
+  shift_scroll_speed = "Set the speed of scrolling while the shift key is pressed. 1 (slowest) to 10 (fastest). The default is 4.",
+  zoom_speed = "Set the camera zoom speed from 10 (slowest) to 1000 (fastest). The default is 80.",
+  apply_scrollspeed = "Apply the entered scroll speed.",
+  cancel_scrollspeed = "Return without changing the scroll speed.",
+  apply_shift_scrollspeed = "Apply the entered shift scroll speed.",
+  cancel_shift_scrollspeed = "Return without changing the shift scroll speed.",
+  apply_zoomspeed = "Apply the entered zoom speed.",
+  cancel_zoomspeed = "Return without changing the zoom speed.",
 }
 
 handyman_window = {

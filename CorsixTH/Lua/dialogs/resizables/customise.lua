@@ -21,15 +21,16 @@ SOFTWARE. --]]
 --! Customise window used in the main menu and ingame.
 class "UICustomise" (UIResizable)
 
----@type UICustomise
-local UICustomise = _G["UICustomise"]
+---@class UICustomise: UIResizable
+---@operator call: UICustomise
+local UICustomise = _G["UICustomise"] ---@type UICustomise
 
 local col = {
   bg             = Colours.PanelDefault,
 }
 
 function UICustomise:UICustomise(ui, mode)
-  self:UIResizable(ui, 340, 375, col.bg)
+  self:UIResizable(ui, 360, 375, col.bg)
 
   self.mode = mode
   self.modal_class = mode == "menu" and "main menu" or "options" or "customise"
@@ -56,10 +57,8 @@ function UICustomise:UICustomise(ui, mode)
     { name = "remove_destroyed_rooms" },
     -- Allow machine menu button in a toolbar
     { name = "machine_menu_button" },
-    -- Allow user to disable screen shake during earthquakes
-    { name = "enable_screen_shake" },
-    -- Add subtitles for announcer messages
-    { name = "enable_announcer_subtitles" }
+    -- Draw money paid by insurance in blue rather than green
+    { name = "enable_insurance_blue_banknote" },
   }
 
   self:buildDialog()

@@ -44,8 +44,9 @@ local default_announcement_decay_hours = {
 --! An announcement queue based on priority
 class "AnnouncementQueue"
 
----@type AnnouncementQueue
-local AnnouncementQueue = _G["AnnouncementQueue"]
+---@class AnnouncementQueue
+---@operator call: AnnouncementQueue
+local AnnouncementQueue = _G["AnnouncementQueue"] ---@type AnnouncementQueue
 
 --! Creates an announcement queue: a collection of announcements with queue semantics.
 function AnnouncementQueue:AnnouncementQueue()
@@ -106,8 +107,9 @@ end
 --! An announcement.
 class "AnnouncementEntry"
 
----@type AnnouncementEntry
-local AnnouncementEntry = _G["AnnouncementEntry"]
+---@class AnnouncementEntry
+---@operator call: AnnouncementEntry
+local AnnouncementEntry = _G["AnnouncementEntry"] ---@type AnnouncementEntry
 
 --! Creates an announcement
 function AnnouncementEntry:AnnouncementEntry()
@@ -126,8 +128,9 @@ end
 -- a worker at the reception desk and announcements are enabled in the settings.
 class "Announcer"
 
----@type Announcer
-local Announcer = _G["Announcer"]
+---@class Announcer
+---@operator call: Announcer
+local Announcer = _G["Announcer"] ---@type Announcer
 
 --! Constructor.
 --!param app (App) The CorsixTH app
@@ -223,14 +226,11 @@ end
 
 --! Private function. Sets the new time (in ticks) when a random announcement should be played.
 function Announcer:_setRandomAnnouncementTarget()
-  -- Note that random announcement are measured in ticks.
-  -- This ensures that on fast game speeds random announcements aren't
-  -- spammed, or on lower game speeds random announcements are never played.
-
-  -- Every tick is 18ms, so ~3333 ticks is 1 minute at normal speed
-  local tick_chunk = 3333
-  -- Set a target of 4 - 6 minutes (chunks)
-  self.random_announcement_ticks_target = math.cosmetic_random(tick_chunk * 4, tick_chunk * 6)
+  -- Note that random announcement period is measured in SDL ticks (18ms).
+  -- This makes them gamespeed independent.
+  -- Random announcements queue after every 90-120 seconds of 'silence'
+  local tick_chunk_lower, tick_chunk_upper = 5000, 6667 -- rounded
+  self.random_announcement_ticks_target = math.cosmetic_random(tick_chunk_lower, tick_chunk_upper)
 end
 
 --! Private function. Plays the actual sound of an announcement.
@@ -256,5 +256,16 @@ function Announcer:_onPlayed(entry)
 
   if entry.played_callback ~= nil then
     entry.played_callback()
+  end
+end
+
+function Announcer:afterLoad(old, new)
+  if old < 270 then
+    -- Refresh the random announcement target if not <120 seconds
+    local old_tick_chunk = self.random_announcement_ticks_target
+    local new_tick_chunk_max = 6667 -- rounded
+    if old_tick_chunk > new_tick_chunk_max then
+      self:_setRandomAnnouncementTarget()
+    end
   end
 end

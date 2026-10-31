@@ -194,6 +194,13 @@ end
 local function run_lobby()
   local menu = assert(TheApp.ui:getWindow(UIMainMenu), "no main menu")
   shot("main-menu")
+  if shot_dir then
+    -- The Settings window (its Back button must fit inside it).
+    menu:buttonOptions()
+    shot("options")
+    assert(TheApp.ui:getWindow(UIOptions), "no options window"):buttonBack()
+    menu = assert(TheApp.ui:getWindow(UIMainMenu), "no main menu after the options window")
+  end
   menu:buttonMultiplayer()
   -- Closing the lobby window brings the main menu back.
   assert(lobby_window(), "no multiplayer window"):close()

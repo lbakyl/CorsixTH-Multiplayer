@@ -473,46 +473,40 @@ options_window = {
   caption = "Einstellungen",
   option_on = "Ein",
   option_off = "Aus",
-  fullscreen = "Vollbild",
   capture_mouse = "Maus einfangen",
-  width = "Breite",
-  height = "Höhe",
   customise = "Spezialeinstellungen",
   folder = "Pfade",
   language = "Spielsprache",
+  back = "Zurück",
+  hotkey = "Tastenkürzel",
+}
+graphics_window = {
+  fullscreen = "Vollbild",
+  width = "Breite",
+  height = "Höhe",
+  option_on = "Ein",
+  option_off = "Aus",
   apply = "Übernehmen",
   cancel = "Abbrechen",
-  back = "Zurück",
-  scroll_speed = "Scrolling", -- "Scrolling-Geschwindigkeit" is too long
-  shift_scroll_speed = "Scrolling (Mod.)", --"schnelles Scrollen" or "Umschalt-Scrolling-Geschwindigkeit" are worse
-  zoom_speed = "Zoomen", --"Zoom-Geschwindigkeit" is too long
-  hotkey = "Tastenkürzel",
 }
 
 tooltip.options_window = {
-  fullscreen = "Darstellung im Vollbild- oder Fenstermodus",
-  fullscreen_button = "Klicken, um zwischen Vollbild- und Fenstermodus zu wechseln",
   capture_mouse = "Ein- bzw. Ausschalten, ob der Mauszeiger das Fenster verlassen kann",
-  width = "Gewünschte Bildschirmbreite eingeben",
-  height = "Gewünschte Bildschirmhöhe eingeben",
-  apply = "Die eingegebene Auflösung übernehmen",
-  cancel = "Zurückkehren, ohne die Auflösung zu ändern",
-  customise_button = "Weitere Einstellungen, die Sie ändern können, um Ihr Spielerlebnis anzupassen",
-  folder_button = "Verzeichniseinstellungen",
+  customise = "Weitere Einstellungen, die Sie ändern können, um Ihr Spielerlebnis anzupassen",
+  folder = "Verzeichniseinstellungen",
   language = "Die Sprache, in der Texte im Spiel erscheinen",
   select_language = "Die Spielsprache ändern",
   language_dropdown_item = "%s als Sprache auswählen",
   back = "Das Optionsfenster schließen",
-  scroll_speed = "Scrolling-Geschwindigkeit von 1 (langsamste) bis 10 (schnellste) einstellen. Standard ist 2.",
-  shift_scroll_speed = "Scrolling-Geschwindigkeit während der Modifikator (Standard: Umschalttaste) gedrückt wird einstellen. 1 (langsamste) bis 10 (schnellste). Standard ist 4.",
-  zoom_speed = "Zoom-Geschwindigkeit der Kamera von 10 (langsamste) bis 1000 (schnellste) einstellen. Standard ist 80.",
-  apply_scrollspeed = "Eingegebene Scrolling-Geschwindigkeit anwenden.",
-  cancel_scrollspeed = "Ohne Änderung der Scrolling-Geschwindigkeit zurückkehren.",
-  apply_shift_scrollspeed = "Eingegebene Modifikator-Scrolling-Geschwindigkeit anwenden.",
-  cancel_shift_scrollspeed = "Ohne Änderung der Modifikator-Scrolling-Geschwindigkeit zurückkehren.",
-  apply_zoomspeed = "Eingegebene Zoom-Geschwindigkeit anwenden.",
-  cancel_zoomspeed = "Ohne Änderung der Zoom-Geschwindigkeit zurückkehren.",
   hotkey = "Tastenkürzel ändern.",
+}
+tooltip.graphics_window = {
+  fullscreen = "Darstellung im Vollbild- oder Fenstermodus",
+  fullscreen_button = "Klicken, um zwischen Vollbild- und Fenstermodus zu wechseln",
+  width = "Gewünschte Bildschirmbreite eingeben",
+  height = "Gewünschte Bildschirmhöhe eingeben",
+  apply = "Die eingegebene Auflösung übernehmen",
+  cancel = "Zurückkehren, ohne die Auflösung zu ändern",
 }
 
 audio_window = {
@@ -586,6 +580,24 @@ tooltip.folders_window = {
   reset_to_default = "Das Verzeichnis zur Standardeinstellung zurücksetzen (%1%)",
   --
   back = "Dieses Menü schließen und zum Einstellungsmenü zurückkehren",
+}
+
+accessibility_window = {
+  scrollspeed = "Scrolling", -- "Scrolling-Geschwindigkeit" is too long
+  shift_scrollspeed = "Scrolling (Mod.)", --"schnelles Scrollen" or "Umschalt-Scrolling-Geschwindigkeit" are worse
+  zoom_speed = "Zoomen", --"Zoom-Geschwindigkeit" is too long
+}
+
+tooltip.accessibility_window = {
+  scrollspeed = "Scrolling-Geschwindigkeit von 1 (langsamste) bis 10 (schnellste) einstellen. Standard ist 2.",
+  shift_scrollspeed = "Scrolling-Geschwindigkeit während der Modifikator (Standard: Umschalttaste) gedrückt wird einstellen. 1 (langsamste) bis 10 (schnellste). Standard ist 4.",
+  zoom_speed = "Zoom-Geschwindigkeit der Kamera von 10 (langsamste) bis 1000 (schnellste) einstellen. Standard ist 80.",
+  apply_scrollspeed = "Eingegebene Scrolling-Geschwindigkeit anwenden.",
+  cancel_scrollspeed = "Ohne Änderung der Scrolling-Geschwindigkeit zurückkehren.",
+  apply_shift_scrollspeed = "Eingegebene Modifikator-Scrolling-Geschwindigkeit anwenden.",
+  cancel_shift_scrollspeed = "Ohne Änderung der Modifikator-Scrolling-Geschwindigkeit zurückkehren.",
+  apply_zoomspeed = "Eingegebene Zoom-Geschwindigkeit anwenden.",
+  cancel_zoomspeed = "Ohne Änderung der Zoom-Geschwindigkeit zurückkehren.",
 }
 
 hotkey_window = {

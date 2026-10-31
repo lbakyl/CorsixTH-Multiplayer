@@ -867,16 +867,12 @@ tooltip.menu_list_window = {
 
 -- Options window
 options_window = {
-  apply = "Appliquer",
   back = "Précédent",
-  cancel = "Annuler",
   caption = "Paramètres",
   capture_mouse = "Capture de la souris",
   check_for_updates = "Vérifier mises à jour",
   customise = "Personnaliser",
   folder = "Dossier",
-  fullscreen = "Plein écran",
-  height = "Hauteur",
   hotkey = "Touches de raccourci",
   language = "Langue du jeu",
   option_disabled = "Désactivé",
@@ -885,14 +881,22 @@ options_window = {
   option_on = "Activer",
   scroll_speed = "Vitesse de défilement",
   shift_scroll_speed = "Vit. de défil. + Maj",
-  width = "Largeur",
   zoom_speed = "Vitesse de zoom",
   right_mouse_scrolling = "Défilement Souris",
   right_mouse_scrolling_option_middle = "Bouton Milieu",
   right_mouse_scrolling_option_right = "Bouton Droit",
-  ui_scale = "Échelle d'interface",
   sound = "Son",
   autosave_frequency = "Fréquence sauv. auto.",
+}
+graphics_window = {
+  fullscreen = "Plein écran",
+  ui_scale = "Échelle d'interface",
+  width = "Largeur",
+  height = "Hauteur",
+  option_on = "Activer",
+  option_off = "Désactiver",
+  apply = "Appliquer",
+  cancel = "Annuler",
 }
 
 autosave_frequency = {
@@ -908,37 +912,30 @@ tooltip.autosave_frequency = {
 }
 
 tooltip.options_window = {
-  fullscreen = "Mode plein écran ou mode fenêtré",
-  fullscreen_button = "Basculer en mode plein écran/fenêtré",
-  ui_scale = "Mise à l'échelle de l'interface. Seules les options d'échelle applicables à votre écran sont disponibles. Augmentez la résolution pour plus d'options.",
-  select_ui_scale = "Sélectionner une échelle d'interface",
   ui_scale_unavailable = "Échelle d'interface indisponible, veuillez d'abord choisir une résolution plus élevée.",
-  width = "Entrez la largeur désirée",
-  height = "Entrez la hauteur désirée",
   language = "Utiliser la langue %s",
   back = "Fermer la fenêtre des options",
-  cancel = "Retour sans changement de résolution",
-  apply = "Appliquer la résolution choisie",
   language_dropdown_item = "Choisir %s comme langue",
   select_language = "Sélectionner la langue du jeu",
-  folder_button = "Dossier des paramètres",
-  customise_button = "Paramètres supplémentaires qui peuvent être modifiés pour personnaliser votre expérience de jeu",
-  apply_shift_scrollspeed = "Appliquer la vitesse de défilement en mode Maj.",
-  shift_scroll_speed = "Définir la vitesse de défilement lorsque la touche Maj est enfoncée. De 1 (la plus lente) à 10 (la plus rapide). La valeur par défaut est 4.",
+  folder = "Dossier des paramètres",
+  customise = "Paramètres supplémentaires qui peuvent être modifiés pour personnaliser votre expérience de jeu",
   hotkey = "Modifier les touches de raccourci du clavier.",
   check_for_updates = "Choisir si le jeu doit rechercher des mises à jour au démarrage.",
-  zoom_speed = "Définir la vitesse de zoom de la caméra de 10 (la plus lente) à 1000 (la plus rapide). La valeur par défaut est 80.",
-  cancel_zoomspeed = "Revenir sans changer la vitesse de zoom.",
-  apply_zoomspeed = "Appliquer la vitesse de zoom choisie.",
-  cancel_scrollspeed = "Revenir sans changer la vitesse de défilement.",
-  cancel_shift_scrollspeed = "Revenir sans changer la vitesse de défilement de la touche Maj.",
-  scroll_speed = "Réglez la vitesse de défilement de 1 (la plus lente) à 10 (la plus rapide). La valeur par défaut est 2.",
-  apply_scrollspeed = "Appliquer la vitesse de défilement entrée.",
   capture_mouse = "Cliquez pour activer la capture du curseur dans la fenêtre du jeu.",
   language_dropdown_no_font = "Sélectionnez une police d'écriture dans les paramètres pour activer ce langage",
   right_mouse_scrolling = "Activer le bouton qui est utilisé pour faire défiler la carte",
   sound = "Modifier les réglages audio",
   autosave_frequency = "Définir la fréquence des sauvegardes automatiques.",
+}
+tooltip.graphics_window = {
+  fullscreen = "Mode plein écran ou mode fenêtré",
+  fullscreen_button = "Basculer en mode plein écran/fenêtré",
+  ui_scale = "Mise à l'échelle de l'interface. Seules les options d'échelle applicables à votre écran sont disponibles. Augmentez la résolution pour plus d'options.",
+  select_ui_scale = "Sélectionner une échelle d'interface",
+  width = "Entrez la largeur désirée",
+  height = "Entrez la hauteur désirée",
+  apply = "Appliquer la résolution choisie",
+  cancel = "Retour sans changement de résolution",
 }
 
 audio_window = {
@@ -981,7 +978,6 @@ customise_window = {
   movies = "Contrôle des cinématiques",
   play_intro = "Jouer la cinémat. d'intro",
   allow_user_actions_while_paused = "Construction en pause",
-  volume = "Raccourci baisse du volume",
   alien_dna_only_by_emergency = "Extraterrestres",
   disable_fractured_bones_females = "Fractures",
   enable_avg_contents = "Achats mémorisés",
@@ -1001,7 +997,6 @@ tooltip.customise_window = {
   movies = "Sélectionnez si les cinématiques doivent être joués.",
   play_intro = "Passer la cinématique d'introduction lorsque vous démarrez le jeu. Le contrôle des cinématiques doit être activé si vous jouez la cinématique d'introduction à chaque fois que vous chargez CorsixTH",
   allow_user_actions_while_paused = "Dans Theme Hospital, le joueur ne pouvait utiliser le menu supérieur que si le jeu était en pause. Il s'agit également du paramètre par défaut dans CorsixTH, mais activant cette option, il est possible de construire des salles ou prendre des objets lorsque le jeu est en pause",
-  volume = "Si la touche de réduction du volume ouvre également le journal de médecine, activer cette option pour modifier le raccourci des dossiers médicaux à Maj + C",
   alien_dna_only_by_emergency = "Comme il y a des animations appropriées, nous avons fait de sorte que les patients avec l'ADN extraterrestre montrent seulement comme des situations d'urgence. Désactivez cette option pour obtenir cas de l'ADN extraterrestre visites régulières",
   disable_fractured_bones_females = "En raison de la faible qualité de l'animation, il n'y a pas de patientes avec des fractures. Désactivez cette option pour recevoir des femmes avec des fractures.",
   enable_avg_contents = "Si vous voulez que le jeu se rappelle des articles supplémentaires que vous avez tendance à normalement magasiner pour une nouvelle salle, activer cette option",
@@ -1044,6 +1039,24 @@ tooltip.folders_window = {
   default = "Emplacement par défaut",
   reset_to_default = "Réinitialiser le répertoire à son emplacement par défaut (%1%)",
   back = "Fermer ce menu et revenir au menu Paramètres"
+}
+
+accessibility_window = {
+  scrollspeed = "Vitesse de défilement",
+  shift_scrollspeed = "Vitesse de défilement avec Maj",
+  zoom_speed = "Zoom Speed",
+}
+
+tooltip.accessibility_window = {
+  apply_shift_scrollspeed = "Appliquer la vitesse de défilement en mode Maj.",
+  shift_scrollspeed = "Définir la vitesse de défilement lorsque la touche Maj est enfoncée. De 1 (la plus lente) à 10 (la plus rapide). La valeur par  défaut est 4.",
+  zoom_speed = "Définir la vitesse de zoom de la caméra de 10 (la plus lente) à 1000 (la plus rapide). La valeur par défaut est 80.",
+  cancel_zoomspeed = "Revenir sans changer la vitesse de zoom.",
+  apply_zoomspeed = "Appliquer la vitesse de zoom choisie.",
+  cancel_scrollspeed = "Revenir sans changer la vitesse de défilement.",
+  cancel_shift_scrollspeed = "Revenir sans changer la vitesse de défilement de la touche Maj.",
+  scrollspeed = "Réglez la vitesse de défilement de 1 (la plus lente) à 10 (la plus rapide). La valeur par défaut est 2.",
+  apply_scrollspeed = "Appliquer la vitesse de défilement entrée.",
 }
 
 font_location_window = {

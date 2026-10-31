@@ -226,22 +226,27 @@ tooltip.menu_list_window = {
 }
 
 options_window = {
+  browse = "Tallózás...",
+  new_th_directory = "Itt egy új Theme Hospital telepítési útvonalat adhatsz meg. Amint kiválasztottad az új könyvtárat, a játék újraindul.",
+  back = "Vissza",
+}
+graphics_window = {
+  caption = "Graphics",
   fullscreen = "Teljes képernyő",
   width = "Szélesség",
   height = "Magasság",
-  browse = "Tallózás...",
-  new_th_directory = "Itt egy új Theme Hospital telepítési útvonalat adhatsz meg. Amint kiválasztottad az új könyvtárat, a játék újraindul.",
   cancel = "Mégse",
-  back = "Vissza",
 }
 
 tooltip.options_window = {
-  fullscreen_button = "Kattints a teljes képernyős módba való váltáshoz",
-  width = "Add meg a kívánt szélességet",
-  height = "Add meg a kívánt magasságot",
   language = "%s nyelv kiválasztása",
   browse = "Másik elérési útvonal kiválasztása a Theme Hospital fájljaihoz",
   back = "Beállítások ablak bezárása",
+}
+tooltip.graphics_window = {
+  fullscreen_button = "Kattints a teljes képernyős módba való váltáshoz",
+  width = "Add meg a kívánt szélességet",
+  height = "Add meg a kívánt magasságot",
 }
 
 calls_dispatcher = {
@@ -1823,8 +1828,8 @@ menu_options_wage_increase.deny = " MEGTAGAD"
 menu_options_wage_increase.grant = " ENGEDÉLYEZ"
 tooltip.audio_window.audio_button = "Minden hang ki/be kapcsolása"
 tooltip.audio_window.audio_toggle = "Ki vagy bekapcsol"
-tooltip.options_window.folder_button = "Könyvtár opciók"
-tooltip.options_window.customise_button = "További beállítások, hogy finomhangolhasd a játékélményt"
+tooltip.options_window.folder = "Könyvtár opciók"
+tooltip.options_window.customise = "További beállítások, hogy finomhangolhasd a játékélményt"
 tooltip.update_window.download = "Látogasd meg a letöltőoldalt, hogy megszerezhesd a CorsixTH legfrissebb verzióját"
 tooltip.update_window.ignore = "A frissítés kihagyása. Újra értesítést fogsz kapni róla, amikor legközelebb elindítod a CorsixTH-t"
 tooltip.folders_window.browse_font = "Válassz másik betűtípusfile-t ( jelenlegi hely: %1% )"
@@ -1848,7 +1853,6 @@ tooltip.customise_window.enable_avg_contents = "Ha szeretnéd, hogy a játék me
 tooltip.customise_window.back = "Menü bezárása, és vissza a Beállításokhoz"
 tooltip.customise_window.movies = "Ezzel le tudod tiltani az összes átvezető videót"
 tooltip.customise_window.disable_fractured_bones_females = "Mivel csak félkész animációink van a törött csontú női páciensek megjelenítésére, ezért ők nem jelennek meg a kórházadban. Ha mégis szeretnéd, hogy érkezzenek ilyen betegek is, akkor ezt kapcsold ki"
-tooltip.customise_window.volume = "Ha hangerő halkítása gomb használata megnyitja az esetleírásokat is, akkor ezt bekapcsolva átállíthatod az esetleírások gyorsbillentyű kombinációját Shift + C -re"
 tooltip.customise_window.play_intro = "A bevezető videó (intro) ki/be kapcsolása - az átvezető videóknak engedélyezve kell lenniük, ha szeretnéd ezt bekapcsolni"
 tooltip.customise_window.allow_user_actions_while_paused = "Az eredeti Theme Hospitalban a játékos csak a felső menüt használhatta ha a játék szüneteltetve volt. Ez az alapbeállítás a CorsixTH-ban is, de ha ezt bekapcsolod, akkor szüneteltetés alatt is elérsz minden menüt"
 update_window.caption = "Frissítés elérhető!"
@@ -1878,7 +1882,6 @@ customise_window.play_intro = "Bevezető videó lejátszása"
 customise_window.caption = "Egyéni beállítások"
 customise_window.back = "Vissza"
 customise_window.movies = "Általános átvezető videó vezérlő"
-customise_window.volume = "Halkítás gyorsbillentyű"
 customise_window.alien_dna_only_by_emergency = "Alien páciensek"
 customise_window.disable_fractured_bones_females = "Törött Csontok"
 options_window.folder = "Könyvtárak"

@@ -23,8 +23,9 @@ corsixth.require("persistance")
 --! Base class for user-interface dialogs.
 class "Window"
 
----@type Window
-local Window = _G["Window"]
+---@class Window
+---@operator call: Window
+local Window = _G["Window"] ---@type Window
 
 -- NB: pressed mouse buttons are denoted with a "mouse_" prefix in buttons_down,
 -- i.e. mouse_left, mouse_middle, mouse_right
@@ -170,8 +171,9 @@ end
 -- thus reducing the amount of work that each individual dialog has to do.
 class "Panel"
 
----@type Panel
-local Panel = _G["Panel"]
+---@class Panel
+---@operator call: Panel
+local Panel = _G["Panel"] ---@type Panel
 
 -- !dummy
 function Panel:Panel()
@@ -537,14 +539,14 @@ function Window:addWindow(window)
     table.insert(self.windows, 1, window)
   else
     -- Normal windows, are added in the first position after on_top windows
-    local pos = false
+    local pos = 0
     for i = 1, #self.windows do
       if not self.windows[i].on_top then
         pos = i
         break
       end
     end
-    pos = pos or #self.windows + 1
+    pos = pos > 0 and pos or #self.windows + 1
     table.insert(self.windows, pos, window)
   end
 end
@@ -596,8 +598,9 @@ end
 --! A region of a `Panel` which causes some action when clicked.
 class "Button"
 
----@type Button
-local Button = _G["Button"]
+---@class Button
+---@operator call: Button
+local Button = _G["Button"] ---@type Button
 
 --!dummy
 function Button:Button()
@@ -695,17 +698,13 @@ function Button:setSound(name)
   return self
 end
 
-local --[[persistable:window_drag_round]] function round(value, amount)
-  return amount * math.floor(value / amount + 0.5)
-end
-
 -- Specify a tooltip to be displayed when hovering this button.
 -- x and y are optional position of bottom left of the tooltip.
 -- If not specified, will default to top center of button.
 function Button:setTooltip(tooltip, x, y)
   self.tooltip = {
     text = tooltip,
-    tooltip_x = x or round((self.x + self.r) / 2, 1),
+    tooltip_x = x or math.round((self.x + self.r) / 2),
     tooltip_y = y or self.y,
   }
   return self
@@ -714,7 +713,7 @@ end
 function Button:setDynamicTooltip(callback, x, y)
   self.tooltip =  {
     callback = callback,
-    tooltip_x = x or round((self.x + self.r) / 2, 1),
+    tooltip_x = x or math.round((self.x + self.r) / 2),
     tooltip_y = y or self.y,
   }
   return self
@@ -754,7 +753,7 @@ function Button:setPosition(x, y)
   self.x = x
   self.y = y
   if self.tooltip then
-    self.tooltip.tooltip_x = math.round((self.x + self.r) / 2, 1)
+    self.tooltip.tooltip_x = math.round((self.x + self.r) / 2)
     self.tooltip.tooltip_y = self.y
   end
 end
@@ -767,7 +766,7 @@ function Button:setSize(width, height)
   self.r = self.x + width
   self.b = self.y + height
   if self.tooltip then
-    self.tooltip.tooltip_x = math.round((self.x + self.r) / 2, 1)
+    self.tooltip.tooltip_x = math.round((self.x + self.r) / 2)
     self.tooltip.tooltip_y = self.y
   end
 end
@@ -836,8 +835,9 @@ end
 --! A window element used to scroll in lists
 class "Scrollbar"
 
----@type Scrollbar
-local Scrollbar = _G["Scrollbar"]
+---@class Scrollbar
+---@operator call: Scrollbar
+local Scrollbar = _G["Scrollbar"] ---@type Scrollbar
 
 --!dummy
 function Scrollbar:Scrollbar()
@@ -945,8 +945,9 @@ end
 --! A window element used to enter text
 class "Textbox"
 
----@type Textbox
-local Textbox = _G["Textbox"]
+---@class Textbox
+---@operator call: Textbox
+local Textbox = _G["Textbox"] ---@type Textbox
 
 --!dummy
 function Textbox:Textbox()
@@ -1344,8 +1345,9 @@ end
 --! A window element used to accept hotkey configurations.
 class "HotkeyBox"
 
----@type HotkeyBox
-local HotkeyBox = _G["HotkeyBox"]
+---@class HotkeyBox
+---@operator call: HotkeyBox
+local HotkeyBox = _G["HotkeyBox"] ---@type HotkeyBox
 
 --!dummy
 function HotkeyBox:HotkeyBox()
@@ -1801,6 +1803,10 @@ local --[[persistable:window_drag_position_representation]] function getNicestPo
   end
 end
 
+local --[[persistable:window_drag_round]] function round(value, amount)
+  return amount * math.floor(value / amount + 0.5)
+end
+
 --[[ Initiate dragging of the window.
 !param x The X position of the cursor in window coordinates.
 !param y The Y position of the cursor in window coordinates.
@@ -2038,7 +2044,7 @@ end
 function Window:makeTooltip(text, x, y, r, b, tooltip_x, tooltip_y, apply_ui_scale)
   local region = {
     text = text, x = x, y = y, r = r, b = b,
-    tooltip_x = tooltip_x or round((x + r) / 2, 1), -- optional
+    tooltip_x = tooltip_x or math.round((x + r) / 2), -- optional
     tooltip_y = tooltip_y or y,                     -- optional
   }
   self.tooltip_regions[#self.tooltip_regions + 1] = region
@@ -2057,7 +2063,7 @@ end
 function Window:makeDynamicTooltip(callback, x, y, r, b, tooltip_x, tooltip_y)
   local region = {
     callback = callback, x = x, y = y, r = r, b = b,
-    tooltip_x = tooltip_x or round((x + r) / 2, 1), -- optional
+    tooltip_x = tooltip_x or math.round((x + r) / 2), -- optional
     tooltip_y = tooltip_y or y,                     -- optional
   }
   self.tooltip_regions[#self.tooltip_regions + 1] = region

@@ -1072,19 +1072,13 @@ options_window = {
   option_off = "No",
   option_enabled = "Activado",
   option_disabled = "Desactivado",
-  fullscreen = "Pantalla Completa",
-  ui_scale = "Escala de interfaz",
   capture_mouse = "Capturar Ratón",
   right_mouse_scrolling = "Desplazamiento con el Ratón",
   right_mouse_scrolling_option_middle = "Botón Central",
   right_mouse_scrolling_option_right = "Botón Derecho",
-  width = "Ancho",
-  height = "Alto",
   customise = "Personalizar",
   folder = "Carpetas",
   language = "Idioma del juego",
-  apply = "Aplicar",
-  cancel = "Cancelar",
   back = "Atrás",
   scroll_speed = "Vel. de Desplazamiento",
   shift_scroll_speed = "Vel. de Despl. (Shift)",
@@ -1093,6 +1087,16 @@ options_window = {
   hotkey = "Atajos de Teclado",
   check_for_updates = "Buscar Actualizaciones",
   sound = "Sonido",
+}
+graphics_window = {
+  fullscreen = "Pantalla Completa",
+  ui_scale = "Escala de interfaz",
+  width = "Ancho",
+  height = "Alto",
+  option_on = "Sí",
+  option_off = "No",
+  apply = "Aplicar",
+  cancel = "Cancelar",
 }
 
 autosave_frequency = {
@@ -1108,37 +1112,30 @@ tooltip.autosave_frequency = {
 }
 
 tooltip.options_window = {
-  fullscreen = "Si el juego debe ejecutarse en pantalla completa o en modo ventana",
-    fullscreen_button = "Haz clic para activar o desactivar el modo de pantalla completa",
-    ui_scale = "Escala la interfaz de usuario. Solo se muestran las opciones de escala que se ajustan a la pantalla; para ver más, aumenta la resolución.",
-    select_ui_scale = "Selecciona una nueva escala para la interfaz de usuario",
     ui_scale_unavailable = "Escala de interfaz no disponible; por favor, selecciona primero una resolución más alta.",
     capture_mouse = "Haz clic para activar o desactivar la captura del cursor durante el juego",
     right_mouse_scrolling = "Cambia el botón del ratón que se utiliza para desplazarse por el mapa",
-    width = "Introduce el ancho de pantalla deseado",
-    height = "Introduce la altura de pantalla deseada",
-    apply = "Aplica la resolución ingresada",
-    cancel = "Vuelve sin cambiar la resolución",
-    customise_button = "Más ajustes que puedes cambiar para personalizar tu experiencia de juego",
-    folder_button = "Opciones de carpetas",
+    customise = "Más ajustes que puedes cambiar para personalizar tu experiencia de juego",
+    folder = "Opciones de carpetas",
     language = "El idioma en el que aparecerán los textos del juego",
     select_language = "Selecciona el idioma del juego",
     language_dropdown_item = "Elegir %s como idioma",
     language_dropdown_no_font = "Selecciona una fuente en la configuración de carpetas para habilitar este idioma",
     back = "Cierra la ventana de opciones",
-    scroll_speed = "Establece la velocidad de desplazamiento entre 1 (más lenta) y 10 (más rápida). El valor predeterminado es 2.",
-    shift_scroll_speed = "Establece la velocidad de desplazamiento al pulsar la tecla Mayús. De 1 (más lenta) a 10 (más rápida). El valor predeterminado es 4.",
-    zoom_speed = "Establece la velocidad de zoom de la cámara de 10 (más lenta) a 1000 (más rápida). El valor predeterminado es 80.",
     autosave_frequency = "Establece la frecuencia con la que el juego realizará autoguardados.",
-    apply_scrollspeed = "Aplica la velocidad de desplazamiento ingresada.",
-    cancel_scrollspeed = "Vuelve sin cambiar la velocidad de desplazamiento.",
-    apply_shift_scrollspeed = "Aplica la velocidad de desplazamiento con Mayús ingresada.",
-    cancel_shift_scrollspeed = "Vuelve sin cambiar la velocidad de desplazamiento con Mayús.",
-    apply_zoomspeed = "Aplica la velocidad de zoom ingresada.",
-    cancel_zoomspeed = "Vuelve sin cambiar la velocidad de zoom.",
     hotkey = "Cambia las teclas de acceso rápido del teclado.",
     check_for_updates = "Establece si el juego debe buscar actualizaciones al iniciar.",
     sound = "Cambia la configuración de audio",
+}
+tooltip.graphics_window = {
+  fullscreen = "Si el juego debe ejecutarse en pantalla completa o en modo ventana",
+  fullscreen_button = "Haz clic para activar o desactivar el modo de pantalla completa",
+  ui_scale = "Escala la interfaz de usuario. Solo se muestran las opciones de escala que se ajustan a la pantalla; para ver más, aumenta la resolución.",
+  select_ui_scale = "Selecciona una nueva escala para la interfaz de usuario",
+  width = "Introduce el ancho de pantalla deseado",
+  height = "Introduce la altura de pantalla deseada",
+  apply = "Aplica la resolución ingresada",
+  cancel = "Vuelve sin cambiar la resolución",
 }
 
 audio_window = {
@@ -1188,28 +1185,22 @@ customise_window = {
   movies = "Control de vídeos",
   play_intro = "Mostrar introducción",
   allow_user_actions_while_paused = "Construir en pausa",
-  volume = "Tecla de volumen",
   alien_dna_only_by_emergency = "Pacientes alienígenas",
   disable_fractured_bones_females = "Fracturas óseas",
   enable_avg_contents = "Contenidos habituales",
   remove_destroyed_rooms = "Eliminar habitaciones destruidas",
   machine_menu_button = "Botón del menú de máquinas",
-  enable_screen_shake = "Temblor de pantalla",
-  enable_announcer_subtitles = "Subtítulos de megafonía",
 }
 
 tooltip.customise_window = {
   movies = "Control global de videos, permite desactivar todos los videos.",
   play_intro = "Activa o desactiva el video de introducción. Necesitas activar el control global de videos si quieres ver la introducción cada vez que inicies CorsixTH.",
   allow_user_actions_while_paused = "En Theme Hospital el jugador solo podía utilizar el menú superior si la partida estaba en pausa. CorsixTH funciona así de forma predeterminada, pero al activar esta opción se puede realizar cualquier acción mientras el juego esté en pausa.",
-  volume = "Si la tecla de bajar volumen abre también el botiquín, utiliza esta opción para cambiar el acceso directo a Mayúsculas + C.",
   alien_dna_only_by_emergency = "Debido a la falta de animaciones decentes disponibles, hemos hecho que los pacientes con ADN alienígena solo aparezcan en una emergencia. Para permitir que los pacientes con ADN alienígena puedan visitar tu hospital, desactiva esta opción.",
   disable_fractured_bones_females = "Debido a una animación deficiente, hemos hecho que no existan pacientes con Fracturas óseas femeninas. Para permitir que las pacientes con Fracturas óseas visiten tu hospital, desactiva esta opción.",
   enable_avg_contents = "Activa esta opción si quieres que el juego recuerde los objetos adicionales que sueles añadir cuando construyes habitaciones.",
   remove_destroyed_rooms = "Activa esta opcion si te gustaría poder eliminar habitaciones destruidas (por un precio)",
   machine_menu_button = "Si quieres tener un botón para abrir el menú de máquinas en el panel inferior, activa esta opción. Ten en cuenta que este botón no estará visible si la resolución de pantalla es pequeña.",
-  enable_screen_shake = "Los terremotos harán que toda la pantalla tiemble. Desactiva esta opción si prefieres que la pantalla permanezca inmóvil.",
-  enable_announcer_subtitles = "Activa esta opción si deseas que el juego muestre subtítulos para los anuncios de tu hospital.",
   back = "Cerrar este menú y volver al menú de opciones.",
 }
 
@@ -1246,6 +1237,28 @@ tooltip.folders_window = {
   reset_to_default = "Vuelve a asignar la carpeta a su ubicación predeterminada ( %1% )",
   clear_directory = "Borrar la selección de directorio actual",
   back  = "Cerrar este menú y volver al menú de Opciones.",
+}
+
+accessibility_window = {
+  enable_screen_shake = "Temblor de pantalla",
+  enable_announcer_subtitles = "Subtítulos de megafonía",
+  scrollspeed = "Vel. de Desplazamiento",
+  shift_scrollspeed = "Vel. de Despl. (Shift)",
+  zoom_speed = "Vel. de Acercamiento",
+}
+
+tooltip.accessibility_window = {
+  enable_screen_shake = "Los terremotos harán que toda la pantalla tiemble. Desactiva esta opción si prefieres que la pantalla permanezca inmóvil.",
+  enable_announcer_subtitles = "Activa esta opción si deseas que el juego muestre subtítulos para los anuncios de tu hospital.",
+  scrollspeed = "Establece la velocidad de desplazamiento de 1 (más lenta) a 10 (más rápida). El valor por defecto es 2.",
+  shift_scrollspeed = "Establece la velocidad de desplazamiento (cuando la tecla Shift se encuentra presionada) de 1 (más lenta) a 10 (más rápida). El valor por defecto es 4.",
+  zoom_speed = "Establece la velocidad de acercamiento de la cámara de 10 (más lenta) a 1000 (más rápida). El valor por defecto 80.",
+  apply_scrollspeed = "Aplica la velocidad de desplazamiento ingresada.",
+  cancel_scrollspeed = "Vuelve sin cambiar la velocidad de acercamiento.",
+  apply_shift_scrollspeed = "Aplica la velocidad de desplazamiento (tecla Shift) ingresada.",
+  cancel_shift_scrollspeed = "Vuelve sin cambiar la velocidad de desplazamiento (tecla Shift).",
+  apply_zoomspeed = "Aplica la velocidad de acercamiento ingresada.",
+  cancel_zoomspeed = "Vuelve sin cambiar la velocidad de acercamiento.",
 }
 
 hotkey_window = {

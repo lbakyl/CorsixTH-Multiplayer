@@ -24,8 +24,9 @@ local AnnouncementPriority = _G["AnnouncementPriority"]
 
 class "CallsDispatcher"
 
----@type CallsDispatcher
-local CallsDispatcher = _G["CallsDispatcher"]
+---@class CallsDispatcher
+---@operator call: CallsDispatcher
+local CallsDispatcher = _G["CallsDispatcher"] ---@type CallsDispatcher
 
 local debug_enabled = false -- Turn on for debug message
 
@@ -314,7 +315,10 @@ function CallsDispatcher:findSuitableStaff(call)
     self:executeCall(call, min_staff)
     return true
   else
-    if debug_enabled then CallsDispatcher.dumpCall(call, 'queued') self:dump(self.call_queue) end
+    if debug_enabled then
+      CallsDispatcher.dumpCall(call, 'queued')
+      self:dump()
+    end
     self:onChange()
     return false
   end

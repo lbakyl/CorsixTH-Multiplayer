@@ -29,8 +29,9 @@ local ipairs
 --! Layer which handles the Lua-facing side of loading and playing audio.
 class "Audio"
 
----@type Audio
-local Audio = _G["Audio"]
+---@class Audio
+---@operator call: Audio
+local Audio = _G["Audio"] ---@type Audio
 
 function Audio:Audio(app)
   self.app = app
@@ -76,7 +77,7 @@ function Audio:init()
     return
   end
 
-  local music = self.app.config.audio_music or self.app.config.audio_mp3
+  local music = self.app.config.audio_music
   local music_dir
   if music then
     music_dir = music

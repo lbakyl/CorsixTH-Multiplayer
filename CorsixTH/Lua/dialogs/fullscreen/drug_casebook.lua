@@ -21,8 +21,9 @@ SOFTWARE. --]]
 --! Drug Casebook fullscreen window (view disease statistics and set prices).
 class "UICasebook" (UIFullscreen)
 
----@type UICasebook
-local UICasebook = _G["UICasebook"]
+---@class UICasebook: UIFullscreen
+---@operator call: UICasebook
+local UICasebook = _G["UICasebook"] ---@type UICasebook
 
 function UICasebook:UICasebook(ui, disease_selection)
   self:UIFullscreen(ui)
@@ -166,9 +167,9 @@ function UICasebook:updateIcons()
       self.not_curable.visible = true
 
       -- Strings for the tooltip
-      local research = false
-      local build = false
-      local staff = false
+      local research
+      local build
+      local staff
       -- Room requirements
       for _, room_id in ipairs(req.rooms) do
         -- Not researched yet?

@@ -51,13 +51,14 @@ globals = { -- Globals
             "SubtitleQueue",
 
             -- UI
-            "UI", "UIAdviser", "UIAdviserHistory", "UIAnnualReport", "UIAudio", "UIBankManager",
+            "UI", "UIAdviser", "UIAccessibility", "UIAdviserHistory", "UIAnnualReport",
+            "UIAudio", "UIBankManager",
             "UIBottomPanel", "UIBuildRoom", "UICallsDispatcher", "UICasebook",
             "UICheats", "UIChooseFont", "UIChooseSoundfont", "UIConfirmDialog",
             "UICustomCampaign", "UICustomGame", "UICustomise",
             "UIDirectoryBrowser", "UIDropdown", "UIEditRoom", "UIFax",
             "UIFileBrowser", "UIFolder", "UIFullscreen", "UIFurnishCorridor",
-            "UIGraphs", "UIHireStaff", "UIHotkeyAssign",
+            "UIGraphicSettings", "UIGraphs", "UIHireStaff", "UIHotkeyAssign",
             "UIHotkeyAssignKeyPane", "UIInformation", "UIJukebox", "UILoadGame",
             "UILoadMap", "UILuaConsole", "UIMachine", "UIMakeDebugPatient",
             "UIMainMenu", "UIMapEditor", "UIMenu", "UIMenuBar", "UIMenuList", "UIMultiplayer", "UIMultiplayerChooseHospital", "UIMultiplayerOffer", "UIMultiplayerAskMoney", "UIMultiplayerChat", "UIMultiplayerChatInput", "UIMultiplayerPlayers", "UIMultiplayerResearch", "UIMultiplayerSabotage", "UIMultiplayerTrade",

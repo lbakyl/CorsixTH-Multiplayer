@@ -58,8 +58,8 @@ menu_options_wage_increase.deny = "    NEGAR "
 menu_options_wage_increase.grant = "    PERMITIR "
 tooltip.audio_window.audio_button = "Ligar ou desligar todo o som do jogo"
 tooltip.audio_window.audio_toggle = "Ligar ou desligar"
-tooltip.options_window.folder_button = "Opções de pastas"
-tooltip.options_window.customise_button = "Mais opões que pode alterar para personalizar a sua experiência de jogo."
+tooltip.options_window.folder = "Opções de pastas"
+tooltip.options_window.customise = "Mais opões que pode alterar para personalizar a sua experiência de jogo."
 tooltip.update_window.download = "Vá para a página de transferências para a última versão de CorsixTH"
 tooltip.update_window.ignore = "Ignorar esta actualização agora. Será notificado de novo na próxima vez que inicializar CorsixTH"
 tooltip.folders_window.browse_font = "Procurar outro tipo de letra (localização actual: %1% )"
@@ -84,7 +84,6 @@ tooltip.customise_window.enable_avg_contents = "Se quer que o jogo lhe lembre qu
 tooltip.customise_window.back = "Fechar este menu e voltar às definições."
 tooltip.customise_window.movies = "Controle geral de vídeos, isto irá permitir desligar todos os vídeos"
 tooltip.customise_window.disable_fractured_bones_females = "Devido a uma má animação colocamos por defeito que não existem pacientes femininas com Ossos Partidos. De forma a permitir que pacientes femininas com Ossos Partidos visitem o hospital, desligue esta opção."
-tooltip.customise_window.volume = "Se o botão para baixar o volume está a abrir também o livro médico, ligue esta opção para mudar o atalho para o livro médico para Shift + C"
 tooltip.customise_window.play_intro = "Ligar ou desligar o vídeo de introdução, o controle geral de vídeos tem que estar ligado se quer ver a introdução cada vez que começa o CorsixTH"
 tooltip.customise_window.allow_user_actions_while_paused = "No Theme Hospital o jogador apenas podia utilizar o menu de topo se o jogo estivesse pausado. Esta é também a opção por defeito no CorsixTH, mas ao activar esta opção, tudo é permitido com o jogo pausado."
 update_window.caption = "Actualização Disponível!"
@@ -114,7 +113,6 @@ customise_window.play_intro = "Reproduzir vídeo de introdução"
 customise_window.caption = "Definições Personalizadas"
 customise_window.back = "Retroceder"
 customise_window.movies = "Controle Geral de Vídeos"
-customise_window.volume = "Atalho para baixar o volume"
 customise_window.alien_dna_only_by_emergency = "Pacientes Extraterrestres"
 customise_window.disable_fractured_bones_females = "Ossos Partidos"
 options_window.folder = "Pastas"
@@ -347,13 +345,15 @@ tooltip = {
 
 
   options_window = {
-    fullscreen_button = "Clica para modo de tela cheia",
     browse = "Procura outra localizaçao da instalaçao original. %1%",
-    height = "Coloca a altura desejada.",
-    width = "Coloca a largura desejada.",
     language = "Escolhe %s como a tua linguagem.",
     back = "Fecha a janela de opçoes.",
     },
+  graphics_window = {
+    fullscreen_button = "Clica para modo de tela cheia",
+    width = "Coloca a largura desejada.",
+    height = "Coloca a altura desejada.",
+  },
 
 }
 
@@ -492,13 +492,15 @@ new_game_window = {
 
 
 options_window = {
-  fullscreen = "Tela cheia",
-  cancel = "Cancelar",
   browse = "Procurar...",
-  width = "Largura",
-  height = "Altura",
   new_th_directory = "Aqui podes escolher uma nova localizaçao da instalaçao de Theme Hospital,assim que o fizeres o jogo será reiniciado.",
   back = "Voltar",
+}
+graphics_window = {
+  fullscreen = "Tela cheia",
+  width = "Largura",
+  height = "Altura",
+  cancel = "Cancelar",
 }
 
 audio_window = {

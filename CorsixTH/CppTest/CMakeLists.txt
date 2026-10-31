@@ -60,6 +60,7 @@ target_sources(UnitTests
     ${CMAKE_CURRENT_SOURCE_DIR}/test_th_lua_ui.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/test_th_pathfind.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/test_th_strings.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_xmi2mid.cpp
 )
 
 include(CTest)

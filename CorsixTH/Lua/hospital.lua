@@ -22,8 +22,9 @@ corsixth.require("announcer")
 
 class "Hospital"
 
----@type Hospital
-local Hospital = _G["Hospital"]
+---@class Hospital
+---@operator call: Hospital
+local Hospital = _G["Hospital"] ---@type Hospital
 
 function Hospital:Hospital(world, avail_rooms, name)
   self.world = world
@@ -1370,8 +1371,8 @@ function Hospital:determineIfContagious(patient)
   -- is a suitable epidemic which they can belong to
   local potentially_contagious = contRate > 0 and (math.random(1,contRate) == contRate)
   -- The patient isn't contagious if these conditions aren't passed
-  local reduce_months = level_config.ReduceContMonths or 14
-  local reduce_people = level_config.ReduceContPeepCount or 20
+  local reduce_months = level_config.gbv.ReduceContMonths or 14
+  local reduce_people = level_config.gbv.ReduceContPeepCount or 20
   local date_in_months = self.world:date():monthOfGame()
 
   if potentially_contagious and date_in_months > reduce_months and
@@ -1514,7 +1515,7 @@ function Hospital:receiveMoneyForTreatment(patient)
       self:receiveMoney(amount, reason)
     end
     casebook.money_earned = casebook.money_earned + amount
-    patient.world:newFloatingDollarSign(patient, amount)
+    patient.world:newFloatingDollarSign(patient, amount, patient.insurance_company ~= nil)
     patient.pay_amount = 0
   end
 end
@@ -2613,7 +2614,7 @@ function Hospital:msgMultiReceptionDesks()
 end
 
 --! Give advice to the user about maintenance of plants.
-function Hospital:advisePlants()
+function Hospital:advisePlants(placed)
 end
 
 --! Show the 'Gates to hell' animation.
@@ -2636,7 +2637,7 @@ function Hospital:adviseDiscoverDisease(disease)
 end
 
 --! Select a relevant message to be displayed to the user
-function Hospital:adviseBoilerBreakdown()
+function Hospital:adviseBoilerBreakdown(broken_heat)
 end
 
 --! Announces a machine needing repair

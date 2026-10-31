@@ -25,8 +25,9 @@ local TH = require("TH")
 --! The ingame menu bar which sits (nominally hidden) at the top of the screen.
 class "UIMenuBar" (Window)
 
----@type UIMenuBar
-local UIMenuBar = _G["UIMenuBar"]
+---@class UIMenuBar: Window
+---@operator call: UIMenuBar
+local UIMenuBar = _G["UIMenuBar"] ---@type UIMenuBar
 
 function UIMenuBar:UIMenuBar(ui, map_editor)
   self:Window()
@@ -482,10 +483,12 @@ function UIMenuBar:calculateMenuSize(menu)
   end
 end
 
+
 class "UIMenu"
 
----@type UIMenu
-local UIMenu = _G["UIMenu"]
+---@class UIMenu
+---@operator call: UIMenu
+local UIMenu = _G["UIMenu"] ---@type UIMenu
 
 function UIMenu:UIMenu()
   self.items = {}
@@ -873,7 +876,6 @@ function UIMenuBar:makeGameMenu(app)
           self.ui:addWindow(UIMakeDebugPatient(self.ui))
         end)
       :appendItem(_S.menu_debug.make_debug_rat, function() self.ui:makeDebugRat() end)
-      :appendItem(_S.menu_debug.cheats:format(hotkey_value_label("ingame_showCheatWindow", hotkeys)),             function() self.ui:showCheatsWindow() end)
       :appendItem(_S.menu_debug.lua_console:format(hotkey_value_label("global_showLuaConsole", hotkeys)),        function() self.ui:addWindow(UILuaConsole(self.ui)) end)
       :appendItem(_S.menu_debug.debug_script:format(hotkey_value_label("global_runDebugScript", hotkeys)),       function() self.ui:runDebugScript() end)
       :appendItem(_S.menu_debug.calls_dispatcher,   function() self.ui:addWindow(UICallsDispatcher(self.ui)) end)
@@ -896,4 +898,14 @@ function UIMenuBar:makeGameMenu(app)
       :appendItem(_S.menu_debug.sprite_viewer, function() corsixth.require("sprite_viewer")() end)
     )
   end
+  self:unlockCheats()
+end
+
+function UIMenuBar:unlockCheats()
+  local app = self.ui.app
+  if not (app.config.debug or app.cheats_menu_unlocked) then return end
+  self:addMenu(_S.menu.cheats_title, UIMenu()
+    :appendItem(_S.menu.cheats:format(hotkey_value_label("ingame_showCheatWindow", app.hotkeys)),
+      function() self.ui:showCheatsWindow() end))
+  app.cheats_menu_unlocked = true
 end

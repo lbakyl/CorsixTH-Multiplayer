@@ -49,8 +49,11 @@ corsixth.require("earthquake")
 --! Manages entities, rooms, and the date.
 class "World"
 
----@type World
-local World = _G["World"]
+---@class World
+---@field app App The application.
+---@field free_build_mode boolean Whether the level is played without money.
+---@operator call: World
+local World = _G["World"] ---@type World
 
 function World:World(app, free_build_mode)
   self.app = app
@@ -2405,7 +2408,9 @@ function World:findFreeObjectNearToUse(humanoid, object_type_name, which, curren
   local object, ox, oy
   self:findObjectNear(humanoid, object_type_name, nil, true, function(x, y, d)
     local obj = self:getObject(x, y, object_type_name)
-    if obj.user or obj.picked_up or (obj.reserved_for and obj.reserved_for ~= humanoid) or (current_object and obj == current_object) then
+    if not obj or obj.user or obj.picked_up or
+        (obj.reserved_for and obj.reserved_for ~= humanoid) or
+        (current_object and obj == current_object) then
       return
     end
     local orientation = obj.object_type.orientations
@@ -2482,7 +2487,8 @@ end
 --! Setup an animated floating money amount above a patient.
 --!param patient Patient to float above.
 --!param amount Amount of money to display.
-function World:newFloatingDollarSign(patient, amount)
+--!param insurance (boolean) Whether the money was paid by an insurance company.
+function World:newFloatingDollarSign(patient, amount, insurance)
   -- Cosmetic: only above patients of the hospital this player runs.
   if self.free_build_mode or patient.hospital ~= self:getUIHospital() then
     return
@@ -2493,7 +2499,7 @@ function World:newFloatingDollarSign(patient, amount)
   local spritelist = TH.spriteList()
   spritelist:setPosition(-17, -60)
   spritelist:setSpeed(0, -1):setLifetime(100)
-  spritelist:setSheet(TheApp.gfx:loadSpriteTable("Data", "Money01V"))
+  spritelist:setSheet(TheApp.gfx:getFloatingBanknoteSpriteTable(insurance))
   spritelist:setUseIntermediateBuffer()
   spritelist:append(1, 0, 0)
   local len = #("%i"):format(amount)
