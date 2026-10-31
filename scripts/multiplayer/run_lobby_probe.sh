@@ -267,7 +267,7 @@ run_probe otto MP_ROLE=join MP_ROOM=wreck MP_STEPS=900 MP_SCENARIO=none & pids+=
   mkdir -p "$out/tom-2/saves"
   cp -r "$out/tom/saves/." "$out/tom-2/saves/"
   run_probe tom-2 MP_NAME=tom MP_ROLE=host MP_ROOM=savegame2 MP_STEPS=700 MP_CONTINUE=latest \
-    MP_UI_SCRIPT="420:uistate;450:buy:plant" & a=$!
+    MP_UI_SCRIPT="420:uistate;450:buy:plant;460:enterchat" & a=$!
   sleep 1
   run_probe sara-2 MP_NAME=sara MP_ROLE=join MP_ROOM=savegame2 MP_STEPS=700 \
     MP_UI_SCRIPT="500:hire:Nurse" & b=$!
@@ -773,7 +773,9 @@ kinds11 = sorted(re.search(r'#\d+ (\w+) ->', x).group(1) for x in after)
 # Tom saved with a stale room editor in his UI; after continuing he can
 # click on the whole map again.
 clicks_ok = 'world hit test on, edit_room false' in t2
-ok11 = (same_save and same_load and seats and clicks_ok and result('tom-2').startswith('IN SYNC through step 700')
+# The chat window came with Tom's save: its key (Y) works again after loading.
+chat_ok = 'chat key with a room editor open at step 460: chat opened' in t2
+ok11 = (same_save and same_load and seats and clicks_ok and chat_ok and result('tom-2').startswith('IN SYNC through step 700')
         and result('sara-2').startswith('IN SYNC through step 700') and applied('tom-2') == applied('sara-2')
         and kinds11 == ['hire', 'place_object'])
 # sara's screen tick failed once at step 120: her game carried on, and the
@@ -781,7 +783,7 @@ ok11 = (same_save and same_load and seats and clicks_ok and result('tom-2').star
 ui_error = bool(re.search(r"room 'savegame': state of 'sara' .*ERROR at step 1[2-3]\d in the screen tick: .*probe: an error in the screen tick", server))
 ok11 = ok11 and ui_error
 print(f"11. Save and continue:      saved at step {saved_t.group(2) if saved_t else '-'} on both: {same_save}; error reported: {ui_error}; "
-      f"continued from it: {same_load}; own hospitals: {seats}; clicks after load: {clicks_ok}; {result('tom-2')} / {result('sara-2')}; "
+      f"continued from it: {same_load}; own hospitals: {seats}; clicks after load: {clicks_ok}; chat key after load: {chat_ok}; {result('tom-2')} / {result('sara-2')}; "
       f"commands after it: {' '.join(kinds11)}")
 fail |= not ok11
 

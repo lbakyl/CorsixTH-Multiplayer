@@ -609,7 +609,16 @@ end
 --! The chat lines and input of a game (once per game UI; not on the
 --! server's referee).
 function MultiplayerLobby:_attachChat(ui)
-  if self.is_referee or not ui or ui:getWindow(UIMultiplayerChat) then return end
+  if self.is_referee or not ui then return end
+  local chat = ui:getWindow(UIMultiplayerChat)
+  if chat then
+    -- One that came with a saved game (a continued game loads a player's
+    -- own save): loading drops every key handler (UI:afterLoad), so the
+    -- chat key is bound again here.
+    chat:removeKeyHandler("ingame_mp_chat")
+    chat:addKeyHandler("ingame_mp_chat", chat.openInput)
+    return
+  end
   ui:addWindow(UIMultiplayerChat(ui))
   -- The game screen was made before the session: now it may scroll past the
   -- map's edge (see GameUI:makeVisibleDiamond).
