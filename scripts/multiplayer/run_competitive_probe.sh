@@ -20,8 +20,16 @@
 #      the mouse finds nothing of the rivals' hospitals (people, doors), only
 #      the player's own and the evil handyman in it; nobody sees a rival's
 #      room outline, nor the blue floor of a room lou furnishes by hand
+#   6. the newer tricks, in room "tricks" (nia against oz): a headhunter
+#      (level 1) after oz's nurse, who leaves for the hiring list when oz does
+#      not pay; oz cannot hire them back while they are kept for nia, nia can;
+#      a broken boiler (level 1), repaired; a smear campaign (level 1) that
+#      runs out at the month's end; espionage (level 3) copies two of oz's
+#      results. In room "tricks2" (pia against quin) quin pays the
+#      headhunter's rise and keeps the nurse; espionage level 1 is refused
+#      at once (nothing improved to copy).
 # With MP_REFEREE=1 the server also runs its headless referee, and a 5th
-# check needs it to agree with the players to the end.
+# check needs it to agree with the players to the end (in all three rooms).
 # Exits 0 only if all checks behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
@@ -50,7 +58,7 @@ if [[ "${MP_REFEREE:-0}" == 1 ]]; then
   export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
   export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/referee"
   export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
-  export MP_REFEREE_PROBE_SCENARIO="race=light" # the probes' own start on every hospital
+  export MP_REFEREE_PROBE_SCENARIO="race=light;tricks=light;tricks2=light" # the probes' own start on every hospital
 fi
 PYTHONPATH="$source_dir/mp_server" python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
@@ -95,6 +103,18 @@ run_probe lou MP_ROLE=join MP_ROOM=race MP_STEPS=1400 MP_FURNISH_PACE=40 \
 sleep 1
 run_probe max MP_ROLE=join MP_ROOM=race MP_STEPS=1400 \
   MP_UI_SCRIPT="40:openhospital;200:sabotage:epidemic:1:1;240:race;600:race;610:rivals;650:shootrat;700:progress;710:progress:2;1300:race" & pids+=($!)
+sleep 1
+run_probe nia MP_ROLE=host MP_ROOM=tricks MP_MODE=competitive MP_PLAYERS=2 MP_LEVEL=2 MP_STEPS=1700 \
+  MP_UI_SCRIPT="20:openhospital;300:sabotage:headhunter:1:2;320:sabotage:boiler:1:2;340:sabotage:smear:1:2;360:sabotage:espionage:3:2;1100:hire:Nurse" & pids+=($!)
+sleep 1
+run_probe oz MP_ROLE=join MP_ROOM=tricks MP_STEPS=1700 \
+  MP_UI_SCRIPT="30:openhospital;60:hire:Nurse;80:buy:radiator;100:learn;150:learn;1000:hire:Nurse" & pids+=($!)
+sleep 1
+run_probe pia MP_ROLE=host MP_ROOM=tricks2 MP_MODE=competitive MP_PLAYERS=2 MP_LEVEL=2 MP_STEPS=700 \
+  MP_UI_SCRIPT="20:openhospital;240:sabotage:headhunter:1:2;260:sabotage:espionage:1:2" & pids+=($!)
+sleep 1
+run_probe quin MP_ROLE=join MP_ROOM=tricks2 MP_STEPS=700 \
+  MP_UI_SCRIPT="30:openhospital;60:hire:Nurse;100:learn;400:answerraise:accept;650:stafflog:Nurse" & pids+=($!)
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 python3 - "$out" "${MP_REFEREE:-0}" <<'PY'
@@ -174,7 +194,33 @@ print(f"   rivals hidden: lou {riv_l.group(0)[4:] if riv_l else '-'}; max {riv_m
 ok3 = ok3 and ok_v and outlines == 0
 fail |= not ok3
 
+o, q = log('oz'), log('quin')
+poached = 'headhunter after Nurse' in o and re.search(r'Nurse #\d+ left hospital 2 for the hiring list', o)
+kept_for_nia = 'hire -> rejected: promised to another hospital' in o and re.search(r'step 110\d: peer 1 #\d+ hire -> ok', o)
+boiler = 'boiler of hospital 2 broken' in o and 'working properly again' in o
+smear = re.search(r'smear campaign against hospital 2 over: (\d+) patients', o)
+spied = re.search(r'hospital 1 spied on hospital 2: ([^\n]+)', o)
+# What nia picked in the spy window is what she got.
+picked = re.search(r'dirty trick espionage level 3 against hospital 2 at step \d+: .*\(picked ([^)]+)\)', log('nia'))
+spied = spied if spied and picked and picked.group(1) == spied.group(1) else None
+paid = 'accepted the pay rise' in q and 'left hospital 2' not in q and re.search(r'staff Nurse #\d+ at step 650', q)
+# (Level 2 has no drug or machine improvements to copy: refused at once.)
+spied1 = 'dirty trick espionage level 1 against hospital 2 at step 260: they know nothing that you do not' in log('pia')
+ok6 = bool(poached and kept_for_nia and boiler and smear and spied and spied.group(1).count(',') == 1 and paid and spied1
+           and all(result(n).startswith('IN SYNC') for n in ('nia', 'oz', 'pia', 'quin')))
+print(f"6. Newer tricks:            poached: {bool(poached)}; kept for the buyer: {bool(kept_for_nia)}; boiler broken and repaired: {boiler}; "
+      f"smear over: {smear.group(1) + ' sent elsewhere' if smear else '-'}; espionage L3: {spied.group(1) if spied else '-'}; "
+      f"rise paid, nurse kept: {bool(paid)}; espionage L1 with nothing to copy refused: {spied1}; "
+      f"{result('nia')} / {result('oz')} / {result('pia')} / {result('quin')}")
+fail |= not ok6
+
 if with_referee:
+    for room, least in (('tricks', 1700), ('tricks2', 700)):
+        confirmed = re.search(rf"room '{room}': referee confirmed steps through (\d+)", server)
+        clean = not re.search(rf"room '{room}': (the players differ|repaired)", server)
+        ok_r6 = bool(confirmed and int(confirmed.group(1)) >= least and clean)
+        print(f"   referee in '{room}': confirmed through {confirmed.group(1) if confirmed else '-'}, no differences: {clean}")
+        fail |= not ok_r6
     connected = "room 'race': referee connected" in server
     differ = re.findall(r"room 'race': the players differ from the referee", server)
     repaired = re.findall(r"room 'race': repaired", server)

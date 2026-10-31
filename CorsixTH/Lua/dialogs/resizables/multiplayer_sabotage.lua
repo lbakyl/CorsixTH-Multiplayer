@@ -35,14 +35,15 @@ local col = {
   caption = Colours.Caption,
 }
 
-local WIDTH = 420
-local ROW = 70
-local INFO_H = 66 -- the box saying what the chosen level does
+local WIDTH = 500
+local ROW = 32 -- a trick: its name, then its three levels, on one line
+local NAME_W = 140
+local INFO_H = 56 -- the box saying what the chosen level does
 
 --!param target (Hospital) optional: the rival to play tricks on
 function UIMultiplayerSabotage:UIMultiplayerSabotage(ui, target)
   local sabotage = MultiplayerSession.sabotage
-  local height = 50 + #sabotage.KINDS * ROW + INFO_H + 95
+  local height = 40 + #sabotage.KINDS * ROW + INFO_H + 92
   self:UIResizable(ui, WIDTH, height, col.bg)
   self.esc_closes = true
   self.resizable = false
@@ -68,18 +69,19 @@ function UIMultiplayerSabotage:UIMultiplayerSabotage(ui, target)
 
   local y = 40
   for _, kind in ipairs(sabotage.KINDS) do
-    self:addBevelPanel(20, y, WIDTH - 40, 22, col.caption):setLabel(S["sabotage_" .. kind]).lowered = true
+    self:addBevelPanel(20, y, NAME_W, 26, col.caption):setLabel(S["sabotage_" .. kind]).lowered = true
     local prices = sabotage.PRICES[kind]
-    local w = math.floor((WIDTH - 40 - 10 * (#prices - 1)) / #prices)
+    local x0 = 20 + NAME_W + 8
+    local w = math.floor((WIDTH - 20 - x0 - 6 * (#prices - 1)) / #prices)
     for level, price in ipairs(prices) do
-      self:addBevelPanel(20 + (level - 1) * (w + 10), y + 27, w, 30, col.button)
+      self:addBevelPanel(x0 + (level - 1) * (w + 6), y, w, 26, col.button)
           :setLabel(S.sabotage_level:format(level, price))
-          :makeButton(0, 0, w, 30, nil, function() self:choose(kind, level) end)
+          :makeButton(0, 0, w, 26, nil, function() self:choose(kind, level) end)
           :setTooltip(S.sabotage_levels[kind][level])
     end
     y = y + ROW
   end
-  self.info_y = y + 5
+  self.info_y = y + 2
   self:addBevelPanel(20, self.info_y, WIDTH - 40, INFO_H, col.caption).lowered = true
   y = y + INFO_H + 10
 
@@ -151,7 +153,131 @@ function UIMultiplayerSabotage:buy(kind, level)
     self:setStatus(why)
     return
   end
+  if kind == "espionage" then
+    -- The player picks what to steal first.
+    self.ui:addWindow(UIMultiplayerSpy(self.ui, self, level))
+    return
+  end
   session:issue({kind = "sabotage", trick = kind, level = level,
       to = self.world:getHospitalIndex(self.target)})
   self:setStatus(S.sabotage_sent)
+end
+
+--! Espionage: the rival's research results the player lacks (of the kinds
+--! the level allows), to pick one (two at level 3) from before the spy goes.
+class "UIMultiplayerSpy" (UIResizable)
+
+---@class UIMultiplayerSpy: UIResizable
+---@operator call: UIMultiplayerSpy
+local UIMultiplayerSpy = _G["UIMultiplayerSpy"] ---@type UIMultiplayerSpy
+
+local SPY_WIDTH = 420
+local SPY_ROWS = 8
+local SPY_ROW_H = 23
+
+--!param tricks (UIMultiplayerSabotage) the dirty tricks window it came from
+--!param level (integer) the espionage level bought
+function UIMultiplayerSpy:UIMultiplayerSpy(ui, tricks, level)
+  local S = _S.multiplayer_window
+  local sabotage = MultiplayerSession.sabotage
+  local height = 40 + SPY_ROWS * (SPY_ROW_H + 2) + 35 + 75
+  self:UIResizable(ui, SPY_WIDTH, height, col.bg)
+  self.esc_closes = true
+  self.resizable = false
+  self.on_top = true
+  self:setDefaultPosition(0.5, 0.25)
+  self.default_button_sound = "selectx.wav"
+  self.tricks, self.level = tricks, level
+  self.world, self.hospital, self.target = tricks.world, tricks.hospital, tricks.target
+  self.items = sabotage.stealable(self.target, self.hospital, level)
+  self.wanted = math.min(sabotage.spyItems(level), #self.items)
+  self.selected, self.count, self.page = {}, 0, 1
+
+  self:addBevelPanel(20, 10, SPY_WIDTH - 40, 20, col.title)
+      :setLabel(S.sabotage_spy_caption:format(self.target.name, self.wanted)).lowered = true
+  self.rows = {}
+  for row = 1, SPY_ROWS do
+    local y = 40 + (row - 1) * (SPY_ROW_H + 2)
+    local panel = self:addBevelPanel(20, y, SPY_WIDTH - 40, SPY_ROW_H, Colours.Setting, nil, nil, nil,
+        Colours.SettingActive)
+    self.rows[row] = panel:makeToggleButton(0, 0, SPY_WIDTH - 40, SPY_ROW_H, nil,
+        function(window, state) window:toggleRow(row, state) end)
+  end
+  local y = 40 + SPY_ROWS * (SPY_ROW_H + 2) + 5
+  self.page_panel = self:addBevelPanel(20, y, 230, 28, col.caption)
+  self.page_panel.lowered = true
+  self:addBevelPanel(260, y, 65, 28, col.button):setLabel(S.research_previous)
+      :makeButton(0, 0, 65, 28, nil, function(window) window:turnPage(-1) end)
+  self:addBevelPanel(335, y, 65, 28, col.button):setLabel(S.research_next)
+      :makeButton(0, 0, 65, 28, nil, function(window) window:turnPage(1) end)
+  self.status_panel = self:addBevelPanel(20, height - 72, SPY_WIDTH - 40, 22, col.bg)
+  self.status_panel.lowered = true
+  self.status_panel:setLabel(S.sabotage_spy_pick)
+  self:addBevelPanel(20, height - 45, 200, 30, col.button)
+      :setLabel(S.sabotage_spy_steal:format(sabotage.PRICES.espionage[level]))
+      :makeButton(0, 0, 200, 30, nil, self.steal)
+  self:addBevelPanel(SPY_WIDTH - 140, height - 45, 120, 30, col.button):setLabel(S.sabotage_close)
+      :makeButton(0, 0, 120, 30, nil, self.close)
+  self:_showPage()
+end
+
+function UIMultiplayerSpy:draw(canvas, x_, y_)
+  UIResizable.draw(self, canvas, x_, y_)
+  MultiplayerSession.drawTitleTabs(canvas, self, x_, y_, self.target)
+end
+
+function UIMultiplayerSpy:_pages()
+  return math.max(1, math.ceil(#self.items / SPY_ROWS))
+end
+
+function UIMultiplayerSpy:_showPage()
+  local first = (self.page - 1) * SPY_ROWS
+  for row, button in ipairs(self.rows) do
+    local item = self.items[first + row]
+    button:setLabel(item and item.name or "")
+    button:enable(item ~= nil)
+    if (item and self.selected[item.key] or false) ~= (button.toggled or false) then button:toggle() end
+  end
+  self.page_panel:setLabel(_S.multiplayer_window.research_page:format(self.page, self:_pages()))
+end
+
+function UIMultiplayerSpy:turnPage(delta)
+  self.page = math.min(self:_pages(), math.max(1, self.page + delta))
+  self:_showPage()
+end
+
+--! Pick an item, or drop it; at most as many as the level takes.
+function UIMultiplayerSpy:toggleRow(row, state)
+  local item = self.items[(self.page - 1) * SPY_ROWS + row]
+  if not item then return end
+  if state and not self.selected[item.key] then
+    if self.count >= self.wanted then
+      self.ui:playSound("wrong2.wav")
+      self:_showPage() -- (un-presses it)
+      return
+    end
+    self.selected[item.key], self.count = true, self.count + 1
+  elseif not state and self.selected[item.key] then
+    self.selected[item.key], self.count = nil, self.count - 1
+  end
+end
+
+--! Send the spy for the items picked: a command, checked again when it runs.
+function UIMultiplayerSpy:steal()
+  local S = _S.multiplayer_window
+  local session = TheApp.mp_session
+  if not session then return end
+  if self.count < self.wanted then
+    self.ui:playSound("wrong2.wav")
+    self.status_panel:setLabel(S.sabotage_spy_pick)
+    return
+  end
+  local keys = {}
+  for _, item in ipairs(self.items) do
+    if self.selected[item.key] then keys[#keys + 1] = item.key end
+  end
+  session:issue({kind = "sabotage", trick = "espionage", level = self.level,
+      to = self.world:getHospitalIndex(self.target), items = table.concat(keys, ";")})
+  if self.tricks.setStatus then self.tricks:setStatus(S.sabotage_sent) end
+  self:close()
 end

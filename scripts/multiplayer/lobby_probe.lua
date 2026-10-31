@@ -1290,8 +1290,21 @@ local function run()
           win:choose(trick, tonumber(level))
           shot("sabotage-" .. trick)
           win:choose(trick, tonumber(level))
-          log(string.format("UI: dirty trick %s level %s against hospital %s at step %d: %s", trick, level, to,
-              session.step, tostring(win.status_panel and win.status_panel.label)))
+          -- Espionage: pick the first items of the list, then Steal.
+          local spy = world.ui:getWindow(UIMultiplayerSpy)
+          local picked = {}
+          if spy then
+            for row = 1, spy.wanted do
+              spy.rows[row]:toggle()
+              spy:toggleRow(row, true)
+              picked[#picked + 1] = spy.items[row].name
+            end
+            shot("spy")
+            spy:steal()
+          end
+          log(string.format("UI: dirty trick %s level %s against hospital %s at step %d: %s%s", trick, level, to,
+              session.step, tostring(win.status_panel and win.status_panel.label),
+              spy and (" (picked " .. table.concat(picked, ", ") .. ")") or ""))
           win:close()
         elseif a == "kickevil" then
           -- Find a rival's evil handyman in this hospital and press the sack

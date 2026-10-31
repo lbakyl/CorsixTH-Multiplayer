@@ -2320,6 +2320,7 @@ local function apply_research(world, from, to, item)
     if research.research_policy.drugs.current == lack then research:nextResearch("drugs") end
   end
 end
+MultiplayerSession.applyResearchItem = apply_research -- (espionage, mp_sabotage.lua)
 
 --! A short list of item names for a fax ("A, B and 3 more").
 local function research_names(items)
@@ -2921,7 +2922,11 @@ function handlers.pay_rise(world, cmd)
     if w.staff == staff then w:close() end
   end
   if accept then
+    staff.mp_headhunted = nil
     staff:increaseWage(amount)
+  elseif staff.mp_headhunted then
+    -- Competitive: poached by a rival's headhunter (no severance).
+    MultiplayerSession.sabotage.poached(staff)
   else
     staff:fire()
   end
@@ -3091,6 +3096,8 @@ function handlers.hire(world, cmd)
     end
   end
   if not index then return false, "no longer available" end
+  local reserved = MultiplayerSession.sabotage.hireRefusal(world, hospital, pool[index])
+  if reserved then return false, reserved end
   if not hospital:isInHospital(cmd.x, cmd.y) or not world.map.th:getCellFlags(cmd.x, cmd.y).passable then
     return false, "invalid position"
   end

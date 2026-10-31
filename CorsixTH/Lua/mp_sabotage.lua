@@ -35,6 +35,18 @@ SOFTWARE. --]]
 --!    walls and keep running between them; each one costs that hospital a
 --!    reputation point a day until it is shot (a click on it, as any rat),
 --!    for 60 days at most.
+--!  * a headhunter: one of the rival's doctors gets a better offer and asks
+--!    for a big pay rise (a junior, a doctor, or a consultant or specialist).
+--!    The rival pays it or loses them: they leave for the hiring list, kept
+--!    there for the buyer for two weeks.
+--!  * a broken boiler: the rival's heating fails (too cold in winter, too hot
+--!    in summer) until their handymen have repaired it; the more handymen,
+--!    the sooner.
+--!  * a smear campaign: for one, two or three months a share of the patients
+--!    who would come to the rival go to the other hospitals instead.
+--!  * espionage: the buyer gets an improvement (level 1), a discovery (level
+--!    2) or two of either (level 3) that the rival has and they do not; at
+--!    level 3 the rival also loses half of the progress on their research.
 --! Every purchase is the lockstep command `sabotage` {trick, level, to}; the
 --! rival is not told who sent an epidemic or an emergency.
 
@@ -46,8 +58,12 @@ sabotage.PRICES = {
   epidemic = {6000, 12000, 20000},
   emergency = {5000, 10000, 18000},
   rats = {4000, 9000, 15000},
+  headhunter = {4000, 9000, 16000},
+  boiler = {3000, 7000, 12000},
+  smear = {5000, 10000, 18000},
+  espionage = {6000, 12000, 20000},
 }
-sabotage.KINDS = {"handyman", "epidemic", "emergency", "rats"}
+sabotage.KINDS = {"handyman", "epidemic", "emergency", "rats", "headhunter", "boiler", "smear", "espionage"}
 
 -- Evil handymen at once in one hospital, at most.
 local MAX_HANDYMEN = 3
@@ -56,6 +72,18 @@ local EPIDEMIC_PATIENTS = {2, 4, 7}
 local EMERGENCY_PATIENTS = {3, 6, 10}
 local RATS = {5, 10, 20}
 local MAX_RATS = 30 -- attack rats alive in one hospital, at most
+-- Headhunter: the pay rise asked, as a share of the wage, and how long the
+-- rival has to answer (ticks; 50 in a day); a poached doctor is kept on the
+-- hiring list for the buyer for HEADHUNT_RESERVED_DAYS.
+local HEADHUNT_RISE = {0.5, 0.75, 1.0}
+local HEADHUNT_TICKS = 50 * 10
+local HEADHUNT_RESERVED_DAYS = 14
+-- Broken boiler: repair work needed (Hospital:_fixBoiler takes 1 to 3 a
+-- day, by the number of handymen).
+local BOILER_REPAIR = {15, 30, 50}
+-- Smear campaign: months, and the share of patients who go elsewhere.
+local SMEAR_MONTHS = {1, 2, 3}
+local SMEAR_SHARE = {0.3, 0.4, 0.5}
 -- The evil handyman's habits, in game hours (one tick each; 50 in a day).
 sabotage.LITTER_EVERY = 25    -- level 2 and 3: litter twice a day
 sabotage.DAMAGE_EVERY = 150   -- level 3: a machine every three days
@@ -98,6 +126,20 @@ function sabotage.refusal(world, buyer, target, kind, level)
     if not target:hasReceptionDesk(true) then return "they have no staffed reception desk" end
   elseif kind == "rats" then
     if sabotage.countRats(world, target) + RATS[level] > MAX_RATS then return "they have enough rats already" end
+  elseif kind == "headhunter" then
+    if not sabotage.headhuntTarget(target, level) then return "they have nobody of that kind to poach" end
+  elseif kind == "boiler" then
+    if target.heating.heating_broke then return "their heating is broken already" end
+    if target:countRadiators() == 0 then return "they have no radiators" end
+  elseif kind == "smear" then
+    if target.mp_smear then return "a smear campaign against them is running already" end
+    local others = false
+    for _, h in ipairs(world.hospitals) do
+      if h ~= target and h.opened and not h.mp_place then others = true end
+    end
+    if not others then return "there is no other hospital for their patients to go to" end
+  elseif kind == "espionage" then
+    if #sabotage.stealable(target, buyer, level) == 0 then return "they know nothing that you do not" end
   elseif kind == "emergency" then
     if target.emergency or target.mp_emergency_timer then return "they have an emergency on" end
     if target.epidemic then return "they have an epidemic on" end
@@ -123,6 +165,14 @@ function handlers.sabotage(world, cmd)
     ok, why = sabotage.startEpidemic(world, target, level)
   elseif kind == "rats" then
     ok, why = sabotage.ratAttack(world, target, level)
+  elseif kind == "headhunter" then
+    ok, why = sabotage.headhunt(world, buyer, target, level)
+  elseif kind == "boiler" then
+    ok, why = sabotage.breakBoiler(world, target, level)
+  elseif kind == "smear" then
+    ok, why = sabotage.smear(world, target, level)
+  elseif kind == "espionage" then
+    ok, why = sabotage.spy(world, buyer, target, level, cmd.items)
   else
     ok, why = sabotage.sendEmergency(world, target, level)
   end
@@ -523,6 +573,252 @@ function sabotage.dailyRats(hospital)
       MultiplayerSession.tellPlayer(hospital.world, hospital, S().sabotage_rats_reminder:format(count))
     end
   end
+end
+
+--------------------------------------------------------------------------------
+-- Headhunter
+--------------------------------------------------------------------------------
+
+--! Whether `staff` is of the kind a headhunter of `level` goes for: level 1 a
+--! junior doctor or a nurse, level 2 a doctor (not a junior or consultant),
+--! level 3 a consultant or a specialist (surgeon, psychiatrist, researcher).
+local function headhuntKind(staff, level)
+  local profile = staff.profile
+  if profile.humanoid_class == "Nurse" then return level == 1 end
+  if profile.humanoid_class ~= "Doctor" then return false end
+  if level == 1 then return profile.is_junior == 1 end
+  if level == 2 then return profile.is_junior ~= 1 and profile.is_consultant ~= 1 end
+  return profile.is_consultant == 1 or profile.is_surgeon == 1 or
+      profile.is_psychiatrist == 1 or profile.is_researcher == 1
+end
+
+--! The member of staff of `hospital` a headhunter of `level` goes for: the
+--! most skilled one of that kind who is not busy with another request.
+function sabotage.headhuntTarget(hospital, level)
+  local best
+  for _, staff in ipairs(hospital.staff) do
+    if not staff.fired and not staff.quitting_in and not staff.mp_in_transit and
+        not staff.mp_saboteur and not staff.mp_headhunted and staff.profile and
+        headhuntKind(staff, level) and
+        (not best or staff.profile.skill > best.profile.skill) then
+      best = staff
+    end
+  end
+  return best
+end
+
+--! A headhunter: the rival's doctor asks for a big pay rise (as a pay rise
+--! request, answered in the usual window), or else leaves.
+function sabotage.headhunt(world, buyer, target, level)
+  local staff = sabotage.headhuntTarget(target, level)
+  if not staff then return false, "they have nobody of that kind to poach" end
+  local amount = math.max(1, math.floor(staff.profile.wage * HEADHUNT_RISE[level]))
+  staff.mp_headhunted = {by = world:getHospitalIndex(buyer)}
+  target:makeRaiseRequest(amount, staff)
+  staff.quitting_in = HEADHUNT_TICKS
+  staff:setMood("pay_rise", "activate")
+  log(string.format("headhunter after %s #%s of hospital %d (rise $%d)", staff.profile.humanoid_class,
+      tostring(staff.mp_id), world:getHospitalIndex(target), amount))
+  MultiplayerSession.tellPlayer(world, target,
+      S().sabotage_headhunter_notice:format(staff.profile:getFullName(), amount))
+  return true
+end
+
+--! A headhunted member of staff who was not given the rise leaves (no
+--! severance, no reputation lost) and goes on the hiring list, kept for the
+--! hospital that sent the headhunter for a while.
+function sabotage.poached(staff)
+  local world, hospital = staff.world, staff.hospital
+  local by = staff.mp_headhunted and staff.mp_headhunted.by
+  staff.mp_headhunted = nil
+  staff.quitting_in = nil
+  hospital:removeMessage(staff)
+  staff.message_callback = nil
+  local staff_window = world.ui and world.ui:getWindow(UIStaff)
+  if staff_window and staff_window.staff == staff then staff_window:close() end
+  staff:removeQueuedStaffMessage()
+  staff:setMood("pay_rise", "deactivate")
+  staff:setMood("exit", "activate")
+  staff:setDynamicInfoText(_S.dynamic_info.staff.actions.fired)
+  staff.fired = true
+  staff.going_home = true
+  staff:despawn()
+  staff.hover_cursor = nil
+  staff:unregisterCallbacks()
+  local window = world.ui and world.ui:getWindow(UIStaffManagement)
+  if window then window:updateStaffList(staff) end
+  -- On the hiring list again, at the top.
+  local profile = staff.profile
+  local pool = world.available_staff[profile.humanoid_class]
+  if pool then
+    profile.mp_reserved = by and {hospital = by, days = HEADHUNT_RESERVED_DAYS} or nil
+    table.insert(pool, 1, profile)
+  end
+  log(string.format("%s #%s left hospital %d for the hiring list", profile.humanoid_class,
+      tostring(staff.mp_id), world:getHospitalIndex(hospital)))
+  MultiplayerSession.tellPlayer(world, hospital, S().sabotage_headhunter_left:format(profile:getFullName()))
+  local buyer = by and world.hospitals[by]
+  if buyer then
+    MultiplayerSession.tellPlayer(world, buyer,
+        S().sabotage_headhunter_won:format(profile:getFullName(), HEADHUNT_RESERVED_DAYS))
+  end
+end
+
+--! Why `hospital` cannot hire `profile` now (nil: it can): a poached doctor
+--! is kept for the hospital that sent the headhunter for a while.
+function sabotage.hireRefusal(world, hospital, profile)
+  local reserved = profile.mp_reserved
+  if reserved and reserved.days > 0 and world.hospitals[reserved.hospital] ~= hospital then
+    return "promised to another hospital for a few days"
+  end
+  return nil
+end
+
+--! Each day: poached doctors on the hiring list are kept a day less, and
+--! smear campaigns end when their time is up.
+function sabotage.daily(world)
+  for _, hospital in ipairs(world.hospitals) do
+    local smear = hospital.mp_smear
+    if smear and world.game_date:monthOfGame() >= smear.until_month then
+      hospital.mp_smear = nil
+      log(string.format("smear campaign against hospital %d over: %d patients went elsewhere",
+          world:getHospitalIndex(hospital), smear.sent or 0))
+      MultiplayerSession.tellPlayer(world, hospital, S().sabotage_smear_over)
+    end
+  end
+  for _, pool in pairs(world.available_staff) do
+    for _, profile in ipairs(pool) do
+      local reserved = profile.mp_reserved
+      if reserved then
+        reserved.days = reserved.days - 1
+        if reserved.days <= 0 then profile.mp_reserved = nil end
+      end
+    end
+  end
+end
+
+--------------------------------------------------------------------------------
+-- Broken boiler
+--------------------------------------------------------------------------------
+
+--! The rival's heating breaks down: cold in the winter months (October to
+--! March), hot otherwise, until their handymen have repaired it
+--! (Hospital:_fixBoiler, the original game's boiler breakdown, which more
+--! handymen repair sooner).
+function sabotage.breakBoiler(world, target, level)
+  local heat = target.heating
+  if heat.heating_broke then return false, "their heating is broken already" end
+  if target:countRadiators() == 0 then return false, "they have no radiators" end
+  local month = world.game_date:monthOfYear()
+  local broken_heat = (month >= 10 or month <= 3) and 0 or 1
+  heat.saved_radiator_heat = heat.radiator_heat
+  heat.radiator_heat = broken_heat
+  heat.boiler_repair_count = BOILER_REPAIR[level]
+  heat.heating_broke = true
+  target:adviseBoilerBreakdown(broken_heat)
+  log(string.format("boiler of hospital %d broken (%s, repair %d)", world:getHospitalIndex(target),
+      broken_heat == 0 and "cold" or "hot", BOILER_REPAIR[level]))
+  MultiplayerSession.tellPlayer(world, target, S().sabotage_boiler_notice)
+  return true
+end
+
+--------------------------------------------------------------------------------
+-- Smear campaign
+--------------------------------------------------------------------------------
+
+--! A smear campaign: for a few months a share of the patients who would come
+--! to the rival go to the other hospitals (World:_coopPatientHospital).
+function sabotage.smear(world, target, level)
+  if target.mp_smear then return false, "a smear campaign against them is running already" end
+  -- (sabotage.daily ends it.)
+  target.mp_smear = {share = SMEAR_SHARE[level],
+      until_month = world.game_date:monthOfGame() + SMEAR_MONTHS[level]}
+  log(string.format("smear campaign against hospital %d until month %d", world:getHospitalIndex(target),
+      target.mp_smear.until_month))
+  MultiplayerSession.tellPlayer(world, target, S().sabotage_smear_notice:format(SMEAR_MONTHS[level]))
+  return true
+end
+
+--! The hospital a new patient goes to instead of `hospital`, if a smear
+--! campaign against it turns them away (nil: they come). Draws a shared
+--! random number only while a campaign runs, the same on every peer.
+function sabotage.smearRedirect(world, hospital)
+  local smear = hospital.mp_smear
+  if not smear or math.random() >= smear.share then return nil end
+  local players = world.mp_coop.players
+  local start = world:getHospitalIndex(hospital) or 1
+  for step = 1, players - 1 do
+    local other = world.hospitals[(start - 1 + step) % players + 1]
+    if other and other ~= hospital and other.opened and not other.mp_place then
+      smear.sent = (smear.sent or 0) + 1
+      return other
+    end
+  end
+  return nil
+end
+
+--------------------------------------------------------------------------------
+-- Espionage
+--------------------------------------------------------------------------------
+
+--! What a spy of `level` can take from `from` for `to`: improvements (drugs
+--! and machines) at level 1, discoveries at level 2, either at level 3.
+function sabotage.stealable(from, to, level)
+  local items = {}
+  for _, item in ipairs(MultiplayerSession.shareableResearch(from, to)) do
+    local discovery = item.kind == "e"
+    if level == 3 or (level == 2) == discovery then items[#items + 1] = item end
+  end
+  return items
+end
+
+--! How many research results a spy of `level` brings back.
+function sabotage.spyItems(level)
+  return level == 3 and 2 or 1
+end
+
+--! Espionage: the buyer gets one (two at level 3) of the rival's research
+--! results they lack, those picked (`keys`, ";"-separated, see
+--! UIMultiplayerSpy) or else at random (bots); at level 3 the rival loses
+--! half the progress towards what they research now.
+function sabotage.spy(world, buyer, target, level, keys)
+  local items = sabotage.stealable(target, buyer, level)
+  if #items == 0 then return false, "they know nothing that you do not" end
+  local chosen = {}
+  if keys and keys ~= "" then
+    local by_key = {}
+    for _, item in ipairs(items) do by_key[item.key] = item end
+    for key in tostring(keys):gmatch("[^;]+") do
+      if by_key[key] and #chosen < sabotage.spyItems(level) then
+        chosen[#chosen + 1] = by_key[key]
+        by_key[key] = nil
+      end
+    end
+    if #chosen == 0 then return false, "they no longer have what you picked, or you have it" end
+  else
+    for _ = 1, sabotage.spyItems(level) do
+      if #items == 0 then break end
+      chosen[#chosen + 1] = table.remove(items, math.random(1, #items))
+    end
+  end
+  local names = {}
+  for _, item in ipairs(chosen) do
+    MultiplayerSession.applyResearchItem(world, target, buyer, item)
+    names[#names + 1] = item.name
+  end
+  if level == 3 then
+    local research = target.research
+    for _, info in pairs(research.research_policy) do
+      local progress = type(info) == "table" and info.current and research.research_progress[info.current]
+      if progress and progress.points then progress.points = math.floor(progress.points / 2) end
+    end
+  end
+  log(string.format("hospital %d spied on hospital %d: %s", world:getHospitalIndex(buyer),
+      world:getHospitalIndex(target), table.concat(names, ", ")))
+  MultiplayerSession.tellPlayer(world, buyer, S().sabotage_espionage_got:format(table.concat(names, ", ")))
+  MultiplayerSession.tellPlayer(world, target,
+      level == 3 and S().sabotage_espionage_notice_3 or S().sabotage_espionage_notice)
+  return true
 end
 
 return sabotage

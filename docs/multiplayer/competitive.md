@@ -93,6 +93,36 @@ done (`spendMoney`, "Dirty tricks"). Prices in `sabotage.PRICES`.
   `shoot_rat` command (a click). In the original rules rats only run from
   hole to hole and are a target for the rat-catching award; they do no harm.
 
+- **Headhunter.** `sabotage.headhunt`: the target's most skilled member of
+  staff of the level's kind (`headhuntTarget`: L1 junior doctor or nurse, L2
+  doctor, L3 consultant or specialist) gets `mp_headhunted = {by}` and a pay
+  rise request (`Hospital:makeRaiseRequest`, +50/75/100 % of the wage,
+  `quitting_in` 10 days). Paid (`pay_rise` command, accept): they stay.
+  Declined, or not answered (`Staff:checkIfWaitedTooLongForRaise`, before the
+  grant-wage policy): `sabotage.poached` - they leave without severance or
+  reputation loss, and their profile goes to the top of the hiring list with
+  `mp_reserved = {hospital, days = 14}`; `handlers.hire` refuses it to
+  others (`sabotage.hireRefusal`) until `sabotage.daily` (from
+  `World:onEndDay`) counts it down.
+- **Broken boiler.** `sabotage.breakBoiler`: the original boiler breakdown
+  without its handyman check (radiator heat 0 from October to March, else 1;
+  repair work 15/30/50, which `Hospital:_fixBoiler` takes off 1-3 a day by
+  the number of handymen). Refused while the heating is broken, or without
+  radiators.
+- **Smear campaign.** `sabotage.smear` sets `hospital.mp_smear = {share,
+  until_month}` (30/40/50 % for 1/2/3 months); `World:_coopPatientHospital`
+  asks `sabotage.smearRedirect`, which (a shared random number, drawn only
+  while a campaign runs) sends that share to the next other hospital in the
+  race; `sabotage.daily` ends the campaign at `until_month`.
+- **Espionage.** `sabotage.spy`: `sabotage.stealable` filters
+  `MultiplayerSession.shareableResearch(target, buyer)` (L1 improvements, L2
+  discoveries, L3 either) and `MultiplayerSession.applyResearchItem` gives
+  one (two at L3, `sabotage.spyItems`); L3 also halves the target's points on
+  every current research topic. The player picks them in `UIMultiplayerSpy`
+  (opened by the second click on an espionage level), which sends their keys
+  with the command (`items`, ";"-separated); the handler takes those still
+  stealable, or refuses. Bots send none and get them at random.
+
 ## Window and Progress Report
 
 - Rivals' hospitals are closed to the mouse: `GameUI:_isRivals` drops a
@@ -134,9 +164,14 @@ players on level 2; `MP_REFEREE=1` adds the headless referee and a 5th check):
 3. a rat attack: ten rats, the target's reputation falls, one is shot;
 4. places, a winner leaving alone, elimination at two year ends, final
    standings; the others IN SYNC to the end;
-5. (referee) no repairs, confirmed to the end.
+5. (referee) no repairs, confirmed to the end (also in rooms tricks and
+   tricks2);
+6. the newer tricks (rooms tricks and tricks2): a headhunted nurse leaves and
+   is kept for the buyer, or stays when the rise is paid; a boiler breaks and
+   is repaired; a smear campaign runs out; espionage L3, and L1 refused with nothing to copy.
 
-Probe actions: `sabotage:<trick>:<level>:<hospital>`, `kickevil`, `shootrat`, `race`;
+Probe actions: `sabotage:<trick>:<level>:<hospital>`, `kickevil`, `shootrat`, `race`,
+`answerraise:accept`, `learn`;
 `MP_MODE=competitive` for the host.
 
 ## Ideas not done yet

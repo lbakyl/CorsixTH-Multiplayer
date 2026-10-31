@@ -187,9 +187,13 @@ function Staff:checkIfWaitedTooLongForRaise()
       self.message_callback = nil
     end
 
+    -- Multiplayer competitive: a rival's headhunter's offer wins when the
+    -- rise is not given in time.
+    if self.mp_headhunted then
+      MultiplayerSession.sabotage.poached(self)
     -- If the hospital policy is set to automatically grant wage increases, grant
     -- the requested raise instead of firing the staff member
-    if self.hospital.policies.grant_wage_increase then
+    elseif self.hospital.policies.grant_wage_increase then
       if staff_rise_window then -- if rise window open
         staff_rise_window:increaseSalary() -- close window and raise
       else

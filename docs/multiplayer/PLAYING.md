@@ -290,7 +290,11 @@ they are switched on).
 MULTIPLAYER > **DIRTY TRICKS** sells tricks to play on a rival, each at three
 levels; **Next rival** picks whom. Click a level to see what it does, and
 click it again to buy it. You pay when the trick is done. The rival
-is not told who sent an epidemic or an emergency.
+is not told who sent a trick (only an evil handyman they throw out goes back
+to whoever sent him). Each trick hits something else: reputation (rats),
+money (the handyman), readiness (emergency), disease control (epidemic),
+staff (headhunter), comfort (boiler), patient numbers (smear campaign) and
+research (espionage).
 
 | Trick | L1 | L2 | L3 |
 |---|---|---|---|
@@ -298,12 +302,18 @@ is not told who sent an epidemic or an emergency.
 | **Epidemic**: contagious patients of one disease arrive at their hospital | $6,000: 2 patients | $12,000: 4 | $20,000: 7 |
 | **Emergency** they cannot refuse: patients arrive by helicopter | $5,000: 3 patients | $10,000: 6 | $18,000: 10, maybe of a disease they have not discovered |
 | **Rat attack**: rats come out of new holes in their walls; while they run about they cost them a reputation point a day for every 5 rats, at most 3 a day (for 30 days at most) | $4,000: 5 rats | $9,000: 10 | $15,000: 20 |
+| **Headhunter**: their best member of staff of a kind gets a better offer and asks for a pay rise; if they do not agree within 10 days, that person leaves for the hiring list, kept for you for 2 weeks | $4,000: a junior doctor or nurse, +50% | $9,000: a doctor, +75% | $16,000: a consultant or specialist, double the wage |
+| **Broken boiler**: their heating fails (too cold in winter, too hot in summer) until their handymen repair it; more handymen repair it sooner | $3,000: short | $7,000: about twice as long | $12,000: long |
+| **Smear campaign**: bad press sends some of their new patients to the other hospitals | $5,000: 1 month, 3 in 10 | $10,000: 2 months, 4 in 10 | $18,000: 3 months, half |
+| **Espionage**: copy research results they have and you do not; a list shows what there is, you pick, then press Steal | $6,000: one drug or machine improvement | $12,000: one discovery | $20,000: two of either, and their current research set back by half |
 
 **Found a handyman who is not on your staff list?** Click him and press the
 sack button: he is thrown out (no severance pay) and walks back to whoever
 sent him, who has to employ him from then on. **Rats?** Click them to shoot
-them (it counts for the rat-catching award too). A trick is refused while it
-cannot work, for example while their emergency is still on.
+them (it counts for the rat-catching award too). **A member of staff wants a
+big rise because of a better offer?** Pay it in the pay rise window, or they
+leave without severance. **Boiler broken?** Hire handymen. A trick is refused
+while it cannot work, for example while their emergency is still on.
 
 Trading staff and money and sharing research work as in co-op.
 

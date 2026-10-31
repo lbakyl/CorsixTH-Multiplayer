@@ -485,7 +485,11 @@ end
 --!return a hospital, or nil if none is open
 function World:_coopPatientHospital()
   local chosen = self:chooseHospitalForPatient(nil)
-  if not chosen or (chosen.opened and not chosen.mp_place) then return chosen end
+  if chosen and chosen.opened and not chosen.mp_place then
+    -- (Competitive: a rival's smear campaign sends some elsewhere.)
+    return MultiplayerSession.sabotage.smearRedirect(self, chosen) or chosen
+  end
+  if not chosen then return chosen end
   local players = self.mp_coop.players
   local start = self:getHospitalIndex(chosen) or 1
   for step = 1, players do
@@ -1479,6 +1483,8 @@ function World:onEndDay()
 
   -- A multiplayer level with events of its own (mp_levels, level 6).
   if self.map.level_config.mp_events then corsixth.require("mp_levels").onEndDay(self) end
+  -- Competitive: poached doctors kept on the hiring list, smear campaigns.
+  if self.mp_coop and self.mp_coop.competitive then MultiplayerSession.sabotage.daily(self) end
 
   -- Maybe it's time for an emergency?
   if self.game_date:monthOfGame() == self.next_emergency_month and
