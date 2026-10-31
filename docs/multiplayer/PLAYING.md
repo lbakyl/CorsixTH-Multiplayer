@@ -207,7 +207,7 @@ training should begin early):
 | 4 | $60,000 | 26 | as level 3, cardiogram, fracture clinic (ultrascan, hair restoration, electrolysis, blood machine, decontamination) |
 | 5 | $70,000 | 33 | as level 4 (also DNA fixer, jelly vat) |
 | 6 | $60,000 | 15 | as level 3, on the map EMERGENCY! |
-| 7 | $50,000 | 26 | as level 4, on map 3: Cutthroat, made for the race |
+| 7 | $50,000 | 26 | as level 4, on map 3 (with four players on Matroftt's map): Cutthroat, made for the race |
 
 To win, a hospital needs all of these at once, and no bank loan (when it
 meets the goals but still owes the bank, the adviser says so: pay off the
@@ -245,7 +245,8 @@ than 70% of its patients died (the other levels: half).
 
 **Level 7, Cutthroat** (2 to 4 players, made for a competitive race; in
 co-op the same events run without the dirty tricks). Level 4's diseases,
-rooms and research on map 3.
+rooms and research on map 3; with four players on a map of its own, made by
+Matroftt on 2026-10-31 (`CorsixTH/Levels/cutthroat4.map`).
 - **Dirty tricks month by month:** a truce until March; then rat attacks,
   smear campaigns and broken boilers; evil handymen, epidemics and espionage
   from June; forced emergencies and headhunters from September; level 3 of

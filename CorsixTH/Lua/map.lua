@@ -222,10 +222,14 @@ function Map:load(level, difficulty, level_name, map_file, level_intro, map_edit
     local errors, result, _
     local mp_levels = corsixth.require("mp_levels")
     local players, digits, mp_level = mp_levels.parseLevelId(level)
+    local def = mp_levels.LEVELS[mp_levels.clamp(mp_level)]
     self.level_number = level
     self.difficulty = "full"
     local data
-    data, errors = self:getRawData("LEVEL.L" .. digits)
+    -- (A level may have a map of its own for this number of players, shipped
+    -- in CorsixTH's Levels folder; its settings still come from NET<digits>.SAM.)
+    local own_map = def.map_files and def.map_files[players]
+    data, errors = self:getRawData(own_map and (self.app.level_dir .. own_map) or ("LEVEL.L" .. digits))
     if not data then return nil, errors end
     _, objects = self.th:load(data)
     errors, result = self:_loadNetLevelConfig(digits, base_config)
@@ -236,8 +240,8 @@ function Map:load(level, difficulty, level_name, map_file, level_intro, map_edit
     if errors then return nil, errors end
     mp_levels.apply(result, campaign, mp_level, players)
     self.level_config = result
-    self.level_name = level_name or self:_netLevelName(digits) or level:upper()
-    local intro = mp_levels.LEVELS[mp_levels.clamp(mp_level)].intro
+    self.level_name = level_name or def.name or self:_netLevelName(digits) or level:upper()
+    local intro = def.intro
     self.level_intro = intro and _S.multiplayer_window[intro]
   elseif map_editor then
     local _
