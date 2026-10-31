@@ -1018,6 +1018,36 @@ function builder.register_handlers()
   end
   -- `n` patients arrive at once next to the reception desk (to make a queue
   -- now; from the map edge they would walk for hundreds of hours).
+  -- `n` patients needing an operation (kidney beans or spare ribs), already
+  -- diagnosed and past the ward, arrive next to the desk and head for the
+  -- operating theatre (a test of the theatre's two surgeons).
+  MultiplayerSession.default_handlers.probe_surgery = function(w, cmd)
+    local hospital = w.hospitals[cmd.hospital or 1]
+    local desk = hospital:getReceptionDesks()[1]
+    if not desk then return false, "no reception desk" end
+    local disease
+    for _, d in ipairs(w.available_diseases) do
+      if not disease and (d.id == "kidney_beans" or d.id == "spare_ribs") then disease = d end
+    end
+    if not disease then return false, "no disease needing an operation on this level" end
+    local saved = builder.hospital
+    builder.hospital = hospital
+    local x, y = builder.find_free_rect(w, desk.tile_x, desk.tile_y + 3, 1, 1, 10)
+    builder.hospital = saved
+    if not x then return false, "no room next to the desk" end
+    for _ = 1, math.min(tonumber(cmd.n) or 1, 10) do
+      local patient = w:spawnPatient(hospital)
+      if patient then
+        patient:setDisease(disease)
+        patient:setDiagnosed()
+        patient.has_passed_reception = true
+        patient.cure_rooms_visited = 1 -- (the ward done)
+        patient:setNextAction(SpawnAction("spawn", {x = x, y = y, direction = "north"}))
+        patient:queueAction(SeekRoomAction("operating_theatre"))
+      end
+    end
+    return true
+  end
   MultiplayerSession.default_handlers.probe_patients = function(w, cmd)
     local hospital = w.hospitals[cmd.hospital or 1]
     local desk = hospital:getReceptionDesks()[1]

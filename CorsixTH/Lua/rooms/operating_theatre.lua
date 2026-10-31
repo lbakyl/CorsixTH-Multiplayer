@@ -158,6 +158,18 @@ function OperatingTheatreRoom:commandEnteringStaff(staff)
   return Room.commandEnteringStaff(self, staff, true)
 end
 
+--! The two surgeons in the room, in a fixed order: by entity number
+--! (World:_numberEntity). `next` on staff_member_set (keyed by the staff)
+--! gives them in an order that differs between computers, so in multiplayer
+--! each game picked another surgeon for each side of the table (a desync).
+--!return (Staff, Staff) the first and the second surgeon, or nil
+function OperatingTheatreRoom:_surgeons()
+  local list = {}
+  for staff in pairs(self.staff_member_set) do list[#list + 1] = staff end
+  table.sort(list, function(a, b) return (a.mp_id or 0) < (b.mp_id or 0) end)
+  return list[1], list[2]
+end
+
 function OperatingTheatreRoom:setStaffMembersAttribute(attribute, value)
   for staff_member, _ in pairs(self.staff_member_set) do
     staff_member[attribute] = value
@@ -234,8 +246,7 @@ function OperatingTheatreRoom:commandEnteringPatient(patient)
   self:setXRayOn(true)
 
   -- Identify the staff
-  local surgeon1 = next(self.staff_member_set)
-  local surgeon2 = next(self.staff_member_set, surgeon1)
+  local surgeon1, surgeon2 = self:_surgeons()
   assert(surgeon1 and surgeon2, "Not enough staff in operating theatre")
 
   local screen, sx, sy = self.world:findObjectNear(patient, "surgeon_screen")
@@ -352,8 +363,7 @@ function OperatingTheatreRoom:onHumanoidLeave(humanoid)
     -- (FIXME: would be better when patient dress back?)
     self:setXRayOn(false)
 
-    local surgeon1 = next(self.staff_member_set)
-    local surgeon2 = next(self.staff_member_set, surgeon1)
+    local surgeon1, surgeon2 = self:_surgeons()
     if surgeon1 then
       self.staff_member_set[surgeon1] = "abort"
     end

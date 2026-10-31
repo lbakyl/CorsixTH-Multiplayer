@@ -1863,6 +1863,9 @@ local function run()
           session:issue({kind = "probe_" .. a})
         elseif a == "patients" then
           session:issue({kind = "probe_patients", n = tonumber(entry.arg)})
+        elseif a == "surgery" then
+          session:issue({kind = "probe_surgery", n = tonumber(entry.arg)})
+          log(string.format("UI: surgery patients (%s) at step %d", entry.arg, session.step))
         elseif a == "enterchat" then
           -- The chat key (Y, with its letter as text, as SDL sends it) while
           -- a room is being drawn: the chat opens with an empty line, and
