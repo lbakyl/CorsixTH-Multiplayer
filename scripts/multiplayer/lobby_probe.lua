@@ -1371,6 +1371,15 @@ local function run()
           -- see what a bot built), with the game date.
           local d = world:date()
           local parts = {}
+          local avoid, af = 0, {}
+          local mw, mh = world.map.th:size()
+          for ty = 1, mh do
+            for tx = 1, mw do
+              world.map.th:getCellFlags(tx, ty, af)
+              if af.avoidTile then avoid = avoid + 1 end
+            end
+          end
+          parts[#parts + 1] = "avoid_tiles=" .. avoid
           for h, hosp in ipairs(world.hospitals) do
             local rooms, staff = {}, {}
             for _, r in pairs(world.rooms) do

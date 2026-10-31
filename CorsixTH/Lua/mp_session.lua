@@ -403,6 +403,7 @@ function MultiplayerSession:restartAt(world, step, peers)
   end
   self.step = step
   self.pending = {}
+  self:_resumeRetries(world, step)
   self.vaccinate_pending = nil
   self.own_fps, self.peer_fps = {}, {}
   self.desync = nil
@@ -442,6 +443,35 @@ function MultiplayerSession.actionsAreCommands()
 end
 
 --! Steps between attempts when a handler asks to retry (see build_room).
+--! After loading a game (a desync repair, a rejoin, a continued game):
+--! commands that were waiting to be tried again (a room waiting for people
+--! to leave its area) are kept in the game (world.mp_retries, beforeStep),
+--! so they go on; the tiles people were asked to leave (avoidTile, set only
+--! by such a room) are freed first and marked again by the room's next try.
+--! Before, a reload forgot the waiting room: its player's editor waited for
+--! good and nobody could build there again (Argus, eu2).
+function MultiplayerSession:_resumeRetries(world, step)
+  local th = world and world.map and world.map.th
+  if not th then return end
+  local w, h = th:size()
+  local flags = {}
+  for ty = 1, h do
+    for tx = 1, w do
+      th:getCellFlags(tx, ty, flags)
+      if flags.avoidTile then th:setCellFlags(tx, ty, {avoidTile = false}) end
+    end
+  end
+  local keys = {}
+  for key in pairs(world.mp_retries or {}) do keys[#keys + 1] = key end
+  table.sort(keys)
+  for _, key in ipairs(keys) do
+    local cmd = world.mp_retries[key]
+    cmd.step = step + MultiplayerSession.RETRY_STEPS
+    cmd.retry_at_hour = nil
+    self.pending[#self.pending + 1] = cmd
+  end
+end
+
 MultiplayerSession.RETRY_STEPS = 4
 MultiplayerSession.MAX_RETRIES = 12
 --! A room waiting for people to walk out of its area waits longer (single
@@ -481,6 +511,7 @@ function MultiplayerSession:beforeStep()
     else
       ok, why = false, "unknown command " .. tostring(cmd.kind)
     end
+    local retry_key = cmd.peer and cmd.seq and (cmd.peer .. ":" .. cmd.seq)
     if not ok and why == "retry" then
       -- Try again a few steps later, at the same step on every peer.
       cmd.retries = (cmd.retries or 0) + 1
@@ -489,11 +520,20 @@ function MultiplayerSession:beforeStep()
         cmd.retry_at_hour = hours_done and hours_done + MultiplayerSession.RETRY_STEPS
         self.pending[#self.pending + 1] = cmd
         why = "retry " .. cmd.retries .. " at step " .. cmd.step
+        -- (Kept in the game too, so a reload goes on with it: _resumeRetries.)
+        if self.world and retry_key then
+          self.world.mp_retries = self.world.mp_retries or {}
+          self.world.mp_retries[retry_key] = cmd
+        end
       else
         why = "gave up"
         local giveup = self.handlers[cmd.kind .. "_giveup"]
         if giveup then giveup(self.world, cmd) end
       end
+    end
+    if why ~= "waiting" and not tostring(why):find("^retry ") and retry_key and
+        self.world and self.world.mp_retries then
+      self.world.mp_retries[retry_key] = nil
     end
     if why == "waiting" then -- luacheck: ignore 542
       -- (still waiting for its retry; nothing to count or log)
