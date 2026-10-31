@@ -30,7 +30,9 @@ takes about 15 minutes.
   editions make games drift out of sync. eu1 and eu2 use the **GOG** edition;
   if your players also play on eu1/eu2, use GOG too.
 
-## 2. Open the game port
+## 2. Firewall and security
+
+### Open only SSH and the game port
 
 Players connect on **TCP port 47800** (you can pick another one, see step 5).
 
@@ -45,6 +47,59 @@ sudo ufw allow 22/tcp
 sudo ufw allow 47800/tcp
 sudo ufw enable
 ```
+
+### Block repeated failed SSH logins (fail2ban)
+
+Any server on the internet gets thousands of password guesses on SSH (port
+22) a day. **fail2ban** watches the SSH log and blocks an address on port 22
+for an hour after 5 failed logins within 10 minutes. eu1 and eu2 run exactly
+this setup.
+
+Install it and write its settings:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y fail2ban
+sudo tee /etc/fail2ban/jail.local > /dev/null <<'EOF'
+[DEFAULT]
+bantime = 1h
+findtime = 10m
+maxretry = 5
+backend = systemd
+# Never block these (optional): your own address, e.g. 203.0.113.7
+# ignoreip = 127.0.0.1/8 ::1 203.0.113.7
+
+[sshd]
+enabled = true
+port = ssh
+EOF
+sudo systemctl enable fail2ban
+sudo systemctl restart fail2ban
+```
+
+If your SSH runs on another port than 22, write that number instead of `ssh`
+in `port = ssh`.
+
+Check that it watches SSH (it may take a few seconds after the restart):
+
+```bash
+sudo fail2ban-client status sshd
+```
+
+It shows `Currently failed`, `Total banned` and the blocked addresses. On a
+new server the numbers grow within hours. It works together with `ufw` and
+with the provider's firewall.
+
+If you block yourself (5 wrong passwords or keys in 10 minutes), wait an hour,
+or log in from another network or through the provider's web console and
+unblock your address:
+
+```bash
+sudo fail2ban-client set sshd unbanip 203.0.113.7
+```
+
+Two more good habits: log in with an SSH key, not a password, and keep the
+server updated (`sudo apt update && sudo apt upgrade`).
 
 ## 3. Copy your Theme Hospital files to the server
 
@@ -166,6 +221,7 @@ sudo bash setup-referee-host.sh --release mp-stable-NEWNUMBER --motd "Welcome to
 | Watch the log | `sudo journalctl -u corsixth-mp -f` |
 | Restart (drops players) | `sudo systemctl restart corsixth-mp` |
 | Stop | `sudo systemctl stop corsixth-mp` |
+| Addresses blocked by fail2ban | `sudo fail2ban-client status sshd` |
 | Settings (welcome text, release) | `/etc/corsixth-mp.env` (restart after a change) |
 | One game's referee log | `/var/lib/corsixth/referee-work/<room>-<number>/referee.log` |
 
@@ -192,8 +248,8 @@ sudo bash setup-referee-host.sh --release mp-stable-NEWNUMBER --motd "Welcome to
 
 - Passwords and game traffic are **not encrypted**. Room passwords only keep
   strangers out of a room; do not use a password you use anywhere else.
-- Keep the server updated (`sudo apt update && sudo apt upgrade`) and log in
-  with SSH keys only.
+- Keep the server updated (`sudo apt update && sudo apt upgrade`), log in
+  with SSH keys only, and keep fail2ban on (step 2).
 - Without a referee, a lighter server without game files exists too (Docker,
   `vps-guide.md`), but there a game that gets out of sync ends, a player who
   left cannot come back, and there are no bots. The technical details of the
