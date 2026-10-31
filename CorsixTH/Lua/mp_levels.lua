@@ -125,11 +125,12 @@ function levels.apply(config, campaign, level, players)
     goal(NUM_CURED, g.cured, 1),
     goal(PERCENTAGE_CURED, g.cure_rate, 1),
   }
-  -- Out of the race (or the team in trouble) at a year end: deep in debt, or
-  -- killing half the patients.
+  -- Out of the race (or the team in trouble) at a year end: deep in debt,
+  -- killing half the patients, or a reputation below 100 (warned below 200).
   config.lose_criteria = {
     [0] = goal(BALANCE, -20000, 1, -15000, 0),
     goal(PERCENTAGE_KILLED, 50, 2, 40),
+    goal(REPUTATION, 100, 3, 200, 0),
   }
   config.mp_level = levels.clamp(level)
   if def.scenario then levels.SCENARIOS[def.scenario].apply(config, players or 2) end
@@ -484,8 +485,8 @@ end
 -- discover the X-ray, scanner or blood machine gets a breakthrough bonus (not
 -- by espionage), the hospital that cures the most patients in a quarter
 -- gains reputation (a smear campaign takes patients away), attack rats
--- shot pay a bounty, machines wear out faster (the evil handyman), the
--- epidemic fine is higher, and four earthquakes shake every hospital.
+-- shot pay a bounty, machines wear out faster (the evil handyman), and four
+-- earthquakes shake every hospital.
 -- In co-op the same events run, without the tricks.
 
 --! When each trick can first be bought (month of the game), and the month
@@ -573,9 +574,6 @@ levels.SCENARIOS.cutthroat = {
         spec.StartStrength = math.max(1, math.floor(spec.StartStrength * 3 / 4))
       end
     end
-    -- The health inspector fines twice as much for each infected patient.
-    config.gbv = config.gbv or {}
-    config.gbv.EpidemicFine = 2 * (config.gbv.EpidemicFine or 2000)
     config.quake_control = {}
     for n, quake in ipairs(CUTTHROAT_QUAKES) do
       config.quake_control[n - 1] = {StartMonth = quake.StartMonth, EndMonth = quake.EndMonth,

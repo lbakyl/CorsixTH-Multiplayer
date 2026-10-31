@@ -1388,8 +1388,8 @@ local function run()
                 objects = objects + 1
               end
             end
-            parts[#parts + 1] = string.format("[%d %s opened=%s balance=%d rooms=%s staff=%s corridor_objects=%d]", h,
-                tostring(hosp.name), tostring(hosp.opened or false), math.floor(hosp.balance),
+            parts[#parts + 1] = string.format("[%d %s opened=%s balance=%d reputation=%d rooms=%s staff=%s corridor_objects=%d]", h,
+                tostring(hosp.name), tostring(hosp.opened or false), math.floor(hosp.balance), math.floor(hosp.reputation),
                 table.concat(rooms, ","), table.concat(st, ","), objects)
           end
           log(string.format("UI: hospitals at step %d (%s, month %d): %s", session.step, d:tostring(),

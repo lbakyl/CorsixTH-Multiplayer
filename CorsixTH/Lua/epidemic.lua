@@ -353,7 +353,8 @@ end
 function Epidemic:sendInitialFax()
   local num_infected = self:countInfectedPatients()
   --Save it in a global variable so we can apply the fine in the declare function
-  self.declare_fine = self:calculateInfectedFine(num_infected)
+  self.declare_fine = self:calculateDeclareFine(num_infected)
+  self.declare_infected = num_infected
 
   local message = {
     {text = _S.fax.epidemic.disease_name:format(self.disease.name)},
@@ -378,6 +379,22 @@ function Epidemic:calculateInfectedFine(infected_count)
   return math.max(2000, infected_count * fine_per_infected)
 end
 
+-- Multiplayer with a hospital each: declaring an epidemic costs less (the
+-- single player rule, the cover-up fine for every infected patient and a
+-- hundredth of it off the reputation, was ruinous in a race: 10 patients
+-- cost $20,000 and 200 reputation).
+local MP_DECLARE_FINE_EACH, MP_DECLARE_FINE_MAX = 1000, 10000
+local MP_DECLARE_REPUTATION_EACH, MP_DECLARE_REPUTATION_MAX = 2, 25
+
+--[[ The fine for declaring an epidemic with a given number of infected
+ patients (the cover-up fine, but less in multiplayer with a hospital each).
+ @param infected_count (Integer) number of infected patients
+ @return fine (Integer) the fine amount ]]
+function Epidemic:calculateDeclareFine(infected_count)
+  if not self.world.mp_coop then return self:calculateInfectedFine(infected_count) end
+  return math.min(MP_DECLARE_FINE_MAX, math.max(MP_DECLARE_FINE_EACH, infected_count * MP_DECLARE_FINE_EACH))
+end
+
 --[[ Gets the amount of reputation to add/remove from the player
  based on a given fine. Reputation gain/loss isn't specified
  in the configs so we use a percentage of the fine as a base
@@ -397,7 +414,13 @@ function Epidemic:resolveDeclaration()
   --No fax for declaration just apply fines and rep hit
   self.hospital:spendMoney(self.declare_fine, _S.transactions.epidemy_fine)
   local reputation_hit = getBaseReputationFromFine(self.declare_fine)
-  self.hospital.reputation = self.hospital.reputation - reputation_hit
+  if self.world.mp_coop then
+    reputation_hit = math.min(MP_DECLARE_REPUTATION_MAX,
+        MP_DECLARE_REPUTATION_EACH * math.max(1, self.declare_infected or 1))
+  end
+  -- (Through the hospital, which keeps it between its minimum and maximum:
+  -- set directly, it went below zero.)
+  self.hospital:unconditionalChangeReputation(-reputation_hit)
   self.hospital.epidemic = nil
 end
 
@@ -545,7 +568,7 @@ function Epidemic:applyOutcome()
     end
     -- Apply fine and reputation hit
     self.hospital:spendMoney(self.coverup_fine,_S.transactions.epidemy_coverup_fine)
-    self.hospital.reputation = self.hospital.reputation - self.reputation_hit
+    self.hospital:unconditionalChangeReputation(-self.reputation_hit)
   else
     self.hospital:receiveMoney(self.compensation, _S.transactions.compensation)
   end

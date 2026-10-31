@@ -140,7 +140,7 @@ Its rules for the tricks are data in the level config, read by
   discovery copied by espionage), quarterly rankings, notices.
 - `config.mp_rat_bounty`: `handlers.shoot_rat` pays it for an attack rat.
 - Applied at load: job fair hiring lists (`staff_levels`), machine strength
-  x 3/4, `gbv.EpidemicFine` x 2, `quake_control` (four earthquakes).
+  x 3/4, `quake_control` (four earthquakes).
 Tests: `mp_levels_spec.lua`; the probe action `trickprices` logs prices,
 refusals, the trick of the month, the rank and the hiring list.
 

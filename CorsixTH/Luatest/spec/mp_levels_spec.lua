@@ -167,6 +167,14 @@ describe("Multiplayer levels", function()
     assert.is_nil(config.emergency_control[1])
     assert.equal(-15, config.mp_refused_emergency)
     assert.equal(550, config.win_criteria[0].Value)
+    -- A reputation below 100 fails a year end (a warning below 200).
+    local rep
+    for _, crit in pairs(config.lose_criteria) do
+      if crit.Criteria == 1 then rep = crit end
+    end
+    assert.equal(100, rep.Value)
+    assert.equal(200, rep.Bound)
+    assert.equal(0, rep.MaxMin)
     for _, crit in pairs(config.lose_criteria) do
       if crit.Criteria == 5 then assert.equal(70, crit.Value) end
     end
@@ -385,7 +393,7 @@ describe("Multiplayer levels", function()
     return world
   end
 
-  it("gives level 7 its tricks, staff, machines, fines and earthquakes", function()
+  it("gives level 7 its tricks, staff, machines and earthquakes", function()
     local campaign = {emergency_control = {[0] = {StartMonth = 6, EndMonth = 8}}, popn = {},
         objects = {{StartStrength = 10}, {StartStrength = 8}, {StartStrength = 1}}}
     local config = {gbv = {EpidemicFine = 2000}}
@@ -398,7 +406,7 @@ describe("Multiplayer levels", function()
     assert.equal(9, config.mp_tricks.unlock.headhunter)
     assert.equal(13, config.mp_tricks.top_level_month)
     assert.equal(100, config.mp_rat_bounty)
-    assert.equal(4000, config.gbv.EpidemicFine)
+    assert.equal(2000, config.gbv.EpidemicFine) -- (as on the other levels)
     -- Machines last three quarters as long (at least 1).
     assert.equal(7, config.objects[1].StartStrength)
     assert.equal(6, config.objects[2].StartStrength)

@@ -183,7 +183,10 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   removal cost) so the space is free for something else.
 - **Emergencies and epidemics:** a click on the white face of the watch
   shows one of the patients (a right-click goes on to the next one).
-- **Epidemics:** if you cover one up, a watch appears at the bottom left.
+- **Epidemics:** declaring one (the first fax) costs less than in single
+  player with a hospital each: $1,000 per infected patient (at most
+  $10,000) and 2 reputation per patient (at most 25). If you cover one up
+  instead, a watch appears at the bottom left.
   Its syringe button starts **vaccination mode**: click the infected patients
   and a nurse vaccinates them. While it is on, other patients cannot be
   clicked; end it with the syringe button again, **Esc** or a right-click.
@@ -273,15 +276,15 @@ Matroftt on 2026-10-31 (`CorsixTH/Levels/cutthroat4.map`).
 - **Health Ministry rankings:** every quarter the hospital that cured the
   most patients gains 15 reputation (a smear campaign takes patients away).
 - **Rat bounty:** $100 for every rat a rival sent that you shoot.
-- **Harder:** machines wear out in three quarters of the usual uses, the
-  health inspector fines twice as much per infected patient, and four
-  earthquakes shake every hospital (strength 2 to 5: months 7-9, 13-16,
+- **Harder:** machines wear out in three quarters of the usual uses, and
+  four earthquakes shake every hospital (strength 2 to 5: months 7-9, 13-16,
   19-22, 26-30).
 
 The value goal is what the biggest starting plot on the map is worth plus
 the amount above, rounded up to $5,000; the Progress Report (F8) shows the
-exact figure. A hospital fails a year end if it is more than $20,000 in debt
-or more than half of its patients have died.
+exact figure. A hospital fails a year end if it is more than $20,000 in debt,
+more than half of its patients have died, or its reputation is below 100
+(warnings from $15,000 in debt, 40% died, a reputation below 200).
 
 ## Winning and losing
 
