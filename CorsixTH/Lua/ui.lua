@@ -742,12 +742,22 @@ function UI:onKeyDown(rawchar, modifiers)
   -- the key.
   if not handled then
     local keyHandlers = self.key_handlers[key]
-    -- Multiplayer: the chat key belongs to the chat, whatever else is open.
+    -- Multiplayer: the chat key belongs to the chat, whatever else is open;
+    -- with Shift too (a capital letter), unless Shift with it is bound.
     if keyHandlers and TheApp.mp_session then
+      local chat
       for _, handler in ipairs(keyHandlers) do
-        if class.is(handler.window, UIMultiplayerChat) then
-          keyHandlers = {handler}
-          break
+        if class.is(handler.window, UIMultiplayerChat) then chat = handler end
+      end
+      if chat then
+        local shifted = next(chat.modifiers) == nil and compare_tables(modifiers, {shift = true})
+        for _, handler in ipairs(keyHandlers) do
+          if shifted and compare_tables(handler.modifiers, modifiers) then shifted = false end
+        end
+        if shifted or compare_tables(chat.modifiers, modifiers) then
+          chat.callback(chat.window, unpack(chat))
+          handled = true
+          keyHandlers = nil
         end
       end
     end

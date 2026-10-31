@@ -151,7 +151,8 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   the research and the price, and they accept or reject it. On acceptance
   they pay you and get what they still lack; you keep your research. No
   answer within 20 game days counts as a rejection.
-- **Chat:** press **Y** (or **MULTIPLAYER**, **SEND A MESSAGE**) and
+- **Chat:** press **Y** (with or without Shift or Caps Lock; or
+  **MULTIPLAYER**, **SEND A MESSAGE**) and
   type; **Tab** chooses who it is for (all players, or one), and the game
   remembers it for next time; **Enter** sends, **Escape** cancels. Enter
   keeps its usual jobs (finish a room, OK in a dialog, hire). To use

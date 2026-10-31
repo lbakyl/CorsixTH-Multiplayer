@@ -1009,6 +1009,34 @@ function MultiplayerSession.markerColour(world, hospital)
   return MARKER_COLOURS[(index - 1) % #MARKER_COLOURS + 1]
 end
 
+local icons -- (mp_icons.lua, loaded when first drawn)
+local icon_colours = setmetatable({}, {__mode = "k"}) -- canvas -> name -> mapped colours
+
+--! Draw one of the multiplayer icons (MATROFTT's pixel art, mp_icons.lua)
+--! with its top left corner at ix, iy, at UI scale s.
+--!param name (string) the icon, e.g. "fax_money" or "transferstuff_pressed"
+function MultiplayerSession.drawIcon(canvas, name, ix, iy, s)
+  icons = icons or corsixth.require("mp_icons")
+  local icon = icons[name]
+  if not icon then return end
+  local mapped = icon_colours[canvas]
+  if not mapped then
+    mapped = {}
+    icon_colours[canvas] = mapped
+  end
+  local colours = mapped[name]
+  if not colours then
+    colours = {}
+    local c = icon.colours
+    for i = 1, #c, 3 do colours[#colours + 1] = canvas:mapRGB(c[i], c[i + 1], c[i + 2]) end
+    mapped[name] = colours
+  end
+  local runs = icon.runs
+  for i = 1, #runs, 4 do
+    canvas:drawRect(colours[runs[i]], ix + runs[i + 1] * s, iy + runs[i + 2] * s, runs[i + 3] * s, s)
+  end
+end
+
 --! Multiplayer with a hospital each: dress a patient in their hospital's
 --! colour (the shirt; only what is drawn changes, alike on every machine).
 --! Patients without the shirt colours (the King, the invisible) stay as

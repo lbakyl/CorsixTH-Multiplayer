@@ -77,8 +77,7 @@ function UIMessage:UIMessage(ui, x, stop_x, onClose, type, message, owner, timeo
       local window = panel.window
       local open = window.button and window.button.toggled
       -- (Through _G: a saved game keeps no reference to this file's locals.)
-      _G.UIMessage.drawOfferIcon(canvas, px + panel.x * s, py + panel.y * s, s, open, window.type,
-          window.panel_sprites)
+      _G.UIMessage.drawOfferIcon(canvas, px + panel.x * s, py + panel.y * s, s, open, window.type)
     end
   end
   -- The emergency has a rotating siren
@@ -92,82 +91,15 @@ function UIMessage:UIMessage(ui, x, stop_x, onClose, type, message, owner, timeo
   end
 end
 
---! Draw a multiplayer offer icon (30 x 28): the game's own message icon
---! frame (the grey stand of the "?" icon), with its green square painted
---! purple and bevelled, pressed in while the offer's window is open, and a
---! white symbol on it: a person for staff and patient offers, a flask for
---! research, coins for money, a fast-forward sign for a speed vote.
---!param sprites the message's panel sprites (Panel02V)
-function UIMessage.drawOfferIcon(canvas, ix, iy, s, open, kind, sprites)
-  local function rect(c, x, y, w, h)
-    canvas:drawRect(canvas:mapRGB(c[1], c[2], c[3]), ix + x * s, iy + y * s, w * s, h * s)
-  end
-  sprites:draw(canvas, 51, ix, iy, { scaleFactor = s }) -- the frame
-  -- The square (18 x 18 at 6, 4): edges, ring and face; pressed in, the
-  -- light and dark edges swap and the face darkens.
-  local light, dark = {206, 168, 246}, {54, 12, 84}
-  local ring, face, shine = {124, 60, 184}, {148, 78, 208}, {172, 112, 228}
-  if open then
-    light, dark = dark, {184, 142, 228}
-    ring, face, shine = {100, 46, 156}, {120, 58, 176}, {120, 58, 176}
-  end
-  rect(dark, 6, 4, 18, 18)
-  rect(light, 6, 4, 17, 1)
-  rect(light, 6, 4, 1, 17)
-  rect(ring, 7, 5, 16, 16)
-  rect(face, 8, 6, 14, 14)
-  rect(shine, 8, 6, 14, 2)
-  rect(light, 8, 6, 2, 1)
-  local white, tint = {243, 243, 243}, {214, 196, 240}
-  local d = open and 1 or 0
-  if kind == "mp_vote" then
-    -- Two white arrowheads pointing right (fast forward).
-    for col = 0, 4 do
-      local h = 10 - 2 * col
-      rect(white, 9 + col + d, 8 + col + d, 1, h)
-      rect(white, 15 + col + d, 8 + col + d, 1, h)
-    end
-  elseif kind == "mp_money" then
-    -- A stack of gold coins, the top one with a dollar sign.
-    local gold, edge, glint = {246, 200, 64}, {170, 120, 20}, {255, 240, 160}
-    for i = 0, 3 do
-      local cy = 17 - i * 3
-      rect(edge, 9 + d, cy + 1 + d, 12, 3)
-      rect(gold, 9 + d, cy + d, 12, 2)
-      rect(glint, 10 + d, cy + d, 4, 1)
-    end
-    rect(edge, 10 + d, 5 + d, 10, 4)
-    rect(gold, 10 + d, 4 + d, 10, 4)
-    rect(edge, 14 + d, 4 + d, 2, 4) -- "$"
-    rect(glint, 11 + d, 4 + d, 3, 1)
-  elseif kind == "mp_research" then
-    -- A flask: cork, neck, widening glass, green liquid with bubbles.
-    rect({206, 158, 100}, 13 + d, 6 + d, 4, 2)
-    rect({150, 106, 60}, 16 + d, 6 + d, 1, 2)
-    rect(white, 13 + d, 8 + d, 4, 4)
-    rect(tint, 16 + d, 8 + d, 1, 4)
-    rect(white, 12 + d, 12 + d, 6, 2)
-    rect(white, 11 + d, 14 + d, 8, 2)
-    rect(white, 10 + d, 16 + d, 10, 3)
-    rect({120, 222, 150}, 11 + d, 15 + d, 8, 1)
-    rect({84, 196, 120}, 11 + d, 16 + d, 8, 2)
-    rect(tint, 10 + d, 18 + d, 10, 1)
-    rect(white, 16 + d, 16 + d, 1, 1) -- bubbles
-    rect(white, 13 + d, 17 + d, 1, 1)
-  else
-    -- A person in a white coat: head, shoulders, body, collar.
-    rect(white, 13 + d, 6 + d, 4, 4)
-    rect(tint, 16 + d, 7 + d, 1, 3)
-    rect(white, 10 + d, 11 + d, 10, 3)
-    rect(white, 11 + d, 14 + d, 8, 5)
-    rect(tint, 18 + d, 12 + d, 1, 6)
-    rect(face, 14 + d, 11 + d, 2, 2)
-    rect(tint, 11 + d, 18 + d, 7, 1)
-    rect(face, 13 + d, 6 + d, 1, 1) -- rounded head and shoulders
-    rect(face, 16 + d, 6 + d, 1, 1)
-    rect(face, 10 + d, 11 + d, 1, 1)
-    rect(face, 19 + d, 11 + d, 1, 1)
-  end
+local OFFER_ICONS = {mp_offer = "fax_transferstuff", mp_research = "fax_shareresearch",
+                     mp_money = "fax_money", mp_vote = "fax_speed"}
+
+--! Draw a multiplayer offer icon (30 x 28, MATROFTT's pixel art, with its
+--! own stand): a person for staff and patient offers, research, money, or a
+--! speed vote; purple, and red while the offer's window is open.
+function UIMessage.drawOfferIcon(canvas, ix, iy, s, open, kind)
+  local name = OFFER_ICONS[kind] or OFFER_ICONS.mp_offer
+  MultiplayerSession.drawIcon(canvas, open and name .. "_pressed" or name, ix, iy, s)
 end
 
 function UIMessage:draw(canvas, x, y)

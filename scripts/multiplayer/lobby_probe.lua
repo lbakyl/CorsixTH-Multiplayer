@@ -1784,13 +1784,19 @@ local function run()
           local input = world.ui:getWindow(UIMultiplayerChatInput)
           local text = input and input.box.text
           if input then input:close() end
+          -- Shift with it (a capital Y) opens it too.
+          world.ui:onKeyDown("y", {shift = true})
+          world.ui:onTextInput("Y")
+          local capital = world.ui:getWindow(UIMultiplayerChatInput)
+          local capital_text = capital and capital.box.text
+          if capital then capital:close() end
           local enter = {}
           for _, handler in ipairs(world.ui.key_handlers["return"] or {}) do
             enter[#enter + 1] = class.type(handler.window) or "?"
           end
-          log(string.format("UI: chat key with a room editor open at step %d: chat %s, text %q, editor %s; Enter for %s",
+          log(string.format("UI: chat key with a room editor open at step %d: chat %s, text %q, editor %s; Enter for %s; Shift: chat %s, text %q",
               session.step, input and "opened" or "not opened", tostring(text), dlg.phase,
-              table.concat(enter, ",")))
+              table.concat(enter, ","), capital and "opened" or "not opened", tostring(capital_text)))
           dlg:close()
         elseif a == "chat" then
           -- In-game chat with the real keys: Y, the text, Tab <n> times
@@ -1839,6 +1845,37 @@ local function run()
           sample("personality")
           sample("mp_offer", {mp_offer = {kind = "staff", from = 1, to = 2, name = "sample"}})
           sample("mp_research", {mp_offer = {kind = "research", from = 1, to = 2, name = "sample"}})
+        elseif a == "iconshots" then
+          -- Test only: the multiplayer icons for screenshots: the four
+          -- message icons (one open) and the staff window's send button.
+          -- Arg "queue" adds the message icons (they slide in over a few
+          -- steps); without it, the shots.
+          local panel, mine = world.ui.bottom_panel, world.ui.hospital
+          if entry.arg == "queue" then
+            for _, kind in ipairs({"mp_offer", "mp_research", "mp_money", "mp_vote"}) do
+              panel:queueMessage(kind, {{text = "sample"}, choices = {{text = "ok", choice = "close"}},
+                  mp_offer = {kind = "staff", from = 1, to = 2, name = "sample"}}, nil, nil, nil, nil, mine)
+            end
+          else
+            shot("icons-messages")
+            local icons = {}
+            for _, icon in ipairs(panel:allMessageIcons()) do
+              if icon.type and icon.type:sub(1, 3) == "mp_" then icons[#icons + 1] = icon end
+            end
+            if icons[2] then
+              icons[2].button.toggled = true
+              shot("icons-messages-one-open")
+              icons[2].button.toggled = false
+            end
+            local member = mine.staff[1]
+            if member then
+              local win = UIStaff(world.ui, member)
+              world.ui:addWindow(win)
+              shot("icons-staff-window")
+              win:close()
+            end
+            log(string.format("UI: icon shots at step %d (%d message icons)", session.step, #icons))
+          end
         elseif a == "learn" then
           session:issue({kind = "probe_learn"})
         elseif a == "askmoney" then
