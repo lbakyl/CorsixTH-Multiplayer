@@ -833,7 +833,8 @@ function sabotage.spy(world, buyer, target, level, keys)
       buyer.mp_spied = buyer.mp_spied or {}
       buyer.mp_spied[item.object.id] = true
     end
-    names[#names + 1] = item.name
+    -- (Names are localised strings: table.concat takes plain ones only.)
+    names[#names + 1] = tostring(item.name):gsub("^<LocalisedString> Current value:", "")
   end
   if level == 3 then
     local research = target.research

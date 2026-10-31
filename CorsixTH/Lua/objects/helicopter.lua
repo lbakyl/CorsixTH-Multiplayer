@@ -66,7 +66,7 @@ function Helicopter:tick()
   if phase == 0 then
     self.th:makeVisible()
     self:setSpeed(0, 10)
-    if mine then
+    if mine and self.hospital.emergency then
       ui:playAnnouncement(self.hospital.emergency.disease.emergency_sound, AnnouncementPriority.Critical)
     end
   elseif phase == 60 then
@@ -74,7 +74,10 @@ function Helicopter:tick()
     self.spawned_patients = 0
     if mine then ui.adviser:say(_A.information.emergency) end
   elseif phase == 85 then
-    if self.spawned_patients < self.hospital.emergency.victims then
+    -- (The emergency can be over before every patient is out, e.g. ended
+    -- early in multiplayer: then the helicopter just takes off again.)
+    local emergency = self.hospital.emergency
+    if emergency and self.spawned_patients < emergency.victims then
       self:spawnPatient()
       phase = 60
     end

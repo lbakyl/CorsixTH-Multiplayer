@@ -141,7 +141,7 @@ function builder.repairCommand(world, room)
   else
     return nil
   end
-  return {kind = "build_room", room = room.room_info.id, x = x, y = y, w = w, h = h,
+  return {kind = "build_room", room = room.room_info.id, x = x, y = y, w = w, h = h, repair = 1,
       door_x = door_x, door_y = door_y, door_wall = door_wall,
       windows = builder.encodeWindows(builder.windowsOfRoom(world, room))}
 end
@@ -405,7 +405,17 @@ local function try_build(world, hospital, cmd)
     hold_keys(ui, dlg)
     return room, nil, dlg
   end
-  local ok, why = builder.autoFurnish(dlg, room, cmd, {})
+  local ok, why, kept = builder.autoFurnish(dlg, room, cmd, {})
+  if not ok and kept then
+    -- A destroyed room repaired whose objects do not all fit where they
+    -- would be placed automatically (its player had put them elsewhere by
+    -- hand): it is not given up, its player places the rest, as after
+    -- drawing a room (the wreck is gone already).
+    dlg:clearBlueprint()
+    dlg.object_cell_x, dlg.object_cell_y = nil, nil
+    hold_keys(ui, dlg)
+    return room, nil, dlg
+  end
   if not ok then return nil, why end
   return builder.finishEditor(dlg, room)
 end
@@ -448,6 +458,8 @@ function builder.autoFurnish(dlg, room, rect, placed)
       end
     end
     if not done then
+      -- (A repaired room is kept: its player places the rest, try_build.)
+      if tonumber(rect.repair) == 1 then return false, "required objects do not fit", true end
       dlg:abortRoom()
       return false, "required objects do not fit"
     end
