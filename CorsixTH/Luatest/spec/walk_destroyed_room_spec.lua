@@ -79,11 +79,13 @@ describe("earthquake destroys a room mid-walk", function()
       Patient = _G.Patient, Staff = _G.Staff, Handyman = _G.Handyman,
       IdleAction = _G.IdleAction, MeanderAction = _G.MeanderAction,
       SeekRoomAction = _G.SeekRoomAction, QueueAction = _G.QueueAction,
+      SeekReceptionAction = _G.SeekReceptionAction,
     }
     _G.IdleAction = stubActionClass("IdleAction")
     _G.MeanderAction = stubActionClass("MeanderAction")
     _G.SeekRoomAction = stubActionClass("SeekRoomAction")
     _G.QueueAction = stubActionClass("QueueAction")
+    _G.SeekReceptionAction = stubActionClass("SeekReceptionAction")
     _G.Patient = {__name = "Patient"}
     _G.Staff = {__name = "Staff"}
     _G.Handyman = {__name = "Handyman"}
@@ -216,6 +218,9 @@ describe("earthquake destroys a room mid-walk", function()
     -- it is why setNextAction cannot simply replace the walk.
     local walk = WalkAction(2, 1)
     walk.must_happen = true
+    -- A walk through a room's door enters it (Room:createEnterAction), unless
+    -- the test says otherwise.
+    walk.is_entering = not opts.not_entering
     humanoid.action_queue[1] = walk
     setmetatable(humanoid, {__index = opts.as_staff and _G.Staff or _G.Patient})
     return humanoid
@@ -312,6 +317,37 @@ describe("earthquake destroys a room mid-walk", function()
       assert.is_true(sizes > 0)
       -- And the walk is left alone, because the room was not destroyed.
       assert.same({"walk", "QueueAction"}, queueNames(humanoid))
+    end)
+  end)
+
+  describe("a patient whose walk does not enter rooms (issue 3611)", function()
+    local function liveQueue(counts)
+      return {
+        unexpect = function() counts.unexpected = counts.unexpected + 1 end,
+        size = function() return 0 end,
+        expectedSize = function() return 0 end,
+      }
+    end
+
+    it("stops at the door and looks for a reception desk again", function()
+      local counts = {unexpected = 0}
+      local humanoid = makeHumanoid({door = makeDoor(makeRoom(), liveQueue(counts)), not_entering = true})
+
+      walkThroughDoor(humanoid)
+
+      assert.same({"IdleAction", "SeekReceptionAction"}, queueNames(humanoid))
+      assert.equals(0, counts.unexpected) -- the door was never used
+    end)
+
+    it("past reception, drops the walk and carries on with what follows", function()
+      local counts = {unexpected = 0}
+      local humanoid = makeHumanoid({door = makeDoor(makeRoom(), liveQueue(counts)), not_entering = true})
+      humanoid.has_passed_reception = true
+      humanoid.action_queue[2] = {name = "next"}
+
+      walkThroughDoor(humanoid)
+
+      assert.same({"next"}, queueNames(humanoid))
     end)
   end)
 
