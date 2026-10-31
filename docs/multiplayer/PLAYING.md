@@ -193,8 +193,8 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 ## Levels
 
 **One shared hospital** plays the campaign levels 1 to 12, as in single
-player. **A hospital each** (co-op and the race) has six levels of its own,
-on Theme Hospital's multiplayer maps (level 6 is a scenario, below). Each takes its diseases, rooms and
+player. **A hospital each** (co-op and the race) has seven levels of its own,
+on Theme Hospital's multiplayer maps (levels 6 and 7 are scenarios, below). Each takes its diseases, rooms and
 research from a campaign level, so level 1 is the smallest. From level 2 on
 the training room is there from the start (there are few staff to hire, so
 training should begin early):
@@ -207,6 +207,7 @@ training should begin early):
 | 4 | $60,000 | 26 | as level 3, cardiogram, fracture clinic (ultrascan, hair restoration, electrolysis, blood machine, decontamination) |
 | 5 | $70,000 | 33 | as level 4 (also DNA fixer, jelly vat) |
 | 6 | $60,000 | 15 | as level 3, on the map EMERGENCY! |
+| 7 | $50,000 | 26 | as level 4, on map 3: Cutthroat, made for the race |
 
 To win, a hospital needs all of these at once, and no bank loan (when it
 meets the goals but still owes the bank, the adviser says so: pay off the
@@ -220,6 +221,7 @@ loan by clicking your money in the bottom bar):
 | 4 | 700 | $200,000 | plot + $150,000 | 350 | 55% |
 | 5 | 750 | $350,000 | plot + $200,000 | 500 | 60% |
 | 6 | 550 | $60,000 | plot + $80,000 | 150 | 40% |
+| 7 | 650 | $150,000 | plot + $150,000 | 300 | 55% |
 
 **Level 6, Emergency!** (2 to 4 players). In the first year (months 2 to
 12) an emergency comes four times a month, to each hospital in turn (a
@@ -240,6 +242,40 @@ or two a swarm moves into one of the hospitals. Staff for hire: 4 doctors per
 player and 2 more each month, many of them consultants at first; from month 9
 every doctor for hire is a junior. A hospital fails a year end only when more
 than 70% of its patients died (the other levels: half).
+
+**Level 7, Cutthroat** (2 to 4 players, made for a competitive race; in
+co-op the same events run without the dirty tricks). Level 4's diseases,
+rooms and research on map 3.
+- **Dirty tricks month by month:** a truce until March; then rat attacks,
+  smear campaigns and broken boilers; evil handymen, epidemics and espionage
+  from June; forced emergencies and headhunters from September; level 3 of
+  every trick only from the second year. The Dirty Tricks window shows the
+  price for you now; a locked trick says from which month it can be bought.
+- **Prices:** each month one trick is the trick of the month at half price
+  (announced on the 1st; rats in March, then smear campaign, broken boiler,
+  evil handyman, epidemic, espionage, emergency, headhunter, and round
+  again). The hospital furthest from the goals at the start of the month
+  pays half for every trick, the one closest pays half as much again (both
+  stack with the trick of the month).
+- **Job fairs** in months 4, 10, 16 and 22 (announced on the 25th before):
+  surgeons, psychiatrists, researchers and consultants on the shared hiring
+  list, first come first served. Otherwise few specialists, and half the
+  doctors junior: worth a headhunter.
+- **Emergencies:** in the first year one a month for each hospital, in turn
+  (pharmacy, inflation and psychiatry cases; operating theatre and clinics
+  from June). **Race emergencies** on the 3rd of months 8, 14 and 20: the
+  same disease and number of patients for every hospital (a busy one gets it
+  when it is free, that month); the first to save every patient earns
+  $10,000 and 20 reputation.
+- **Breakthroughs:** the first hospital to discover the X-ray, the scanner
+  or the blood machine earns $10,000 and 15 reputation (not by espionage).
+- **Health Ministry rankings:** every quarter the hospital that cured the
+  most patients gains 15 reputation (a smear campaign takes patients away).
+- **Rat bounty:** $100 for every rat a rival sent that you shoot.
+- **Harder:** machines wear out in three quarters of the usual uses, the
+  health inspector fines twice as much per infected patient, and four
+  earthquakes shake every hospital (strength 2 to 5: months 7-9, 13-16,
+  19-22, 26-30).
 
 The value goal is what the biggest starting plot on the map is worth plus
 the amount above, rounded up to $5,000; the Progress Report (F8) shows the

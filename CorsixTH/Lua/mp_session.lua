@@ -3005,6 +3005,11 @@ function handlers.shoot_rat(world, cmd)
   if not rat or rat.shot then return false, "no such rat" end
   -- Co-op: rats in another player's hospital are theirs to shoot.
   if not ours(world, cmd, rat) then return false, "not ours" end
+  -- Level 7 pays a bounty for a rat sent by a rival (a dirty trick).
+  local bounty = world.map.level_config.mp_rat_bounty
+  if bounty and rat.mp_attack_rat and rat.hospital then
+    rat.hospital:receiveMoney(bounty, _S.multiplayer_window.level7_rat_bounty)
+  end
   rat:shoot()
   return true
 end

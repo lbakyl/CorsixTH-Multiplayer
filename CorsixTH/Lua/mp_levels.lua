@@ -53,6 +53,9 @@ levels.LEVELS = {
   -- On the map called EMERGENCY!, with level 3's rooms and research.
   {campaign = 5, map = 2, cash = 60000, scenario = "emergency", intro = "level_intro_6",
     goals = {reputation = 550, balance = 60000, value = 80000, cured = 150, cure_rate = 40}},
+  -- "Cutthroat", made for a race: level 8's rooms and research on map 3.
+  {campaign = 8, map = 3, cash = 50000, scenario = "cutthroat", intro = "level_intro_7",
+    goals = {reputation = 650, balance = 150000, value = 150000, cured = 300, cure_rate = 55}},
 }
 levels.COUNT = #levels.LEVELS
 
@@ -279,9 +282,9 @@ end
 
 --! An emergency of month `month`: a kind by the weights of the phase begun
 --! last, then one of its diseases (kinds without one on the level left out).
-local function pickEmergency(world, month)
+local function pickEmergency(world, month, phases)
   local phase
-  for _, p in ipairs(EMERGENCY_PHASES) do
+  for _, p in ipairs(phases or EMERGENCY_PHASES) do
     if p.from <= month then phase = p end
   end
   if not phase then return nil end
@@ -326,11 +329,11 @@ end
 
 --! The next hospital in turn that can take an emergency gets one.
 --!return (boolean) whether one did
-local function sendEmergency(world, month)
+local function sendEmergency(world, month, phases)
   for _ = 1, world.mp_coop.players do
     local hospital = world:_coopTurn("level_emergency")
     if not busy(hospital) then
-      local emergency = pickEmergency(world, month)
+      local emergency = pickEmergency(world, month, phases)
       if emergency and startEmergency(hospital, emergency) then return true end
     end
   end
@@ -406,10 +409,8 @@ local function ratSwarm(world)
   return spawned
 end
 
---! The level's events, at the end of every day (World:onEndDay).
-function levels.onEndDay(world)
-  if world.map.level_config.mp_events ~= "emergency" or not world.mp_coop then return end
-  corsixth.require("mp_session")
+--! Level 6's events, at the end of every day.
+local function emergencyDay(world)
   local state = world.mp_level_events
   if not state then
     state = {days_to_wave = nil, days_to_rats = between(RAT_SWARM_DAYS)}
@@ -462,6 +463,357 @@ function levels.onEndDay(world)
     ratSwarm(world)
     state.days_to_rats = between(RAT_SWARM_DAYS)
   end
+end
+
+
+-- Level 7, "Cutthroat" -------------------------------------------------------
+--
+-- A race with level 8's rooms and research, made for the dirty tricks
+-- (mp_sabotage.lua). A truce until March; then the tricks unlock by what
+-- they hit (sabotage.unlockMonth), level 3 of each from the second year.
+-- Each month one trick costs half price (the trick of the month), the last
+-- hospital in the race pays half for every trick and the leader half as
+-- much again (sabotage.price). Things worth a trick: job fairs bring
+-- specialists to the shared hiring list (months 4, 10, 16, 22: headhunters
+-- poach them), race emergencies come to every hospital at once (months 8,
+-- 14, 20: the first to save every patient gets a bonus), the first to
+-- discover the X-ray, scanner or blood machine gets a breakthrough bonus (not
+-- by espionage), the hospital that cures the most patients in a quarter
+-- gains reputation (a smear campaign takes patients away), attack rats
+-- shot pay a bounty, machines wear out faster (the evil handyman), the
+-- epidemic fine is higher, and four earthquakes shake every hospital.
+-- In co-op the same events run, without the tricks.
+
+--! When each trick can first be bought (month of the game), and the month
+--! level 3 of every trick can (a truce until then: none before month 3).
+local TRICK_UNLOCK = {rats = 3, smear = 3, boiler = 3, handyman = 6, epidemic = 6, espionage = 6,
+    emergency = 9, headhunter = 9}
+local TRICK_TOP_LEVEL_MONTH = 13
+--! The trick of the month, from month 3 on, round and round.
+local TRICK_ROTATION = {"rats", "smear", "boiler", "handyman", "epidemic", "espionage", "emergency",
+    "headhunter"}
+local TRICK_ROTATION_FROM = 3
+--! Price factors: the trick of the month, the last hospital in the race and
+--! the leader (by how close they are to the goals at the start of the month).
+local PRICE_OF_THE_MONTH, PRICE_LAST, PRICE_LEADER = 0.5, 0.5, 1.5
+--! Months whose hiring list has the specialists.
+local JOB_FAIRS = {4, 10, 16, 22}
+--! Race emergencies: months, the day they come, the bonus to the first
+--! hospital to save every patient.
+local RACE_EMERGENCY_MONTHS = {8, 14, 20}
+local RACE_EMERGENCY_DAY = 3
+local RACE_BONUS, RACE_REPUTATION = 10000, 20
+--! The emergencies of the first year, one a month for each hospital.
+local CUTTHROAT_PHASES = {
+  {from = 2, weights = {pharmacy = 2, inflation = 3, psychiatry = 3}},
+  {from = 6, weights = {pharmacy = 1, inflation = 2, psychiatry = 2, theatre = 3, clinics = 2}},
+}
+local CUTTHROAT_EMERGENCY_LAST_MONTH = 12
+--! The first discovery of these machines earns a bonus.
+local BREAKTHROUGHS = {"x_ray", "scanner", "blood_machine"}
+local BREAKTHROUGH_BONUS, BREAKTHROUGH_REPUTATION = 10000, 15
+--! The quarter's best: reputation for the hospital that cured the most.
+local QUARTER_REPUTATION = 15
+--! Paid for every attack rat shot.
+local RAT_BOUNTY = 100
+--! Earthquakes: in a window of months, of a strength (Earthquake class).
+local CUTTHROAT_QUAKES = {
+  {StartMonth = 7, EndMonth = 9, Severity = 2},
+  {StartMonth = 13, EndMonth = 16, Severity = 3},
+  {StartMonth = 19, EndMonth = 22, Severity = 4},
+  {StartMonth = 26, EndMonth = 30, Severity = 5},
+}
+
+--! A hiring list with few specialists, but many at the job fairs, for
+--! `players` hospitals sharing it. (An entry with Month = m is used for the
+--! list from month m + 1 on.)
+local function cutthroatStaff(players)
+  local result, i = {}, 0
+  local function entry(month, fair)
+    result[i] = {
+      Month = month,
+      Doctors = fair and 3 * players + 2 or 2 * players + 1,
+      Nurses = 3 * players + math.random(0, players),
+      Handymen = players + math.random(0, players),
+      Receptionists = players + math.random(0, players),
+      -- One in two of the fair's doctors a surgeon, a psychiatrist, a
+      -- researcher; one in three a consultant. Otherwise few of them, and
+      -- half the doctors junior.
+      ShrkRate = fair and 2 or 10, SurgRate = fair and 2 or 10, RschRate = fair and 2 or 10,
+      ConsRate = fair and 3 or 0,
+      JrRate = fair and 0 or 2,
+    }
+    i = i + 1
+  end
+  entry(0, false)
+  for _, month in ipairs(JOB_FAIRS) do
+    entry(month - 1, true)
+    entry(month, false)
+  end
+  return result
+end
+
+levels.SCENARIOS.cutthroat = {
+  apply = function(config, players)
+    -- The level's own emergencies (levels.onEndDay) instead of the campaign's.
+    config.emergency_control = {[0] = {StartMonth = 0, EndMonth = 0, Min = 0, Max = 0, Illness = 0,
+        PercWin = 0, Bonus = 0}}
+    config.mp_events = "cutthroat"
+    config.staff_levels = cutthroatStaff(players)
+    -- The dirty tricks' schedule and prices (mp_sabotage.lua).
+    config.mp_tricks = {unlock = TRICK_UNLOCK, top_level_month = TRICK_TOP_LEVEL_MONTH}
+    config.mp_rat_bounty = RAT_BOUNTY
+    -- Machines last three quarters as long.
+    for _, spec in pairs(config.objects or {}) do
+      if type(spec) == "table" and spec.StartStrength then
+        spec.StartStrength = math.max(1, math.floor(spec.StartStrength * 3 / 4))
+      end
+    end
+    -- The health inspector fines twice as much for each infected patient.
+    config.gbv = config.gbv or {}
+    config.gbv.EpidemicFine = 2 * (config.gbv.EpidemicFine or 2000)
+    config.quake_control = {}
+    for n, quake in ipairs(CUTTHROAT_QUAKES) do
+      config.quake_control[n - 1] = {StartMonth = quake.StartMonth, EndMonth = quake.EndMonth,
+          Severity = quake.Severity}
+    end
+  end,
+}
+
+--! The hospitals still racing (all of them in co-op), in hospital order.
+local function racing(world)
+  local list = {}
+  for index = 1, world.mp_coop.players do
+    local hospital = world.hospitals[index]
+    if hospital and not hospital.mp_place then list[#list + 1] = hospital end
+  end
+  return list
+end
+
+--! How close `hospital` is to the goals: the average of each goal's share
+--! reached (0 .. 1), in a fixed order of goals.
+local function goalScore(world, hospital)
+  local conditions = world.endconditions
+  local goals = conditions and conditions.win_goals and conditions.win_goals[1]
+  if not goals then return 0 end
+  local names = {}
+  for name in pairs(goals) do names[#names + 1] = name end
+  table.sort(names)
+  local total = 0
+  for _, name in ipairs(names) do
+    local goal = goals[name]
+    local value = conditions:getAttribute(hospital, name) or 0
+    local share
+    if goal.max_min == 1 then
+      share = goal.win_value > 0 and value / goal.win_value or 1
+    else
+      share = value <= goal.win_value and 1 or goal.win_value / math.max(value, 1)
+    end
+    total = total + math.max(0, math.min(1, share))
+  end
+  return #names > 0 and total / #names or 0
+end
+
+--! The leader and the last of the race (by hospital index): none when all
+--! are as close to the goals.
+local function rankRace(world)
+  local ranks = {}
+  local list = racing(world)
+  if #list < 2 then return ranks end
+  local scores, best, worst = {}, nil, nil
+  for _, hospital in ipairs(list) do
+    local score = math.floor(goalScore(world, hospital) * 1000)
+    scores[hospital] = score
+    best = math.max(best or score, score)
+    worst = math.min(worst or score, score)
+  end
+  if best == worst then return ranks end
+  for _, hospital in ipairs(list) do
+    local index = world:getHospitalIndex(hospital)
+    if scores[hospital] == best then ranks[index] = "leader" end
+    if scores[hospital] == worst then ranks[index] = "last" end
+  end
+  return ranks
+end
+
+local function tellAll(world, text)
+  MultiplayerSession.tellOthers(world, nil, text)
+end
+
+--! The trick of month `month`, or nil (before the rotation starts).
+function levels.trickOfTheMonth(month)
+  if month < TRICK_ROTATION_FROM then return nil end
+  return TRICK_ROTATION[(month - TRICK_ROTATION_FROM) % #TRICK_ROTATION + 1]
+end
+
+--! The price factor of a trick for `buyer` this month on a level with its
+--! own trick rules (1 elsewhere).
+function levels.trickPriceFactor(world, buyer, kind)
+  local state = world.mp_level_events
+  if not (world.map.level_config.mp_tricks and state) then return 1 end
+  local factor = 1
+  -- (By the date: the notice of the month comes at the end of its first day.)
+  if world.mp_coop and world.mp_coop.competitive and
+      levels.trickOfTheMonth(world.game_date:monthOfGame()) == kind then
+    factor = factor * PRICE_OF_THE_MONTH
+  end
+  local rank = state.ranks and state.ranks[world:getHospitalIndex(buyer)]
+  if rank == "last" then factor = factor * PRICE_LAST
+  elseif rank == "leader" then factor = factor * PRICE_LEADER end
+  return factor
+end
+
+--! A race emergency for every hospital still waiting for this month's.
+local function sendRaceEmergency(world, state)
+  local race = state.race
+  for index = 1, world.mp_coop.players do
+    local hospital = world.hospitals[index]
+    if race.pending[index] and not hospital.mp_place and not busy(hospital) then
+      local emergency = makeEmergency(race.disease, race.spec)
+      emergency.victims = race.victims
+      emergency.mp_race = race.month
+      if startEmergency(hospital, emergency) then race.pending[index] = nil end
+    end
+  end
+end
+
+--! A race emergency ended in `hospital` (Hospital:resolveEmergency): the
+--! first to save every patient gets the bonus.
+function levels.raceEmergencyResolved(hospital, emergency)
+  local world = hospital.world
+  local race = world.mp_level_events and world.mp_level_events.race
+  if not race or race.month ~= emergency.mp_race or race.winner then return end
+  if emergency.cured_emergency_patients < emergency.victims then return end
+  race.winner = world:getHospitalIndex(hospital)
+  hospital:receiveMoney(RACE_BONUS, _S.multiplayer_window.level7_race_bonus)
+  hospital:changeReputation(nil, nil, RACE_REPUTATION)
+  tellAll(world, _S.multiplayer_window.level7_race_won:format(hospital.name, RACE_BONUS))
+end
+
+--! The first hospital to discover one of the BREAKTHROUGHS (not by
+--! espionage, sabotage.spy) gets a bonus.
+local function checkBreakthroughs(world, state)
+  for _, id in ipairs(BREAKTHROUGHS) do
+    local object = TheApp.objects and TheApp.objects[id]
+    if state.breakthroughs[id] == nil then
+      -- Open only when it is still to be researched by every hospital.
+      local open = object ~= nil
+      for index = 1, world.mp_coop.players do
+        local progress = object and world.hospitals[index].research.research_progress[object]
+        if not progress or progress.discovered then open = false end
+      end
+      state.breakthroughs[id] = open and "open" or false
+    end
+    if state.breakthroughs[id] == "open" then
+      for _, hospital in ipairs(racing(world)) do
+        local progress = hospital.research.research_progress[object]
+        local spied = hospital.mp_spied and hospital.mp_spied[id]
+        if state.breakthroughs[id] == "open" and progress and progress.discovered and not spied then
+          state.breakthroughs[id] = world:getHospitalIndex(hospital)
+          hospital:receiveMoney(BREAKTHROUGH_BONUS, _S.multiplayer_window.level7_breakthrough_bonus)
+          hospital:changeReputation(nil, nil, BREAKTHROUGH_REPUTATION)
+          tellAll(world, _S.multiplayer_window.level7_breakthrough:format(hospital.name,
+              object.name, BREAKTHROUGH_BONUS))
+        end
+      end
+    end
+  end
+end
+
+--! The quarter's best: the hospital that cured the most since the last one.
+local function quarterRanking(world, state)
+  local best, winners = 0, {}
+  for _, hospital in ipairs(racing(world)) do
+    local index = world:getHospitalIndex(hospital)
+    local cured = (hospital.num_cured or 0) - (state.quarter_start[index] or 0)
+    if cured > best then best, winners = cured, {hospital}
+    elseif cured == best and cured > 0 then winners[#winners + 1] = hospital end
+  end
+  for _, hospital in ipairs(winners) do
+    hospital:changeReputation(nil, nil, QUARTER_REPUTATION)
+    tellAll(world, _S.multiplayer_window.level7_quarter:format(hospital.name, best))
+  end
+  for index = 1, world.mp_coop.players do
+    state.quarter_start[index] = world.hospitals[index].num_cured or 0
+  end
+end
+
+local function isIn(list, value)
+  for _, v in ipairs(list) do if v == value then return true end end
+  return false
+end
+
+--! Level 7's events, at the end of every day.
+local function cutthroatDay(world)
+  local state = world.mp_level_events
+  if not state then
+    state = {breakthroughs = {}, quarter_start = {}}
+    for index = 1, world.mp_coop.players do
+      state.quarter_start[index] = world.hospitals[index].num_cured or 0
+    end
+    world.mp_level_events = state
+  end
+  local competitive = world.mp_coop.competitive
+  local date = world.game_date
+  local month, day = date:monthOfGame(), date:dayOfMonth()
+  if state.month ~= month then
+    state.month = month
+    state.waiting = 0
+    state.emergency_days = {}
+    for i = 1, math.min(world.mp_coop.players, #EMERGENCY_DAYS) do
+      state.emergency_days[i] = between(EMERGENCY_DAYS[i])
+    end
+    if competitive then
+      state.ranks = rankRace(world)
+      state.trick_of_month = levels.trickOfTheMonth(month)
+      if month == TRICK_ROTATION_FROM then tellAll(world, _S.multiplayer_window.level7_truce_over) end
+      if state.trick_of_month then
+        tellAll(world, _S.multiplayer_window.level7_trick_of_month:format(
+            _S.multiplayer_window["sabotage_" .. state.trick_of_month]))
+      end
+    end
+    if isIn(JOB_FAIRS, month) then tellAll(world, _S.multiplayer_window.level7_job_fair) end
+    if month > 1 and (month - 1) % 3 == 0 then quarterRanking(world, state) end
+  end
+  if day == 25 and isIn(JOB_FAIRS, month + 1) then
+    tellAll(world, _S.multiplayer_window.level7_job_fair_soon)
+  end
+  -- The first year's emergencies, each hospital in turn (not in a month of
+  -- a race emergency).
+  if month >= CUTTHROAT_PHASES[1].from and month <= CUTTHROAT_EMERGENCY_LAST_MONTH and
+      not isIn(RACE_EMERGENCY_MONTHS, month) then
+    for _, d in ipairs(state.emergency_days) do
+      if day == d then state.waiting = (state.waiting or 0) + 1 end
+    end
+    while (state.waiting or 0) > 0 and sendEmergency(world, month, CUTTHROAT_PHASES) do
+      state.waiting = state.waiting - 1
+    end
+  end
+  -- A race emergency: the same one for every hospital (one busy then gets
+  -- it as soon as it is free, until the month ends).
+  if isIn(RACE_EMERGENCY_MONTHS, month) and day == RACE_EMERGENCY_DAY then
+    local emergency = pickEmergency(world, math.max(month, CUTTHROAT_PHASES[#CUTTHROAT_PHASES].from),
+        CUTTHROAT_PHASES)
+    if emergency then
+      local spec = {min = emergency.victims, max = emergency.victims, win = emergency.percentage * 100,
+          bonus = emergency.bonus}
+      state.race = {month = month, disease = emergency.disease, spec = spec, victims = emergency.victims,
+          pending = {}}
+      for index = 1, world.mp_coop.players do state.race.pending[index] = true end
+      tellAll(world, _S.multiplayer_window.level7_race_emergency:format(RACE_BONUS))
+    end
+  end
+  if state.race and state.race.month == month then sendRaceEmergency(world, state) end
+  checkBreakthroughs(world, state)
+end
+
+--! The level's events, at the end of every day (World:onEndDay).
+function levels.onEndDay(world)
+  if not world.mp_coop then return end
+  local events = world.map.level_config.mp_events
+  if events ~= "emergency" and events ~= "cutthroat" then return end
+  corsixth.require("mp_session")
+  if events == "emergency" then emergencyDay(world) else cutthroatDay(world) end
 end
 
 return levels

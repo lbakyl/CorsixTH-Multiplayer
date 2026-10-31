@@ -1306,6 +1306,31 @@ local function run()
               session.step, tostring(win.status_panel and win.status_panel.label),
               spy and (" (picked " .. table.concat(picked, ", ") .. ")") or ""))
           win:close()
+        elseif a == "trickprices" then
+          -- Level 7 and others: what each trick (level 1 and 3) costs this
+          -- player now, why it is refused against hospital <arg>, the trick
+          -- of the month, and the specialists on the hiring list.
+          local sabotage = MultiplayerSession.sabotage
+          local mine, target = world.ui.hospital, world.hospitals[tonumber(entry.arg) or 2]
+          local parts = {}
+          for _, kind in ipairs(sabotage.KINDS) do
+            local why = sabotage.refusal(world, mine, target, kind, 1)
+            parts[#parts + 1] = string.format("%s=%d/%d%s", kind, sabotage.price(world, mine, kind, 1),
+                sabotage.price(world, mine, kind, 3), why and ("(" .. why .. ")") or "")
+          end
+          local pool = world.available_staff.Doctor or {}
+          local cons, spec = 0, 0
+          for _, profile in ipairs(pool) do
+            if profile.is_consultant then cons = cons + 1 end
+            if profile.is_surgeon == 1 or profile.is_psychiatrist == 1 or profile.is_researcher == 1 then
+              spec = spec + 1
+            end
+          end
+          local state = world.mp_level_events or {}
+          log(string.format("UI: tricks at step %d, month %d: %s; of the month %s; rank %s; doctors %d, consultants %d, specialists %d; quake month %s",
+              session.step, world.game_date:monthOfGame(), table.concat(parts, " "), tostring(state.trick_of_month),
+              tostring(state.ranks and state.ranks[world:getHospitalIndex(mine)]), #pool, cons, spec,
+              tostring(world.earthquake and world.earthquake.start_month)))
         elseif a == "kickevil" then
           -- Find a rival's evil handyman in this hospital and press the sack
           -- button of his staff window (then OK). Look again later if none yet.

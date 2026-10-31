@@ -115,7 +115,15 @@ describe("Multiplayer levels", function()
     _G.MultiplayerSession = {tellPlayer = function() end, tellOthers = function(world, _, text)
       world.told[#world.told + 1] = {text = text, month = world.game_date:monthOfGame()}
     end}
-    _G._S = {multiplayer_window = {level_rats_notice = "rats", level_slack_tongue_warning = "slack"}}
+    _G._S = {multiplayer_window = {level_rats_notice = "rats", level_slack_tongue_warning = "slack",
+        level7_truce_over = "truce over", level7_trick_of_month = "trick %s", level7_job_fair_soon = "fair soon",
+        level7_job_fair = "fair", level7_race_emergency = "race %d", level7_race_won = "won %s %d",
+        level7_race_bonus = "race bonus", level7_breakthrough = "breakthrough %s %s %d",
+        level7_breakthrough_bonus = "breakthrough bonus", level7_quarter = "quarter %s %d"}}
+    for _, kind in ipairs({"rats", "smear", "boiler", "handyman", "epidemic", "espionage", "emergency",
+        "headhunter"}) do
+      _S.multiplayer_window["sabotage_" .. kind] = kind
+    end
     corsixth.require = function() end
   end)
   after_each(function()
@@ -128,7 +136,8 @@ describe("Multiplayer levels", function()
     assert.equal("net44", levels.levelId(4, 5))
     assert.equal("net32", levels.levelId(3, 3))
     assert.equal("net42_6", levels.levelId(4, 6))
-    assert.equal("net22_6", levels.levelId(1, 9)) -- (2 to 4 players, levels 1 to 6)
+    assert.equal("net23_7", levels.levelId(1, 9)) -- (2 to 4 players, levels 1 to 7)
+    assert.equal("net33_7", levels.levelId(3, 7)) -- level 7 on map 3
     local players, digits, level = levels.parseLevelId("net42_6")
     assert.equal(4, players)
     assert.equal("42", digits)
@@ -352,6 +361,182 @@ describe("Multiplayer levels", function()
     end
     assert.truthy(#swarms >= 4 and #swarms <= 8)
     for i, swarm in ipairs(swarms) do assert.equal(2 - i % 2, swarm.hospital) end
+  end)
+
+  -- Level 7, "Cutthroat" ------------------------------------------------------
+
+  local function cutthroat_world(players, competitive)
+    local world = fake_world(players)
+    world.map.level_config.mp_events = "cutthroat"
+    world.map.level_config.mp_tricks = {}
+    world.mp_coop.competitive = competitive
+    for index, hospital in ipairs(world.hospitals) do
+      hospital.research.research_progress = {}
+      hospital.world = world
+      hospital.name = "H" .. index
+      hospital.money, hospital.rep = 0, 0
+      function hospital:receiveMoney(amount) self.money = self.money + amount end
+      function hospital:changeReputation(_, _, amount) self.rep = self.rep + amount end
+    end
+    function world:getHospitalIndex(hospital) return hospital.index end
+    return world
+  end
+
+  it("gives level 7 its tricks, staff, machines, fines and earthquakes", function()
+    local campaign = {emergency_control = {[0] = {StartMonth = 6, EndMonth = 8}}, popn = {},
+        objects = {{StartStrength = 10}, {StartStrength = 8}, {StartStrength = 1}}}
+    local config = {gbv = {EpidemicFine = 2000}}
+    levels.apply(config, campaign, 7, 3)
+    assert.equal(7, config.mp_level)
+    assert.equal("cutthroat", config.mp_events)
+    assert.equal(0, config.emergency_control[0].EndMonth)
+    assert.equal(650, config.win_criteria[0].Value)
+    assert.equal(3, config.mp_tricks.unlock.rats)
+    assert.equal(9, config.mp_tricks.unlock.headhunter)
+    assert.equal(13, config.mp_tricks.top_level_month)
+    assert.equal(100, config.mp_rat_bounty)
+    assert.equal(4000, config.gbv.EpidemicFine)
+    -- Machines last three quarters as long (at least 1).
+    assert.equal(7, config.objects[1].StartStrength)
+    assert.equal(6, config.objects[2].StartStrength)
+    assert.equal(1, config.objects[3].StartStrength)
+    -- Four earthquakes, each stronger than the last, in order.
+    local quakes = config.quake_control
+    for i = 0, 3 do
+      assert.equal(i + 2, quakes[i].Severity)
+      if i > 0 then assert.truthy(quakes[i].StartMonth > quakes[i - 1].EndMonth) end
+    end
+    assert.is_nil(quakes[4])
+    -- Job fairs: the lists for months 4, 10, 16 and 22 (entries 3, 9, 15
+    -- and 21) have the specialists; the others few, and half juniors.
+    local fair_months = {}
+    for i = 0, #config.staff_levels do
+      local entry = config.staff_levels[i]
+      if entry.ConsRate > 0 then
+        fair_months[#fair_months + 1] = entry.Month + 1
+        assert.equal(0, entry.JrRate)
+        assert.equal(2, entry.SurgRate)
+      else
+        assert.equal(2, entry.JrRate)
+        assert.equal(10, entry.SurgRate)
+      end
+      assert.truthy(entry.Receptionists >= 3 and entry.Handymen >= 3)
+    end
+    assert.same({4, 10, 16, 22}, fair_months)
+  end)
+
+  it("names a trick of the month from March, round and round", function()
+    assert.is_nil(levels.trickOfTheMonth(2))
+    assert.equal("rats", levels.trickOfTheMonth(3))
+    assert.equal("headhunter", levels.trickOfTheMonth(10))
+    assert.equal("rats", levels.trickOfTheMonth(11))
+  end)
+
+  it("prices tricks by the month's trick and the place in the race", function()
+    local world = cutthroat_world(3, true)
+    world.game_date = Date(1, 3, 1) -- March: rats are the trick of the month
+    world.mp_level_events = {ranks = {[1] = "leader", [3] = "last"}}
+    local h = world.hospitals
+    assert.equal(1.5, levels.trickPriceFactor(world, h[1], "boiler"))
+    assert.equal(0.75, levels.trickPriceFactor(world, h[1], "rats"))
+    assert.equal(1, levels.trickPriceFactor(world, h[2], "boiler"))
+    assert.equal(0.5, levels.trickPriceFactor(world, h[2], "rats"))
+    assert.equal(0.25, levels.trickPriceFactor(world, h[3], "rats"))
+    world.map.level_config.mp_tricks = nil -- other levels
+    assert.equal(1, levels.trickPriceFactor(world, h[3], "rats"))
+  end)
+
+  it("sends level 7's emergencies: one a month each, and race emergencies", function()
+    local world = cutthroat_world(2, true)
+    play(world, 365)
+    local per_month, race = {}, {}
+    for _, e in ipairs(world.emergencies) do
+      if e.emergency.mp_race then
+        race[#race + 1] = e
+      else
+        per_month[e.month] = (per_month[e.month] or 0) + 1
+      end
+    end
+    assert.is_nil(per_month[1])
+    for month = 2, 12 do
+      if month == 8 then
+        assert.is_nil(per_month[8]) -- the race emergency's month
+      else
+        assert.equal(2, per_month[month], "month " .. month)
+      end
+    end
+    -- The race emergency: the same disease and victims for both, on 3 August.
+    assert.equal(2, #race)
+    assert.equal(race[1].emergency.disease, race[2].emergency.disease)
+    assert.equal(race[1].emergency.victims, race[2].emergency.victims)
+    assert.equal(8, race[1].month)
+    assert.equal(3, race[1].day)
+    assert.truthy(race[1].hospital ~= race[2].hospital)
+    -- The first to save every patient gets the bonus, the second nothing.
+    local h1, h2 = world.hospitals[race[1].hospital], world.hospitals[race[2].hospital]
+    local e1, e2 = race[1].emergency, race[2].emergency
+    e2.cured_emergency_patients = e2.victims - 1
+    levels.raceEmergencyResolved(h2, e2) -- one lost: no bonus
+    e1.cured_emergency_patients = e1.victims
+    levels.raceEmergencyResolved(h1, e1)
+    e2.cured_emergency_patients = e2.victims
+    levels.raceEmergencyResolved(h2, e2) -- (too late anyway)
+    assert.equal(10000, h1.money)
+    assert.equal(20, h1.rep)
+    assert.equal(0, h2.money)
+    -- Told: the truce's end in March, a trick of the month from March, the
+    -- job fair (soon, then open) in April and October.
+    local texts = {}
+    for _, t in ipairs(world.told) do texts[#texts + 1] = t.month .. ":" .. t.text end
+    local all = table.concat(texts, "|")
+    assert.truthy(all:find("3:truce over", 1, true))
+    assert.truthy(all:find("3:trick rats", 1, true))
+    assert.truthy(all:find("10:trick headhunter", 1, true))
+    assert.truthy(all:find("3:fair soon", 1, true))
+    assert.truthy(all:find("4:fair", 1, true))
+    assert.truthy(all:find("10:fair", 1, true))
+    assert.truthy(all:find("8:race 10000", 1, true))
+  end)
+
+  it("plays level 7 in co-op without the tricks' notices", function()
+    local world = cutthroat_world(2, false)
+    play(world, 120)
+    for _, t in ipairs(world.told) do
+      assert.falsy(t.text:find("trick", 1, true) or t.text:find("truce", 1, true))
+    end
+    assert.truthy(#world.emergencies > 0)
+  end)
+
+  it("rewards the first discovery of a breakthrough machine, not a stolen one", function()
+    local world = cutthroat_world(2, true)
+    local xray = {id = "x_ray", name = "X-ray"}
+    TheApp.objects = {x_ray = xray}
+    for _, h in ipairs(world.hospitals) do h.research.research_progress[xray] = {discovered = false} end
+    play(world, 5)
+    -- Hospital 2 steals it from hospital 1 the day hospital 1 discovers it.
+    world.hospitals[1].research.research_progress[xray].discovered = true
+    world.hospitals[2].research.research_progress[xray].discovered = true
+    world.hospitals[2].mp_spied = {x_ray = true}
+    play(world, 1)
+    assert.equal(10000, world.hospitals[1].money)
+    assert.equal(0, world.hospitals[2].money)
+    play(world, 30)
+    assert.equal(10000, world.hospitals[1].money) -- once only
+    TheApp.objects = nil
+  end)
+
+  it("ranks the quarter by patients cured", function()
+    local world = cutthroat_world(3, true)
+    play(world, 1)
+    world.hospitals[1].num_cured, world.hospitals[2].num_cured, world.hospitals[3].num_cured = 10, 25, 3
+    play(world, 95) -- into April
+    assert.equal(15, world.hospitals[2].rep)
+    assert.equal(0, world.hospitals[1].rep)
+    -- The next quarter counts from April.
+    world.hospitals[1].num_cured = 40
+    play(world, 92) -- into July
+    assert.equal(15, world.hospitals[1].rep)
+    assert.equal(15, world.hospitals[2].rep)
   end)
 
   it("does nothing on the other levels", function()

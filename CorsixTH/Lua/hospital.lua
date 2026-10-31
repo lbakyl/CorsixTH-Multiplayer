@@ -1200,6 +1200,8 @@ function Hospital:resolveEmergency()
     self:changeReputation("emergency_failed", emer.disease)
   end
 
+  -- Level 7's race emergency: the first to save every patient gets a bonus.
+  if emer.mp_race then corsixth.require("mp_levels").raceEmergencyResolved(self, emer) end
   -- Multiplayer co-op asks the hospital whether an emergency is under way
   -- (World:onEndDay), so it must end here.
   if self.world.mp_coop then self.emergency = nil end

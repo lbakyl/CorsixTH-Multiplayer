@@ -73,7 +73,8 @@ function UIMultiplayerSabotage:UIMultiplayerSabotage(ui, target)
     local prices = sabotage.PRICES[kind]
     local x0 = 20 + NAME_W + 8
     local w = math.floor((WIDTH - 20 - x0 - 6 * (#prices - 1)) / #prices)
-    for level, price in ipairs(prices) do
+    for level in ipairs(prices) do
+      local price = sabotage.price(self.world, self.hospital, kind, level)
       self:addBevelPanel(x0 + (level - 1) * (w + 6), y, w, 26, col.button)
           :setLabel(S.sabotage_level:format(level, price))
           :makeButton(0, 0, w, 26, nil, function() self:choose(kind, level) end)
@@ -134,7 +135,7 @@ function UIMultiplayerSabotage:choose(kind, level)
   end
   self.chosen_kind, self.chosen_level = kind, level
   self.info = S["sabotage_" .. kind] .. " L" .. level .. ": " .. S.sabotage_levels[kind][level]
-  self:setStatus(S.sabotage_again:format(level, MultiplayerSession.sabotage.PRICES[kind][level]))
+  self:setStatus(S.sabotage_again:format(level, MultiplayerSession.sabotage.price(self.world, self.hospital, kind, level)))
 end
 
 function UIMultiplayerSabotage:setStatus(text)
@@ -214,7 +215,7 @@ function UIMultiplayerSpy:UIMultiplayerSpy(ui, tricks, level)
   self.status_panel.lowered = true
   self.status_panel:setLabel(S.sabotage_spy_pick)
   self:addBevelPanel(20, height - 45, 200, 30, col.button)
-      :setLabel(S.sabotage_spy_steal:format(sabotage.PRICES.espionage[level]))
+      :setLabel(S.sabotage_spy_steal:format(sabotage.price(self.world, self.hospital, "espionage", level)))
       :makeButton(0, 0, 200, 30, nil, self.steal)
   self:addBevelPanel(SPY_WIDTH - 140, height - 45, 120, 30, col.button):setLabel(S.sabotage_close)
       :makeButton(0, 0, 120, 30, nil, self.close)

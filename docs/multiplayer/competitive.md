@@ -123,6 +123,27 @@ done (`spendMoney`, "Dirty tricks"). Prices in `sabotage.PRICES`.
   with the command (`items`, ";"-separated); the handler takes those still
   stealable, or refuses. Bots send none and get them at random.
 
+## Level 7, Cutthroat (mp_levels.lua)
+A level made for the race (`scenario = "cutthroat"`, `config.mp_events`).
+Its rules for the tricks are data in the level config, read by
+`mp_sabotage.lua`; other levels have none and are unchanged.
+- `config.mp_tricks = {unlock, top_level_month}`: `sabotage.unlockMonth`
+  and the refusal "not on this level before month N" (handler and window).
+- `sabotage.price(world, buyer, kind, level)` is the price everywhere (the
+  window, the handler, bots): `PRICES` times `mp_levels.trickPriceFactor`,
+  which halves the trick of the month (`levels.trickOfTheMonth`) and applies
+  the place in the race (`world.mp_level_events.ranks`, set on the 1st of a
+  month by `rankRace`: the average share of each win goal reached).
+- Events in `cutthroatDay` (World:onEndDay): the first year's emergencies,
+  race emergencies (`emergency.mp_race`; `Hospital:resolveEmergency` calls
+  `levels.raceEmergencyResolved`), breakthroughs (`hospital.mp_spied` marks a
+  discovery copied by espionage), quarterly rankings, notices.
+- `config.mp_rat_bounty`: `handlers.shoot_rat` pays it for an attack rat.
+- Applied at load: job fair hiring lists (`staff_levels`), machine strength
+  x 3/4, `gbv.EpidemicFine` x 2, `quake_control` (four earthquakes).
+Tests: `mp_levels_spec.lua`; the probe action `trickprices` logs prices,
+refusals, the trick of the month, the rank and the hiring list.
+
 ## Window and Progress Report
 
 - Rivals' hospitals are closed to the mouse: `GameUI:_isRivals` drops a

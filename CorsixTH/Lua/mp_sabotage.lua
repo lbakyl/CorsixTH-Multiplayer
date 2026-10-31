@@ -101,6 +101,26 @@ local function log(text)
   if session then session.log(string.format("sabotage (step %d): %s", session.step, text)) end
 end
 
+--! What a trick costs `buyer` now: its price, changed on a level with its
+--! own trick rules (level 7: the trick of the month, the last and the
+--! leader of the race, mp_levels.trickPriceFactor), in whole $100.
+function sabotage.price(world, buyer, kind, level)
+  local price = sabotage.PRICES[kind][level]
+  local factor = corsixth.require("mp_levels").trickPriceFactor(world, buyer, kind)
+  if factor == 1 then return price end
+  return math.floor(price * factor / 100 + 0.5) * 100
+end
+
+--! The month of the game from which a trick of `kind` at `level` can be
+--! bought (nil: from the start), on a level with its own trick rules.
+function sabotage.unlockMonth(world, kind, level)
+  local rules = world.map.level_config.mp_tricks
+  if not rules then return nil end
+  local month = rules.unlock and rules.unlock[kind]
+  if level == 3 and rules.top_level_month then month = math.max(month or 0, rules.top_level_month) end
+  return month
+end
+
 --! Why the buyer's hospital cannot play this trick on `target` now (nil: it can).
 function sabotage.refusal(world, buyer, target, kind, level)
   if not (world.mp_coop and world.mp_coop.competitive) then return "only in a competitive game" end
@@ -146,7 +166,11 @@ function sabotage.refusal(world, buyer, target, kind, level)
     if not target:hasReceptionDesk(true) then return "they have no staffed reception desk" end
     if not target:getHeliportSpawnPosition() then return "they have no helipad" end
   end
-  if buyer.balance < prices[level] then return "not enough money" end
+  local from = sabotage.unlockMonth(world, kind, level)
+  if from and world.game_date:monthOfGame() < from then
+    return string.format("not on this level before month %d", from)
+  end
+  if buyer.balance < sabotage.price(world, buyer, kind, level) then return "not enough money" end
   return nil
 end
 
@@ -177,7 +201,7 @@ function handlers.sabotage(world, cmd)
     ok, why = sabotage.sendEmergency(world, target, level)
   end
   if not ok then return false, why end
-  local price = sabotage.PRICES[kind][level]
+  local price = sabotage.price(world, buyer, kind, level)
   buyer:spendMoney(price, S().sabotage_transaction)
   log(string.format("hospital %d bought %s level %d against hospital %d",
       world:getHospitalIndex(buyer), kind, level, world:getHospitalIndex(target)))
@@ -804,6 +828,11 @@ function sabotage.spy(world, buyer, target, level, keys)
   local names = {}
   for _, item in ipairs(chosen) do
     MultiplayerSession.applyResearchItem(world, target, buyer, item)
+    -- (A discovery copied earns no breakthrough bonus: mp_levels.lua.)
+    if item.kind == "e" then
+      buyer.mp_spied = buyer.mp_spied or {}
+      buyer.mp_spied[item.object.id] = true
+    end
     names[#names + 1] = item.name
   end
   if level == 3 then
