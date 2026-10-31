@@ -130,6 +130,9 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   original game's multiplayer; a patient sent to another hospital changes
   to that one's), its patients and staff have a small bar of it at their
   feet, and its player's chat lines are a darker shade of it. The
+  **PLAYERS** window has a tab of each player's colour before their row,
+  and the windows that send, offer or ask something have tabs of the other
+  player's colour on both sides of their title. The
   **MULTIPLAYER** menu, **PLAYER COLOURS** shows the bars only for the
   other players' people (the default), for everybody, or not at all. On the town map, land on
   another player's side shows that player's name and "not for sale". The

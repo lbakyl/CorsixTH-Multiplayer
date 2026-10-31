@@ -211,6 +211,7 @@ end
 
 function UIMultiplayerResearch:draw(canvas, x_, y_)
   UIResizable.draw(self, canvas, x_, y_)
+  MultiplayerSession.drawTitleTabs(canvas, self, x_, y_, self.target)
   if not self.price_y then return end
   -- The filled part of the price bar and its handle.
   local s = TheApp.gfx:getUIScale()

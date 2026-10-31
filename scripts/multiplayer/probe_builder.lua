@@ -399,8 +399,10 @@ function builder.ui_hire(world, desk_x, desk_y, class, log)
   local dlg = UIHireStaff(ui)
   ui:addWindow(dlg)
   -- "Doctor:surgeon": the first doctor with that skill (surgeon,
-  -- psychiatrist, researcher, junior, consultant), else the first one.
-  local skill
+  -- psychiatrist, researcher, junior, consultant), else the first one;
+  -- "...@research": placed straight into this hospital's room of that kind.
+  local skill, at_room
+  class, at_room = class:match("^([^@]+)@?([%w_]*)$")
   class, skill = class:match("^(%a+):?(%a*)$")
   dlg:setCategory(class)
   local pool = world.available_staff[class]
@@ -434,6 +436,22 @@ function builder.ui_hire(world, desk_x, desk_y, class, log)
         end
       end
     end
+  end
+  if at_room ~= "" then
+    local found
+    for _, rm in pairs(world.rooms) do
+      if not found and rm.hospital == ui.hospital and rm.built and rm.room_info.id == at_room then
+        for y = rm.y + 1, rm.y + rm.height - 2 do
+          for x = rm.x + 1, rm.x + rm.width - 2 do
+            if not found then
+              place.tile_x, place.tile_y = x, y
+              found = place:_isValidStaffPlacement() and not world:getObject(x, y)
+            end
+          end
+        end
+      end
+    end
+    if not found then log("UI: no free tile in a " .. at_room .. " to hire into") end
   end
   tx, ty = place.tile_x, place.tile_y
   place.onMouseMove = function() end -- keep the tile we set (no real cursor)
@@ -1039,6 +1057,22 @@ function builder.register_handlers()
       local entry = h.disease_casebook[ids[1]]
       entry.cure_effectiveness = math.min(100, entry.cure_effectiveness + 10)
     end
+    return true
+  end
+  -- This hospital's staff of `class` become tired (fatigue `fatigue`);
+  -- stuck = 1: also marked as going to the staff room without heading there
+  -- (the state Staff:checkIfNeedRest repairs).
+  MultiplayerSession.default_handlers.probe_tire = function(w, cmd)
+    local h = w.hospitals[cmd.hospital or 1]
+    local n = 0
+    for _, s in ipairs(h.staff) do
+      if s.humanoid_class == cmd.class and not s.fired then
+        s.attributes.fatigue = tonumber(cmd.fatigue) or 0.95
+        if tonumber(cmd.stuck) == 1 then s.going_to_staffroom = true end
+        n = n + 1
+      end
+    end
+    if n == 0 then return false, "nobody to tire" end
     return true
   end
   MultiplayerSession.default_handlers.probe_raise = function(w, cmd)

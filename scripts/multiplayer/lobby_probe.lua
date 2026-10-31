@@ -1054,6 +1054,7 @@ local function run()
             shot("staffwindow-" .. entry.arg)
             win:sendToPlayer()
             local trade = world.ui:getWindow(UIMultiplayerTrade)
+            if trade then shot("trade-" .. entry.arg) end
             log(string.format("UI: staff window of %s at step %d: send icon opens the trade window: %s, selected: %s",
                 entry.arg, session.step, tostring(trade ~= nil),
                 tostring(trade and trade.selected and trade.selected.staff == member)))
@@ -1615,10 +1616,14 @@ local function run()
         elseif a == "movestaff" or a == "whereis" then
           -- movestaff: right-click the first member of staff of that class,
           -- then click a free tile in one of this hospital's rooms (as a
-          -- person does). whereis: log where they are and in which room.
+          -- person does); "Doctor:research": the first one not in a room of
+          -- that kind yet, into one. whereis: log where they are and in which room.
+          local want_class, want_room = entry.arg:match("^(%a+):?([%w_]*)$")
           local st
           for _, s2 in ipairs(world.ui.hospital.staff) do
-            if not st and s2.humanoid_class == entry.arg and not s2.fired and s2.tile_x then st = s2 end
+            local r2 = s2.tile_x and s2:getRoom()
+            if not st and s2.humanoid_class == want_class and not s2.fired and s2.tile_x and
+                (want_room == "" or not (r2 and r2.room_info.id == want_room)) then st = s2 end
           end
           if not st then
             log("UI: no " .. entry.arg .. " to move")
@@ -1639,7 +1644,7 @@ local function run()
             local dest
             for _, rm in pairs(world.rooms) do
               if not dest and rm.hospital == world.ui.hospital and rm.built and not rm.crashed and
-                  rm ~= st:getRoom() then
+                  rm ~= st:getRoom() and (want_room == "" or rm.room_info.id == want_room) then
                 for ty = rm.y + 1, rm.y + rm.height - 2 do
                   for tx = rm.x + 1, rm.x + rm.width - 2 do
                     if not dest and win then
@@ -1662,6 +1667,25 @@ local function run()
               -- A click there in the placement window (as hiring does).
               builder.click_tile(world.ui, win, "left", dest[1], dest[2])
               if world.ui:getWindow(UIPlaceStaff) then log("UI: the placement window did not take the click") end
+            end
+          end
+        elseif a == "tire" then
+          -- Test only: this hospital's staff of class <arg> become tired (a
+          -- command, so in every game alike).
+          local tclass, stuck = entry.arg:match("^(%a+):?(%a*)$")
+          session:issue({kind = "probe_tire", class = tclass, fatigue = 0.95, stuck = stuck == "stuck" and 1 or 0})
+          log(string.format("UI: tired %s at step %d", entry.arg, session.step))
+        elseif a == "stafflog" then
+          -- Where this hospital's staff of class <arg> are, how tired, and
+          -- their staff room flags.
+          for _, s2 in ipairs(world.ui.hospital.staff) do
+            if s2.humanoid_class == entry.arg and not s2.fired then
+              local r2 = s2.tile_x and s2:getRoom()
+              local act = s2:getCurrentAction()
+              log(string.format("UI: staff %s #%s at step %d in %s, fatigue %.2f, action %s, needed %s going %s waiting %s",
+                  entry.arg, tostring(s2.mp_id), session.step, r2 and r2.room_info.id or "the_corridor",
+                  s2:getAttribute("fatigue") or -1, act and act.name or "-", tostring(s2.staffroom_needed),
+                  tostring(s2.going_to_staffroom), tostring(s2.waiting_for_staffroom)))
             end
           end
         elseif a == "players" then

@@ -1009,6 +1009,25 @@ function MultiplayerSession.markerColour(world, hospital)
   return MARKER_COLOURS[(index - 1) % #MARKER_COLOURS + 1]
 end
 
+--! A tab in a hospital's colour (a game with a hospital each), so a window
+--! shows whose it is: at (wx, wy), w x h, in the window's own coordinates.
+--! Nothing in other games.
+function MultiplayerSession.drawColourTab(canvas, window, x_, y_, hospital, wx, wy, w, h)
+  local world = TheApp.world
+  local c = hospital and world and world.mp_coop and MultiplayerSession.markerColour(world, hospital)
+  if not c then return end
+  local s = TheApp.gfx:getUIScale()
+  local x, y = window.x * s + x_ + wx * s, window.y * s + y_ + wy * s
+  canvas:drawRect(canvas:mapRGB(48, 32, 64), x, y, w * s, h * s)
+  canvas:drawRect(canvas:mapRGB(c[1], c[2], c[3]), x + s, y + s, (w - 2) * s, (h - 2) * s)
+end
+
+--! Colour tabs on both sides of a window's title (at 20, 10, 20 high).
+function MultiplayerSession.drawTitleTabs(canvas, window, x_, y_, hospital)
+  MultiplayerSession.drawColourTab(canvas, window, x_, y_, hospital, 6, 10, 10, 20)
+  MultiplayerSession.drawColourTab(canvas, window, x_, y_, hospital, window.width - 16, 10, 10, 20)
+end
+
 local icons -- (mp_icons.lua, loaded when first drawn)
 local icon_colours = setmetatable({}, {__mode = "k"}) -- canvas -> name -> mapped colours
 

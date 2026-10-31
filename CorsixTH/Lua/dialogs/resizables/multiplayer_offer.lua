@@ -127,6 +127,7 @@ end
 
 function UIMultiplayerOffer:draw(canvas, x_, y_)
   UIResizable.draw(self, canvas, x_, y_)
+  MultiplayerSession.drawTitleTabs(canvas, self, x_, y_, self.world.hospitals[self.offer.from])
   local entity = self.entity
   if self.face_parts and entity and entity.profile then
     local s = TheApp.gfx:getUIScale()
@@ -238,6 +239,7 @@ function UIMultiplayerChooseHospital:UIMultiplayerChooseHospital(ui, patient, fa
   self.default_button_sound = "selectx.wav"
   self:addBevelPanel(20, 10, 260, 20, col.title):setLabel(S.refer_choose).lowered = true
   local world = ui.app.world
+  self.world, self.others = world, others
   for i, index in ipairs(others) do
     local b = self:addBevelPanel(20, 4 + i * 36, 260, 30, col.button):setLabel(world.hospitals[index].name)
         :makeButton(0, 0, 260, 30, nil, self.choose)
@@ -245,6 +247,13 @@ function UIMultiplayerChooseHospital:UIMultiplayerChooseHospital(ui, patient, fa
   end
   self:addBevelPanel(160, height - 40, 120, 30, col.button):setLabel(S.trade_close)
       :makeButton(0, 0, 120, 30, nil, self.close)
+end
+
+function UIMultiplayerChooseHospital:draw(canvas, x_, y_)
+  UIResizable.draw(self, canvas, x_, y_)
+  for i, index in ipairs(self.others) do
+    MultiplayerSession.drawColourTab(canvas, self, x_, y_, self.world.hospitals[index], 6, 4 + i * 36, 10, 30)
+  end
 end
 
 function UIMultiplayerChooseHospital:choose(_, button)

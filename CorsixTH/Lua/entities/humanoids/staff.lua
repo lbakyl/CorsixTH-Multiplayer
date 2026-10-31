@@ -415,6 +415,47 @@ function Staff:checkIfNeedRest()
       end
     end
 
+    -- Repair flags that lost their reason (seen in multiplayer: a researcher
+    -- stayed at work, tired, for good). going_to_staffroom must come with a
+    -- seek_staffroom action in the queue (see goToStaffRoom); something that
+    -- replaced the queue, as a researcher's work cycle does, can drop it.
+    -- And a staff room may be there to rest in without a new one being built
+    -- (one that was being edited, say): look again every 100 ticks.
+    if self.going_to_staffroom then
+      local seeking = false
+      for _, queued in ipairs(self.action_queue) do
+        if queued.name == "seek_staffroom" then seeking = true end
+      end
+      if not seeking then
+        print(("Staff %s: going to the staff room without heading there; sent again")
+            :format(tostring(self.mp_id or self.profile.name)))
+        self.going_to_staffroom = nil
+      end
+    end
+    if self.waiting_for_staffroom then
+      self.staffroom_recheck = (self.staffroom_recheck or 0) + 1
+      if self.staffroom_recheck >= 100 then
+        self.staffroom_recheck = nil
+        if self.world:findRoomNear(self, "staff_room") then
+          print(("Staff %s: waited for a staff room while one was there; sent")
+              :format(tostring(self.mp_id or self.profile.name)))
+          self.waiting_for_staffroom = false
+        end
+      end
+    end
+
+    -- Still tired at work long after it should have gone: say why, once (a
+    -- line in the server's referee log, to find the cause).
+    self.tired_at_work = (self.tired_at_work or 0) + 1
+    if self.tired_at_work == 3000 and room then
+      local names = {}
+      for _, queued in ipairs(self.action_queue) do names[#names + 1] = queued.name end
+      print(("Staff %s tired in %s for 3000 ticks: fatigue %.2f, waiting %s, needed %s, going %s, patient %s, actions %s")
+          :format(tostring(self.mp_id or self.profile.name), room.room_info.id, self:getAttribute("fatigue"),
+          tostring(self.waiting_for_staffroom), tostring(self.staffroom_needed),
+          tostring(self.going_to_staffroom), tostring(room:getPatient() ~= nil), table.concat(names, ",")))
+    end
+
     -- Abort if waiting for a staffroom to be built, waiting for the patient to leave,
     -- already going to staffroom or being picked up
     if self.waiting_for_staffroom or self.staffroom_needed or
@@ -434,6 +475,8 @@ function Staff:checkIfNeedRest()
     else
       self:goToStaffRoom()
     end
+  else
+    self.tired_at_work = nil
   end
 end
 

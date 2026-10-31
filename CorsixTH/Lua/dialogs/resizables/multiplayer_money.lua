@@ -127,6 +127,7 @@ end
 
 function UIMultiplayerAskMoney:draw(canvas, x_, y_)
   UIResizable.draw(self, canvas, x_, y_)
+  MultiplayerSession.drawTitleTabs(canvas, self, x_, y_, self.target)
   if not self.bar then return end
   local s = TheApp.gfx:getUIScale()
   local x, y = self.x * s + x_, self.y * s + y_

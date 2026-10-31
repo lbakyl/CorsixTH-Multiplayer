@@ -111,6 +111,7 @@ function UIMultiplayerPlayers.rows(lobby, session, world)
       status = S.players_playing
     end
     rows[#rows + 1] = {
+      hospital_entity = hospital, -- (its colour tab)
       name = p.name,
       hospital = hospital and hospital.name or "-",
       ping = (p.connected and p.rtt >= 0) and S.players_ms:format(p.rtt) or "-",
@@ -140,6 +141,16 @@ function UIMultiplayerPlayers:refresh()
     self.cells[1].status:setLabel(_S.multiplayer_window.players_waiting)
   end
   self.shown_list = TheApp.mp_lobby and TheApp.mp_lobby.game_players
+  self.row_hospitals = {}
+  for row = 1, MAX_ROWS do self.row_hospitals[row] = rows[row] and rows[row].hospital_entity end
+end
+
+--! Each player's colour (a game with a hospital each) in a tab before the row.
+function UIMultiplayerPlayers:draw(canvas, x_, y_)
+  UIResizable.draw(self, canvas, x_, y_)
+  for row = 1, MAX_ROWS do
+    MultiplayerSession.drawColourTab(canvas, self, x_, y_, self.row_hospitals[row], 6, 40 + row * 25, 10, 23)
+  end
 end
 
 function UIMultiplayerPlayers:onTick()

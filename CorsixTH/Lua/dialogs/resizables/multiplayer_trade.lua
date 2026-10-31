@@ -132,6 +132,11 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
 end
 
 --! The next player hospital after `current` (wrapping), other than ours.
+function UIMultiplayerTrade:draw(canvas, x_, y_)
+  UIResizable.draw(self, canvas, x_, y_)
+  MultiplayerSession.drawTitleTabs(canvas, self, x_, y_, self.target)
+end
+
 function UIMultiplayerTrade:_nextTarget(current)
   local hospitals = self.world.hospitals
   local n = self.world.mp_coop and self.world.mp_coop.players or 1
