@@ -34,6 +34,13 @@ local function meander_action_start(action, humanoid)
   if class.is(humanoid, Staff) and humanoid:isIdle() and not room then
     if class.is(humanoid, Handyman) then
       if humanoid:searchForHandymanTask() == true then
+        -- The task goes after a meander that must happen (one queued to
+        -- leave a room's blueprint, Humanoid:leaveArea): finish it, or it
+        -- stays the current action with nothing to end it, and the handyman
+        -- stands there for good (seen in multiplayer, rooms drawn over them).
+        if humanoid:getCurrentAction() == action then
+          humanoid:finishAction()
+        end
         return
       end
 

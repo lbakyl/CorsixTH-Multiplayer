@@ -986,6 +986,14 @@ end
 -- Check if it is cold or hot around the humanoid and increase/decrease the
 -- feeling of warmth accordingly. Returns whether the calling function should proceed.
 function Humanoid:tickDay()
+  -- A meander told to stop (todo_interrupt) with no timer to run it is stuck
+  -- for good (a running meander always has a walk or idle in front of it):
+  -- finish it. Games saved with a handyman frozen that way (MeanderAction,
+  -- searchForHandymanTask behind a meander that must happen) recover too.
+  local current = self.action_queue[1]
+  if current and current.name == "meander" and current.todo_interrupt and not self.timer_time then
+    self:finishAction()
+  end
   -- No use doing anything if we're going home/fired (or dead)
   if self.going_home or self.going_to_die or self.dead then
     return false
