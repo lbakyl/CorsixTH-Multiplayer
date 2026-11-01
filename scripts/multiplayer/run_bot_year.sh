@@ -8,6 +8,10 @@
 # hospital manager, bot_manager.lua; "manager" is the manager without the
 # server's advice). With ANTHROPIC_API_KEY set (and the anthropic package
 # for MP_PYTHON) the "smart" bots get the language model's advice.
+# MP_YEAR_REALTIME=1 plays at Normal speed in real time, as with people (a
+# game year takes about 17 minutes), so the advice comes as often as it would
+# in a real game (once a game month); otherwise everything runs as fast as it
+# can.
 # Both play STEPS lockstep steps (default 18000, about a game year) as fast
 # as they can; every 3000 steps the watcher logs every hospital (rooms,
 # staff, money, reputation, value, cures, deaths, goals). Prints the two
@@ -47,7 +51,10 @@ export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_
 export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/headless"
 export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
 export MP_REFEREE_PROBE_SCENARIO="${scenarios#;}"
-MP_BOT_BRAIN="${brains#;}" MP_BOT_FAST=1 MP_BOT_SEED="${MP_BOT_SEED:-7}" CORSIXTH_MP_AI_STATE="$out/ai-spend.json" \
+realtime=${MP_YEAR_REALTIME:-0}
+bot_fast=1 watch="MP_FAST=1" first=""
+if [[ "$realtime" == 1 ]]; then bot_fast=0 watch="MP_FAST=0 MP_REALTIME=1" first="5:speed:Normal;"; fi
+MP_BOT_BRAIN="${brains#;}" MP_BOT_FAST=$bot_fast MP_BOT_SEED="${MP_BOT_SEED:-7}" CORSIXTH_MP_AI_STATE="$out/ai-spend.json" \
   PYTHONPATH="$source_dir/mp_server" "$python" -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
 server_pid=$!
@@ -63,8 +70,8 @@ run_watcher() { # name room
   printf 'theme_hospital_install = [[%s]]\nsavegames = [[%s]]\nplayer_name = "%s"\nlanguage = [[English]]\naudio = false\nplay_intro = false\nmovies = false\ngrant_wage_increase = false\n' \
     "$game_data" "$dir/saves" "$name" > "$dir/config.txt"
   env XDG_CONFIG_HOME="$dir/config" MP_NAME="$name" MP_ROLE=host MP_ROOM="$room" MP_MODE=coop MP_LEVEL="$level" \
-    MP_PLAYERS=2 MP_ADD_BOTS=1 MP_SCENARIO=none MP_STEPS="$steps" MP_STALL_LIMIT=300 \
-    MP_UI_SCRIPT="${script#;}" timeout 5400 "$binary" \
+    MP_PLAYERS=2 MP_ADD_BOTS=1 MP_SCENARIO=none MP_STEPS="$steps" MP_STALL_LIMIT=300 $watch \
+    MP_UI_SCRIPT="$first${script#;}" timeout 5400 "$binary" \
     "--interpreter=$source_dir/scripts/multiplayer/lobby_probe.lua" \
     "--config-file=$dir/config.txt" > "$dir/log.txt" 2>&1 || true
 }
