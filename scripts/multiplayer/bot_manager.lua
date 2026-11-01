@@ -546,12 +546,12 @@ function M:answerFaxes(s)
             if not self:available(r) then buildable = false end
           end
         end
+        -- (Never "research": that is an autopsy, and it costs the hospital
+        -- a lot of reputation when it comes out.)
         if not missing then
           pick, why = index.wait, "the room is there"
         elseif buildable and s.balance > 15000 then
           pick, why = index.wait, "building the room"
-        elseif index.research then
-          pick, why = index.research, "research"
         else
           pick, why = index.send_home, "no room for it"
         end

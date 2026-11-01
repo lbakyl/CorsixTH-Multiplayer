@@ -61,7 +61,7 @@ best project it can afford is done, one every one to four game days.
 - **Every day**: a handyman to each machine with three uses or fewer, the
   heating up or down for cold or hot patients, a $5,000 loan before the money
   runs out, the faxes (a patient it cannot treat yet: wait if the room is
-  there or being built, research if it can, else send home; a VIP only with a
+  there or being built, else send home, never research: that is an autopsy, which costs reputation; a VIP only with a
   good reputation and a clean hospital; an epidemic is declared), and in a
   race it throws out evil handymen a few days after they arrive and shoots
   attack rats.
