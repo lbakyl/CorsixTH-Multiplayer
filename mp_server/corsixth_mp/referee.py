@@ -73,6 +73,8 @@ async def _start_headless(config: RefereeConfig, port: int, room: str, token: st
         "play_demo = false\ncheck_for_updates = false\n",
         encoding="utf-8")
     env = dict(os.environ)
+    # The bots ask the server for advice; the API key stays with the server.
+    env.pop("ANTHROPIC_API_KEY", None)
     env.update({
         "CORSIXTH_SOURCE": config.source,
         "MP_SERVER": f"127.0.0.1:{port}",

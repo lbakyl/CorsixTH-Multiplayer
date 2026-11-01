@@ -2,8 +2,9 @@
 
 For testing a build alone or with fewer people: the room's host clicks an
 empty place in the room ("waiting for a player... (click: add a bot)") and a
-bot takes it. Up to three bots fit in a room for four. A bot is meant to make
-the first year or so look like somebody is playing, not to be a good player.
+bot takes it. Up to three bots fit in a room for four. A bot runs its own
+hospital by what it needs (the "smart" brain, `bot_manager.lua`), and can take
+advice from a language model through the server (below).
 
 ## How it works
 
@@ -32,7 +33,83 @@ referee build cannot run bots (the button is not shown there).
   the game's random numbers (that would desync its game); it has its own
   generator, seeded from the clock and its name.
 
-## What it does
+## The hospital manager (`scripts/multiplayer/bot_manager.lua`)
+
+The default brain (`MP_BOT_BRAIN=smart`). Every game day it reads its hospital
+as a player reads the screen (`Manager:assess`): the patients and the rooms
+their diseases need (a decaying demand per room type, more for diagnosed
+patients), queues per room type, staff and their tiredness, reception,
+litter, worn machines, thirst, warmth, toilets, money, loan, reputation and
+the level's goals. Every possible project gets a score from those needs
+(`Manager:projects`): the opening basics first (receptionist, GP's office,
+doctor), then rooms the patients need, a pharmacy and general diagnosis, a
+staff room when staff tire, toilets, a research room for diseases waiting
+for undiscovered rooms, a second room of a busy type, staff for rooms short of
+them or with long queues (capped by the patients), handymen for litter and
+machines, a second desk for a long reception queue, benches for people
+standing, drinks machines, radiators for cold patients, bins, plants. The
+best project it can afford is done, one every one to four game days.
+
+- **Rooms** are sized per type (`SIZES`: a GP's office 5x5, a ward 7x7, a staff
+  room 6x6, ...), placed with a free tile below and to the right where possible
+  so the corridor in front of the door is two tiles wide, and furnished by hand
+  (`Bot:furnishTick`): the extras are bought in the room editor (`room_buy`)
+  and every object is put down like a click. Extras (`EXTRAS`): a radiator, a
+  plant and a bin in most rooms; a sofa, a TV and a pool table in the staff
+  room; more loos and sinks; two more beds in a ward. Extras without a place
+  are sold again. Out of floor: it buys land.
+- **Every day**: a handyman to each machine with three uses or fewer, the
+  heating up or down for cold or hot patients, a $5,000 loan before the money
+  runs out, the faxes (a patient it cannot treat yet: wait if the room is
+  there or being built, research if it can, else send home; a VIP only with a
+  good reputation and a clean hospital; an epidemic is declared), and in a
+  race it throws out evil handymen a few days after they arrive and shoots
+  attack rats.
+- **Every month**: prices (down 10% when patients walked out over them, else
+  up with a good reputation and full queues, down when it suffers), repaying
+  the loan when money allows, research aimed at the disease whose treatment
+  room it lacks most.
+- **Dirty tricks** (race): on the rival closest to winning (a person before a
+  bot), the kind that hurts it most (an evil handyman for a hospital with
+  machines, an epidemic or emergency for a staffed desk, else rats).
+- The month in one log line: why patients left (cured, sent away, fed up,
+  too dear), the diseases it lost most, patients in the hospital, queues per
+  room type, specialists, prices, reputation, money.
+
+`MP_BOT_BRAIN=script` keeps the old fixed plan (described below), also per
+bot or per room (`"plan=script;smart=smart"`), for comparing the two:
+`scripts/multiplayer/run_bot_year.sh BIN DATA [LEVEL] [STEPS]` runs two co-op
+rooms side by side for a game year, one bot each.
+
+## Advice from a language model (`mp_server/corsixth_mp/advisor.py`)
+
+With an Anthropic API key on the server (`/etc/corsixth-mp-secrets.env`,
+`ANTHROPIC_API_KEY=...`; `setup-referee-host.sh` lets the service read it and
+installs the `anthropic` package in `/opt/corsixth-mp/venv`) the bots ask the
+server, never the API (the key is removed from the bots' and referee's
+environment):
+
+- `ASK kind=plan` once a game month: the hospital's report (`Manager:report`:
+  money, goals, rooms and queues, rooms patients needed, staff, comfort,
+  prices, why patients left, rivals) and the menu of projects
+  (`Manager.menu`). The model (default `claude-haiku-5-5`, low effort,
+  structured output) answers up to six priorities with weights, a price and a
+  one-line note. The server keeps only actions from the menu; the manager adds
+  the weights to those projects' scores until they are done, and sets the
+  price at the next monthly round. A team mate sometimes says the note in the
+  chat; a rival keeps it to itself.
+- `ASK kind=chat` when a person writes to the bot (privately or by name): the
+  model answers in the bot's voice (friendly, or a cheeky rival), under 30
+  words; if no answer comes within 10 seconds the bot uses its stock line.
+- `ANSWER id=...` with `actions` ("action:weight,..."), `price`, `note`, or
+  `text`; `error=off|busy|none|failed`. Only bots may ask, a plan at most every
+  20 seconds and a chat line every 3 seconds per bot.
+- A daily budget (`CORSIXTH_MP_AI_DAILY_USD`, default $3; kept in
+  `/var/lib/corsixth/ai-spend.json` across restarts) stops the advice for the
+  rest of the day (UTC). Without a key, or over the budget, the bots play on
+  the manager's own rules. Haiku 5.5 costs about $0.001 a plan.
+
+## The fixed plan (`MP_BOT_BRAIN=script`)
 
 - **Builds** (game days): a reception desk after 2 to 5 days, a receptionist,
   then one room every 10 to 20 days while it has the money (it keeps $3,000):

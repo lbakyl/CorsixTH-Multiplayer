@@ -13,6 +13,13 @@
 #            first time: it is copied to /opt/corsixth-mp/thdata, readable only
 #            by the service account. It is not part of any release.
 #
+# Advice for the bots from a language model (mp_server/corsixth_mp/advisor.py):
+# put the Anthropic API key into /etc/corsixth-mp-secrets.env yourself, as
+#   ANTHROPIC_API_KEY=...   (root:corsixth, mode 640)
+# This script never writes that file; the service reads it if it is there,
+# and without it the bots play on their own rules. Optional settings there
+# too: CORSIXTH_MP_AI_MODEL, CORSIXTH_MP_AI_DAILY_USD (default 3).
+#
 # Safe to run again, e.g. with the next release. Restarting the service drops
 # every connected player: check that nobody is playing first.
 set -euo pipefail
@@ -43,7 +50,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 say "Packages: Python, git, and the libraries the game binary links against"
 apt-get update -q >/dev/null
-apt-get install -y -q --no-install-recommends python3 git curl ca-certificates libgomp1 \
+apt-get install -y -q --no-install-recommends python3 python3-venv git curl ca-certificates libgomp1 \
   libpulse0 libasound2t64 libjack-jackd2-0 libpipewire-0.3-0t64 libx11-6 libxext6 libxcursor1 \
   libxi6 libxfixes3 libxrandr2 libxss1 libgbm1 libwayland-egl1 libwayland-client0 \
   libwayland-cursor0 libdecor-0-0 >/dev/null
@@ -68,6 +75,10 @@ if [[ ! -d "$BASE/src/.git" ]]; then git clone -q "https://github.com/$REPO.git"
 git -C "$BASE/src" fetch -q origin
 git -C "$BASE/src" checkout -q -f "$SHA"
 git -C "$BASE/src" log --oneline -1
+
+say "Python environment for the server (the Anthropic SDK for the bots' advice)"
+if [[ ! -x "$BASE/venv/bin/python" ]]; then python3 -m venv "$BASE/venv"; fi
+"$BASE/venv/bin/pip" install -q --upgrade anthropic
 
 say "Referee: the Linux package of $RELEASE"
 R="$BASE/referee/$SHA"
@@ -111,7 +122,8 @@ User=corsixth
 Group=corsixth
 WorkingDirectory=$BASE/src/mp_server
 EnvironmentFile=/etc/corsixth-mp.env
-ExecStart=/usr/bin/python3 -m corsixth_mp --host 0.0.0.0 --port $PORT
+EnvironmentFile=-/etc/corsixth-mp-secrets.env
+ExecStart=$BASE/venv/bin/python -m corsixth_mp --host 0.0.0.0 --port $PORT
 Restart=on-failure
 RestartSec=5
 KillMode=control-group

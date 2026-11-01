@@ -1419,9 +1419,12 @@ local function run()
                 objects = objects + 1
               end
             end
-            parts[#parts + 1] = string.format("[%d %s opened=%s balance=%d reputation=%d rooms=%s staff=%s corridor_objects=%d]", h,
+            parts[#parts + 1] = string.format("[%d %s opened=%s balance=%d reputation=%d rooms=%s staff=%s corridor_objects=%d"
+                .. " value=%d cured=%d deaths=%d visitors=%d loan=%d goals=%s]", h,
                 tostring(hosp.name), tostring(hosp.opened or false), math.floor(hosp.balance), math.floor(hosp.reputation),
-                table.concat(rooms, ","), table.concat(st, ","), objects)
+                table.concat(rooms, ","), table.concat(st, ","), objects, math.floor(hosp.value or 0),
+                hosp.num_cured or 0, hosp.num_deaths or 0, hosp.num_visitors or 0, hosp.loan or 0,
+                tostring(world.endconditions and world.endconditions:goalsMet(hosp) or false))
           end
           log(string.format("UI: hospitals at step %d (%s, month %d): %s", session.step, d:tostring(),
               d:monthOfGame(), table.concat(parts, " ")))

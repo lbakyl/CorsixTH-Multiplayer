@@ -31,6 +31,7 @@ import time
 from dataclasses import dataclass, field
 
 from . import pacing
+from .advisor import Advisor
 from .builds import BuildCheck, DataCheck
 from .referee import RefereeConfig, start_bot, start_referee
 from .protocol import (MAX_LINE_BYTES, PROTOCOL_VERSION, ProtocolError, command_peer, command_step,
@@ -80,6 +81,8 @@ BOT_START_TIMEOUT = 60.0
 # Each bot is a whole game running on this server: at most this many at once
 # (all rooms together; CORSIXTH_MP_MAX_BOTS).
 MAX_BOTS = 6
+# A bot asks the language model (advisor.py) at most this often (seconds).
+ASK_INTERVAL = {"plan": 20.0, "chat": 3.0}
 # Gameplay settings every peer must use (lesson 4 in the handover README).
 DEFAULT_SETTINGS = {"grant_wage_increase": 1, "free_build_mode": 0}
 
@@ -112,6 +115,7 @@ class Player:
     is_referee: bool = False
     is_bot: bool = False
     bot_proc: object = None
+    last_ask: dict[str, float] = field(default_factory=dict)
     team: int = 0  # a "teams" room: 1 or 2
     diag_bytes: int = 0
 
@@ -230,8 +234,10 @@ class Server:
                  max_per_address: int = MAX_PER_ADDRESS,
                  referee: RefereeConfig | None = None, max_bots: int = MAX_BOTS,
                  build_check: BuildCheck | None = None,
-                 data_check: DataCheck | None = None) -> None:
+                 data_check: DataCheck | None = None, advisor: Advisor | None = None) -> None:
         self.referee_config = referee
+        # Advice for the bots from a language model (advisor.py; None: off).
+        self.advisor = advisor
         # Only this game build may connect (None: any; builds.py).
         self.build_check = build_check
         # Only players with the referee's Theme Hospital level files (builds.py).
@@ -800,6 +806,50 @@ class Server:
         self._add_to_room(player, room, ready=True)
         return True
 
+    def _on_ask(self, player: Player, f: dict[str, str]) -> None:
+        """A bot asks for advice (advisor.py): kind=plan (text = its hospital's
+        report, menu = its projects, comma-separated) or kind=chat (text =
+        its hospital in brief, lines = the chat so far, newline-separated,
+        rival=1 in a race). The answer comes back as ANSWER id=... with
+        actions ("action:weight,..."), price, note, or text; or error=..."""
+        if not player.is_bot:
+            self._error(player, "not_bot", "Only bots ask for advice")
+            return
+        qid, kind = f.get("id", ""), f.get("kind", "")
+        if self.advisor is None or not self.advisor.enabled:
+            player.send(encode("ANSWER", id=qid, error="off"))
+            return
+        now = time.monotonic()
+        if kind not in ASK_INTERVAL or now - player.last_ask.get(kind, -1e9) < ASK_INTERVAL[kind]:
+            player.send(encode("ANSWER", id=qid, error="busy"))
+            return
+        player.last_ask[kind] = now
+        asyncio.get_running_loop().create_task(self._answer(player, qid, kind, f))
+
+    async def _answer(self, player: Player, qid: str, kind: str, f: dict[str, str]) -> None:
+        advisor = self.advisor
+        assert advisor is not None
+        try:
+            if kind == "plan":
+                menu = [m for m in f.get("menu", "").split(",") if m]
+                plan = await advisor.plan(f.get("text", ""), menu)
+                if plan is None:
+                    player.send(encode("ANSWER", id=qid, error="none"))
+                    return
+                actions = ",".join(f"{a}:{w}" for a, w in plan["actions"])
+                player.send(encode("ANSWER", id=qid, actions=actions, price=plan["price"],
+                                   note=plan["note"] or None))
+            else:
+                lines = [line for line in f.get("lines", "").split("\n") if line]
+                text = await advisor.chat(player.name, f.get("rival") == "1", f.get("text", ""), lines)
+                if text is None:
+                    player.send(encode("ANSWER", id=qid, error="none"))
+                    return
+                player.send(encode("ANSWER", id=qid, text=text))
+        except Exception:  # noqa: BLE001 (a failed answer must not stop the server)
+            log.exception("advice for %r failed", player.name)
+            player.send(encode("ANSWER", id=qid, error="failed"))
+
     def _send_lobby(self, room: Room) -> None:
         if room.state != "lobby":
             return
@@ -1314,7 +1364,8 @@ def main(argv: list[str] | None = None) -> None:
             log.info("players must have Theme Hospital data %s", data_check.data)
         server = Server(motd=args.motd, max_connections=args.max_connections,
                         max_per_address=args.max_per_address, referee=referee,
-                        max_bots=args.max_bots, build_check=build_check, data_check=data_check)
+                        max_bots=args.max_bots, build_check=build_check, data_check=data_check,
+                        advisor=Advisor())
         await server.start(args.host, args.port)
         # Stop cleanly on SIGTERM (docker stop) as well as Ctrl+C.
         stop = asyncio.Event()
