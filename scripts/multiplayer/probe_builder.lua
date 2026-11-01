@@ -1048,6 +1048,23 @@ function builder.register_handlers()
     end
     return true
   end
+  -- A fax with choices about the first patient of a hospital who has none,
+  -- created at the same step on every peer: {hospital}.
+  MultiplayerSession.default_handlers.probe_patientfax = function(w, cmd)
+    local hospital = w.hospitals[tonumber(cmd.target) or 1]
+    for _, e in ipairs(w.entities) do
+      if class.is(e, Patient) and e.hospital == hospital and not e.message_callback and not e.going_home then
+        w.ui.bottom_panel:queueMessage("information", {
+          {text = "Test fax about a patient"},
+          choices = {{text = "Wait", choice = "wait"}, {text = "Send home", choice = "send_home"}},
+        }, e)
+        w.mp_probe_fax_patient = e
+        return true
+      end
+    end
+    return false, "no patient without a fax"
+  end
+
   MultiplayerSession.default_handlers.probe_patients = function(w, cmd)
     local hospital = w.hospitals[cmd.hospital or 1]
     local desk = hospital:getReceptionDesks()[1]

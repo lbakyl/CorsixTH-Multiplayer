@@ -129,7 +129,12 @@ end
 
 --! Displays the fax/strike message to the player when opened from the bottom_panel.
 function UIMessage:openMessage()
-  if TheApp.world:isUserActionProhibited() then
+  local world = TheApp.world
+  -- Multiplayer with a hospital each: another hospital's message (reached
+  -- e.g. by clicking its patient) is for its player only; an answer from
+  -- here would be refused anyway (fax_choice: "not ours").
+  if world:isUserActionProhibited() or (world.mp_coop and self.hospital and not self.everyone and
+      not world:isUIHospital(self.hospital)) then
     self.ui:playSound("wrong2.wav")
     self:adjustToggle()
     return

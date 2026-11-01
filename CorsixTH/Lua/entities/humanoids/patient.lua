@@ -75,7 +75,9 @@ end
 
 function Patient:onClick(ui, button)
   if button == "left" then
-    if self.message_callback then
+    -- (In multiplayer with a hospital each, another hospital's fax about this
+    -- patient is its player's: this player gets the patient window.)
+    if self.message_callback and self.world:isUIHospital(self.hospital) then
       self:message_callback()
     else
 

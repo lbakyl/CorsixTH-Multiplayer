@@ -26,6 +26,9 @@
 # hal (host) plays hospital 1 alone; Bot Agnes and ivy share hospital 2 and
 # both build in it (the bot its desk, receptionist, rooms and staff, ivy a
 # GP's office and a nurse), IN SYNC, and the referee agrees.
+# Also a 9th check, room "clinic" (co-op, a hospital each): kim's patient
+# gets a fax; lou clicking that patient gets the patient window, not kim's
+# fax (another hospital's faxes are its player's); kim gets the fax.
 # Exits 0 only if all checks behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
@@ -54,7 +57,7 @@ if [[ "${MP_REFEREE:-0}" == 1 ]]; then
   export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
   export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/referee"
   export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
-  export MP_REFEREE_PROBE_SCENARIO="trio=light;duo=light;mixed=none" # the probes' own start on every hospital
+  export MP_REFEREE_PROBE_SCENARIO="trio=light;duo=light;mixed=none;clinic=light" # the probes' own start on every hospital
   # Bots act twenty times sooner than a person would, and answer at once.
   export MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7
 fi
@@ -110,11 +113,15 @@ sleep 1
 run_probe fay MP_ROLE=join MP_ROOM=duo MP_TEAM=2 MP_STEPS=800 MP_UI_SCRIPT="60:teams" & pids+=($!)
 sleep 1
 run_probe gus MP_ROLE=join MP_ROOM=duo MP_TEAM=1 MP_STEPS=800 MP_UI_SCRIPT="60:teams;300:quit" & pids+=($!)
+sleep 1
+run_probe kim MP_ROLE=host MP_ROOM=clinic MP_MODE=coop MP_PLAYERS=2 MP_LEVEL=2 MP_STEPS=800   MP_UI_SCRIPT="20:openhospital;100:patients:3;150:patientfax:1;220:clickfaxpatient" & pids+=($!)
+sleep 1
+run_probe lou MP_ROLE=join MP_ROOM=clinic MP_STEPS=800 MP_UI_SCRIPT="30:openhospital;200:clickfaxpatient" & pids+=($!)
 if [[ "${MP_REFEREE:-0}" == 1 ]]; then
   sleep 1
   run_probe hal MP_ROLE=host MP_ROOM=mixed MP_MODE=teamshared MP_TEAM=1 MP_PLAYERS=3 MP_ADD_BOTS=1 MP_LEVEL=2     MP_STEPS=1200 MP_SCENARIO=none MP_UI_SCRIPT="60:teams;1150:hospitals" & pids+=($!)
   sleep 3
-  run_probe ivy MP_ROLE=join MP_ROOM=mixed MP_TEAM=2 MP_STEPS=1200 MP_SCENARIO=none     MP_UI_SCRIPT="60:teams;400:room:gp:5:5;500:hire:Nurse;1150:hospitals" & pids+=($!)
+  run_probe ivy MP_ROLE=join MP_ROOM=mixed MP_TEAM=2 MP_STEPS=1200 MP_SCENARIO=none     MP_UI_SCRIPT="60:teams;120:room:gp:4:4;500:hire:Nurse;1150:hospitals" & pids+=($!)
 fi
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
@@ -195,6 +202,17 @@ print(f"6. Team mate leaves:        dee sees {states}; player_away commands {awa
       f"{result('dee')} / {result('eli')} / {result('fay')}")
 fail |= not ok6
 
+# 9. Another hospital's patient: its fax is not for this player
+def click(n):
+    m = re.search(r"UI: clicked hospital (\d+)'s patient with a fax at step \d+ \(mine: (\w+)\): fax shown (\w+), patient window (\w+)", log(n))
+    return m.groups() if m else None
+faxcmd = applied('kim', 'probe_patientfax')
+ok9 = (click('lou') == ('1', 'false', 'false', 'true') and click('kim') == ('1', 'true', 'true', 'false')
+       and any(x.endswith('-> ok') for x in faxcmd)
+       and result('kim').startswith('IN SYNC') and result('lou').startswith('IN SYNC'))
+print(f"9. Other hospital's fax:    lou {click('lou')}; kim {click('kim')}; {faxcmd}; {result('kim')} / {result('lou')}")
+fail |= not ok9
+
 if with_referee:
     # 8. A bot shares a team hospital with a person
     ivy_teams = teams('ivy')
@@ -214,7 +232,7 @@ if with_referee:
           f"ivy's room: {ivy_room}; hospital 2 rooms {h2.groups() if h2 else '-'}, hospital 1 rooms "
           f"[{h1.group(1) if h1 else '-'}]; {result('hal')} / {result('ivy')}")
     fail |= not ok8
-    for room, least in (('trio', 1100), ('duo', 800), ('mixed', 1200)):
+    for room, least in (('trio', 1100), ('duo', 800), ('mixed', 1200), ('clinic', 800)):
         confirmed = re.search(rf"room '{room}': referee confirmed steps through (\d+)", server)
         clean = not re.search(rf"room '{room}': (the players differ|repaired)", server)
         ok7 = bool(confirmed and int(confirmed.group(1)) >= least - 100 and clean)

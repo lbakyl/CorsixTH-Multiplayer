@@ -1940,6 +1940,24 @@ local function run()
           end
           log(string.format("UI: team at step %d: %s; won %s", session.step, table.concat(parts, " "),
               tostring(world.mp_team_won)))
+        elseif a == "patientfax" then
+          -- patientfax:<hospital>: a fax about one of its patients (test command)
+          session:issue({kind = "probe_patientfax", target = tonumber(entry.arg) or 1})
+        elseif a == "clickfaxpatient" then
+          -- A left click on the patient that fax is about: the fax opens for
+          -- that patient's own hospital, anybody else gets the patient window.
+          local patient = world.mp_probe_fax_patient
+          if not patient then
+            log("UI: no patient with a test fax")
+          else
+            patient:onClick(world.ui, "left")
+            local fax, window = world.ui:getWindow(UIFax), world.ui:getWindow(UIPatient)
+            log(string.format("UI: clicked hospital %d's patient with a fax at step %d (mine: %s): fax shown %s, patient window %s",
+                world:getHospitalIndex(patient.hospital), session.step, tostring(patient.hospital == world.ui.hospital),
+                tostring(fax ~= nil), tostring(window ~= nil)))
+            if fax then fax:close() end
+            if window then window:close() end
+          end
         elseif a == "wincheck" or a == "yearend" then
           session:issue({kind = "probe_" .. a})
         elseif a == "patients" then

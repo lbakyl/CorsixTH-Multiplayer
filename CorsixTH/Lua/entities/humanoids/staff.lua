@@ -306,7 +306,8 @@ function Staff:onClick(ui, button)
   end
 
   if button == "left" then
-    if self.message_callback then
+    -- (Another hospital's fax about this person is its player's.)
+    if self.message_callback and self.world:isUIHospital(self.hospital) then
       self:message_callback()
     else
       ui:addWindow(UIStaff(ui, self))
