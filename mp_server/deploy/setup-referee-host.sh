@@ -9,15 +9,27 @@
 # --release  a test release of lbakyl/CorsixTH-Multiplayer: its Linux package
 #            is the referee, and the server code comes from the same commit.
 #            The players must run that release (the build ids must match).
+# --code     optional: the server code and the referee's and bots' scripts
+#            from another branch or commit (newer than the release), for
+#            server-side changes the players' build does not need (bots, the
+#            server itself). Default: the release's own commit.
 # --data     your Theme Hospital folder (the one with DATA, QDATA, ...), the
 #            first time: it is copied to /opt/corsixth-mp/thdata, readable only
 #            by the service account. It is not part of any release.
+#
+# Advice for the bots from a language model (mp_server/corsixth_mp/advisor.py):
+# put the Anthropic API key into /etc/corsixth-mp-secrets.env yourself, as
+#   ANTHROPIC_API_KEY=...   (root:corsixth, mode 640)
+# This script never writes that file; the service reads it if it is there,
+# and without it the bots play on their own rules. Optional settings there
+# too: CORSIXTH_MP_AI_MODEL, CORSIXTH_MP_AI_DAILY_USD (default 3).
 #
 # Safe to run again, e.g. with the next release. Restarting the service drops
 # every connected player: check that nobody is playing first.
 set -euo pipefail
 
 RELEASE=""
+CODE=""
 DATA=""
 PORT=47800
 MOTD="CorsixTH multiplayer server (with referee)"
@@ -27,6 +39,7 @@ BASE=/opt/corsixth-mp
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --release) RELEASE=$2; shift 2 ;;
+    --code) CODE=$2; shift 2 ;;
     --data) DATA=$2; shift 2 ;;
     --port) PORT=$2; shift 2 ;;
     --motd) MOTD=$2; shift 2 ;;
@@ -43,7 +56,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 say "Packages: Python, git, and the libraries the game binary links against"
 apt-get update -q >/dev/null
-apt-get install -y -q --no-install-recommends python3 git curl ca-certificates libgomp1 \
+apt-get install -y -q --no-install-recommends python3 python3-venv git curl ca-certificates libgomp1 \
   libpulse0 libasound2t64 libjack-jackd2-0 libpipewire-0.3-0t64 libx11-6 libxext6 libxcursor1 \
   libxi6 libxfixes3 libxrandr2 libxss1 libgbm1 libwayland-egl1 libwayland-client0 \
   libwayland-cursor0 libdecor-0-0 >/dev/null
@@ -63,11 +76,22 @@ fi
 [[ -d "$BASE/thdata/themehos" ]] || die "no game data yet: pass --data once"
 chown -R root:corsixth "$BASE/thdata" && chmod -R u=rwX,g=rX,o= "$BASE/thdata"
 
-say "Server code at $SHA"
+say "Server code at ${CODE:-$SHA}"
 if [[ ! -d "$BASE/src/.git" ]]; then git clone -q "https://github.com/$REPO.git" "$BASE/src"; fi
 git -C "$BASE/src" fetch -q origin
-git -C "$BASE/src" checkout -q -f "$SHA"
+if [[ -n "$CODE" ]]; then
+  # A branch name (origin/<branch>) or a commit.
+  if git -C "$BASE/src" rev-parse -q --verify "origin/$CODE" >/dev/null; then CODE="origin/$CODE"; fi
+  git -C "$BASE/src" checkout -q -f "$CODE"
+  git -C "$BASE/src" merge-base --is-ancestor "$SHA" HEAD || die "--code $CODE does not contain the release's commit $SHA"
+else
+  git -C "$BASE/src" checkout -q -f "$SHA"
+fi
 git -C "$BASE/src" log --oneline -1
+
+say "Python environment for the server (the Anthropic SDK for the bots' advice)"
+if [[ ! -x "$BASE/venv/bin/python" ]]; then python3 -m venv "$BASE/venv"; fi
+"$BASE/venv/bin/pip" install -q --upgrade anthropic
 
 say "Referee: the Linux package of $RELEASE"
 R="$BASE/referee/$SHA"
@@ -78,7 +102,7 @@ mv "$R/CorsixTH-Multiplayer" "$R/game"
 ln -s game "$R/CorsixTH" # referee.lua loads <source>/CorsixTH/CorsixTH.lua
 # The referee, and the bots (computer players) a room owner adds, if this
 # release has them.
-for f in referee.lua probe_builder.lua bot.lua; do
+for f in referee.lua probe_builder.lua bot.lua bot_manager.lua; do
   if [[ -f "$BASE/src/scripts/multiplayer/$f" ]]; then cp "$BASE/src/scripts/multiplayer/$f" "$R/scripts/multiplayer/"; fi
 done
 chown -R root:corsixth "$BASE/referee" "$BASE/src" && chmod -R g+rX,o= "$BASE/referee"
@@ -111,7 +135,8 @@ User=corsixth
 Group=corsixth
 WorkingDirectory=$BASE/src/mp_server
 EnvironmentFile=/etc/corsixth-mp.env
-ExecStart=/usr/bin/python3 -m corsixth_mp --host 0.0.0.0 --port $PORT
+EnvironmentFile=-/etc/corsixth-mp-secrets.env
+ExecStart=$BASE/venv/bin/python -m corsixth_mp --host 0.0.0.0 --port $PORT
 Restart=on-failure
 RestartSec=5
 KillMode=control-group

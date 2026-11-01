@@ -1391,6 +1391,51 @@ local function run()
           else
             log("UI: no rat to shoot")
           end
+        elseif a == "map" then
+          -- A hospital's floor plan in the log (map:<hospital>): a letter per
+          -- room (in the order they were built), "." corridor, "_" floor that
+          -- cannot be built on, corridor objects (b bench, p plant, r
+          -- radiator, d drinks, R reception, u bin, x extinguisher, "," litter,
+          -- o others), " " outside.
+          local hosp = world.hospitals[tonumber(entry.arg) or 1]
+          local mw, mh = world.map.th:size()
+          local x0, y0, x1, y1 = mw, mh, 1, 1
+          for y = 1, mh do
+            for x = 1, mw do
+              if hosp:isInHospital(x, y) then
+                x0, y0, x1, y1 = math.min(x0, x), math.min(y0, y), math.max(x1, x), math.max(y1, y)
+              end
+            end
+          end
+          local letters, ids = {}, {}
+          for id, r in pairs(world.rooms) do if r.hospital == hosp then ids[#ids + 1] = id end end
+          table.sort(ids)
+          local legend = {}
+          for i, id in ipairs(ids) do
+            letters[id] = string.char(64 + ((i - 1) % 26) + 1)
+            legend[#legend + 1] = letters[id] .. "=" .. world.rooms[id].room_info.id
+          end
+          log(string.format("UI: map of hospital %d at step %d (%d,%d): %s", hosp and world:getHospitalIndex(hosp) or 0,
+              session.step, x0, y0, table.concat(legend, " ")))
+          for y = y0, y1 do
+            local row = {}
+            for x = x0, x1 do
+              local r = world:getRoom(x, y)
+              local c = " "
+              local marks = {litter = ",", bench = "b", plant = "p", radiator = "r", drinks_machine = "d",
+                  reception_desk = "R", bin = "u", extinguisher = "x"}
+              if r and letters[r.id] then c = letters[r.id]
+              elseif hosp:isInHospital(x, y) then
+                local obj = world:getObject(x, y)
+                local flags = world.map.th:getCellFlags(x, y)
+                if obj then c = marks[obj.object_type.id] or "o"
+                elseif not flags.buildable then c = "_"
+                else c = "." end
+              end
+              row[#row + 1] = c
+            end
+            log("MAP |" .. table.concat(row) .. "|")
+          end
         elseif a == "hospitals" then
           -- Every hospital: open or not, balance, its rooms and staff (to
           -- see what a bot built), with the game date.
@@ -1422,9 +1467,12 @@ local function run()
                 objects = objects + 1
               end
             end
-            parts[#parts + 1] = string.format("[%d %s opened=%s balance=%d reputation=%d rooms=%s staff=%s corridor_objects=%d]", h,
+            parts[#parts + 1] = string.format("[%d %s opened=%s balance=%d reputation=%d rooms=%s staff=%s corridor_objects=%d"
+                .. " value=%d cured=%d deaths=%d visitors=%d loan=%d goals=%s]", h,
                 tostring(hosp.name), tostring(hosp.opened or false), math.floor(hosp.balance), math.floor(hosp.reputation),
-                table.concat(rooms, ","), table.concat(st, ","), objects)
+                table.concat(rooms, ","), table.concat(st, ","), objects, math.floor(hosp.value or 0),
+                hosp.num_cured or 0, hosp.num_deaths or 0, hosp.num_visitors or 0, hosp.loan or 0,
+                tostring(world.endconditions and world.endconditions:goalsMet(hosp) or false))
           end
           log(string.format("UI: hospitals at step %d (%s, month %d): %s", session.step, d:tostring(),
               d:monthOfGame(), table.concat(parts, " ")))

@@ -30,6 +30,12 @@
 --                        by this (default 1: like a person)
 --   MP_BOT_FAST          1: run the game as fast as the others allow and
 --                        answer at once (scripted tests)
+--   MP_BOT_BRAIN         "smart" (default: scripts/multiplayer/bot_manager.lua
+--                        decides from the hospital's needs, with the server's
+--                        advice if it has any), "manager" (the same without
+--                        advice) or "script" (the fixed plan below);
+--                        "Name=script;Other=smart" per bot
+--                        or per room
 local args = {...}
 local unpack_args = table.unpack or unpack
 local source_dir = assert(os.getenv("CORSIXTH_SOURCE"), "Missing CORSIXTH_SOURCE")
@@ -212,8 +218,21 @@ end
 -- The bot
 --------------------------------------------------------------------------------
 
-local socket, builder, sabotage
+local socket, builder, sabotage, Manager
 local Bot = {}
+
+--! Which brain this bot uses (MP_BOT_BRAIN, see the top; a key may also
+--! name the room).
+local function brain_of(name)
+  local spec = os.getenv("MP_BOT_BRAIN") or "smart"
+  if not spec:find("=", 1, true) then return spec end
+  local first = name:lower():match("(%a+)$") or name:lower()
+  for who, b in spec:gmatch("([^;=]+)=([^;]+)") do
+    local w = who:lower()
+    if w == name:lower() or w == first or w == room:lower() then return b end
+  end
+  return "smart"
+end
 Bot.__index = Bot
 
 -- Rooms first, in this order; then the others the level has, by name.
@@ -240,6 +259,14 @@ function Bot.new(lobby)
   self.last_reply = -1000
   self.next_think = 0
   self.world = nil
+  self.brain = brain_of(my_name)
+  if self.brain ~= "script" then
+    self.manager = Manager.new(self, {log = log, rand = rand, pick = pick, sabotage = sabotage, lines = LINES,
+        typing = function(text) return 1.5 + #text * 0.06 + rand() * 2 end})
+  end
+  -- "manager": the same brain, without the language model's advice.
+  if self.brain == "manager" then self.ai = "off" end
+  log("brain: " .. self.brain)
   return self
 end
 
@@ -290,6 +317,21 @@ function Bot:playerOfHospital(index)
   end
 end
 
+--! Does a person run this hospital too (one shared hospital, or a team
+--! hospital)? Then the bot only helps: it builds and staffs, and leaves the
+--! hospital's decisions (prices, loans, heating, research, faxes) to them.
+function Bot:sharesWithPerson()
+  local session = TheApp.mp_session
+  local mine = self:hospitalIndex()
+  for peer, h in pairs(self.lobby.peer_hospital or {}) do
+    if h == mine and peer ~= (session and session.peer_id) then
+      local _, is_bot = self:playerName(peer)
+      if not is_bot then return true end
+    end
+  end
+  return false
+end
+
 function Bot:hospitalIndex()
   return TheApp.mp_session and TheApp.mp_session.hospital_index or 1
 end
@@ -305,11 +347,76 @@ function Bot:later(days)
 end
 
 --------------------------------------------------------------------------------
+-- Advice from a language model, through the server (mp_server advisor.py)
+--------------------------------------------------------------------------------
+
+--! Ask the server (ASK kind=plan|chat); `done(fields)` gets the ANSWER, or
+--! nil if none came within `wait` seconds.
+function Bot:ask(kind, fields, wait, done)
+  if self.ai == "off" then return false end
+  self.asks = self.asks or {}
+  self.ask_id = (self.ask_id or 0) + 1
+  fields.id, fields.kind = self.ask_id, kind
+  self.asks[self.ask_id] = {done = done, until_time = self:now() + wait}
+  self.lobby:send("ASK", fields)
+  return true
+end
+
+function Bot:onAnswer(f)
+  local id = tonumber(f.id)
+  local entry = id and self.asks and self.asks[id]
+  if not entry then return end
+  self.asks[id] = nil
+  if f.error == "off" then
+    if self.ai ~= "off" then log("advice: off on this server") end
+    self.ai = "off"
+  end
+  entry.done(not f.error and f or nil)
+end
+
+--! Questions nobody answered in time: their fallback.
+function Bot:expireAsks()
+  local now = self:now()
+  for id, entry in pairs(self.asks or {}) do
+    if now > entry.until_time then
+      self.asks[id] = nil
+      entry.done(nil)
+    end
+  end
+end
+
+--! Once a game month: the hospital's report to the model, whose plan the
+--! manager follows (it still checks everything itself).
+function Bot:askPlan()
+  local manager = self.manager
+  local report = manager and manager:report()
+  if not report then return end
+  self:ask("plan", {text = report, menu = table.concat(Manager.menu(), ",")}, 60, function(f)
+    if not f then return end
+    local plan = {priorities = {}, price = tonumber(f.price)}
+    for action, weight in (f.actions or ""):gmatch("([%w_:]+):(%d+)") do
+      plan.priorities[#plan.priorities + 1] = {action = action, weight = tonumber(weight)}
+    end
+    manager:applyPlan(plan)
+    -- A team mate now and then says what it is up to (a rival keeps quiet).
+    if f.note and f.note ~= "" and not self.fiery and rand() < 0.3 then
+      self:say(f.note, typing(f.note))
+    end
+  end)
+end
+
+--------------------------------------------------------------------------------
 -- Chat
 --------------------------------------------------------------------------------
 
 function Bot:onChat(f)
   local peer = tonumber(f.peer)
+  -- The chat so far (for the model's answers).
+  self.chat_lines = self.chat_lines or {}
+  if f.text and f.name and f.name ~= "server" then
+    self.chat_lines[#self.chat_lines + 1] = f.name .. ": " .. f.text
+    if #self.chat_lines > 8 then table.remove(self.chat_lines, 1) end
+  end
   local session = TheApp.mp_session
   if not session or not peer or peer == 0 or peer == session.peer_id then return end
   local name, is_bot = self:playerName(peer)
@@ -337,7 +444,20 @@ function Bot:onChat(f)
   local mine = world and world.ui and world.ui.hospital
   local mate = hosp and mine and world:mpTeam(mine) and not world:mpRivals(world.hospitals[hosp], mine)
   local line = pick(REPLIES[kind][(self.fiery and not mate) and "fiery" or "friendly"]):format(name)
-  self:say(line, typing(line), private and peer or nil)
+  -- Spoken to: the model answers if the server has one (the stock line if
+  -- it does not answer within a few seconds).
+  local to = private and peer or nil
+  if (private or named) and self.ai ~= "off" then
+    local report = self.manager and self.manager:report() or ""
+    local brief = report:match("^[^\n]*\n[^\n]*") or report
+    local asked = self:ask("chat", {text = brief, lines = table.concat(self.chat_lines, "\n"),
+        rival = (self.fiery and not mate) and 1 or nil}, 10, function(answer)
+      local reply = answer and answer.text or line
+      self:say(reply, typing(reply), to)
+    end)
+    if asked then return end
+  end
+  self:say(line, typing(line), to)
 end
 
 --------------------------------------------------------------------------------
@@ -498,6 +618,89 @@ function Bot:roomFits(x, y, w, h)
   return true
 end
 
+--! Where a player would put a w x h room (squares from `size` down to
+--! `min`, and one tile shorter): against the building's walls and the other
+--! rooms, in rows, with a corridor in front of the door (the row below it;
+--! two rows if possible), without thin gaps that nothing fits into, near the
+--! reception, and never on the reception's or the entrances' floor.
+--!return x, y, w, h or nil
+function Bot:layoutSpot(min, size)
+  local world = self.world
+  local hosp = world.ui.hospital
+  local th = world.map.th
+  local mw, mh = th:size()
+  -- Free floor, once (a table lookup is much cheaper than the map).
+  local free = {}
+  local x0, y0, x1, y1 = mw, mh, 1, 1
+  for y = 1, mh do
+    for x = 1, mw do
+      if hosp:isInHospital(x, y) then
+        x0, y0, x1, y1 = math.min(x0, x), math.min(y0, y), math.max(x1, x), math.max(y1, y)
+        if self:freeTile(x, y) then free[y * 1000 + x] = true end
+      end
+    end
+  end
+  -- Keep the reception's queue and the entrances clear.
+  local keep = {}
+  local function protect(cx, cy, r)
+    for y = cy - r, cy + r do
+      for x = cx - r, cx + r do free[y * 1000 + x] = nil keep[y * 1000 + x] = true end
+    end
+  end
+  for _, desk in ipairs(hosp:getReceptionDesks()) do
+    if desk.tile_x then protect(desk.tile_x, desk.tile_y, 3) end
+  end
+  for _, e in ipairs(world.entities) do
+    local id = e.object_type and e.object_type.id
+    if id and id:find("entrance", 1, true) and e.tile_x and hosp:isInHospital(e.tile_x, e.tile_y) then
+      protect(e.tile_x, e.tile_y, 2)
+    end
+  end
+  local function f(x, y) return free[y * 1000 + x] end
+  -- A wall, a room, or the outside: not floor, and not floor kept clear.
+  local function solid(x, y) return not f(x, y) and not keep[y * 1000 + x] end
+  local ax, ay = self:anchor()
+  local best, bx, by, bw, bh
+  local shapes = {}
+  for s = size, min, -1 do
+    shapes[#shapes + 1] = {s, s}
+    if s - 1 >= min then shapes[#shapes + 1] = {s, s - 1} end
+  end
+  for _, shape in ipairs(shapes) do
+    local w, h = shape[1], shape[2]
+    for y = y0, y1 - h do
+      for x = x0, x1 - w + 1 do
+        local ok = true
+        -- The room, and the row below it (the corridor at its door).
+        for ty = y, y + h do
+          for tx = x, x + w - 1 do
+            if not f(tx, ty) then ok = false break end
+          end
+          if not ok then break end
+        end
+        if ok then
+          local score = w * h * 0.6
+          for tx = x, x + w - 1 do
+            if solid(tx, y - 1) then score = score + 1 end
+            -- (A one tile gap above: nothing will ever fit in it.)
+            if f(tx, y - 1) and solid(tx, y - 2) then score = score - 1.5 end
+            if f(tx, y + h + 1) then score = score + 0.3 end
+          end
+          for ty = y, y + h - 1 do
+            if solid(x - 1, ty) then score = score + 1 end
+            if solid(x + w, ty) then score = score + 1 end
+            if f(x - 1, ty) and solid(x - 2, ty) then score = score - 1.5 end
+            if f(x + w, ty) and solid(x + w + 1, ty) then score = score - 1.5 end
+          end
+          score = score - 0.12 * (math.abs(x + w / 2 - ax) + math.abs(y + h / 2 - ay))
+          if not best or score > best then best, bx, by, bw, bh = score, x, y, w, h end
+        end
+      end
+    end
+  end
+  return bx, by, bw, bh
+end
+
 --! The nearest place for a packed w x h room (see Bot:roomFits).
 function Bot:packedSpot(cx, cy, w, h)
   for r = 0, 40 do
@@ -511,8 +714,199 @@ function Bot:packedSpot(cx, cy, w, h)
   end
 end
 
---! Draw the next room (furnished automatically). Returns the type drawn,
---! or nil and why not ("money", "space": it needs more land, "done").
+--! Draw a room of this type (furnished automatically): with free floor
+--! around it if possible, else smaller, else packed against other walls.
+--!param size (integer) optional: the size it would like (a bigger ward, say)
+--!return true, or nil and why not ("money", "space": it needs more land,
+--! "refused": the room editor did not take it)
+function Bot:drawRoom(room_type, size, extras)
+  local hospital = self.world.ui.hospital
+  if self.furnishing then return nil, "busy" end
+  if hospital.balance - self:roomCost(room_type) < RESERVE then return nil, "money" end
+  local min = room_type.minimum_size or 4
+  local ax, ay = self:anchor()
+  size = math.max(min, size or math.min(7, math.max(5, min + 1)))
+  local x, y, w, h
+  -- Where a player would put it (against walls and rooms, in rows).
+  local ok_layout, lx, ly, lw, lh = pcall(self.layoutSpot, self, min, size)
+  if ok_layout and lx then
+    x, y, w, h = lx, ly, lw, lh
+  elseif not ok_layout then
+    log("layout: " .. tostring(lx))
+  end
+  -- Else a free tile more below and to the right (where the door goes), so
+  -- the corridor in front of it is two tiles wide.
+  for s = size, min, -1 do
+    if not x then
+      x, y = builder.find_free_rect(self.world, ax, ay, s + 1, s + 1, 40)
+      w = s
+    end
+  end
+  for s = size, min, -1 do
+    if not x then
+      x, y = builder.find_free_rect(self.world, ax, ay, s, s, 40)
+      w = s
+    end
+  end
+  for s = size, min, -1 do
+    if not x then
+      x, y = self:packedSpot(ax, ay, s, s)
+      w = s
+    end
+  end
+  if not x then
+    log(string.format("no space for a %s (%dx%d)", room_type.id, min, min))
+    return nil, "space"
+  end
+  local by_hand = extras and next(extras) ~= nil
+  local ok, res = pcall(builder.ui_room, self.world, ax, ay, room_type.id, w, h or w, true, log, {x, y}, by_hand)
+  if not ok then log("could not draw " .. room_type.id .. ": " .. tostring(res)) end
+  if ok and res then
+    if by_hand then self.furnishing = {extras = extras, room_id = room_type.id} end
+    return true
+  end
+  return nil, "refused"
+end
+
+--! Can this room take one more of this object (the level has it, it is
+--! researched, and the room type lists it)?
+local function extra_allowed(world, rm, id)
+  local object = TheApp.objects[id]
+  if not object then return false end
+  local listed = false
+  for _, o in ipairs(rm.room_info.objects_additional or {}) do
+    if o == id then listed = true end
+  end
+  local cfg = world.map.level_config.objects
+  local progress = world.ui.hospital.research.research_progress[object]
+  return listed and cfg[object.thob] and cfg[object.thob].AvailableForLevel == 1 and
+      (not progress or progress.discovered) and true or false
+end
+
+--! A room drawn for hand furnishing (Bot:drawRoom with extras): buy the
+--! extras in its editor (room_buy), then put every object down one at a
+--! time like clicks (room_object), then confirm (room_finish). Extras with
+--! no place left are sold again. Returns true while busy.
+function Bot:furnishTick()
+  local job = self.furnishing
+  if not job then return false end
+  local world, session = self.world, TheApp.mp_session
+  local dlg = world.ui.edit_room
+  local step = session.step
+  job.since = job.since or step
+  if not (dlg and dlg.mp_room_id) then
+    if step > job.since + 600 then
+      log("furnishing: the " .. job.room_id .. " was not built")
+      self.furnishing = nil
+    end
+    return true
+  end
+  local function count()
+    local n = 0
+    for _, o in ipairs(dlg.objects) do n = n + o.qty end
+    return n
+  end
+  if not job.bought then
+    job.bought = true
+    local buy, cost = {}, 0
+    local hospital = world.ui.hospital
+    for id, n in pairs(job.extras) do
+      if extra_allowed(world, dlg.room, id) then
+        local each = hospital:getObjectBuildCost(id)
+        if hospital.balance - cost - each * n >= RESERVE then
+          buy[id] = n
+          cost = cost + each * n
+        end
+      end
+    end
+    local parts = {}
+    for id, n in pairs(buy) do parts[#parts + 1] = id .. ":" .. n end
+    table.sort(parts)
+    if #parts > 0 then
+      session:issue({kind = "room_buy", room = dlg.mp_room_id, buy = table.concat(parts, ","), sell = ""})
+      log(string.format("furnishing %s #%d: buying %s", job.room_id, dlg.mp_room_id, table.concat(parts, ",")))
+    end
+    job.wait = step + session.delay + 3
+    return true
+  end
+  if job.wait and step < job.wait then return true end
+  job.wait = nil
+  if job.pending then
+    if count() < job.pending.count or step > job.pending.by_step then
+      job.pending = nil
+    else
+      return true
+    end
+  end
+  local o = dlg.objects[1]
+  if not o then
+    if dlg.confirm_button.enabled then
+      log(string.format("furnished %s #%d", job.room_id, dlg.mp_room_id))
+      dlg:confirm()
+    else
+      log("furnishing: " .. job.room_id .. " cannot be finished; cancelled")
+      dlg:cancel()
+    end
+    self.furnishing = nil
+    return false
+  end
+  job.tried = job.tried or {}
+  local rm = dlg.room
+  -- Where a player puts things: the furniture against the walls first; a
+  -- plant, bin, radiator, bookcase or extinguisher only into a corner or
+  -- against a wall, never in the middle of the room.
+  local small = {plant = true, bin = true, radiator = true, bookcase = true, extinguisher = true, skeleton = true}
+  local tiles = {}
+  for ty = rm.y, rm.y + rm.height - 1 do
+    for tx = rm.x, rm.x + rm.width - 1 do
+      local walls = (tx == rm.x and 1 or 0) + (tx == rm.x + rm.width - 1 and 1 or 0) +
+          (ty == rm.y and 1 or 0) + (ty == rm.y + rm.height - 1 and 1 or 0)
+      if walls > 0 or not small[o.object.id] then tiles[#tiles + 1] = {tx, ty, walls} end
+    end
+  end
+  table.sort(tiles, function(a, b)
+    if a[3] ~= b[3] then return a[3] > b[3] end
+    if a[2] ~= b[2] then return a[2] < b[2] end
+    return a[1] < b[1]
+  end)
+  for _, t in ipairs(tiles) do
+    local tx, ty = t[1], t[2]
+    for _, dir in ipairs({"north", "east", "south", "west"}) do
+      local key = string.format("%s:%d,%d:%s", o.object.id, tx, ty, dir)
+      if o.object.orientations[dir] and not job.tried[key] then
+        dlg:setActiveIndex(1)
+        dlg:setOrientation(dir)
+        dlg:setBlueprintCell(tx, ty)
+        if dlg.object_blueprint_good and not world:anyHumanoidObscuringArea(tx, ty) then
+          job.tried[key] = true
+          job.pending = {count = count(), by_step = step + session.delay + 3}
+          dlg:placeObject()
+          return true
+        end
+      end
+    end
+  end
+  -- No place for it: once the room has all it needs (or for an extra), the
+  -- rest of this object is sold again (extras bought of a needed object,
+  -- such as more beds, share its line); a needed object stops it all.
+  local needed = rm.room_info.objects_needed and rm.room_info.objects_needed[o.object.id]
+  if dlg.confirm_button.enabled or (job.extras[o.object.id] and not needed) then
+    log(string.format("furnishing: no place for %d more %s; selling", o.qty, o.object.id))
+    session:issue({kind = "room_buy", room = dlg.mp_room_id, buy = "", sell = o.object.id .. ":" .. o.qty})
+    job.extras[o.object.id] = nil
+    job.wait = step + session.delay + 3
+    return true
+  end
+  log("furnishing: no place for a needed " .. o.object.id .. "; cancelled")
+  dlg:cancel()
+  -- (Not this room type again for a while.)
+  if self.manager then self.manager.failed["room:" .. job.room_id] = self:gameDay() + 20 end
+  self.furnishing = nil
+  return false
+end
+
+--! Draw the next room of the fixed plan (the scripted bot). Returns the
+--! type drawn, or nil and why not ("money", "space", "done").
 function Bot:buildNextRoom()
   local hospital = self.world.ui.hospital
   for _, room_type in ipairs(self:roomPlan()) do
@@ -520,32 +914,9 @@ function Bot:buildNextRoom()
     if hospital:countRoomOfType(room_type.id, 1) == 0 and tries < 3 then
       if hospital.balance - self:roomCost(room_type) < RESERVE then return nil, "money" end
       self.room_tries[room_type.id] = tries + 1
-      local min = room_type.minimum_size or 4
-      local ax, ay = self:anchor()
-      local size = math.min(7, math.max(5, min + 1))
-      -- The size it would like with room around it, then smaller, then
-      -- packed against other walls.
-      local x, y, w
-      for s = size, min, -1 do
-        if not x then
-          x, y = builder.find_free_rect(self.world, ax, ay, s, s, 40)
-          w = s
-        end
-      end
-      for s = size, min, -1 do
-        if not x then
-          x, y = self:packedSpot(ax, ay, s, s)
-          w = s
-        end
-      end
-      if x then
-        local ok, res = pcall(builder.ui_room, self.world, ax, ay, room_type.id, w, w, true, log, {x, y})
-        if not ok then log("could not draw " .. room_type.id .. ": " .. tostring(res)) end
-        if ok and res then return room_type end
-      else
-        log(string.format("no space for a %s (%dx%d)", room_type.id, min, min))
-        return nil, "space"
-      end
+      local ok, why = self:drawRoom(room_type)
+      if ok then return room_type end
+      if why == "space" or why == "money" then return nil, why end
     end
   end
   return nil, "done"
@@ -605,8 +976,32 @@ function Bot:buyCorridor(object_id)
   table.sort(facings)
   local ax, ay = self:anchor()
   local placed
-  -- Tiles with free floor all around (so nothing blocks a corridor).
-  local x, y = builder.find_free_rect(world, ax, ay, 1, 1, 40, function(tx, ty)
+  -- As a player does: against a wall (of the building or a room), never in
+  -- front of a door, an entrance or the reception, so the open floor stays
+  -- free for rooms and nothing blocks a corridor. (A reception desk itself
+  -- goes where there is space around it.)
+  local hosp = ui.hospital
+  local clear = {}
+  local function keep(cx, cy, r)
+    for ky = cy - r, cy + r do
+      for kx = cx - r, cx + r do clear[ky * 1000 + kx] = true end
+    end
+  end
+  for _, r in pairs(world.rooms) do
+    if r.hospital == hosp and r.door and r.door.tile_x then keep(r.door.tile_x, r.door.tile_y, 1) end
+  end
+  for _, desk in ipairs(hosp:getReceptionDesks()) do
+    if desk.tile_x then keep(desk.tile_x, desk.tile_y, 2) end
+  end
+  for _, e in ipairs(world.entities) do
+    local id = e.object_type and e.object_type.id
+    if id and id:find("entrance", 1, true) and e.tile_x then keep(e.tile_x, e.tile_y, 2) end
+  end
+  local function wall(tx, ty)
+    return not hosp:isInHospital(tx, ty) or world:getRoom(tx, ty) ~= nil or
+        not world.map.th:getCellFlags(tx, ty).passable
+  end
+  local function fits(tx, ty)
     if world:anyHumanoidObscuringArea(tx, ty) then return false end
     for _, facing in ipairs(facings) do
       place:setOrientation(facing)
@@ -614,7 +1009,28 @@ function Bot:buyCorridor(object_id)
       if place.object_blueprint_good then return true end
     end
     return false
-  end)
+  end
+  local x, y
+  if object_id ~= "reception_desk" then
+    -- Nearest first, in a fixed order.
+    for r = 0, 40 do
+      for dy = -r, r do
+        for dx = -r, r do
+          local tx, ty = ax + dx, ay + dy
+          if not x and math.max(math.abs(dx), math.abs(dy)) == r and not clear[ty * 1000 + tx] and
+              self:freeTile(tx, ty) and (wall(tx - 1, ty) or wall(tx + 1, ty) or wall(tx, ty - 1) or
+              wall(tx, ty + 1)) and fits(tx, ty) then
+            x, y = tx, ty
+          end
+        end
+      end
+      if x then break end
+    end
+  end
+  if not x then
+    -- Tiles with free floor all around (so nothing blocks a corridor).
+    x, y = builder.find_free_rect(world, ax, ay, 1, 1, 40, fits)
+  end
   if x then
     place.object_cell_x, place.object_cell_y = x, y
     place:onMouseUp("left", 100000, 100000) -- a click outside the window
@@ -649,32 +1065,41 @@ function Bot:staffWanted()
   return want
 end
 
+--! Can it hire somebody of this category (Doctor, Nurse, Handyman,
+--! Receptionist, or a specialist: Psychiatrist, Surgeon, Researcher) now?
+function Bot:canHire(category)
+  local class, skill = category, SPECIALISTS[category]
+  if skill then class = "Doctor" end
+  local pool = self.world.available_staff[class]
+  if not pool or #pool == 0 then return false end
+  if not skill then return true end
+  for _, profile in ipairs(pool) do
+    if profile["is_" .. skill] == 1 then return true end
+  end
+  return false
+end
+
+--! Hire one member of staff of this category (see Bot:canHire).
+function Bot:hireCategory(category)
+  if self.world.ui.hospital.balance < RESERVE or not self:canHire(category) then return false end
+  local class, skill = category, SPECIALISTS[category]
+  if skill then class = "Doctor" end
+  local dx, dy = self:anchor()
+  local ok, err = pcall(builder.ui_hire, self.world, dx, dy, skill and (class .. ":" .. skill) or class, log)
+  if not ok then log("could not hire a " .. category .. ": " .. tostring(err)) end
+  return ok
+end
+
 --! Hire one member of staff the hospital lacks (specialists first).
 function Bot:hireOne()
-  local world = self.world
-  local hospital = world.ui.hospital
+  local hospital = self.world.ui.hospital
   if hospital.balance < RESERVE then return false end
   local want = self:staffWanted()
   local order = {"Receptionist", "Psychiatrist", "Surgeon", "Researcher", "Doctor", "Nurse", "Handyman"}
   for _, category in ipairs(order) do
     local need = want[category] or 0
-    if need > 0 and hospital:countStaffOfCategory(category, need) < need then
-      local class, skill = category, SPECIALISTS[category]
-      if skill then class = "Doctor" end
-      local pool = world.available_staff[class]
-      local has = pool and #pool > 0
-      if has and skill then
-        has = false
-        for _, profile in ipairs(pool) do
-          if profile["is_" .. skill] == 1 then has = true end
-        end
-      end
-      if has then
-        local dx, dy = self:anchor()
-        local ok, err = pcall(builder.ui_hire, world, dx, dy, skill and (class .. ":" .. skill) or class, log)
-        if not ok then log("could not hire a " .. category .. ": " .. tostring(err)) end
-        return ok
-      end
+    if need > 0 and hospital:countStaffOfCategory(category, need) < need and self:canHire(category) then
+      return self:hireCategory(category)
     end
   end
   return false
@@ -705,16 +1130,25 @@ end
 function Bot:playTrick()
   local world = self.world
   local mine = world.ui.hospital
-  local targets = {}
-  for index, hospital in ipairs(world.hospitals) do
-    local peer, name, is_bot = self:playerOfHospital(index)
-    if world:mpRivals(mine, hospital) and peer and not is_bot then targets[#targets + 1] = {hospital, name} end
+  local target, choice
+  if self.manager then
+    -- The rival closest to winning, and the trick that hurts it most.
+    local hosp, name = self.manager:trickTarget()
+    if not hosp then return false end
+    target, choice = {hosp, name}, self.manager:trickKind(hosp)
+  else
+    local targets = {}
+    for index, hospital in ipairs(world.hospitals) do
+      local peer, name, is_bot = self:playerOfHospital(index)
+      if world:mpRivals(mine, hospital) and peer and not is_bot then targets[#targets + 1] = {hospital, name} end
+    end
+    if #targets == 0 then return false end
+    target = pick(targets)
+    choice = self.tricks_played == 0 and {"handyman", "rats"} or sabotage.KINDS
   end
-  if #targets == 0 then return false end
-  local target = pick(targets)
   local kinds = {}
   -- (Only tricks this level allows yet: level 7 unlocks them month by month.)
-  for _, k in ipairs(self.tricks_played == 0 and {"handyman", "rats"} or sabotage.KINDS) do
+  for _, k in ipairs(choice) do
     local from = sabotage.unlockMonth(world, k, 1)
     if not from or world.game_date:monthOfGame() >= from then kinds[#kinds + 1] = k end
   end
@@ -799,7 +1233,8 @@ function Bot:think()
   local plan = self.plan
   local day = self:gameDay()
   self:answerOffers()
-  self:answerEmergencies()
+  -- (A person sharing the hospital answers its emergencies.)
+  if not (self.manager and self:sharesWithPerson()) then self:answerEmergencies() end
 
   if day >= plan.greet and not plan.greeted then
     plan.greeted = true
@@ -810,6 +1245,29 @@ function Bot:think()
     table.sort(others)
     local line = pick(LINES.greet[self.fiery and "fiery" or "friendly"]):format(others[1] and pick(others) or "everybody")
     self:say(line, typing(line))
+  end
+
+  if self.manager then
+    -- The smart brain: a room being furnished first, then the manager.
+    if self:furnishTick() then return end
+    if not hospital.mp_place and #hospital:getReceptionDesks() == 0 then
+      if day >= plan.desk then
+        plan.desk = self:later(3)
+        local ok, err = pcall(self.buyCorridor, self, "reception_desk")
+        if not ok then log("could not buy a desk: " .. tostring(err)) end
+      end
+      return
+    end
+    self.manager:think()
+    if self.fiery and day >= plan.trick and hospital.opened and not hospital.mp_place then
+      if self:playTrick() then
+        self.tricks_played = self.tricks_played + 1
+        plan.trick = self:later(rand(60, 120))
+      else
+        plan.trick = self:later(7)
+      end
+    end
+    return
   end
 
   -- A placed (won or out) racer does no more.
@@ -896,6 +1354,7 @@ function Bot:update()
   local session = TheApp.mp_session
   local world = TheApp.world
   self:flushOutbox()
+  self:expireAsks()
   if not session or not world or session.held then return end
   if world ~= self.world then self:attach(world) end
   self:closeWindows()
@@ -921,6 +1380,7 @@ local function run()
   corsixth.require("mp_session")
   builder = assert(loadfile(source_dir .. "/scripts/multiplayer/probe_builder.lua"))()
   sabotage = MultiplayerSession.sabotage
+  Manager = assert(loadfile(source_dir .. "/scripts/multiplayer/bot_manager.lua"))()
 
   local bot
   -- Money sent to it: seen when the command runs here (the game itself
@@ -935,6 +1395,34 @@ local function run()
       bot:moneyReceived(tonumber(cmd.hospital), tonumber(cmd.amount))
     end
     return ok, why
+  end
+  -- Why its patients leave (cured, sent away, too dear, fed up), counted
+  -- here only (the game's own counts stay as they are).
+  local go_home = Patient.goHome
+  Patient.goHome = function(patient, reason, ...)
+    local manager = bot and bot.manager
+    local world = TheApp.world
+    if manager and world and world.ui and patient.hospital == world.ui.hospital and not patient.going_home then
+      local key = tostring(reason)
+      if reason == "kicked" and patient.waiting then key = "fed_up" end
+      manager.left[key] = (manager.left[key] or 0) + 1
+      if reason ~= "cured" and patient.disease then
+        local d = patient.disease.id
+        manager.lost[d] = (manager.lost[d] or 0) + 1
+      end
+    end
+    return go_home(patient, reason, ...)
+  end
+  local counting = Patient.goHome
+  -- (A saved game must not hold this function: the class gets its own back
+  -- while the game is saved, and the counting one again afterwards.)
+  local save_game = SaveGameFile
+  SaveGameFile = function(...)
+    Patient.goHome = go_home
+    local results = {pcall(save_game, ...)}
+    Patient.goHome = counting
+    if not results[1] then error(results[2], 0) end
+    return unpack_args(results, 2)
   end
   -- The game ends for everybody (lost, or all back to the lobby): stop.
   local finished = false
@@ -961,6 +1449,8 @@ local function run()
   lobby:addListener(function(_, event, f)
     if event == "chat" then bot:onChat(f) end
   end)
+  -- The server's answers to its questions (advice; not a game message).
+  lobby._onANSWER = function(_, f) bot:onAnswer(f) end
   local session = TheApp.mp_session
   -- Speed votes are for the people (MultiplayerSession:voterCount).
   if session then session.abstains = true end
