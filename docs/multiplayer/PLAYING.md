@@ -79,8 +79,9 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
 5. **Race of team hospitals:** the same team buttons, but each team runs
    **one hospital together**, as in a shared game: team mates build, hire
    and answer faxes in the same hospital, and the two hospitals race. The
-   hospitals are named after their players ("JAN + ABI"). A bot cannot share
-   a hospital: put a bot on a team of its own.
+   hospitals are named after their players ("JAN + ABI"). A bot can be your
+   team mate too: it builds in your hospital along with you (a desk, rooms,
+   staff), and whatever you have already built it leaves alone.
 
 **Nobody to play with?** As the host, click an empty place in your room
 ("click: add a bot") and a computer player takes it; click the bot to take it

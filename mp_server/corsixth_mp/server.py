@@ -726,10 +726,6 @@ class Server:
         if self.referee_config is None:
             self._error(player, "no_bots", "This server cannot run bots")
             return
-        if room.mode == "teamshared" and room.continue_step is not None:
-            # The saved teams are fixed, and a bot cannot share a hospital.
-            self._error(player, "bot_team", "Bots cannot join a continued game of team hospitals")
-            return
         if room.is_full():
             self._error(player, "room_full", "The room is full")
             return
@@ -878,14 +874,6 @@ class Server:
                 len({p.team for p in room.players.values()}) < 2:
             self._error(player, "one_team", "Both teams need a player")
             return
-        if room.mode == "teamshared" and room.continue_step is None:
-            # A bot runs a hospital on its own: it cannot share one.
-            for t in TEAMS:
-                members = [p for p in room.players.values() if p.team == t]
-                if len(members) > 1 and any(p.is_bot for p in members):
-                    self._error(player, "bot_team",
-                                "A bot plays a team hospital alone; give it its own team")
-                    return
         not_ready = [p.name for p in room.players.values() if not p.ready and p is not player]
         not_ready += [entry[0] for entry in room.bots_pending.values()]
         if not_ready:

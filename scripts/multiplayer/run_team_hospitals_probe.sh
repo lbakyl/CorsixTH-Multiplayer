@@ -21,7 +21,11 @@
 #   6. a team mate leaves: gus quits at step 300; hospital 1 still counts as
 #      playing (dee runs it), and dee, eli and fay stay IN SYNC to the end
 # With MP_REFEREE=1 the server also runs its headless referee, and a 7th
-# check needs it to agree with the players to the end (both rooms).
+# check needs it to agree with the players to the end (all rooms). The
+# referee also lets the server run bots, for an 8th check in room "mixed":
+# hal (host) plays hospital 1 alone; Bot Agnes and ivy share hospital 2 and
+# both build in it (the bot its desk, receptionist, rooms and staff, ivy a
+# GP's office and a nurse), IN SYNC, and the referee agrees.
 # Exits 0 only if all checks behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
@@ -50,7 +54,9 @@ if [[ "${MP_REFEREE:-0}" == 1 ]]; then
   export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
   export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/referee"
   export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
-  export MP_REFEREE_PROBE_SCENARIO="trio=light;duo=light" # the probes' own start on every hospital
+  export MP_REFEREE_PROBE_SCENARIO="trio=light;duo=light;mixed=none" # the probes' own start on every hospital
+  # Bots act twenty times sooner than a person would, and answer at once.
+  export MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7
 fi
 PYTHONPATH="$source_dir/mp_server" python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
@@ -104,6 +110,12 @@ sleep 1
 run_probe fay MP_ROLE=join MP_ROOM=duo MP_TEAM=2 MP_STEPS=800 MP_UI_SCRIPT="60:teams" & pids+=($!)
 sleep 1
 run_probe gus MP_ROLE=join MP_ROOM=duo MP_TEAM=1 MP_STEPS=800 MP_UI_SCRIPT="60:teams;300:quit" & pids+=($!)
+if [[ "${MP_REFEREE:-0}" == 1 ]]; then
+  sleep 1
+  run_probe hal MP_ROLE=host MP_ROOM=mixed MP_MODE=teamshared MP_TEAM=1 MP_PLAYERS=3 MP_ADD_BOTS=1 MP_LEVEL=2     MP_STEPS=1200 MP_SCENARIO=none MP_UI_SCRIPT="60:teams;1150:hospitals" & pids+=($!)
+  sleep 3
+  run_probe ivy MP_ROLE=join MP_ROOM=mixed MP_TEAM=2 MP_STEPS=1200 MP_SCENARIO=none     MP_UI_SCRIPT="60:teams;400:room:gp:5:5;500:hire:Nurse;1150:hospitals" & pids+=($!)
+fi
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 python3 - "$out" "${MP_REFEREE:-0}" <<'PY'
@@ -184,7 +196,25 @@ print(f"6. Team mate leaves:        dee sees {states}; player_away commands {awa
 fail |= not ok6
 
 if with_referee:
-    for room, least in (('trio', 1100), ('duo', 800)):
+    # 8. A bot shares a team hospital with a person
+    ivy_teams = teams('ivy')
+    cmds = applied('hal', '(place_object|hire|build_room)')
+    bot_ok = {k for k in ('place_object', 'hire', 'build_room')
+              if any('peer 2 ' in x and k in x and x.endswith('-> ok') for x in cmds)}
+    ivy_room = any('peer 3 ' in x and 'build_room' in x and x.endswith('-> ok') for x in cmds)
+    report = re.findall(r'UI: hospitals at step \d+ .*?: (.*)', log('hal'))
+    h1 = re.search(r'\[1 HAL opened=\w+ balance=-?\d+ reputation=\d+ rooms=(\S*) ', report[-1]) if report else None
+    h2 = re.search(r'\[2 BOT AGNES \+ IVY opened=\w+ balance=-?\d+ reputation=\d+ rooms=(\S*) staff=(\S*) ', report[-1]) if report else None
+    ok8 = (ivy_teams is not None and ivy_teams[0] == '2' and ivy_teams[1] == '1=HAL:1 2=BOT AGNES + IVY:2'
+           and bot_ok == {'place_object', 'hire', 'build_room'} and ivy_room
+           and h1 is not None and h1.group(1) == '' and h2 is not None and 'gp' in h2.group(1)
+           and 'Receptionist' in h2.group(2)
+           and result('hal').startswith('IN SYNC') and result('ivy').startswith('IN SYNC'))
+    print(f"8. Bot shares a hospital:   ivy {ivy_teams[:2] if ivy_teams else '-'}; bot's commands ok: {sorted(bot_ok)}; "
+          f"ivy's room: {ivy_room}; hospital 2 rooms {h2.groups() if h2 else '-'}, hospital 1 rooms "
+          f"[{h1.group(1) if h1 else '-'}]; {result('hal')} / {result('ivy')}")
+    fail |= not ok8
+    for room, least in (('trio', 1100), ('duo', 800), ('mixed', 1200)):
         confirmed = re.search(rf"room '{room}': referee confirmed steps through (\d+)", server)
         clean = not re.search(rf"room '{room}': (the players differ|repaired)", server)
         ok7 = bool(confirmed and int(confirmed.group(1)) >= least - 100 and clean)

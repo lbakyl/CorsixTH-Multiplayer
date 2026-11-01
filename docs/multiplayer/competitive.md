@@ -272,14 +272,17 @@ plus `world.mp_coop.team_hospitals = true`.
   server (`Server._team_seats`) seats every player in the hospital whose name
   lists theirs, anybody else in the hospital with fewer players, and sizes
   the room by the number of saved names.
-- Bots: a bot runs a hospital alone, so `START` is refused (`bot_team`) while
-  a bot shares a team with anybody, and bots cannot join a continued game of
-  team hospitals.
+- Bots: a bot may share its team's hospital with people (or other bots). It
+  decides from what the hospital already has (a desk, one room of each type,
+  the staff the rooms need), so it adds to what its team mates build; two
+  builds on the same spot are refused on every peer as usual. In a continued
+  game a bot takes a saved player's name and sits in that player's hospital.
 
 Tests: `scripts/multiplayer/run_team_hospitals_probe.sh BIN DATA` (rooms
 trio, 2 against 1, and duo, 2 against 2; `MP_REFEREE=1` adds the referee
-check). Server: `test_team_hospitals_room_and_bots`,
-`test_team_hospitals_continued_seats`, `test_team_seats_without_a_saved_name`.
+check, and with it room "mixed": a bot and a person share hospital 2).
+Server: `test_team_hospitals_room_and_bots`, `test_team_hospitals_continued_seats`,
+`test_team_hospitals_continued_with_a_bot`, `test_team_seats_without_a_saved_name`.
 
 ## Ideas not done yet
 

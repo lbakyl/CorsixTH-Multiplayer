@@ -730,6 +730,9 @@ local function run()
     for i, entry in ipairs(ui_script) do
       if not done[i] and session.step >= entry.hour then
         done[i] = true
+        -- Without a test setup (MP_SCENARIO=none) build from where a person
+        -- would: the reception desk, or the middle of the hospital.
+        if not desk_x then desk_x, desk_y = builder.anchor(world) end
         local a, live = entry.action, entry.live
         if a == "buy" then builder.ui_buy(world, desk_x, desk_y, entry.arg, log)
         elseif a == "openhospital" then
