@@ -912,30 +912,24 @@ def test_team_hospitals_room_and_bots():
         await ben.expect("JOINED")
         await ann.expect("PLAYER", name="Ben", team="1")
         ben.send(encode("READY", ready=1))
-        # A bot runs a hospital alone: it cannot share its team's.
+        # A bot may share its team's hospital with a person.
         ben.send(encode("TEAM", team=2))
         await ann.expect("PLAYER", name="Ben", team="2")
         ann.send(encode("START"))
-        assert (await ann.expect("ERROR"))["code"] == "bot_team"
-        ben.send(encode("TEAM", team=1))
-        await ann.expect("PLAYER", name="Ben", team="1")
-        ann.send(encode("START"))
         st = await ann.expect("START")
-        assert st["mode"] == "teamshared" and st["teams"] == "1:1,2:2,3:1"
+        assert st["mode"] == "teamshared" and st["teams"] == "1:1,2:2,3:2"
     run_with_bots(body)
 
 
 def test_team_hospitals_continued_seats():
     async def body(server, port, bots):
         # A saved game of team hospitals names each hospital after its
-        # players: the room has a place per name, everybody sits in their
-        # team's hospital, and no bot can take a place.
+        # players: the room has a place per name and everybody sits in their
+        # team's hospital.
         ann = await Client.connect(port, "Ann")
         ann.send(encode("CREATE", room="again", password="", max=2, mode="teamshared", level=2,
                         step=300, date="1-02-10T05", seats="ANN + BEN,CAT", **{"continue": 1}))
         assert (await ann.expect("JOINED"))["max"] == "3"
-        ann.send(encode("BOT", add=1))
-        assert (await ann.expect("ERROR"))["code"] == "bot_team"
         cat = await Client.connect(port, "Cat")
         cat.send(encode("JOIN", room="again", password=""))
         await cat.expect("JOINED")
@@ -961,3 +955,27 @@ def test_team_seats_without_a_saved_name():
     for peer, name in ((1, "Ann"), (2, "Zed"), (3, "Ben")):
         room.players[peer] = srv.Player(pid=peer, writer=None, name=name)
     assert srv.Server._seats(room) == {1: 1, 2: 2, 3: 1}
+
+
+def test_team_hospitals_continued_with_a_bot():
+    async def body(server, port, bots):
+        # A bot takes a saved player's place (their name) and sits in that
+        # player's team hospital, next to the team mate who came back.
+        ann = await Client.connect(port, "Ann")
+        ann.send(encode("CREATE", room="again", password="", max=2, mode="teamshared", level=2,
+                        step=300, date="1-02-10T05", seats="ANN + BEN,CAT", **{"continue": 1}))
+        await ann.expect("JOINED")
+        ann.send(encode("BOT", add=1))
+        await started_bots(bots, 1)
+        assert bots[0]["name"] == "BEN"
+        bot = await connect_bot(port, bots[0])
+        await bot.expect("JOINED")
+        cat = await Client.connect(port, "Cat")
+        cat.send(encode("JOIN", room="again", password=""))
+        await cat.expect("JOINED")
+        cat.send(encode("READY", ready=1))
+        await ann.expect("PLAYER", name="Cat", ready="1")
+        ann.send(encode("START"))
+        st = await ann.expect("START")
+        assert st["seats"] == "1:1,2:1,3:2"
+    run_with_bots(body)
