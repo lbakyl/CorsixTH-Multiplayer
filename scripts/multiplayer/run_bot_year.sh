@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 # Usage: bash scripts/multiplayer/run_bot_year.sh BINARY GAME_DATA [LEVEL] [STEPS]
 #
-# The bots' brains side by side: two co-op rooms on the same level, each with
-# a scripted player who only watches (its hospital stays closed, so its
-# patients go to the bot) and one bot: "plan" has the fixed building plan
-# (MP_BOT_BRAIN=script), "smart" the hospital manager (bot_manager.lua).
+# The bots' brains side by side: co-op rooms on the same level, each with a
+# scripted player who only watches (its hospital stays closed, so its
+# patients go to the bot) and one bot. MP_YEAR_ROOMS lists room:brain pairs
+# (default "plan:script smart:smart": the fixed building plan against the
+# hospital manager, bot_manager.lua; "manager" is the manager without the
+# server's advice). With ANTHROPIC_API_KEY set (and the anthropic package
+# for MP_PYTHON) the "smart" bots get the language model's advice.
 # Both play STEPS lockstep steps (default 18000, about a game year) as fast
 # as they can; every 3000 steps the watcher logs every hospital (rooms,
 # staff, money, reputation, value, cures, deaths, goals). Prints the two
 # bots' hospitals at the end. Exits 0 if both games stayed in sync.
 #
-# Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
+# Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it, or
+# MP_LUA_CPATH/MP_LUA_PATH set) and python3 (MP_PYTHON).
 set -euo pipefail
 if [[ $# -lt 2 ]]; then
   echo "Usage: $0 BINARY GAME_DATA [LEVEL] [STEPS]" >&2
@@ -21,7 +25,8 @@ binary=$(realpath "$1")
 game_data=$(realpath "$2")
 level=${3:-1}
 steps=${4:-18000}
-: "${LUASOCKET_TREE:?Set LUASOCKET_TREE to a LuaRocks tree containing luasocket}"
+rooms=${MP_YEAR_ROOMS:-plan:script smart:smart}
+python=${MP_PYTHON:-python3}
 lua_ver=${LUA_VERSION_DIR:-5.4}
 out=$(mktemp -d "${TMPDIR:-/tmp}/corsixth-botyear.XXXXXXXX")
 echo "Probe output: $out"
@@ -29,16 +34,21 @@ echo "Probe output: $out"
 export CORSIXTH_SOURCE="$source_dir"
 export USER="${USER:-corsixth-probe}"
 export SDL_VIDEODRIVER=dummy SDL_AUDIO_DRIVER=dummy SDL_RENDER_DRIVER=software
-export MP_LUA_CPATH="$LUASOCKET_TREE/lib/lua/$lua_ver/?.so"
-export MP_LUA_PATH="$LUASOCKET_TREE/share/lua/$lua_ver/?.lua"
+if [[ -z "${MP_LUA_CPATH:-}" ]]; then
+  : "${LUASOCKET_TREE:?Set LUASOCKET_TREE to a LuaRocks tree containing luasocket}"
+  export MP_LUA_CPATH="$LUASOCKET_TREE/lib/lua/$lua_ver/?.so"
+  export MP_LUA_PATH="$LUASOCKET_TREE/share/lua/$lua_ver/?.lua"
+fi
+brains="" scenarios=""
+for r in $rooms; do brains="$brains;${r%%:*}=${r#*:}"; scenarios="$scenarios;${r%%:*}=none"; done
 
 port=$((47000 + RANDOM % 900))
 export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
 export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/headless"
 export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
-export MP_REFEREE_PROBE_SCENARIO="plan=none;smart=none"
-MP_BOT_BRAIN="plan=script;smart=smart" MP_BOT_FAST=1 MP_BOT_SEED="${MP_BOT_SEED:-7}" \
-  PYTHONPATH="$source_dir/mp_server" python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
+export MP_REFEREE_PROBE_SCENARIO="${scenarios#;}"
+MP_BOT_BRAIN="${brains#;}" MP_BOT_FAST=1 MP_BOT_SEED="${MP_BOT_SEED:-7}" CORSIXTH_MP_AI_STATE="$out/ai-spend.json" \
+  PYTHONPATH="$source_dir/mp_server" "$python" -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
 server_pid=$!
 trap 'kill $server_pid 2>/dev/null || true' EXIT
@@ -58,15 +68,17 @@ run_watcher() { # name room
     "--interpreter=$source_dir/scripts/multiplayer/lobby_probe.lua" \
     "--config-file=$dir/config.txt" > "$dir/log.txt" 2>&1 || true
 }
-run_watcher pia plan & a=$!
-run_watcher sam smart & b=$!
-wait $a $b || true
+pids=()
+for r in $rooms; do run_watcher "w${r%%:*}" "${r%%:*}" & pids+=($!); done
+wait "${pids[@]}" || true
 
-python3 - "$out" <<'PY'
-import pathlib, re, sys
+python3 - "$out" $rooms <<'PY'
+import json, pathlib, re, sys
 out = pathlib.Path(sys.argv[1])
 fail = False
-for name, room in (('pia', 'plan'), ('sam', 'smart')):
+for spec in sys.argv[2:]:
+    room = spec.split(':')[0]
+    name = 'w' + room
     text = (out / name / 'log.txt').read_text()
     res = re.search(r'RESULT: (.*)', text)
     print(f"{room}: {res.group(1) if res else 'no result'}")
@@ -74,5 +86,11 @@ for name, room in (('pia', 'plan'), ('sam', 'smart')):
     for step, date, rest in re.findall(r'UI: hospitals at step (\d+) \(([^)]*)\): (.*)', text):
         bot = re.search(r'\[2 (.*?)\]', rest)
         print(f"  step {step} ({date}): {bot.group(1) if bot else '-'}")
+server = (out / 'server.log').read_text()
+asks = len(re.findall(r'advice: \d+ in', server))
+spend = out / 'ai-spend.json'
+if asks:
+    spent = json.loads(spend.read_text())['spent'] if spend.exists() else 0
+    print(f"advice: {asks} answers, ${spent:.4f}")
 sys.exit(1 if fail else 0)
 PY

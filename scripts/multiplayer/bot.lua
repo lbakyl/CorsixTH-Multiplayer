@@ -31,8 +31,10 @@
 --   MP_BOT_FAST          1: run the game as fast as the others allow and
 --                        answer at once (scripted tests)
 --   MP_BOT_BRAIN         "smart" (default: scripts/multiplayer/bot_manager.lua
---                        decides from the hospital's needs) or "script" (the
---                        fixed plan below); "Name=script;Other=smart" per bot
+--                        decides from the hospital's needs, with the server's
+--                        advice if it has any), "manager" (the same without
+--                        advice) or "script" (the fixed plan below);
+--                        "Name=script;Other=smart" per bot
 --                        or per room
 local args = {...}
 local unpack_args = table.unpack or unpack
@@ -262,6 +264,8 @@ function Bot.new(lobby)
     self.manager = Manager.new(self, {log = log, rand = rand, pick = pick, sabotage = sabotage, lines = LINES,
         typing = function(text) return 1.5 + #text * 0.06 + rand() * 2 end})
   end
+  -- "manager": the same brain, without the language model's advice.
+  if self.brain == "manager" then self.ai = "off" end
   log("brain: " .. self.brain)
   return self
 end
