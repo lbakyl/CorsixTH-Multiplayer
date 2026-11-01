@@ -1238,6 +1238,17 @@ local function run()
     end
     return go_home(patient, reason, ...)
   end
+  local counting = Patient.goHome
+  -- (A saved game must not hold this function: the class gets its own back
+  -- while the game is saved, and the counting one again afterwards.)
+  local save_game = SaveGameFile
+  SaveGameFile = function(...)
+    Patient.goHome = go_home
+    local results = {pcall(save_game, ...)}
+    Patient.goHome = counting
+    if not results[1] then error(results[2], 0) end
+    return unpack_args(results, 2)
+  end
   -- The game ends for everybody (lost, or all back to the lobby): stop.
   local finished = false
   MultiplayerSession.finishGame = function(self)
