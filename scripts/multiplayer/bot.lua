@@ -852,20 +852,36 @@ function Bot:furnishTick()
   end
   job.tried = job.tried or {}
   local rm = dlg.room
+  -- Where a player puts things: the furniture against the walls first; a
+  -- plant, bin, radiator, bookcase or extinguisher only into a corner or
+  -- against a wall, never in the middle of the room.
+  local small = {plant = true, bin = true, radiator = true, bookcase = true, extinguisher = true, skeleton = true}
+  local tiles = {}
   for ty = rm.y, rm.y + rm.height - 1 do
     for tx = rm.x, rm.x + rm.width - 1 do
-      for _, dir in ipairs({"north", "east", "south", "west"}) do
-        local key = string.format("%s:%d,%d:%s", o.object.id, tx, ty, dir)
-        if o.object.orientations[dir] and not job.tried[key] then
-          dlg:setActiveIndex(1)
-          dlg:setOrientation(dir)
-          dlg:setBlueprintCell(tx, ty)
-          if dlg.object_blueprint_good and not world:anyHumanoidObscuringArea(tx, ty) then
-            job.tried[key] = true
-            job.pending = {count = count(), by_step = step + session.delay + 3}
-            dlg:placeObject()
-            return true
-          end
+      local walls = (tx == rm.x and 1 or 0) + (tx == rm.x + rm.width - 1 and 1 or 0) +
+          (ty == rm.y and 1 or 0) + (ty == rm.y + rm.height - 1 and 1 or 0)
+      if walls > 0 or not small[o.object.id] then tiles[#tiles + 1] = {tx, ty, walls} end
+    end
+  end
+  table.sort(tiles, function(a, b)
+    if a[3] ~= b[3] then return a[3] > b[3] end
+    if a[2] ~= b[2] then return a[2] < b[2] end
+    return a[1] < b[1]
+  end)
+  for _, t in ipairs(tiles) do
+    local tx, ty = t[1], t[2]
+    for _, dir in ipairs({"north", "east", "south", "west"}) do
+      local key = string.format("%s:%d,%d:%s", o.object.id, tx, ty, dir)
+      if o.object.orientations[dir] and not job.tried[key] then
+        dlg:setActiveIndex(1)
+        dlg:setOrientation(dir)
+        dlg:setBlueprintCell(tx, ty)
+        if dlg.object_blueprint_good and not world:anyHumanoidObscuringArea(tx, ty) then
+          job.tried[key] = true
+          job.pending = {count = count(), by_step = step + session.delay + 3}
+          dlg:placeObject()
+          return true
         end
       end
     end
