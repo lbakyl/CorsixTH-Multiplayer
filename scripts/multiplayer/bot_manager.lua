@@ -392,10 +392,12 @@ function M:issue(cmd)
 end
 
 --! Small things a player does every day: handymen to worn machines, the
---! heating, a loan when money runs out, faxes, rats and evil handymen.
+--! heating, a loan when money runs out, faxes, rats and evil handymen. A
+--! helper (a person runs the hospital too) only sends the handymen.
 function M:daily(s)
   local bot = self.bot
   local hosp = s.hosp
+  local helper = bot:sharesWithPerson()
   -- Worn machines: a handyman to each (once in a while per machine).
   if (s.staff.Handyman or 0) > 0 then
     for _, m in ipairs(s.worn) do
@@ -406,6 +408,7 @@ function M:daily(s)
       end
     end
   end
+  if helper then return end
   -- Heating: warmer when patients are cold, cooler when they are hot.
   if hosp.opened and s.patients >= 4 and (s.objects.radiator or 0) > 0 then
     if s.cold > s.patients / 4 and s.heat < 8 then
@@ -727,12 +730,14 @@ function M:think()
   local s = self:assess()
   self:daily(s)
   if s.hosp.mp_place then return end -- out of the race (or won): no more building
-  if not s.hosp.opened and s.staffed_desks > 0 and s.rooms.gp and (s.staff.Doctor or 0) > 0 then
+  if not s.hosp.opened and s.staffed_desks > 0 and s.rooms.gp and (s.staff.Doctor or 0) > 0 and
+      not bot:sharesWithPerson() then
     bot:openHospital()
   end
   if s.month ~= self.last_month then
     self.last_month = s.month
-    self:monthly(s)
+    -- (Prices, the loan and research belong to a person sharing the hospital.)
+    if bot:sharesWithPerson() then self.log(self:monthLine(s)) else self:monthly(s) end
     bot:askPlan()
   end
   self:doProject(s)

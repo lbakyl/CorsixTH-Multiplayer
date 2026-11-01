@@ -317,6 +317,21 @@ function Bot:playerOfHospital(index)
   end
 end
 
+--! Does a person run this hospital too (one shared hospital, or a team
+--! hospital)? Then the bot only helps: it builds and staffs, and leaves the
+--! hospital's decisions (prices, loans, heating, research, faxes) to them.
+function Bot:sharesWithPerson()
+  local session = TheApp.mp_session
+  local mine = self:hospitalIndex()
+  for peer, h in pairs(self.lobby.peer_hospital or {}) do
+    if h == mine and peer ~= (session and session.peer_id) then
+      local _, is_bot = self:playerName(peer)
+      if not is_bot then return true end
+    end
+  end
+  return false
+end
+
 function Bot:hospitalIndex()
   return TheApp.mp_session and TheApp.mp_session.hospital_index or 1
 end
@@ -437,8 +452,8 @@ function Bot:onChat(f)
     local brief = report:match("^[^\n]*\n[^\n]*") or report
     local asked = self:ask("chat", {text = brief, lines = table.concat(self.chat_lines, "\n"),
         rival = (self.fiery and not mate) and 1 or nil}, 10, function(answer)
-      local text = answer and answer.text or line
-      self:say(text, typing(text), to)
+      local reply = answer and answer.text or line
+      self:say(reply, typing(reply), to)
     end)
     if asked then return end
   end
@@ -1063,7 +1078,8 @@ function Bot:think()
   local plan = self.plan
   local day = self:gameDay()
   self:answerOffers()
-  self:answerEmergencies()
+  -- (A person sharing the hospital answers its emergencies.)
+  if not (self.manager and self:sharesWithPerson()) then self:answerEmergencies() end
 
   if day >= plan.greet and not plan.greeted then
     plan.greeted = true

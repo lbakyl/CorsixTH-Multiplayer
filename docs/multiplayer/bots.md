@@ -69,6 +69,11 @@ best project it can afford is done, one every one to four game days.
   up with a good reputation and full queues, down when it suffers), repaying
   the loan when money allows, research aimed at the disease whose treatment
   room it lacks most.
+- **Sharing a hospital with a person** (one shared hospital, or a team
+  hospital): the bot only helps. It builds, furnishes, hires, sends handymen
+  and buys corridor items, and leaves prices, loans, heating, research, opening
+  the hospital and its faxes (patients, VIPs, epidemics, emergencies) to the
+  person (`Bot:sharesWithPerson`).
 - **Dirty tricks** (race): on the rival closest to winning (a person before a
   bot), the kind that hurts it most (an evil handyman for a hospital with
   machines, an epidemic or emergency for a staffed desk, else rats).
