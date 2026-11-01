@@ -780,10 +780,12 @@ function Bot:furnishTick()
       end
     end
   end
-  -- No place for it: an extra is sold again; a needed object stops it all.
+  -- No place for it: once the room has all it needs (or for an extra), the
+  -- rest of this object is sold again (extras bought of a needed object,
+  -- such as more beds, share its line); a needed object stops it all.
   local needed = rm.room_info.objects_needed and rm.room_info.objects_needed[o.object.id]
-  if job.extras[o.object.id] and not needed then
-    log(string.format("furnishing: no place for a %s; selling it", o.object.id))
+  if dlg.confirm_button.enabled or (job.extras[o.object.id] and not needed) then
+    log(string.format("furnishing: no place for %d more %s; selling", o.qty, o.object.id))
     session:issue({kind = "room_buy", room = dlg.mp_room_id, buy = "", sell = o.object.id .. ":" .. o.qty})
     job.extras[o.object.id] = nil
     job.wait = step + session.delay + 3
@@ -791,6 +793,8 @@ function Bot:furnishTick()
   end
   log("furnishing: no place for a needed " .. o.object.id .. "; cancelled")
   dlg:cancel()
+  -- (Not this room type again for a while.)
+  if self.manager then self.manager.failed["room:" .. job.room_id] = self:gameDay() + 20 end
   self.furnishing = nil
   return false
 end

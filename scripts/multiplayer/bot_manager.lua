@@ -278,10 +278,11 @@ function M:projects(s)
   if gp_per > BUSY_QUEUE and s.rooms.general_diag and s.rooms.general_diag < COPIES.general_diag then
     room("general_diag", gp_per - BUSY_QUEUE + 1)
   end
-  -- Busy rooms: another one of the type.
+  -- Busy rooms: another one of the type. (A room without its doctor at
+  -- this moment is no reason not to: the doctor may be on a break.)
   for id, n in pairs(s.rooms) do
     local per = s.queue[id] / n
-    if per > BUSY_QUEUE and n < (COPIES[id] or 1) and not s.unstaffed[id] then
+    if per > BUSY_QUEUE and n < (COPIES[id] or 1) then
       room(id, (per - BUSY_QUEUE + 1) * 1.2, id == "ward" and 7 or nil)
     end
   end
