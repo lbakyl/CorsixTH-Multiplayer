@@ -892,3 +892,72 @@ def test_theme_hospital_data_check(tmp_path):
         finally:
             await server.close()
     asyncio.run(main())
+
+
+def test_team_hospitals_room_and_bots():
+    async def body(server, port, bots):
+        ann = await Client.connect(port, "Ann")
+        ann.send(encode("CREATE", room="pair", password="", max=3, mode="teamshared", level=2))
+        assert (await ann.expect("JOINED"))["mode"] == "teamshared"
+        assert (await ann.expect("PLAYER"))["team"] == "1"
+        # A bot joins the smaller team, the next person the other one.
+        ann.send(encode("BOT", add=1))
+        await started_bots(bots, 1)
+        assert bots[0]["mode"] == "teamshared"
+        agnes = await connect_bot(port, bots[0])
+        await agnes.expect("JOINED")
+        await ann.expect("PLAYER", name="Bot Agnes", team="2")
+        ben = await Client.connect(port, "Ben")
+        ben.send(encode("JOIN", room="pair", password=""))
+        await ben.expect("JOINED")
+        await ann.expect("PLAYER", name="Ben", team="1")
+        ben.send(encode("READY", ready=1))
+        # A bot runs a hospital alone: it cannot share its team's.
+        ben.send(encode("TEAM", team=2))
+        await ann.expect("PLAYER", name="Ben", team="2")
+        ann.send(encode("START"))
+        assert (await ann.expect("ERROR"))["code"] == "bot_team"
+        ben.send(encode("TEAM", team=1))
+        await ann.expect("PLAYER", name="Ben", team="1")
+        ann.send(encode("START"))
+        st = await ann.expect("START")
+        assert st["mode"] == "teamshared" and st["teams"] == "1:1,2:2,3:1"
+    run_with_bots(body)
+
+
+def test_team_hospitals_continued_seats():
+    async def body(server, port, bots):
+        # A saved game of team hospitals names each hospital after its
+        # players: the room has a place per name, everybody sits in their
+        # team's hospital, and no bot can take a place.
+        ann = await Client.connect(port, "Ann")
+        ann.send(encode("CREATE", room="again", password="", max=2, mode="teamshared", level=2,
+                        step=300, date="1-02-10T05", seats="ANN + BEN,CAT", **{"continue": 1}))
+        assert (await ann.expect("JOINED"))["max"] == "3"
+        ann.send(encode("BOT", add=1))
+        assert (await ann.expect("ERROR"))["code"] == "bot_team"
+        cat = await Client.connect(port, "Cat")
+        cat.send(encode("JOIN", room="again", password=""))
+        await cat.expect("JOINED")
+        ben = await Client.connect(port, "Ben")
+        ben.send(encode("JOIN", room="again", password=""))
+        await ben.expect("JOINED")
+        dan = await Client.connect(port, "Dan")
+        dan.send(encode("JOIN", room="again", password=""))
+        assert (await dan.expect("ERROR"))["code"] == "room_full"
+        for c in (cat, ben):
+            c.send(encode("READY", ready=1))
+        ann.send(encode("START"))
+        st = await ann.expect("START")
+        assert st["mode"] == "teamshared" and st["seats"] == "1:1,2:2,3:1"
+    run_with_bots(body)
+
+
+def test_team_seats_without_a_saved_name():
+    # Somebody whose name is not saved joins the hospital with fewer players.
+    room = srv.Room(name="r", salt=b"", password_hash=None, build="b", max_players=4,
+                    mode="teamshared", level=1, difficulty="full", speed_control="any",
+                    owner=None, seat_names=["ANN + BEN", "CAT"])
+    for peer, name in ((1, "Ann"), (2, "Zed"), (3, "Ben")):
+        room.players[peer] = srv.Player(pid=peer, writer=None, name=name)
+    assert srv.Server._seats(room) == {1: 1, 2: 2, 3: 1}

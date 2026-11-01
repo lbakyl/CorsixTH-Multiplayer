@@ -259,8 +259,15 @@ function MultiplayerSession:_markPlayerAway(peer)
     if p ~= 0 and (not lowest or p < lowest) then lowest = p end
   end
   if lowest ~= self.peer_id then return end
-  local index = self.lobby and self.lobby.peer_hospital and self.lobby.peer_hospital[peer]
-  if index then self:issue({kind = "player_away", seat = index, away = 1}) end
+  local seats = self.lobby and self.lobby.peer_hospital
+  local index = seats and seats[peer]
+  if not index then return end
+  -- A hospital run by a team (mode teamshared) is away only once all its
+  -- players are.
+  for _, p in ipairs(self.peers) do
+    if p ~= peer and p ~= 0 and seats[p] == index then return end
+  end
+  self:issue({kind = "player_away", seat = index, away = 1})
 end
 
 --! The relay server found differing fingerprints at `step`.

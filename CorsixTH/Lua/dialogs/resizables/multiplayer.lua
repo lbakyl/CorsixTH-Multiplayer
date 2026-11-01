@@ -389,7 +389,7 @@ function UIMultiplayer:_buildRoom()
   -- A race of two teams (not a continued one: its teams come with the save):
   -- each player's team on a button at the end of their line.
   local room = self.lobby.room
-  local team_w = (room.mode == "teams" and room["continue"] ~= "1") and 80 or 0
+  local team_w = (MultiplayerLobby.isTeams(room.mode) and room["continue"] ~= "1") and 80 or 0
   local line_w = WIDTH - 40 - (team_w > 0 and team_w + 5 or 0)
   self.team_buttons = team_w > 0 and {} or nil
   for i = 1, 4 do

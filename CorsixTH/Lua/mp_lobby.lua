@@ -37,18 +37,26 @@ MultiplayerLobby.PROTOCOL = 1
 MultiplayerLobby.DEFAULT_PORT = 47800
 
 --! Room modes: one shared hospital; a hospital each, as a team (co-op); a
---! hospital each, racing to the level's goals (competitive); or a race of
---! two teams, a hospital each (teams: 2 against 2, 2 against 1, ...).
-MultiplayerLobby.MODES = {"shared", "coop", "competitive", "teams"}
+--! hospital each, racing to the level's goals (competitive); a race of two
+--! teams, a hospital each (teams: 2 against 2, 2 against 1, ...); or a race
+--! of two teams, one hospital per team that its players run together
+--! (teamshared).
+MultiplayerLobby.MODES = {"shared", "coop", "competitive", "teams", "teamshared"}
 
---! Does a room of this mode give every player a hospital of their own?
+--! Does a game of this mode have several hospitals (the co-op machinery:
+--! world.mp_coop)? A hospital per player, or with "teamshared" one per team.
 function MultiplayerLobby.hospitalEach(mode)
-  return mode == "coop" or mode == "competitive" or mode == "teams"
+  return mode == "coop" or mode == "competitive" or mode == "teams" or mode == "teamshared"
 end
 
 --! Is a game of this mode a race (places, dirty tricks)?
 function MultiplayerLobby.isRace(mode)
-  return mode == "competitive" or mode == "teams"
+  return mode == "competitive" or mode == "teams" or mode == "teamshared"
+end
+
+--! Do the players of a room of this mode pick a team (Team A / Team B)?
+function MultiplayerLobby.isTeams(mode)
+  return mode == "teams" or mode == "teamshared"
 end
 
 --! The lobby's name for a mode.
@@ -57,13 +65,16 @@ function MultiplayerLobby.modeLabel(mode)
   if mode == "coop" then return S.mode_coop end
   if mode == "competitive" then return S.mode_competitive end
   if mode == "teams" then return S.mode_teams end
+  if mode == "teamshared" then return S.mode_teamshared end
   return S.mode_shared
 end
 
 --! The mode of a running game, from its world.
 function MultiplayerLobby.worldMode(world)
   if not (world and world.mp_coop) then return "shared" end
-  if world.mp_coop.teams then return "teams" end
+  if world.mp_coop.teams then
+    return world.mp_coop.team_hospitals and "teamshared" or "teams"
+  end
   return world.mp_coop.competitive and "competitive" or "coop"
 end
 
@@ -1040,7 +1051,8 @@ function MultiplayerLobby:_addMultiplayerMenu(ui, mode)
     local current = TheApp.ui -- the menu bar outlives a desync repair's load
     current:addWindow(UIMultiplayerPlayers(current))
   end)
-  if coop then
+  -- With a hospital per team nobody has a team mate's hospital to trade with.
+  if coop and mode ~= "teamshared" then
     menu:appendItem(_S.multiplayer_window.menu_trade, function()
       local current = TheApp.ui
       current:addWindow(UIMultiplayerTrade(current))
@@ -1049,6 +1061,8 @@ function MultiplayerLobby:_addMultiplayerMenu(ui, mode)
     menu:appendItem(_S.multiplayer_window.menu_research, function()
       UIMultiplayerResearch.open(TheApp.ui)
     end)
+  end
+  if coop then
     -- Player colours under the patients and staff (MultiplayerSession.drawMarkers).
     local colours = UIMenu()
     for _, choice in ipairs({"all", "others", "off"}) do
@@ -1111,7 +1125,14 @@ function MultiplayerLobby:_beginGame(f)
   -- neighbouring plots (worked out the same way on every peer).
   local team_of, team_seats = {}, nil
   for p, team in (f.teams or ""):gmatch("(%d+):(%d+)") do team_of[tonumber(p)] = tonumber(team) end
-  if coop and f.mode == "teams" and next(team_of) and not f.seats then
+  -- A hospital per team: team A runs hospital 1, team B hospital 2, so the
+  -- game has two hospitals however many players there are.
+  local team_hospitals = f.mode == "teamshared"
+  local hospital_count = team_hospitals and 2 or #peers
+  if team_hospitals and not f.seats then
+    team_seats = {}
+    for _, p in ipairs(peers) do team_seats[p] = team_of[p] == 2 and 2 or 1 end
+  elseif coop and f.mode == "teams" and next(team_of) and not f.seats then
     local mp_levels = corsixth.require("mp_levels")
     team_seats = mp_levels.teamSeats(peers, team_of,
         mp_levels.hospitalTiles(app, #peers, tonumber(f.level) or 1))
@@ -1137,19 +1158,30 @@ function MultiplayerLobby:_beginGame(f)
     for i, p in ipairs(peers) do
       local player = self.players[p]
       local index = team_seats and team_seats[p] or i
-      names[index] = (start_names[i] or (player and player.name) or ("Player " .. p)):upper()
+      local name = (start_names[i] or (player and player.name) or ("Player " .. p)):upper()
+      if team_hospitals then
+        -- A team's hospital is named after all its players ("ANN + BEN").
+        names[index] = names[index] and (names[index] .. " + " .. name) or name
+      else
+        names[index] = name
+      end
       if p == tonumber(f.peer) then my_index = index end
       if team_seats then
         teams = teams or {}
         teams[index] = team_of[p] == 2 and 2 or 1
       end
     end
+    if team_hospitals then
+      teams = {1, 2}
+      for t = 1, 2 do names[t] = names[t] or ("TEAM " .. string.char(64 + t)) end
+    end
     -- A saved game continued: the server gave every player a hospital.
     for p, index in (f.seats or ""):gmatch("(%d+):(%d+)") do
       if tonumber(p) == tonumber(f.peer) then my_index = tonumber(index) end
     end
-    app.mp_coop = {players = #peers, local_index = my_index, names = names,
-        competitive = MultiplayerLobby.isRace(f.mode), teams = teams}
+    app.mp_coop = {players = hospital_count, local_index = my_index, names = names,
+        competitive = MultiplayerLobby.isRace(f.mode), teams = teams,
+        team_hospitals = team_hospitals or nil}
   end
 
   self.restore_order = MultiplayerLobby.useCanonicalOrder(app)
@@ -1157,7 +1189,7 @@ function MultiplayerLobby:_beginGame(f)
   if not resume then
     math.randomseed(tonumber(f.seed))
     local level = tonumber(f.level) or 1
-    local level_id = coop and MultiplayerLobby.coopLevelId(#peers, level) or level
+    local level_id = coop and MultiplayerLobby.coopLevelId(hospital_count, level) or level
     local loaded = app:loadLevel(level_id, f.difficulty or "full", nil, nil, nil, nil,
         _S.errors.load_level_prefix, nil)
     if not loaded or not app.world then

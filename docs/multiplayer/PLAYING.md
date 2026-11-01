@@ -60,8 +60,9 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
 1. Main menu, **Multiplayer**. Click **EU1: stable** or **EU2: test builds**
    (or type another server's address), enter your name, then **Connect**.
 2. **To host:** type a room name, and a password if you like. Choose **One
-   shared hospital**, **A hospital each** (co-op), **Competitive race** or
-   **Race of two teams** (click the button to cycle through them), the level and the number of
+   shared hospital**, **A hospital each** (co-op), **Competitive race**,
+   **Race of two teams** or **Race of team hospitals** (click the button to
+   cycle through them), the level and the number of
    players (or a saved game with **Continue**, see below), then **Create**.
    When everybody has pressed **Ready**, press **Start game**. You do not
    need a full room: with a seat still empty (somebody could not make it),
@@ -75,6 +76,11 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
    **Team B** button: click yours to change sides (the host can move anybody,
    bots too). Any split works: 2 against 2, 2 against 1, 3 against 1. The
    game seats team mates next to each other on the map.
+5. **Race of team hospitals:** the same team buttons, but each team runs
+   **one hospital together**, as in a shared game: team mates build, hire
+   and answer faxes in the same hospital, and the two hospitals race. The
+   hospitals are named after their players ("JAN + ABI"). A bot cannot share
+   a hospital: put a bot on a team of its own.
 
 **Nobody to play with?** As the host, click an empty place in your room
 ("click: add a bot") and a computer player takes it; click the bot to take it
@@ -332,6 +338,11 @@ they are switched on).
   machines or doors does nothing, and you do not see the outlines of the
   rooms they draw, nor the blue floor of a room they are furnishing (its
   walls you do see).
+
+- **Race of team hospitals:** like a race of two teams, but each team has
+  one hospital that all its players run together; there is nobody to trade
+  with, and dirty tricks go to the other team's hospital. The hospital
+  counts as playing while at least one of its players is still in the game.
 
 - **Race of two teams:** team mates help each other as in co-op (money,
   staff, patients, research; only with each other) and race the other team.

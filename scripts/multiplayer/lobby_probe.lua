@@ -14,7 +14,7 @@
 --   MP_COOP           1: the host creates a co-op room (a hospital each)
 --   MP_ADD_BOTS       the host clicks this many empty places in the room to
 --                     add bots (the server must run them)
---   MP_MODE           the room mode the host picks: shared, coop, competitive or teams
+--   MP_MODE           the room mode the host picks: shared, coop, competitive, teams or teamshared
 --   MP_TEAM           in a room of two teams: this player's team (1 or 2)
 --   MP_SCENARIO       light | busy | none                (default light; none: no
 --                     test setup, to join a game a person hosts)
@@ -243,7 +243,7 @@ local function run_lobby()
     w = lobby_window()
     w.room_name_box:setText(room)
     w.password_box:setText(password)
-    for _ = 1, 3 do -- "A hospital each", "Competitive race", "Race of two teams"
+    for _ = 2, #MultiplayerLobby.MODES do -- one press per mode after "One shared hospital"
       if w.new_mode ~= room_mode then w:buttonMode() end
     end
     for _ = 2, tonumber(os.getenv("MP_LEVEL") or 1) do w:buttonLevel() end

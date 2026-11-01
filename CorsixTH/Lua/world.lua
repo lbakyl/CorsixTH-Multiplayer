@@ -118,7 +118,8 @@ function World:World(app, free_build_mode)
   if coop then
     -- (competitive: the players race to the goals; see World:_mpRaceCheck;
     -- teams: a race of two teams, hospital index -> 1 or 2, World:mpTeam)
-    self.mp_coop = {players = coop.players, competitive = coop.competitive or nil, teams = coop.teams}
+    self.mp_coop = {players = coop.players, competitive = coop.competitive or nil, teams = coop.teams,
+        team_hospitals = coop.team_hospitals}
     self.mp_local_index = coop.local_index
     for i = 1, coop.players do
       local hospital = PlayerHospital(self, avail_rooms, coop.names[i] or ("PLAYER " .. i), i)

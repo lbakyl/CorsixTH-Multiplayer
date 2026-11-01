@@ -246,6 +246,41 @@ Probe settings and actions: `MP_MODE=teams`, `MP_TEAM=1|2`, `teams`,
 `giveto:<hospital>:<amount>`, `teamview`, `chat:<tabs>:<text>`. Specs: `mp_levels_spec.lua`
 ("two teams"). Server: `test_teams_room`.
 
+## A race of team hospitals (mode `teamshared`)
+
+The race of two teams with one hospital per team: team mates run it
+together, as in a shared game, and the two hospitals race. Same machinery
+as `teams` (`world.mp_coop.competitive`, `world.mp_coop.teams = {1, 2}`),
+plus `world.mp_coop.team_hospitals = true`.
+
+- Lobby and server: mode `teamshared` (`MultiplayerLobby.isTeams(mode)`:
+  teams or teamshared; `hospitalEach` and `isRace` include it; server
+  `TEAM_MODES`). Same team buttons and `TEAM` verb; `START` carries
+  `teams=peer:team`.
+- Game start (`MultiplayerLobby:_beginGame`): two hospitals whatever the
+  number of players, so the level loads the 2-player map
+  (`coopLevelId(2, level)`); team A plays hospital 1, team B hospital 2
+  (`peer_hospital[peer] = team`); each hospital is named after its players
+  in peer order ("ANN + BEN"). Commands carry the team's hospital
+  (`session.hospital_index`), so everything a team mate does goes to the
+  shared hospital, as in a shared game.
+- Menu: no TRADE or RESEARCH entries (no team mate's hospital to trade
+  with); dirty tricks and the race as in `teams`.
+- Leaving: `MultiplayerSession:_markPlayerAway` marks a hospital away only
+  when none of its players is left in the game.
+- Continued games: the save names each hospital after its players; the
+  server (`Server._team_seats`) seats every player in the hospital whose name
+  lists theirs, anybody else in the hospital with fewer players, and sizes
+  the room by the number of saved names.
+- Bots: a bot runs a hospital alone, so `START` is refused (`bot_team`) while
+  a bot shares a team with anybody, and bots cannot join a continued game of
+  team hospitals.
+
+Tests: `scripts/multiplayer/run_team_hospitals_probe.sh BIN DATA` (rooms
+trio, 2 against 1, and duo, 2 against 2; `MP_REFEREE=1` adds the referee
+check). Server: `test_team_hospitals_room_and_bots`,
+`test_team_hospitals_continued_seats`, `test_team_seats_without_a_saved_name`.
+
 ## Ideas not done yet
 
 See the report in the session; the main ones: a security guard or CCTV to

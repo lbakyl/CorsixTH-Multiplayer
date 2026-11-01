@@ -41,11 +41,16 @@ log = logging.getLogger("corsixth_mp")
 SERVER_VERSION = "0.1"
 MAX_NAME = 32
 MAX_ROOMS = 64
-MODES = ("shared", "coop", "competitive", "teams")
-# Modes in which every player runs a hospital of their own.
-HOSPITAL_EACH = ("coop", "competitive", "teams")
-# A race of two teams ("teams"): every player is on team 1 or 2.
+MODES = ("shared", "coop", "competitive", "teams", "teamshared")
+# Modes with several hospitals: one per player, or ("teamshared") one per
+# team that its players run together.
+HOSPITAL_EACH = ("coop", "competitive", "teams", "teamshared")
+# A race of two teams ("teams": a hospital each; "teamshared": a hospital per
+# team): every player is on team 1 or 2.
+TEAM_MODES = ("teams", "teamshared")
 TEAMS = (1, 2)
+# How a saved "teamshared" hospital name lists its players ("ANN + BEN").
+TEAM_NAME_JOIN = " + "
 SPEED_CONTROL = ("any", "owner")
 DIFFICULTIES = ("easy", "full", "hard")
 PING_INTERVAL_LOBBY = 1.0
@@ -77,6 +82,11 @@ BOT_START_TIMEOUT = 60.0
 MAX_BOTS = 6
 # Gameplay settings every peer must use (lesson 4 in the handover README).
 DEFAULT_SETTINGS = {"grant_wage_increase": 1, "free_build_mode": 0}
+
+
+def _team_players(seat_names: list[str]) -> list[str]:
+    """The players' names in saved "teamshared" hospital names."""
+    return [n.strip() for seat in seat_names for n in seat.split(TEAM_NAME_JOIN) if n.strip()]
 
 
 def _hash_password(password: str, salt: bytes) -> bytes:
@@ -534,6 +544,9 @@ class Server:
             seat_names = [n.strip()[:MAX_NAME] for n in f.get("seats", "").split(",") if n.strip()][:4]
             if mode in HOSPITAL_EACH and seat_names:
                 max_players = min(4, max(2, len(seat_names)))
+            if mode == "teamshared" and seat_names:
+                # A team's hospital is saved under all its players' names.
+                max_players = min(4, max(2, len(_team_players(seat_names))))
         password = f.get("password", "")
         salt = secrets.token_bytes(16)
         room = Room(name=name, salt=salt,
@@ -599,7 +612,7 @@ class Server:
         assert peer is not None
         player.room, player.peer, player.ready = room, peer, ready
         room.players[peer] = player
-        if room.mode == "teams":
+        if room.mode in TEAM_MODES:
             # The smaller team (team 1 when even); anybody may change sides.
             sizes = {t: sum(1 for p in room.players.values() if p.team == t) for t in TEAMS}
             player.team = min(TEAMS, key=lambda t: sizes[t])
@@ -625,7 +638,7 @@ class Server:
         """A "teams" room in the lobby: a player changes their own team
         (team=1|2); the owner may move anybody, bots too (peer=<peer>)."""
         room = player.room
-        if room is None or room.state != "lobby" or room.mode != "teams":
+        if room is None or room.state != "lobby" or room.mode not in TEAM_MODES:
             return
         who = player
         if f.get("peer"):
@@ -678,7 +691,8 @@ class Server:
         of BOT_NAMES."""
         taken = {p.name.lower() for p in room.players.values()}
         taken |= {entry[0].lower() for entry in room.bots_pending.values()}
-        for name in list(room.seat_names) + list(BOT_NAMES):
+        saved = _team_players(room.seat_names) if room.mode == "teamshared" else room.seat_names
+        for name in list(saved) + list(BOT_NAMES):
             if name.lower() not in taken:
                 return name
         n = 1
@@ -705,6 +719,10 @@ class Server:
             return
         if self.referee_config is None:
             self._error(player, "no_bots", "This server cannot run bots")
+            return
+        if room.mode == "teamshared" and room.continue_step is not None:
+            # The saved teams are fixed, and a bot cannot share a hospital.
+            self._error(player, "bot_team", "Bots cannot join a continued game of team hospitals")
             return
         if room.is_full():
             self._error(player, "room_full", "The room is full")
@@ -806,10 +824,18 @@ class Server:
         if len(room.players) + len(room.bots_pending) < 2:
             self._error(player, "not_enough", "Wait for another player")
             return
-        if room.mode == "teams" and room.continue_step is None and \
+        if room.mode in TEAM_MODES and room.continue_step is None and \
                 len({p.team for p in room.players.values()}) < 2:
             self._error(player, "one_team", "Both teams need a player")
             return
+        if room.mode == "teamshared" and room.continue_step is None:
+            # A bot runs a hospital on its own: it cannot share one.
+            for t in TEAMS:
+                members = [p for p in room.players.values() if p.team == t]
+                if len(members) > 1 and any(p.is_bot for p in members):
+                    self._error(player, "bot_team",
+                                "A bot plays a team hospital alone; give it its own team")
+                    return
         not_ready = [p.name for p in room.players.values() if not p.ready and p is not player]
         not_ready += [entry[0] for entry in room.bots_pending.values()]
         if not_ready:
@@ -830,8 +856,9 @@ class Server:
                                  names=",".join(room.players[n].name.replace(",", " ")
                                                 for n in sorted(room.players)),
                                  **DEFAULT_SETTINGS)
-        if room.mode == "teams" and room.continue_step is None:
-            # Every peer seats the teams on neighbouring plots (mp_lobby.lua).
+        if room.mode in TEAM_MODES and room.continue_step is None:
+            # Every peer seats the teams on neighbouring plots, or with
+            # "teamshared" in the team's hospital (mp_lobby.lua).
             room.start_fields["teams"] = ",".join(
                 f"{n}:{room.players[n].team}" for n in sorted(room.players))
         if room.continue_step is not None:
@@ -858,6 +885,8 @@ class Server:
     def _seats(room: Room) -> dict[int, int]:
         """Co-op saved game: peer -> hospital (1-based). A player gets the
         hospital with their name; the others get the free ones in order."""
+        if room.mode == "teamshared":
+            return Server._team_seats(room)
         names = [n.upper() for n in room.seat_names]
         seats: dict[int, int] = {}
         taken: set[int] = set()
@@ -872,6 +901,26 @@ class Server:
         for peer in sorted(room.players):
             if peer not in seats:
                 seats[peer] = free.pop(0)
+        return seats
+
+    @staticmethod
+    def _team_seats(room: Room) -> dict[int, int]:
+        """A saved game of team hospitals: peer -> hospital (1-based). A
+        player sits in the hospital whose name lists theirs ("ANN + BEN");
+        anybody else joins the hospital with the fewest players."""
+        teams = [[n.upper() for n in seat.split(TEAM_NAME_JOIN)] for seat in room.seat_names]
+        seats: dict[int, int] = {}
+        for peer in sorted(room.players):
+            name = room.players[peer].name.upper()
+            for i, members in enumerate(teams, 1):
+                if name in members:
+                    seats[peer] = i
+                    break
+        count = max(len(teams), 2)
+        for peer in sorted(room.players):
+            if peer not in seats:
+                sizes = {i: sum(1 for s in seats.values() if s == i) for i in range(1, count + 1)}
+                seats[peer] = min(sizes, key=lambda i: (sizes[i], i))
         return seats
 
     async def _spawn_referee(self, room: Room) -> None:

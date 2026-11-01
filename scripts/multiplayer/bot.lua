@@ -234,7 +234,7 @@ function Bot.new(lobby)
   self.lobby = lobby
   self.mode = lobby.start_params and lobby.start_params.mode or os.getenv("MP_BOT_MODE") or "coop"
   -- (A race, of two teams too: tricks, and rivals' offers refused.)
-  self.fiery = self.mode == "competitive" or self.mode == "teams"
+  self.fiery = self.mode == "competitive" or self.mode == "teams" or self.mode == "teamshared"
   self.outbox = {}         -- {at = real time, text =, to = peer or nil, fn = optional}
   self.offers_seen = {}    -- message number -> true
   self.last_reply = -1000
