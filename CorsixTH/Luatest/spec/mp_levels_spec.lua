@@ -390,6 +390,9 @@ describe("Multiplayer levels", function()
       function hospital:changeReputation(_, _, amount) self.rep = self.rep + amount end
     end
     function world:getHospitalIndex(hospital) return hospital.index end
+    function world:mpTeam(hospital) -- as World:mpTeam
+      return self.mp_coop.teams and self.mp_coop.teams[hospital.index] or nil
+    end
     return world
   end
 
@@ -556,4 +559,56 @@ describe("Multiplayer levels", function()
     play(world, 365 * 2)
     assert.equal(0, #world.emergencies + #world.epidemics + #world.rats)
   end)
+
+  describe("two teams", function()
+    -- The hospitals of the 4 player map 41: 1 and 2 at the top, 3 and 4
+    -- below them (camera tiles).
+    local MAP41 = {{55, 62}, {71, 62}, {56, 72}, {72, 72}}
+
+    it("seats team mates next to each other", function()
+      -- Peers 1 and 2 against 3 and 4: 1 and 3 are neighbours, 2 and 4.
+      local seats = levels.teamSeats({1, 2, 3, 4}, {[1] = 1, [2] = 1, [3] = 2, [4] = 2}, MAP41)
+      assert.same({[1] = 1, [2] = 3, [3] = 2, [4] = 4}, seats)
+      -- Whoever is on which team.
+      seats = levels.teamSeats({1, 2, 3, 4}, {[1] = 2, [2] = 1, [3] = 1, [4] = 2}, MAP41)
+      assert.same({[2] = 1, [3] = 3, [1] = 2, [4] = 4}, seats)
+    end)
+
+    it("gives a pair against one the two closest hospitals", function()
+      -- Map 30: hospital 1 far left, 2 bottom middle, 3 far right.
+      local map30 = {{21, 42}, {56, 81}, {102, 35}}
+      local seats = levels.teamSeats({1, 2, 3}, {[1] = 2, [2] = 1, [3] = 1}, map30)
+      assert.same({[2] = 1, [3] = 2, [1] = 3}, seats)
+      -- The one alone on team 1.
+      seats = levels.teamSeats({1, 2, 3}, {[1] = 1, [2] = 2, [3] = 2}, map30)
+      assert.same({[1] = 3, [2] = 1, [3] = 2}, seats)
+    end)
+
+    it("seats by team in hospital order without the map", function()
+      local seats = levels.teamSeats({2, 3, 5}, {[2] = 2, [3] = 1, [5] = 2})
+      assert.same({[3] = 1, [2] = 2, [5] = 3}, seats)
+    end)
+
+    it("reads where the hospitals are from the map file", function()
+      local data = {string.char(4)}
+      for _ = 2, 163876 do data[#data + 1] = "\0" end
+      -- y * 128 + x, low byte first
+      for _, tile in ipairs(MAP41) do
+        local index = tile[2] * 128 + tile[1]
+        data[#data + 1] = string.char(index % 256, math.floor(index / 256))
+      end
+      local read
+      local app = {level_dir = "/levels/"}
+      function app:readDataFile(dir, file) read = dir .. ":" .. file return table.concat(data) end
+      assert.same(MAP41, levels.hospitalTiles(app, 4, 2))
+      assert.equal("Levels:LEVEL.L41", read)
+      -- Level 7 with four players: its own map.
+      levels.hospitalTiles(app, 4, 7)
+      assert.equal("Levels:/levels/cutthroat4.map", read)
+      -- (A file that cannot be read: none.)
+      function app:readDataFile() error("missing") end
+      assert.is_nil(levels.hospitalTiles(app, 4, 2))
+    end)
+  end)
 end)
+

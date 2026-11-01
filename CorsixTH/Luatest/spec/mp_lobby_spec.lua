@@ -158,6 +158,28 @@ describe("MultiplayerLobby", function()
     assert.is_false(lobby:canAddBots())
   end)
 
+  it("knows this player's team mates still in a race of two teams", function()
+    local lobby = make_lobby()
+    local h = {{}, {}, {}, {}}
+    local teams = {1, 2, 1, 2}
+    local world = {hospitals = h, mpTeam = function(_, hosp)
+      for i, x in ipairs(h) do if x == hosp then return teams[i] end end
+    end}
+    -- Peers 1..4 at hospitals 1, 3, 2, 4: peer 1 and peer 3 are not team mates.
+    lobby.peer_hospital = {1, 3, 2, 4}
+    lobby.game_players = {
+      {peer = 1, connected = true}, {peer = 2, connected = true},
+      {peer = 3, connected = true}, {peer = 4, connected = true},
+    }
+    assert.same({2}, lobby:teamMates(world, 1))
+    assert.same({4}, lobby:teamMates(world, 3))
+    lobby.game_players[2].connected = false -- left the game
+    assert.same({}, lobby:teamMates(world, 1))
+    teams = nil -- not a race of two teams
+    world.mpTeam = function() return nil end
+    assert.same({}, lobby:teamMates(world, 3))
+  end)
+
   it("leaves a room and asks for the room list again", function()
     local lobby, t = make_lobby()
     t.inbox = {"WELCOME id=1 proto=1", "JOINED max=2 mode=shared owner=1 peer=1 room=r"}

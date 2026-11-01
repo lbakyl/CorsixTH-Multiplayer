@@ -60,8 +60,8 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
 1. Main menu, **Multiplayer**. Click **EU1: stable** or **EU2: test builds**
    (or type another server's address), enter your name, then **Connect**.
 2. **To host:** type a room name, and a password if you like. Choose **One
-   shared hospital**, **A hospital each** (co-op) or **Competitive race**
-   (click the button to cycle through them), the level and the number of
+   shared hospital**, **A hospital each** (co-op), **Competitive race** or
+   **Race of two teams** (click the button to cycle through them), the level and the number of
    players (or a saved game with **Continue**, see below), then **Create**.
    When everybody has pressed **Ready**, press **Start game**. You do not
    need a full room: with a seat still empty (somebody could not make it),
@@ -71,6 +71,10 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
    room, until you **Disconnect**.
 3. **To join:** pick the room in the list, type its password, **Join**, then
    **Ready**.
+4. **Race of two teams:** each player's line in the room has a **Team A** /
+   **Team B** button: click yours to change sides (the host can move anybody,
+   bots too). Any split works: 2 against 2, 2 against 1, 3 against 1. The
+   game seats team mates next to each other on the map.
 
 **Nobody to play with?** As the host, click an empty place in your room
 ("click: add a bot") and a computer player takes it; click the bot to take it
@@ -79,7 +83,9 @@ hospital slowly, as a beginner would (a desk, a GP's office, then one room
 after the other), hires staff, opens, and chats a little. In co-op it accepts
 whatever you offer it and thanks you; in a competitive race it refuses
 everything, sends your money back and plays a dirty trick on you now and then
-(the first some time in months 7 to 12). Bots are there for trying the game
+(the first some time in months 7 to 12). In a race of two teams it is a good
+team mate and a bad rival: it takes what its team mate offers and plays its
+tricks on the other team. Bots are there for trying the game
 out: after the first year they do not do much more. The test server runs a
 few at most.
 
@@ -156,14 +162,16 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   answer within 20 game days counts as a rejection.
 - **Chat:** press **Y** (with or without Shift or Caps Lock; or
   **MULTIPLAYER**, **SEND A MESSAGE**) and
-  type; **Tab** chooses who it is for (all players, or one), and the game
+  type; **Tab** chooses who it is for (all players, in a race of two teams
+  your team, or one player), and the game
   remembers it for next time; **Enter** sends, **Escape** cancels. Enter
   keeps its usual jobs (finish a room, OK in a dialog, hire). To use
   another key for the chat: **OPTIONS**, **Hotkeys**, **General In-Game
   Keys**, **Multiplayer Chat** (or `ingame_mp_chat` in `hotkeys.txt`).
   Messages show at the top left for 30 seconds on a bar in the sender's
   colour (each player has one; computer
-  players are grey); private ones have a purple mark at the start. Players
+  players are grey); private ones have a purple mark at the start, team
+  ones a green mark. Players
   on an older server get private lines as public ones.
 - **Asking for money (co-op):** the bank manager (click your balance at the
   bottom), **Ask a player**: set the amount ($500 to $50,000) and **Ask**.
@@ -324,6 +332,18 @@ they are switched on).
   machines or doors does nothing, and you do not see the outlines of the
   rooms they draw, nor the blue floor of a room they are furnishing (its
   walls you do see).
+
+- **Race of two teams:** team mates help each other as in co-op (money,
+  staff, patients, research; only with each other) and race the other team.
+  A hospital that reaches the goals is told so and plays on, so it can still
+  help its team mate. The team whose hospitals have all reached the goals
+  takes 1st place, and the race is over. A hospital that fails the goals at
+  two year ends in a row is out (no more patients), but its team races on;
+  a team with all its hospitals out loses. If a player leaves, their
+  hospital does not count for their team until they rejoin. You can look
+  into your team mate's hospital, not into the other team's. Dirty tricks
+  work on the other team only. In the chat, **Tab** once picks **To
+  team** (only your team mates read it).
 
 ## Dirty tricks (competitive race)
 

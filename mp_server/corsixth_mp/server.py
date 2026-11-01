@@ -41,9 +41,11 @@ log = logging.getLogger("corsixth_mp")
 SERVER_VERSION = "0.1"
 MAX_NAME = 32
 MAX_ROOMS = 64
-MODES = ("shared", "coop", "competitive")
+MODES = ("shared", "coop", "competitive", "teams")
 # Modes in which every player runs a hospital of their own.
-HOSPITAL_EACH = ("coop", "competitive")
+HOSPITAL_EACH = ("coop", "competitive", "teams")
+# A race of two teams ("teams"): every player is on team 1 or 2.
+TEAMS = (1, 2)
 SPEED_CONTROL = ("any", "owner")
 DIFFICULTIES = ("easy", "full", "hard")
 PING_INTERVAL_LOBBY = 1.0
@@ -100,6 +102,7 @@ class Player:
     is_referee: bool = False
     is_bot: bool = False
     bot_proc: object = None
+    team: int = 0  # a "teams" room: 1 or 2
     diag_bytes: int = 0
 
     @property
@@ -596,6 +599,10 @@ class Server:
         assert peer is not None
         player.room, player.peer, player.ready = room, peer, ready
         room.players[peer] = player
+        if room.mode == "teams":
+            # The smaller team (team 1 when even); anybody may change sides.
+            sizes = {t: sum(1 for p in room.players.values() if p.team == t) for t in TEAMS}
+            player.team = min(TEAMS, key=lambda t: sizes[t])
         player.send(encode("JOINED", room=room.name, peer=peer, owner=room.owner is player,
                            mode=room.mode, level=room.level, difficulty=room.difficulty,
                            max=room.max_players,
@@ -614,12 +621,46 @@ class Server:
             player.ready = f.get("ready", "1") == "1"
             self._send_lobby(player.room)
 
+    def _on_team(self, player: Player, f: dict[str, str]) -> None:
+        """A "teams" room in the lobby: a player changes their own team
+        (team=1|2); the owner may move anybody, bots too (peer=<peer>)."""
+        room = player.room
+        if room is None or room.state != "lobby" or room.mode != "teams":
+            return
+        who = player
+        if f.get("peer"):
+            who = room.players.get(int(f["peer"])) if f["peer"].isdigit() else None
+            if who is None or (who is not player and room.owner is not player):
+                self._error(player, "not_owner", "Only the room owner moves other players")
+                return
+        team = int(f["team"]) if f.get("team", "").isdigit() else 0
+        if team not in TEAMS:
+            self._error(player, "bad_team", "team must be 1 or 2")
+            return
+        if who.team != team:
+            who.team = team
+            log.info("room %r: %r is on team %d", room.name, who.name, team)
+            self._send_lobby(room)
+
     def _on_chat(self, player: Player, f: dict[str, str]) -> None:
         room = player.room
         if not room:
             return
         text = f.get("text", "")[:200]
         to = f.get("to", "")
+        if f.get("team") == "1":
+            # A team line (a race of two teams): the sender's team mates, as the
+            # sender's game knows them (to=<peer>,<peer>...), and back to the sender.
+            peers = sorted({int(p) for p in to.split(",") if p.isdigit()} & set(room.players)
+                           - {player.peer})
+            if not peers:
+                return
+            line = encode("CHAT", peer=player.peer, name=player.name, text=text,
+                          to=",".join(map(str, peers)), team=1)
+            for p in peers:
+                room.players[p].send(line)
+            player.send(line)
+            return
         if to.isdigit() and int(to) in room.players:
             # A private line: only that player, and the sender sees it sent.
             line = encode("CHAT", peer=player.peer, name=player.name, text=text, to=int(to))
@@ -748,7 +789,7 @@ class Server:
         for peer, pl in sorted(room.players.items()):
             room.broadcast(encode("PLAYER", peer=peer, name=pl.name, ready=pl.ready,
                                   rtt=round(pl.rtt), owner=room.owner is pl,
-                                  bot=1 if pl.is_bot else None))
+                                  bot=1 if pl.is_bot else None, team=pl.team or None))
         room.broadcast(encode("LOBBY", room=room.name, count=len(room.players),
                               starting=len(room.bots_pending) or None,
                               max=room.max_players, mode=room.mode, level=room.level,
@@ -764,6 +805,10 @@ class Server:
             return
         if len(room.players) + len(room.bots_pending) < 2:
             self._error(player, "not_enough", "Wait for another player")
+            return
+        if room.mode == "teams" and room.continue_step is None and \
+                len({p.team for p in room.players.values()}) < 2:
+            self._error(player, "one_team", "Both teams need a player")
             return
         not_ready = [p.name for p in room.players.values() if not p.ready and p is not player]
         not_ready += [entry[0] for entry in room.bots_pending.values()]
@@ -785,6 +830,10 @@ class Server:
                                  names=",".join(room.players[n].name.replace(",", " ")
                                                 for n in sorted(room.players)),
                                  **DEFAULT_SETTINGS)
+        if room.mode == "teams" and room.continue_step is None:
+            # Every peer seats the teams on neighbouring plots (mp_lobby.lua).
+            room.start_fields["teams"] = ",".join(
+                f"{n}:{room.players[n].team}" for n in sorted(room.players))
         if room.continue_step is not None:
             # A saved game: nobody loads the level; the host sends the save,
             # and everybody loads it like after a desync repair.

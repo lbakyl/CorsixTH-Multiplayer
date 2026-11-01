@@ -186,13 +186,14 @@ class "UIMultiplayerChooseHospital" (UIResizable)
 ---@operator call: UIMultiplayerChooseHospital
 local UIMultiplayerChooseHospital = _G["UIMultiplayerChooseHospital"] ---@type UIMultiplayerChooseHospital
 
---! The other players' hospitals (index list).
+--! The other players' hospitals this one may trade with (index list; in a
+--! race of two teams only team mates).
 local function other_hospitals(ui)
   local world = ui.app.world
   local list = {}
   local n = world.mp_coop and world.mp_coop.players or 0
   for i = 1, n do
-    if world.hospitals[i] and world.hospitals[i] ~= ui.hospital then list[#list + 1] = i end
+    if world:mpMayTrade(ui.hospital, world.hospitals[i]) then list[#list + 1] = i end
   end
   return list
 end

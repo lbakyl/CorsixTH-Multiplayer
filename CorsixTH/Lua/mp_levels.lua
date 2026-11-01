@@ -93,6 +93,86 @@ function levels.parseLevelId(id)
   return tonumber(players), players .. map, tonumber(level) or tonumber(map) + 1
 end
 
+--! Where each player's hospital lies on the map of a level for `players`:
+--! {[player] = {x, y}}, the map's starting camera tiles (the same map file
+--! Map:load uses), or nil if the file cannot be read.
+function levels.hospitalTiles(app, players, level)
+  local _, digits, mp_level = levels.parseLevelId(levels.levelId(players, level))
+  local def = levels.LEVELS[levels.clamp(mp_level)]
+  local own_map = def.map_files and def.map_files[players]
+  local ok, data = pcall(app.readDataFile, app, "Levels",
+      own_map and (app.level_dir .. own_map) or ("LEVEL.L" .. digits))
+  -- (th_map.cpp: the player count is the first byte; camera tiles at 163876,
+  -- two bytes each, y * 128 + x)
+  if not ok or type(data) ~= "string" or #data < 163876 + 2 * players then return nil end
+  local tiles = {}
+  for i = 1, players do
+    local lo, hi = data:byte(163876 + 2 * i - 1, 163876 + 2 * i)
+    local index = hi * 256 + lo
+    tiles[i] = {index % 128, math.floor(index / 128)}
+  end
+  return tiles
+end
+
+--! A race of two teams: which hospital each player gets, so that the
+--! members of a team are neighbours. Of all the ways to give team 1 its
+--! hospitals, the one with the smallest sum of squared distances between
+--! team mates (both teams) wins; the first one in order on a tie. Team
+--! members get their hospitals in peer order. Without `tiles`, team 1 gets
+--! the first hospitals.
+--!param peers (table) the peer numbers in start order
+--!param teams (table) peer -> team (1 or 2)
+--!param tiles (table) levels.hospitalTiles, or nil
+--!return peer -> hospital index
+function levels.teamSeats(peers, teams, tiles)
+  local n = #peers
+  local members = {{}, {}}
+  for _, p in ipairs(peers) do
+    local list = members[teams[p] == 2 and 2 or 1]
+    list[#list + 1] = p
+  end
+  local function spread(set)
+    local sum = 0
+    for i = 1, #set do
+      for j = i + 1, #set do
+        local a, b = tiles[set[i]], tiles[set[j]]
+        local dx, dy = a[1] - b[1], a[2] - b[2]
+        sum = sum + dx * dx + dy * dy
+      end
+    end
+    return sum
+  end
+  local best, best_cost
+  local size = #members[1]
+  -- Every set of `size` hospitals for team 1, in increasing order.
+  local function try(set, from)
+    if #set == size then
+      local others = {}
+      for i = 1, n do
+        local taken = false
+        for _, s in ipairs(set) do taken = taken or s == i end
+        if not taken then others[#others + 1] = i end
+      end
+      local cost = tiles and spread(set) + spread(others) or 0
+      if not best_cost or cost < best_cost then
+        best, best_cost = {{(table.unpack or unpack)(set)}, others}, cost
+      end
+      return
+    end
+    for i = from, n do
+      set[#set + 1] = i
+      try(set, i + 1)
+      set[#set] = nil
+    end
+  end
+  try({}, 1)
+  local seats = {}
+  for team = 1, 2 do
+    for k, p in ipairs(members[team]) do seats[p] = best[team][k] end
+  end
+  return seats
+end
+
 --! Put level `level`'s content into `config` (the multiplayer map's level
 --! config): the sections above from `campaign` (the campaign level's
 --! config), the starting money, and the goals. The value goal is set later
@@ -617,14 +697,25 @@ local function goalScore(world, hospital)
 end
 
 --! The leader and the last of the race (by hospital index): none when all
---! are as close to the goals.
+--! are as close to the goals. (A race of two teams ranks the teams: each
+--! hospital counts with its team's average.)
 local function rankRace(world)
   local ranks = {}
   local list = racing(world)
   if #list < 2 then return ranks end
+  local team_sum, team_count = {}, {}
+  for _, hospital in ipairs(list) do
+    local team = world:mpTeam(hospital)
+    if team then
+      team_sum[team] = (team_sum[team] or 0) + goalScore(world, hospital)
+      team_count[team] = (team_count[team] or 0) + 1
+    end
+  end
   local scores, best, worst = {}, nil, nil
   for _, hospital in ipairs(list) do
-    local score = math.floor(goalScore(world, hospital) * 1000)
+    local team = world:mpTeam(hospital)
+    local share = team and team_sum[team] / team_count[team] or goalScore(world, hospital)
+    local score = math.floor(share * 1000)
     scores[hospital] = score
     best = math.max(best or score, score)
     worst = math.min(worst or score, score)

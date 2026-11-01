@@ -111,10 +111,14 @@ function UIMultiplayerPlayers.rows(lobby, session, world)
     else
       status = S.players_playing
     end
+    -- (A race of two teams: the team's letter after the hospital.)
+    local team = hospital and world:mpTeam(hospital)
+    local hospital_text = hospital and hospital.name or "-"
+    if team then hospital_text = S.players_team:format(hospital_text, S.team_letters[team]) end
     rows[#rows + 1] = {
       hospital_entity = hospital, -- (its colour tab)
       name = p.name,
-      hospital = hospital and hospital.name or "-",
+      hospital = hospital_text,
       ping = (p.connected and p.rtt >= 0) and S.players_ms:format(p.rtt) or "-",
       status = status,
       value = hospital and money(hospital.value) or "-",

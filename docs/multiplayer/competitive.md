@@ -13,7 +13,7 @@ co-op and shared games are unchanged.
 - `MultiplayerLobby.MODES` = shared, coop, competitive;
   `MultiplayerLobby.hospitalEach(mode)`, `modeLabel(mode)`,
   `worldMode(world)` (for the `.mpinfo` of a save and the menu).
-- Lobby window: the mode button cycles through the three.
+- Lobby window: the mode button cycles through them (teams: below).
 - Server: `MODES` and `HOSPITAL_EACH` (continued games seat players by name
   in both co-op and competitive).
 
@@ -194,6 +194,57 @@ players on level 2; `MP_REFEREE=1` adds the headless referee and a 5th check):
 Probe actions: `sabotage:<trick>:<level>:<hospital>`, `kickevil`, `shootrat`, `race`,
 `answerraise:accept`, `learn`;
 `MP_MODE=competitive` for the host.
+
+## A race of two teams (mode `teams`)
+
+Two teams race each other (2 against 2, 2 against 1, 3 against 1, ...): a
+competitive game (`world.mp_coop.competitive`) with
+`world.mp_coop.teams = {[hospital index] = 1 or 2}`.
+
+- Lobby and server: mode `teams` (`MultiplayerLobby.isRace(mode)`: competitive
+  or teams). A team button on each player's line (`UIMultiplayer:clickTeam`,
+  verb `TEAM`); the host moves anybody, bots too. `START` carries
+  `teams=peer:team`; `MultiplayerLobby:_beginGame` seats team mates on the
+  closest hospitals of the map (`mp_levels.hospitalTiles` reads the map's
+  starting camera tiles, `mp_levels.teamSeats` picks the split with the
+  smallest spread), the same on every peer, the referee and bots included.
+  A continued game keeps the teams of its save (no team buttons).
+- `World:mpTeam(hosp)`, `World:mpRivals(a, b)` (a race, not team mates),
+  `World:mpMayTrade(from, to)` (any other hospital, but in a team race only
+  team mates).
+- Trades: `give_money`, `send_staff`, `offer_staff`, `offer_patient`,
+  `offer_research`, `ask_money` are refused across teams ("not on your team");
+  the trade, money, research and refer windows offer only team mates, and
+  the staff and patient windows' send icons are not there without one.
+- Tricks: `sabotage.refusal` refuses a team mate ("they are on your team"),
+  the window cycles through the other team only, a smear campaign sends
+  patients to the other team, the leader and last price factors rank the
+  teams (average of their hospitals' goal scores).
+- Looking in: a team mate's hospital is open to the mouse (`GameUI:_isRivals`),
+  their room outlines and the blue floor of a room they furnish are shown.
+- The race (`World:_mpTeamRaceCheck`): a hospital that reaches the goals is
+  marked (`mp_goals_reached`) and plays on; a team takes 1st place once every
+  hospital of it that still counts has reached them, and the other team 2nd
+  (`World:_mpTeamPlace`, `_mpTeamRaceCheckOver`: the standings fax). A
+  hospital failing the goals at two year ends in a row is out
+  (`mp_place = 0`, "out"), its team races on; a team with all its hospitals
+  out is 2nd. A hospital whose player left does not count until they rejoin
+  (`player_away`, as in co-op).
+- PLAYERS window: the team letter after each hospital.
+- Bots: offers and money from a team mate are welcome, tricks only on the
+  other team (`World:mpRivals`).
+- Team chat: Tab in the chat line goes everybody, **To team**, then each
+  player (`UIMultiplayerChatInput:_targets`, remembered in
+  `lobby.chat_target = "team"`). The line goes as `CHAT team=1
+  to=<mates' peers>` (`MultiplayerLobby:teamMates`: from the game's teams,
+  so a continued game works too); the server sends it to those players and
+  back to the sender only. A green mark at the start of the line.
+
+Tests: `scripts/multiplayer/run_teams_probe.sh BIN DATA` (rooms trio, 2
+against 1, and duo, 2 against 2; `MP_REFEREE=1` adds the referee check).
+Probe settings and actions: `MP_MODE=teams`, `MP_TEAM=1|2`, `teams`,
+`giveto:<hospital>:<amount>`, `teamview`, `chat:<tabs>:<text>`. Specs: `mp_levels_spec.lua`
+("two teams"). Server: `test_teams_room`.
 
 ## Ideas not done yet
 

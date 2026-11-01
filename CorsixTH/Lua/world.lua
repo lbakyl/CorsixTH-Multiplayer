@@ -116,8 +116,9 @@ function World:World(app, free_build_mode)
   -- player hospital per player, hospital i owning the plots of player i.
   local coop = app.mp_coop
   if coop then
-    -- (competitive: the players race to the goals; see World:_mpRaceCheck)
-    self.mp_coop = {players = coop.players, competitive = coop.competitive or nil}
+    -- (competitive: the players race to the goals; see World:_mpRaceCheck;
+    -- teams: a race of two teams, hospital index -> 1 or 2, World:mpTeam)
+    self.mp_coop = {players = coop.players, competitive = coop.competitive or nil, teams = coop.teams}
     self.mp_local_index = coop.local_index
     for i = 1, coop.players do
       local hospital = PlayerHospital(self, avail_rooms, coop.names[i] or ("PLAYER " .. i), i)
@@ -1576,6 +1577,7 @@ function World:_mpTellLoan(hosp)
 end
 
 function World:checkIfGameWon()
+  if self.mp_coop and self.mp_coop.teams then return self:_mpTeamRaceCheck() end
   if self.mp_coop and self.mp_coop.competitive then return self:_mpRaceCheck() end
   -- Multiplayer co-op is a team game: the level is won once every hospital
   -- has reached the level's goals (once reached, they stay reached). Until
@@ -1903,6 +1905,111 @@ function World:_mpRaceCheckOver()
   self.ui.bottom_panel:openLastMessage()
 end
 
+--! A race of two teams: the hospitals of `team`, in hospital order.
+function World:mpTeamHospitals(team)
+  local list = {}
+  for i = 1, self.mp_coop.players do
+    if self.mp_coop.teams[i] == team then list[#list + 1] = self.hospitals[i] end
+  end
+  return list
+end
+
+--! A race of two teams: the team's name, its hospitals' ("ANN + BEN").
+function World:mpTeamName(team)
+  local names = {}
+  for _, hosp in ipairs(self:mpTeamHospitals(team)) do names[#names + 1] = hosp.name end
+  return table.concat(names, " + ")
+end
+
+--! A race of two teams. A hospital that reaches the goals stays in the game
+--! (it can still help its team mates); a team takes the next place once
+--! every hospital of it that still plays has reached them. A hospital that
+--! is out (failed the goals two year ends running, World:onEndYear) or whose
+--! player left (mp_player_away, until they rejoin) does not count; a team
+--! with none left that counts waits. Places and standings are the teams'.
+function World:_mpTeamRaceCheck()
+  if self.mp_race_over then return end
+  local S = _S.multiplayer_window
+  for i = 1, self.mp_coop.players do
+    local hosp = self.hospitals[i]
+    if not hosp.mp_place and not hosp.mp_goals_reached then
+      if self.endconditions:checkEndGame(hosp) == "win" then
+        hosp.mp_goals_reached = true
+        local team = self:mpTeam(hosp)
+        MultiplayerSession.tellPlayer(self, hosp, S.team_race_reached)
+        MultiplayerSession.tellOthers(self, hosp, S.team_race_reached_other:format(hosp.name,
+            self:mpTeamName(team)))
+      else
+        self:_mpTellLoan(hosp)
+      end
+    end
+  end
+  for team = 1, 2 do
+    local counting, done = 0, true
+    for _, hosp in ipairs(self:mpTeamHospitals(team)) do
+      if not hosp.mp_place and not hosp.mp_player_away then
+        counting = counting + 1
+        done = done and hosp.mp_goals_reached or false
+      end
+    end
+    -- (Both at the same check: the team of the first hospital wins.)
+    if counting > 0 and done and not self:_mpTeamPlaced(team) then
+      self:_mpTeamPlace(team, "won")
+      break
+    end
+  end
+  self:_mpTeamRaceCheckOver()
+end
+
+--! A race of two teams: has `team` its place already?
+function World:_mpTeamPlaced(team)
+  return self.mp_team_places ~= nil and self.mp_team_places[team] ~= nil
+end
+
+--! A race of two teams: give `team` its place, "won" (1st), "out" (2nd: all
+--! its hospitals are out) or "last" (the place left). Every hospital of it
+--! is then out of the race (no new patients or events). With two teams the
+--! first place given ends the race (World:_mpTeamRaceCheckOver).
+function World:_mpTeamPlace(team, how)
+  self.mp_team_places = self.mp_team_places or {}
+  local place = how == "won" and 1 or 2
+  if how == "last" then place = self.mp_team_places[3 - team].place == 1 and 2 or 1 end
+  self.mp_team_places[team] = {place = place, how = how}
+  for _, hosp in ipairs(self:mpTeamHospitals(team)) do
+    hosp.mp_place, hosp.mp_place_how, hosp.mp_failing_since = place, how, nil
+  end
+end
+
+--! A race of two teams: once a team has its place, the race is over; the
+--! other team takes the place left, and the standings go to everybody.
+function World:_mpTeamRaceCheckOver()
+  if self.mp_race_over or not (self:_mpTeamPlaced(1) or self:_mpTeamPlaced(2)) then return end
+  for team = 1, 2 do
+    if not self:_mpTeamPlaced(team) then self:_mpTeamPlace(team, "last") end
+  end
+  self.mp_race_over = true
+  local S = _S.multiplayer_window
+  local order = {1, 2}
+  table.sort(order, function(a, b) return self.mp_team_places[a].place < self.mp_team_places[b].place end)
+  local lines = {}
+  for _, team in ipairs(order) do
+    local p = self.mp_team_places[team]
+    lines[#lines + 1] = S.race_standing:format(place_text(p.place), self:mpTeamName(team)) ..
+        (p.how == "out" and S.race_standing_out or "")
+  end
+  local message = {
+    {text = S.race_over[1]},
+    {text = table.concat(lines, ", ")},
+    {text = S.race_over[2]},
+    choices = {
+      {text = S.back_to_lobby, choice = "return_to_main_menu"},
+      {text = S.keep_playing, choice = "stay_on_level"},
+    },
+  }
+  self.ui.bottom_panel:queueMessage("information", message, nil, nil, 2, nil, nil, true)
+  self.ui.bottom_panel:openLastMessage()
+end
+
 --! Multiplayer: the video for a player whose game ends ("win" or "lose").
 --! A race is won by reaching the goals, or by being the last one racing when
 --! all the others are out; otherwise the game ends after a win (the team's
@@ -1911,6 +2018,32 @@ function World:mpEndMovie(hosp)
   if not (self.mp_coop and self.mp_coop.competitive) then return "win" end
   if hosp and (hosp.mp_place_how == "won" or hosp.mp_place == 1) then return "win" end
   return "lose"
+end
+
+--! Multiplayer, a race of two teams: the team (1 or 2) of `hosp`; nil in any
+--! other game.
+function World:mpTeam(hosp)
+  local teams = self.mp_coop and self.mp_coop.teams
+  if not (teams and hosp) then return nil end
+  for i, h in ipairs(self.hospitals) do
+    if h == hosp then return teams[i] end
+  end
+  return nil
+end
+
+--! Multiplayer: are hospitals `a` and `b` rivals in a race (two different
+--! hospitals, and not on the same team)?
+function World:mpRivals(a, b)
+  if not (a and b) or a == b or not (self.mp_coop and self.mp_coop.competitive) then return false end
+  return not self.mp_coop.teams or self:mpTeam(a) ~= self:mpTeam(b)
+end
+
+--! Multiplayer: may hospital `from` send `to` money, staff, patients or
+--! research, or ask it for money? Any other hospital may, except in a race of
+--! two teams: only a team mate.
+function World:mpMayTrade(from, to)
+  if not (from and to) or from == to then return false end
+  return not (self.mp_coop and self.mp_coop.teams) or self:mpTeam(from) == self:mpTeam(to)
 end
 
 --! The player list's text for a hospital's place in a competitive game, or nil.
@@ -2119,12 +2252,20 @@ function World:onEndYear()
   if self.mp_coop and self.mp_coop.competitive then
     -- A race: a hospital still failing the goals at the next year end is out
     -- (at the bottom of the standings); the others race on.
+    -- (A race of two teams: that hospital is out, its team races on; the
+    -- team is out once all its hospitals are. One that reached the goals
+    -- has done its part.)
     local S = _S.multiplayer_window
+    local teams = self.mp_coop.teams
     for i = 1, self.mp_coop.players do
       local hosp = self.hospitals[i]
       local _, limit = self.endconditions:checkEndGame(hosp)
-      if hosp.mp_place then -- luacheck: ignore 542
+      if hosp.mp_place or (teams and hosp.mp_goals_reached) then -- luacheck: ignore 542
         -- (out of the race already)
+      elseif limit and hosp.mp_failing_since and teams then
+        hosp.mp_place, hosp.mp_place_how, hosp.mp_failing_since = 0, "out", nil
+        MultiplayerSession.tellPlayer(self, hosp, S.team_member_out)
+        MultiplayerSession.tellOthers(self, hosp, S.team_member_out_other:format(hosp.name))
       elseif limit and hosp.mp_failing_since then
         self:_mpPlace(hosp, "out")
       elseif limit then
@@ -2136,7 +2277,22 @@ function World:onEndYear()
         MultiplayerSession.tellOthers(self, nil, S.goals_recovered:format(hosp.name))
       end
     end
-    self:_mpRaceCheckOver()
+    if teams then
+      for team = 1, 2 do
+        local left = false
+        for _, hosp in ipairs(self:mpTeamHospitals(team)) do left = left or not hosp.mp_place end
+        -- (Both out at the same year end: team 1 is out, team 2 takes the
+        -- place left.)
+        if not left and not self:_mpTeamPlaced(team) and not self.mp_race_over then
+          self:_mpTeamPlace(team, "out")
+          break
+        end
+      end
+      -- (A team whose other hospitals have reached the goals may be done now.)
+      self:_mpTeamRaceCheck()
+    else
+      self:_mpRaceCheckOver()
+    end
   elseif self.mp_coop then
     -- A team game: a hospital failing the goals is not thrown out; the others
     -- can rescue it. The team loses only if a hospital still fails them at

@@ -24,8 +24,8 @@ SOFTWARE. --]]
 --! UIMultiplayerChat shows the last lines at the top left of the game view,
 --! each for a while on a bar in the sender's colour, and opens the input line
 --! on Enter. UIMultiplayerChatInput is that line: Tab chooses
---! who it is for (everybody, then each other player), remembered for next
---! time; Enter sends, Escape closes.
+--! who it is for (everybody, in a race of two teams the own team, then each
+--! other player), remembered for next time; Enter sends, Escape closes.
 class "UIMultiplayerChat" (Window)
 
 ---@class UIMultiplayerChat: Window
@@ -39,11 +39,12 @@ local LINES = 6
 -- hospital in a game with a hospital each, else by peer: darker versions of
 -- the hospital colours (mustard, salmon, lavender, white: the patients'
 -- shirts and the staff bars, MultiplayerSession.markerColour). Bots are grey,
--- private lines get a purple mark at the start.
+-- private lines get a purple mark at the start, team lines a green one.
 local PLAYER_COLOURS = {
   {135, 98, 14}, {150, 62, 52}, {82, 66, 152}, {92, 104, 124}, {20, 110, 125}, {125, 35, 115},
 }
 local BOT_COLOUR, NOTICE_COLOUR, PRIVATE_MARK = {75, 75, 75}, {30, 30, 40}, {180, 90, 255}
+local TEAM_MARK = {70, 210, 90}
 
 --! The colour of a player's chat lines.
 --!param peer (integer) the sender's peer number (or, in a game with a
@@ -80,7 +81,8 @@ function UIMultiplayerChat:hitTest()
 end
 
 --! Add a line.
---!param private (boolean) only for this player (or sent by them to one)
+--!param private (boolean or "team") only for this player (or sent by them
+--! to one), or a line to (or from) a team mate
 --!param colour ({r, g, b} or nil) the sender's colour (UIMultiplayerChat.colourOf)
 function UIMultiplayerChat:add(text, private, colour)
   if type(text) == "userdata" then text = require("TH").stringProxy._unwrap(text) end -- a game string
@@ -104,8 +106,8 @@ function UIMultiplayerChat:draw(canvas, x, y)
     local c = line.colour
     canvas:drawRect(canvas:mapRGB(c[1], c[2], c[3]), x + 6 * s, ly, w, 16 * s)
     if line.private then
-      canvas:drawRect(canvas:mapRGB(PRIVATE_MARK[1], PRIVATE_MARK[2], PRIVATE_MARK[3]),
-          x + 6 * s, ly, 3 * s, 16 * s)
+      local m = line.private == "team" and TEAM_MARK or PRIVATE_MARK
+      canvas:drawRect(canvas:mapRGB(m[1], m[2], m[3]), x + 6 * s, ly, 3 * s, 16 * s)
     end
     self.font:draw(canvas, line.text, x + 10 * s, ly + 3 * s)
     ly = ly + 18 * s
@@ -185,31 +187,46 @@ function UIMultiplayerChatInput:_others()
   return others
 end
 
+--! This player's team mates still in the game (their peers; a race of two
+--! teams only).
+function UIMultiplayerChatInput:_teamMates()
+  local lobby, session = self:_lobby()
+  return lobby and lobby:teamMates(TheApp.world, session.peer_id) or {}
+end
+
+--! Who a line can be for, in Tab order: everybody (nil), the own team
+--! ("team", when there is a team mate), then each other player (their peer).
+function UIMultiplayerChatInput:_targets()
+  local targets = {false}
+  if #self:_teamMates() > 0 then targets[#targets + 1] = "team" end
+  for _, p in ipairs(self:_others()) do targets[#targets + 1] = p.peer end
+  return targets
+end
+
 function UIMultiplayerChatInput:_showTarget()
   local lobby = self:_lobby()
   local S = _S.multiplayer_window
-  local name
-  for _, p in ipairs(self:_others()) do
-    if lobby and p.peer == lobby.chat_target then name = p.name end
+  local label
+  if lobby and lobby.chat_target == "team" and #self:_teamMates() > 0 then
+    label = S.chat_to_team
   end
-  if lobby and not name then lobby.chat_target = nil end -- that player is gone
-  self.target_panel:setLabel(name and S.chat_to:format(name) or S.chat_to_all)
+  for _, p in ipairs(self:_others()) do
+    if lobby and p.peer == lobby.chat_target then label = S.chat_to:format(p.name) end
+  end
+  if lobby and not label then lobby.chat_target = nil end -- that player (or team) is gone
+  self.target_panel:setLabel(label or S.chat_to_all)
 end
 
---! Tab: everybody, then each other player in turn.
+--! Tab: everybody, the own team, then each other player in turn.
 function UIMultiplayerChatInput:nextTarget()
   local lobby = self:_lobby()
   if not lobby then return end
-  local others = self:_others()
-  local next_target
-  if lobby.chat_target == nil then
-    next_target = others[1] and others[1].peer
-  else
-    for i, p in ipairs(others) do
-      if p.peer == lobby.chat_target then next_target = others[i + 1] and others[i + 1].peer end
-    end
+  local targets = self:_targets()
+  local next_target = false
+  for i, target in ipairs(targets) do
+    if target == (lobby.chat_target or false) then next_target = targets[i + 1] or false end
   end
-  lobby.chat_target = next_target
+  lobby.chat_target = next_target or nil
   self:_showTarget()
 end
 
@@ -217,7 +234,12 @@ function UIMultiplayerChatInput:send()
   local lobby = self:_lobby()
   local text = tostring(self.box.text or ""):match("^%s*(.-)%s*$")
   if lobby and text ~= "" then
-    lobby:send("CHAT", {text = text, to = lobby.chat_target})
+    if lobby.chat_target == "team" then
+      local mates = self:_teamMates()
+      if #mates > 0 then lobby:send("CHAT", {text = text, to = table.concat(mates, ","), team = 1}) end
+    else
+      lobby:send("CHAT", {text = text, to = lobby.chat_target})
+    end
   end
   self:close()
 end

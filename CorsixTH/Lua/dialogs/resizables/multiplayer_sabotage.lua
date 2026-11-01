@@ -127,14 +127,15 @@ function UIMultiplayerSabotage:onTick()
   return UIResizable.onTick(self)
 end
 
---! The next rival after `current` (wrapping) that is still in the race.
+--! The next rival after `current` (wrapping) that is still in the race (in a
+--! race of two teams: on the other team).
 function UIMultiplayerSabotage:_nextTarget(current)
   local hospitals = self.world.hospitals
   local n = self.world.mp_coop and self.world.mp_coop.players or 1
   local start = current and self.world:getHospitalIndex(current) or 0
   for step = 1, n do
     local h = hospitals[(start + step - 1) % n + 1]
-    if h and h ~= self.hospital and not h.mp_place then return h end
+    if h and self.world:mpRivals(self.hospital, h) and not h.mp_place then return h end
   end
 end
 

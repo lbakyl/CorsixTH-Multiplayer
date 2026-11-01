@@ -575,6 +575,15 @@ def test_private_chat_reaches_only_the_addressee(run):
         a.send(encode("CHAT", text="hello all"))
         assert (await c.expect("CHAT", text="hello all")).get("to") is None
         assert not any("psst" in line for line in c.inbox)
+        # A team line: the listed team mates and the sender, nobody else (the
+        # sender and unknown peers are dropped from the list).
+        a.send(encode("CHAT", text="team only", to="3,1,9", team=1))
+        got = await c.expect("CHAT", text="team only")
+        assert got["to"] == "3" and got["team"] == "1" and got["name"] == "Alice"
+        assert (await a.expect("CHAT", text="team only"))["team"] == "1"  # the sender's copy
+        a.send(encode("CHAT", text="after"))
+        await b.expect("CHAT", text="after")
+        assert not any("team only" in line for line in b.inbox)
     run(body)
 
 
@@ -602,6 +611,45 @@ def test_competitive_room_and_continued_seats(run):
         x = await Client.connect(port, "Xena")
         x.send(encode("CREATE", room="odd", password="", max=2, mode="battle", level=1))
         assert (await x.expect("ERROR"))["code"] == "bad_room"
+    run(body)
+
+
+def test_teams_room(run):
+    async def body(server, port):
+        a = await Client.connect(port, "Ann")
+        a.send(encode("CREATE", room="2v1", password="", max=3, mode="teams", level=2))
+        assert (await a.expect("JOINED"))["mode"] == "teams"
+        assert (await a.expect("PLAYER"))["team"] == "1"
+        b = await Client.connect(port, "Ben")
+        b.send(encode("JOIN", room="2v1", password=""))
+        await b.expect("JOINED")
+        # A newcomer joins the smaller team.
+        assert (await b.expect("PLAYER", peer="2"))["team"] == "2"
+        c = await Client.connect(port, "Cleo")
+        c.send(encode("JOIN", room="2v1", password=""))
+        await c.expect("JOINED")
+        assert (await c.expect("PLAYER", peer="3"))["team"] == "1"
+        # Everybody on one team: the host cannot start.
+        b.send(encode("TEAM", team=1))
+        await b.expect("PLAYER", peer="2", team="1")
+        b.send(encode("READY", ready=1))
+        c.send(encode("READY", ready=1))
+        a.send(encode("START"))
+        assert (await a.expect("ERROR"))["code"] == "one_team"
+        # Only the owner moves somebody else.
+        b.send(encode("TEAM", team=2, peer=3))
+        assert (await b.expect("ERROR"))["code"] == "not_owner"
+        b.send(encode("TEAM", team=3))
+        assert (await b.expect("ERROR"))["code"] == "bad_team"
+        a.send(encode("TEAM", team=2, peer=3))
+        await a.expect("PLAYER", peer="3", team="2")
+        a.send(encode("START"))
+        st = await a.expect("START")
+        assert st["mode"] == "teams" and st["teams"] == "1:1,2:1,3:2"
+        # Not in other modes.
+        d = await Client.connect(port, "Dan")
+        d.send(encode("CREATE", room="race", password="", max=2, mode="competitive", level=1))
+        assert "team" not in await d.expect("PLAYER")
     run(body)
 
 

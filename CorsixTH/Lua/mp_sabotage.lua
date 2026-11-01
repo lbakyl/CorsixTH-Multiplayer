@@ -127,6 +127,7 @@ function sabotage.refusal(world, buyer, target, kind, level)
   local prices = sabotage.PRICES[kind]
   if not prices or not prices[level] then return "no such trick" end
   if not target or target == buyer then return "no such hospital" end
+  if not world:mpRivals(buyer, target) then return "they are on your team" end
   if buyer.mp_place then return "you are out of the race" end
   if target.mp_place then return "they are out of the race" end
   if not target.opened or target.mp_opening then return "their hospital is not open yet" end
@@ -765,7 +766,8 @@ end
 
 --! The hospital a new patient goes to instead of `hospital`, if a smear
 --! campaign against it turns them away (nil: they come). Draws a shared
---! random number only while a campaign runs, the same on every peer.
+--! random number only while a campaign runs, the same on every peer. (In a
+--! race of two teams they go to the other team, never to a team mate.)
 function sabotage.smearRedirect(world, hospital)
   local smear = hospital.mp_smear
   if not smear or math.random() >= smear.share then return nil end
@@ -773,7 +775,7 @@ function sabotage.smearRedirect(world, hospital)
   local start = world:getHospitalIndex(hospital) or 1
   for step = 1, players - 1 do
     local other = world.hospitals[(start - 1 + step) % players + 1]
-    if other and other ~= hospital and other.opened and not other.mp_place then
+    if other and world:mpRivals(hospital, other) and other.opened and not other.mp_place then
       smear.sent = (smear.sent or 0) + 1
       return other
     end

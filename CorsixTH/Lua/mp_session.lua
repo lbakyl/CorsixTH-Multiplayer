@@ -246,13 +246,14 @@ function MultiplayerSession:takeOverRooms(world, peer)
   for _, id in ipairs(ids) do self:issue({kind = "room_takeover", room = id, left = peer}) end
 end
 
---! Co-op: a player left. Their hospital stops counting for the team's goals
---! until they rejoin (World:checkIfGameWon), else the others could never win.
---! The remaining player with the lowest number sends it as a command, so
---! every peer marks it at the same step.
+--! Co-op (or a race of two teams): a player left. Their hospital stops
+--! counting for the team's goals until they rejoin (World:checkIfGameWon),
+--! else the others could never win. The remaining player with the lowest
+--! number sends it as a command, so every peer marks it at the same step.
 function MultiplayerSession:_markPlayerAway(peer)
   local world = self.world
-  if self.observer or not (world and world.mp_coop) or world.mp_coop.competitive then return end
+  if self.observer or not (world and world.mp_coop) then return end
+  if world.mp_coop.competitive and not world.mp_coop.teams then return end
   local lowest
   for _, p in ipairs(self.peers) do
     if p ~= 0 and (not lowest or p < lowest) then lowest = p end
@@ -654,6 +655,9 @@ function MultiplayerSession:_tellRejected(cmd, why)
   if not text and (why == "not ours" or why == "not our staff" or why == "not our patient" or
       why == "not our patient or room") then
     text = "That belongs to another player's hospital."
+  end
+  if not text and why == "not on your team" then
+    text = "Only your team mates can trade with you."
   end
   if not text and (why == "not enough money" or why == "loan limit") then
     text = "Not enough money for that."
@@ -1687,10 +1691,12 @@ function handlers.open_hospital(world, cmd)
 end
 
 --! A race: the blue floor of a rival's room being furnished is not shown
---! here (its walls are up for everybody; what goes in is its player's).
+--! here (its walls are up for everybody; what goes in is its player's). A
+--! team mate's is.
 local function hide_rivals_floor(world, cmd)
   local session = TheApp.mp_session
-  if session and cmd.peer ~= session.peer_id and world.mp_coop and world.mp_coop.competitive then
+  if session and cmd.peer ~= session.peer_id and
+      world:mpRivals(world.hospitals[cmd.hospital or 1], world:getUIHospital()) then
     paint_rect(world, cmd, 0)
   end
 end
@@ -1944,6 +1950,7 @@ function handlers.give_money(world, cmd)
   local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
   local amount = math.floor(tonumber(cmd.amount) or 0)
   if not from or not to or from == to then return false, "no such hospital" end
+  if not world:mpMayTrade(from, to) then return false, "not on your team" end
   if amount <= 0 then return false, "nothing to send" end
   if from.balance < amount then return false, "not enough money" end
   from:spendMoney(amount, _S.multiplayer_window.money_sent:format(to.name))
@@ -2007,6 +2014,7 @@ MultiplayerSession.arrivalTile = arrival_tile
 function handlers.send_staff(world, cmd)
   local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
   if not from or not to or from == to then return false, "no such hospital" end
+  if not world:mpMayTrade(from, to) then return false, "not on your team" end
   local staff = find_staff(world, from, cmd)
   if not staff then return false, "no such staff member" end
   return MultiplayerSession.transferStaff(world, from, to, staff)
@@ -2183,6 +2191,7 @@ end
 function handlers.offer_staff(world, cmd)
   local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
   if not from or not to or from == to then return false, "no such hospital" end
+  if not world:mpMayTrade(from, to) then return false, "not on your team" end
   local price = math.floor(tonumber(cmd.price) or 0)
   if price < 0 or price > MultiplayerSession.STAFF_MAX_PRICE then return false, "invalid price" end
   local staff = find_staff(world, from, cmd)
@@ -2210,6 +2219,7 @@ MultiplayerSession.referable = referable
 function handlers.offer_patient(world, cmd)
   local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
   if not from or not to or from == to then return false, "no such hospital" end
+  if not world:mpMayTrade(from, to) then return false, "not on your team" end
   local patient = world:getEntityById(tonumber(cmd.patient))
   if not patient or not class.is(patient, Patient) or patient.hospital ~= from then
     return false, "no such patient"
@@ -2380,6 +2390,7 @@ function handlers.offer_research(world, cmd)
   local S = _S.multiplayer_window
   local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
   if not from or not to or from == to then return false, "no such hospital" end
+  if not world:mpMayTrade(from, to) then return false, "not on your team" end
   local price = math.floor(tonumber(cmd.price) or -1)
   if price < 0 or price > MultiplayerSession.RESEARCH_MAX_PRICE then return false, "invalid price" end
   local items = research_items_of(from, to, cmd.items)
@@ -2419,6 +2430,7 @@ function handlers.ask_money(world, cmd)
   local S = _S.multiplayer_window
   local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
   if not from or not to or from == to then return false, "no such hospital" end
+  if not world:mpMayTrade(from, to) then return false, "not on your team" end
   local amount = math.floor(tonumber(cmd.amount) or 0)
   if amount < MultiplayerSession.ASK_MIN or amount > MultiplayerSession.ASK_MAX then
     return false, "invalid amount"
@@ -2693,7 +2705,7 @@ function handlers.player_away(world, cmd)
   if (hospital.mp_player_away or false) == away then return false, "no change" end
   hospital.mp_player_away = away or nil
   local S = _S.multiplayer_window
-  if world.mp_coop.players > 1 and not world.mp_coop.competitive then
+  if world.mp_coop.players > 1 and (not world.mp_coop.competitive or world.mp_coop.teams) then
     MultiplayerSession.tellOthers(world, hospital,
         (away and S.player_away_note or S.player_back_note):format(hospital.name))
   end

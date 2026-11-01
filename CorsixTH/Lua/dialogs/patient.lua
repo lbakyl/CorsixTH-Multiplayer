@@ -98,7 +98,8 @@ function UIPatient:UIPatient(ui, patient)
   -- Co-op: this player's patient can be referred to another player's hospital.
   local world = ui.app.world
   if TheApp.mp_session and world.mp_coop and world.mp_coop.players > 1 and
-      patient.hospital == ui.hospital and not self.mp_view_only then
+      patient.hospital == ui.hospital and not self.mp_view_only and
+      #UIMultiplayerChooseHospital.otherHospitals(ui) > 0 then
     -- The staff list's purple send button, the size of the Close button
     -- above it (MATROFTT's design), in the free place below that button.
     local icon = self:addColourPanel(147, 49, 24, 24, 48, 16, 74)

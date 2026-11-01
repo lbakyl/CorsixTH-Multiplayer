@@ -9,7 +9,9 @@
 -- fourth month, answers when spoken to (and seldom otherwise), and a word
 -- when somebody sends it something. In co-op it accepts what the others offer (staff, patients,
 -- research, money requests); in a competitive race it refuses all of it and
--- plays a dirty trick now and then (the first one in months 7 to 12).
+-- plays a dirty trick now and then (the first one in months 7 to 12). In a
+-- race of two teams it takes what its team mates offer and plays its tricks
+-- on the other team.
 --
 -- It never uses the game's random numbers (that would change its game and
 -- desync it); its choices come from its own generator below.
@@ -231,7 +233,8 @@ function Bot.new(lobby)
   local self = setmetatable({}, Bot)
   self.lobby = lobby
   self.mode = lobby.start_params and lobby.start_params.mode or os.getenv("MP_BOT_MODE") or "coop"
-  self.fiery = self.mode == "competitive"
+  -- (A race, of two teams too: tricks, and rivals' offers refused.)
+  self.fiery = self.mode == "competitive" or self.mode == "teams"
   self.outbox = {}         -- {at = real time, text =, to = peer or nil, fn = optional}
   self.offers_seen = {}    -- message number -> true
   self.last_reply = -1000
@@ -329,7 +332,11 @@ function Bot:onChat(f)
   end
   self.last_reply = self:now()
   local kind = reply_kind(text)
-  local line = pick(REPLIES[kind][self.fiery and "fiery" or "friendly"]):format(name)
+  -- (In a race of two teams: friendly to its team mate.)
+  local world, hosp = self.world, self.lobby.peer_hospital and self.lobby.peer_hospital[peer]
+  local mine = world and world.ui and world.ui.hospital
+  local mate = hosp and mine and world:mpTeam(mine) and not world:mpRivals(world.hospitals[hosp], mine)
+  local line = pick(REPLIES[kind][(self.fiery and not mate) and "fiery" or "friendly"]):format(name)
   self:say(line, typing(line), private and peer or nil)
 end
 
@@ -349,7 +356,8 @@ function Bot:answerOffers()
       self.offers_seen[icon.mp_id] = true
       local _, name = self:playerOfHospital(offer.from)
       name = name or "friend"
-      local accept = not self.fiery
+      -- (From a team mate in a race of two teams: welcome.)
+      local accept = not self.world:mpRivals(self.world.hospitals[offer.from], mine)
       local line
       if accept then
         local cost = offer.kind == "money" and offer.amount or offer.price or 0
@@ -416,7 +424,7 @@ end
 function Bot:moneyReceived(from_index, amount)
   local _, name = self:playerOfHospital(from_index)
   name = name or "friend"
-  if self.fiery then
+  if self.world:mpRivals(self.world.hospitals[from_index], self.world.ui.hospital) then
     -- Refused: it goes straight back.
     local line = pick(LINES.money_back):format(name)
     local delay = 3 + rand() * 4
@@ -700,7 +708,7 @@ function Bot:playTrick()
   local targets = {}
   for index, hospital in ipairs(world.hospitals) do
     local peer, name, is_bot = self:playerOfHospital(index)
-    if hospital ~= mine and peer and not is_bot then targets[#targets + 1] = {hospital, name} end
+    if world:mpRivals(mine, hospital) and peer and not is_bot then targets[#targets + 1] = {hospital, name} end
   end
   if #targets == 0 then return false end
   local target = pick(targets)

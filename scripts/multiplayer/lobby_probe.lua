@@ -14,7 +14,8 @@
 --   MP_COOP           1: the host creates a co-op room (a hospital each)
 --   MP_ADD_BOTS       the host clicks this many empty places in the room to
 --                     add bots (the server must run them)
---   MP_MODE           the room mode the host picks: shared, coop or competitive
+--   MP_MODE           the room mode the host picks: shared, coop, competitive or teams
+--   MP_TEAM           in a room of two teams: this player's team (1 or 2)
 --   MP_SCENARIO       light | busy | none                (default light; none: no
 --                     test setup, to join a game a person hosts)
 --   MP_STEPS          game hours to play                 (default 1500)
@@ -163,6 +164,25 @@ local function lobby_window()
   return TheApp.ui:getWindow(UIMultiplayer)
 end
 
+--! A room of two teams: MP_TEAM (1 or 2) is this player's team, picked with
+--! the team button on their line (as a person clicks it).
+local function pick_team(lobby)
+  local want = tonumber(os.getenv("MP_TEAM") or "")
+  if not want then return end
+  local clicked = false
+  wait_for("team " .. want, function()
+    local me = lobby.players[tonumber(lobby.room.peer)]
+    if me and tonumber(me.team) == want then return true end
+    local win = lobby_window()
+    if me and not clicked and win and win.team_buttons then
+      clicked = true
+      win:clickTeam(tonumber(lobby.room.peer))
+    end
+    return false
+  end, 15)
+  log("UI: on team " .. want)
+end
+
 local shots_taken = {}
 local filming -- see the "film" action
 local held_room -- see the "holdroom" action
@@ -223,7 +243,7 @@ local function run_lobby()
     w = lobby_window()
     w.room_name_box:setText(room)
     w.password_box:setText(password)
-    for _ = 1, 3 do -- "A hospital each", "Competitive race"
+    for _ = 1, 3 do -- "A hospital each", "Competitive race", "Race of two teams"
       if w.new_mode ~= room_mode then w:buttonMode() end
     end
     for _ = 2, tonumber(os.getenv("MP_LEVEL") or 1) do w:buttonLevel() end
@@ -239,6 +259,7 @@ local function run_lobby()
     w:buttonCreate()
     wait_for("own room", function() return lobby.state == "in_room" end)
     log("created room " .. room)
+    pick_team(lobby)
     -- Bots: click the first empty place, once per bot, as a person would.
     local add_bots = tonumber(os.getenv("MP_ADD_BOTS") or "0")
     for k = 1, add_bots do
@@ -327,6 +348,7 @@ local function run_lobby()
       return lobby
     end
     wait_for("ready button", function() return lobby_window() and lobby_window().view == "room" end)
+    pick_team(lobby)
     lobby_window():buttonReady(true)
     wait_for("lobby update", function() return lobby.summary ~= nil end, 10)
     shot("lobby-room-joined")
@@ -350,7 +372,7 @@ local function run()
   lobby:addListener(function(_, event, f)
     if event == "chat" then
       log(string.format("CHAT IN at step %d: %s%s: %s", TheApp.mp_session and TheApp.mp_session.step or -1,
-          tostring(f.name), f.to and " (private)" or "", tostring(f.text)))
+          tostring(f.name), f.team == "1" and " (team)" or f.to and " (private)" or "", tostring(f.text)))
       -- The colour of its bar in the chat lines (the sender's).
       local window = TheApp.ui and TheApp.ui:getWindow(UIMultiplayerChat)
       local line = window and window.lines[#window.lines]
@@ -1445,6 +1467,52 @@ local function run()
               "rival doors shown %d of %d; evil handyman shown %s; rival rooms being furnished %d, " ..
               "blue tiles %d", session.step, own_hidden, own, rival_shown, rival, doors_shown, doors, evil,
               furnished, blue))
+        elseif a == "teams" then
+          -- A race of two teams: every hospital's team, this player's, and
+          -- whom the windows offer for trades and for dirty tricks.
+          local parts, trade, tricks = {}, {}, {}
+          for i = 1, world.mp_coop.players do
+            local h = world.hospitals[i]
+            parts[#parts + 1] = string.format("%d=%s:%s", i, h.name, tostring(world:mpTeam(h)))
+          end
+          for _, i in ipairs(UIMultiplayerChooseHospital.otherHospitals(world.ui)) do trade[#trade + 1] = i end
+          local sab = UIMultiplayerSabotage(world.ui)
+          local first = sab.target
+          local t = first
+          repeat
+            if t then tricks[#tricks + 1] = world:getHospitalIndex(t) end
+            t = t and sab:_nextTarget(t)
+          until not t or t == first
+          sab:close()
+          log(string.format("UI: teams at step %d: me %d; %s; trade with %s; tricks on %s", session.step,
+              world:getHospitalIndex(world.ui.hospital), table.concat(parts, " "), table.concat(trade, ","),
+              table.concat(tricks, ",")))
+        elseif a == "giveto" then
+          -- giveto:<hospital>:<amount>: the give_money command itself, as a
+          -- changed game would send it (no window offers a rival).
+          local to, amount = entry.arg:match("^(%d+):(%d+)$")
+          log(string.format("UI: giving $%s to hospital %s at step %d", amount, to, session.step))
+          session:issue({kind = "give_money", to = tonumber(to), amount = tonumber(amount)})
+        elseif a == "teamview" then
+          -- What the mouse may point at: a team mate's people, and not the
+          -- other team's.
+          local ui, mine = world.ui, world.ui.hospital
+          local mate, mate_shown, other, other_shown = 0, 0, 0, 0
+          for _, e in ipairs(world.entities) do
+            if class.is(e, Humanoid) and e.hospital and e.hospital ~= mine and not e.going_home and
+                not e.mp_saboteur then
+              local shown = not ui:_isRivals(e)
+              if world:mpRivals(e.hospital, mine) then
+                other = other + 1
+                if shown then other_shown = other_shown + 1 end
+              else
+                mate = mate + 1
+                if shown then mate_shown = mate_shown + 1 end
+              end
+            end
+          end
+          log(string.format("UI: teamview at step %d: team mates' people shown %d of %d; other team's shown %d of %d",
+              session.step, mate_shown, mate, other_shown, other))
         elseif a == "level" then
           -- What the level has: diseases, rooms there at the start, rooms
           -- that come later (research or automatic), and the goals.
@@ -1468,8 +1536,9 @@ local function run()
           local parts = {}
           for h = 1, (world.mp_coop and world.mp_coop.players or 1) do
             local hosp = world.hospitals[h]
-            parts[#parts + 1] = string.format("%d=%s%s", h, tostring(hosp.mp_place or "-"),
-                hosp.mp_place_how and ("(" .. hosp.mp_place_how .. ")") or "")
+            -- (* reached the goals, in a race of two teams still playing)
+            parts[#parts + 1] = string.format("%d=%s%s%s", h, tostring(hosp.mp_place or "-"),
+                hosp.mp_place_how and ("(" .. hosp.mp_place_how .. ")") or "", hosp.mp_goals_reached and "*" or "")
           end
           local staff = {}
           for _, s in ipairs(world.ui.hospital.staff) do staff[#staff + 1] = s.humanoid_class end

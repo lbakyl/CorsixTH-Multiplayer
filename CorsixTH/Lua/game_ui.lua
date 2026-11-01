@@ -465,16 +465,17 @@ end
 --! Multiplayer competitive: whether `entity` is part of a rival's hospital,
 --! which this player may not look into (no information, staff or queue
 --! windows, no details in the bottom panel). Whatever is in their own
---! hospital stays visible, a rival's evil handyman too.
+--! hospital stays visible, a rival's evil handyman too, and in a race of two
+--! teams everything of a team mate's.
 function GameUI:_isRivals(entity)
   local world = self.app.world
   if not (world and world.mp_coop and world.mp_coop.competitive) then return false end
   local x, y = entity.tile_x, entity.tile_y
   if x and self.hospital:isInHospital(x, y) then return false end
-  if entity.hospital and entity.hospital ~= self.hospital then return true end
+  if entity.hospital and world:mpRivals(entity.hospital, self.hospital) then return true end
   if x then
     for _, hospital in ipairs(world.hospitals) do
-      if hospital ~= self.hospital and hospital:isInHospital(x, y) then return true end
+      if world:mpRivals(hospital, self.hospital) and hospital:isInHospital(x, y) then return true end
     end
   end
   return false

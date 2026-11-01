@@ -25,13 +25,14 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 |---|---|---|
 | `HELLO` | first line | `proto` (1), `build` (game build id, must match the room's), `name`; the server's referee adds `role=referee`, `room` and `token`; a bot the server started `role=bot`, `room` and `token` (it joins that room, ready) |
 | `LIST` | lobby | (none) |
-| `CREATE` | lobby | `room`, `password` (empty = open), `max` (2–4), `mode` (`shared` = one hospital for everybody, `coop` = one hospital each as a team, `competitive` = one hospital each, a race), `level` (1–12), `difficulty` (`easy`/`full`/`hard`), `speed_control` (`any`/`owner`); to continue a saved game also `continue=1`, `step` (the step it was saved at), `date`, `seats` (its hospitals' names, comma-separated) |
+| `CREATE` | lobby | `room`, `password` (empty = open), `max` (2–4), `mode` (`shared` = one hospital for everybody, `coop` = one hospital each as a team, `competitive` = one hospital each, a race, `teams` = one hospital each, a race of two teams), `level` (1–12), `difficulty` (`easy`/`full`/`hard`), `speed_control` (`any`/`owner`); to continue a saved game also `continue=1`, `step` (the step it was saved at), `date`, `seats` (its hospitals' names, comma-separated) |
 | `JOIN` | lobby | `room`, `password`; for a running room: rejoin under the name of a player who left |
 | `READY` | in a room | `ready` |
+| `TEAM` | in a `teams` room's lobby | `team` (1 or 2): this player's team; the owner may add `peer` to move another player (a bot too). A new player joins the smaller team (team 1 when even) |
 | `START` | room owner | (none) |
 | `BOT` | room owner, in the lobby | `add=1`: the server starts a computer player that joins the room (error `no_bots` on a server without a referee build, `room_full`, `too_many_bots`); `remove=<peer>`: that bot leaves (see `bots.md`) |
 | `LEAVE` | in a room | (none) |
-| `CHAT` | in a room or game | `text`; optional `to` (a peer): only that player gets it |
+| `CHAT` | in a room or game | `text`; optional `to` (a peer): only that player gets it; `team=1` with `to=<peer>,<peer>...` (a race of two teams: the sender's team mates, as its game knows them): only those players get it |
 | `SPEED` | in game | `speed`: `Pause` or a speed name up to the room's `max_speed` |
 | `SHOW` | in game | cosmetic, outside the lockstep: `kind=blueprint room x y w h` (a room outline being drawn; `w=0` clears it) |
 | `DIAG` | after a desync | `step`, `part`, `text`: this game's state (money, rooms, every entity) for the server log, to compare the games |
@@ -51,10 +52,10 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 | `ERROR code=build_mismatch text need release url` | answer to `HELLO` on a server that only lets in its referee's build (`referee.md`): `need` is the Lua code checksum it wants (the last part of the build id), `release` and `url` the release to get and its download page (both optional); the server then hangs up. The game offers `url` only if it is a `https://github.com/` page |
 | `ROOM room players max mode level locked state build_ok continue` | one per room after `LIST`, then `ROOMS_END count`; `continue=1` for a saved game |
 | `JOINED room peer owner mode level difficulty max continue date bots` | you are in the room as player `peer` (`continue`, `date`: a saved game; `bots=1`: this server can add bots) |
-| `PLAYER peer name ready rtt owner bot` | one per player (`bot=1`: a computer player), followed by |
+| `PLAYER peer name ready rtt owner bot team` | one per player (`bot=1`: a computer player; `team`: 1 or 2 in a `teams` room), followed by |
 | `LOBBY room count max mode level delay speed one_way latency starting` | (`starting`: bots the server is still starting; they keep a place) | the room summary: recommended lockstep `delay` (steps), fastest smooth `speed`, worst player-to-player one-way time (ms) and click-to-effect `latency` at Normal speed (ms). Sent about once a second while in the lobby |
 | `OWNER` | you are now the room owner |
-| `START peer peers names seed level difficulty mode delay max_speed speed speed_control grant_wage_increase free_build_mode` | the game starts: everybody seeds the gameplay random generator with `seed`, loads `level` and plays as `peer` among `peers` (comma-separated, start order; `names` in the same order). A rejoining player also gets `resume=1` and `active` (the players now) and loads no level |
+| `START peer peers names seed level difficulty mode delay max_speed speed speed_control grant_wage_increase free_build_mode` | the game starts: everybody seeds the gameplay random generator with `seed`, loads `level` and plays as `peer` among `peers` (comma-separated, start order; `names` in the same order). A rejoining player also gets `resume=1` and `active` (the players now) and loads no level. A new `teams` game also has `teams` (`peer:team,...`): every peer seats team mates on neighbouring plots from it (`mp_levels.teamSeats`); `START` is refused (`one_team`) while everybody is on one team |
 | `SPEED peer name speed` | a player changed the speed (or paused); every client applies it, the sender included |
 | `SHOW peer kind ...` | another player's cosmetic information, relayed unchanged with the sender's `peer` |
 | `LEFT peer step name` | a player left the game after reporting `step`; stop waiting for them |
@@ -63,7 +64,7 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 | `SAVE step` | referee only: save once at `step` (or later) |
 | `LOAD step parts peers`, `SAVEDATA d`, `LOADEND step` | the shared save (base64 in `parts` lines); load it and restart at `step` with `peers` |
 | `RESUME step` | play on |
-| `CHAT peer name text [to]` | chat (`peer=0`: a server notice); with `to`, a private line, sent to that player and back to the sender |
+| `CHAT peer name text [to] [team]` | chat (`peer=0`: a server notice); with `to`, a private line, sent to that player and back to the sender; with `team=1`, a team line, sent to the players in `to` and back to the sender |
 | `PING id` | answer with `PONG id=` (every 2 seconds during a game) |
 | `PLAYERS n peerI nameI stateI rttI quietI stepI` | every 2 seconds during a game, for MULTIPLAYER > PLAYERS: each player (I = 1..n) with `state` `on` or `left`, the average round trip in ms over the last 10 seconds (`-1`: none), seconds since the server last heard from them, and their last reported step. Older clients ignore it |
 

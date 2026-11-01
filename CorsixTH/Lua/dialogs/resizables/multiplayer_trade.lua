@@ -144,7 +144,7 @@ function UIMultiplayerTrade:_nextTarget(current)
   local start = current and self.world:getHospitalIndex(current) or 0
   for step = 1, n do
     local h = hospitals[(start + step - 1) % n + 1]
-    if h and h ~= self.hospital then return h end
+    if h and self.world:mpMayTrade(self.hospital, h) then return h end
   end
 end
 

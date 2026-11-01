@@ -386,11 +386,23 @@ end
 function UIMultiplayer:_buildRoom()
   local S, T = _S.multiplayer_window, _S.tooltip.multiplayer_window
   self.player_panels = {}
+  -- A race of two teams (not a continued one: its teams come with the save):
+  -- each player's team on a button at the end of their line.
+  local room = self.lobby.room
+  local team_w = (room.mode == "teams" and room["continue"] ~= "1") and 80 or 0
+  local line_w = WIDTH - 40 - (team_w > 0 and team_w + 5 or 0)
+  self.team_buttons = team_w > 0 and {} or nil
   for i = 1, 4 do
-    self.player_panels[i] = label(self, 20, 40 + (i - 1) * 27, WIDTH - 40, "")
+    local y = 40 + (i - 1) * 27
+    self.player_panels[i] = label(self, 20, y, line_w, "")
     -- The host clicks an empty place to add a bot there, or a bot to take
     -- it away again.
-    self.player_panels[i]:makeButton(0, 0, WIDTH - 40, 25, nil, function() self:clickPlace(i) end)
+    self.player_panels[i]:makeButton(0, 0, line_w, 25, nil, function() self:clickPlace(i) end)
+    if self.team_buttons then
+      self.team_buttons[i] = self:addBevelPanel(WIDTH - 20 - team_w, y, team_w, 25, col.button)
+          :setLabel(""):makeButton(0, 0, team_w, 25, nil, function() self:clickTeam(i) end)
+          :setTooltip(T.team)
+    end
   end
   self.summary_panel = label(self, 20, 40 + 4 * 27 + 5, WIDTH - 40, "")
   self.mode_panel = label(self, 20, 40 + 5 * 27 + 5, WIDTH - 40, "")
@@ -427,6 +439,14 @@ function UIMultiplayer:_updateRoom()
       text = bots and S.add_bot or S.waiting_player
     end
     self.player_panels[i]:setLabel(text)
+    local team_button = self.team_buttons and self.team_buttons[i]
+    if team_button then
+      team_button:setVisible(p ~= nil)
+      team_button:enable(p ~= nil and (lobby:isOwner() or p.peer == lobby.room.peer))
+      if p then
+        team_button.panel_for_sprite:setLabel(S.team_button:format(S.team_letters[tonumber(p.team) == 2 and 2 or 1]))
+      end
+    end
   end
   local s = lobby.summary
   self.summary_panel:setLabel(s and S.recommendation:format(s.speed, s.latency or "?") or S.measuring)
@@ -450,6 +470,19 @@ function UIMultiplayer:clickPlace(i)
     lobby:removeBot(i)
   elseif not p and i <= (tonumber(lobby.room.max) or 2) then
     lobby:addBot()
+  end
+end
+
+--! A race of two teams: a player changes sides; the host may move anybody.
+function UIMultiplayer:clickTeam(i)
+  local lobby = self.lobby
+  local p = lobby.players[i]
+  if not p then return end
+  local team = tonumber(p.team) == 2 and 1 or 2
+  if p.peer == lobby.room.peer then
+    lobby:setTeam(team)
+  elseif lobby:isOwner() then
+    lobby:setTeam(team, i)
   end
 end
 

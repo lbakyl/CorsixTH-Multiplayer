@@ -121,7 +121,8 @@ function UIStaff:UIStaff(ui, staff)
   -- (the purple icon of the patient window; it opens the trade window).
   local world = app.world
   if TheApp.mp_session and world and world.mp_coop and world.mp_coop.players > 1 and
-      staff.hospital and staff.hospital == ui.hospital then
+      staff.hospital and staff.hospital == ui.hospital and
+      #UIMultiplayerChooseHospital.otherHospitals(ui) > 0 then
     -- (Over the wage note, sized to it: the skills box has the doctors'
     -- specialist icons, and a handyman has his tasks there.)
     local ix, iy, iw, ih = 90, 191, 33, 21
