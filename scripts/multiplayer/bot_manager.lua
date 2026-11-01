@@ -237,6 +237,12 @@ function M:projects(s)
   local function room(id, score, size)
     local rt = rooms_by_id[id]
     if not rt or not self:available(id) then return end
+    -- A room for a specialist (a psychiatrist, surgeons, a researcher) waits
+    -- until one is on the staff or on the hiring list: an empty room helps
+    -- nobody.
+    for cat in pairs(rt.required_staff or {}) do
+      if SPECIALISTS[cat] and hosp:countStaffOfCategory(cat, 1) == 0 and not bot:canHire(cat) then return end
+    end
     local want, extras = M.roomPlan(id)
     add("room:" .. id, score, function() return bot:drawRoom(rt, size or want, extras) end, bot:roomCost(rt))
   end

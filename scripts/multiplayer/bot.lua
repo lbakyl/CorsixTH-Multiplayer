@@ -618,6 +618,89 @@ function Bot:roomFits(x, y, w, h)
   return true
 end
 
+--! Where a player would put a w x h room (squares from `size` down to
+--! `min`, and one tile shorter): against the building's walls and the other
+--! rooms, in rows, with a corridor in front of the door (the row below it;
+--! two rows if possible), without thin gaps that nothing fits into, near the
+--! reception, and never on the reception's or the entrances' floor.
+--!return x, y, w, h or nil
+function Bot:layoutSpot(min, size)
+  local world = self.world
+  local hosp = world.ui.hospital
+  local th = world.map.th
+  local mw, mh = th:size()
+  -- Free floor, once (a table lookup is much cheaper than the map).
+  local free = {}
+  local x0, y0, x1, y1 = mw, mh, 1, 1
+  for y = 1, mh do
+    for x = 1, mw do
+      if hosp:isInHospital(x, y) then
+        x0, y0, x1, y1 = math.min(x0, x), math.min(y0, y), math.max(x1, x), math.max(y1, y)
+        if self:freeTile(x, y) then free[y * 1000 + x] = true end
+      end
+    end
+  end
+  -- Keep the reception's queue and the entrances clear.
+  local keep = {}
+  local function protect(cx, cy, r)
+    for y = cy - r, cy + r do
+      for x = cx - r, cx + r do free[y * 1000 + x] = nil keep[y * 1000 + x] = true end
+    end
+  end
+  for _, desk in ipairs(hosp:getReceptionDesks()) do
+    if desk.tile_x then protect(desk.tile_x, desk.tile_y, 3) end
+  end
+  for _, e in ipairs(world.entities) do
+    local id = e.object_type and e.object_type.id
+    if id and id:find("entrance", 1, true) and e.tile_x and hosp:isInHospital(e.tile_x, e.tile_y) then
+      protect(e.tile_x, e.tile_y, 2)
+    end
+  end
+  local function f(x, y) return free[y * 1000 + x] end
+  -- A wall, a room, or the outside: not floor, and not floor kept clear.
+  local function solid(x, y) return not f(x, y) and not keep[y * 1000 + x] end
+  local ax, ay = self:anchor()
+  local best, bx, by, bw, bh
+  local shapes = {}
+  for s = size, min, -1 do
+    shapes[#shapes + 1] = {s, s}
+    if s - 1 >= min then shapes[#shapes + 1] = {s, s - 1} end
+  end
+  for _, shape in ipairs(shapes) do
+    local w, h = shape[1], shape[2]
+    for y = y0, y1 - h do
+      for x = x0, x1 - w + 1 do
+        local ok = true
+        -- The room, and the row below it (the corridor at its door).
+        for ty = y, y + h do
+          for tx = x, x + w - 1 do
+            if not f(tx, ty) then ok = false break end
+          end
+          if not ok then break end
+        end
+        if ok then
+          local score = w * h * 0.6
+          for tx = x, x + w - 1 do
+            if solid(tx, y - 1) then score = score + 1 end
+            -- (A one tile gap above: nothing will ever fit in it.)
+            if f(tx, y - 1) and solid(tx, y - 2) then score = score - 1.5 end
+            if f(tx, y + h + 1) then score = score + 0.3 end
+          end
+          for ty = y, y + h - 1 do
+            if solid(x - 1, ty) then score = score + 1 end
+            if solid(x + w, ty) then score = score + 1 end
+            if f(x - 1, ty) and solid(x - 2, ty) then score = score - 1.5 end
+            if f(x + w, ty) and solid(x + w + 1, ty) then score = score - 1.5 end
+          end
+          score = score - 0.12 * (math.abs(x + w / 2 - ax) + math.abs(y + h / 2 - ay))
+          if not best or score > best then best, bx, by, bw, bh = score, x, y, w, h end
+        end
+      end
+    end
+  end
+  return bx, by, bw, bh
+end
+
 --! The nearest place for a packed w x h room (see Bot:roomFits).
 function Bot:packedSpot(cx, cy, w, h)
   for r = 0, 40 do
@@ -643,8 +726,15 @@ function Bot:drawRoom(room_type, size, extras)
   local min = room_type.minimum_size or 4
   local ax, ay = self:anchor()
   size = math.max(min, size or math.min(7, math.max(5, min + 1)))
-  local x, y, w
-  -- Best: a free tile more below and to the right (where the door goes), so
+  local x, y, w, h
+  -- Where a player would put it (against walls and rooms, in rows).
+  local ok_layout, lx, ly, lw, lh = pcall(self.layoutSpot, self, min, size)
+  if ok_layout and lx then
+    x, y, w, h = lx, ly, lw, lh
+  elseif not ok_layout then
+    log("layout: " .. tostring(lx))
+  end
+  -- Else a free tile more below and to the right (where the door goes), so
   -- the corridor in front of it is two tiles wide.
   for s = size, min, -1 do
     if not x then
@@ -669,7 +759,7 @@ function Bot:drawRoom(room_type, size, extras)
     return nil, "space"
   end
   local by_hand = extras and next(extras) ~= nil
-  local ok, res = pcall(builder.ui_room, self.world, ax, ay, room_type.id, w, w, true, log, {x, y}, by_hand)
+  local ok, res = pcall(builder.ui_room, self.world, ax, ay, room_type.id, w, h or w, true, log, {x, y}, by_hand)
   if not ok then log("could not draw " .. room_type.id .. ": " .. tostring(res)) end
   if ok and res then
     if by_hand then self.furnishing = {extras = extras, room_id = room_type.id} end
@@ -870,8 +960,32 @@ function Bot:buyCorridor(object_id)
   table.sort(facings)
   local ax, ay = self:anchor()
   local placed
-  -- Tiles with free floor all around (so nothing blocks a corridor).
-  local x, y = builder.find_free_rect(world, ax, ay, 1, 1, 40, function(tx, ty)
+  -- As a player does: against a wall (of the building or a room), never in
+  -- front of a door, an entrance or the reception, so the open floor stays
+  -- free for rooms and nothing blocks a corridor. (A reception desk itself
+  -- goes where there is space around it.)
+  local hosp = ui.hospital
+  local clear = {}
+  local function keep(cx, cy, r)
+    for ky = cy - r, cy + r do
+      for kx = cx - r, cx + r do clear[ky * 1000 + kx] = true end
+    end
+  end
+  for _, r in pairs(world.rooms) do
+    if r.hospital == hosp and r.door and r.door.tile_x then keep(r.door.tile_x, r.door.tile_y, 1) end
+  end
+  for _, desk in ipairs(hosp:getReceptionDesks()) do
+    if desk.tile_x then keep(desk.tile_x, desk.tile_y, 2) end
+  end
+  for _, e in ipairs(world.entities) do
+    local id = e.object_type and e.object_type.id
+    if id and id:find("entrance", 1, true) and e.tile_x then keep(e.tile_x, e.tile_y, 2) end
+  end
+  local function wall(tx, ty)
+    return not hosp:isInHospital(tx, ty) or world:getRoom(tx, ty) ~= nil or
+        not world.map.th:getCellFlags(tx, ty).passable
+  end
+  local function fits(tx, ty)
     if world:anyHumanoidObscuringArea(tx, ty) then return false end
     for _, facing in ipairs(facings) do
       place:setOrientation(facing)
@@ -879,7 +993,28 @@ function Bot:buyCorridor(object_id)
       if place.object_blueprint_good then return true end
     end
     return false
-  end)
+  end
+  local x, y
+  if object_id ~= "reception_desk" then
+    -- Nearest first, in a fixed order.
+    for r = 0, 40 do
+      for dy = -r, r do
+        for dx = -r, r do
+          local tx, ty = ax + dx, ay + dy
+          if not x and math.max(math.abs(dx), math.abs(dy)) == r and not clear[ty * 1000 + tx] and
+              self:freeTile(tx, ty) and (wall(tx - 1, ty) or wall(tx + 1, ty) or wall(tx, ty - 1) or
+              wall(tx, ty + 1)) and fits(tx, ty) then
+            x, y = tx, ty
+          end
+        end
+      end
+      if x then break end
+    end
+  end
+  if not x then
+    -- Tiles with free floor all around (so nothing blocks a corridor).
+    x, y = builder.find_free_rect(world, ax, ay, 1, 1, 40, fits)
+  end
   if x then
     place.object_cell_x, place.object_cell_y = x, y
     place:onMouseUp("left", 100000, 100000) -- a click outside the window

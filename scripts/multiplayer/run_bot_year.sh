@@ -64,6 +64,7 @@ export MP_SERVER="127.0.0.1:$port"
 
 script=""
 for s in $(seq 3000 3000 "$steps"); do script="$script;$((s - 10)):hospitals"; done
+script="$script;$((steps - 5)):map:2"
 run_watcher() { # name room
   local name=$1 room=$2 dir="$out/$1"
   mkdir -p "$dir/config" "$dir/saves"
