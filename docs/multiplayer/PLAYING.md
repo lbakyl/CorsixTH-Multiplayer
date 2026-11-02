@@ -11,11 +11,11 @@ It is a test version: expect rough edges, and please report what you find.
 - **Windows or Linux** (64-bit), or **macOS 26 Tahoe or newer on Apple
   Silicon** (M1 or later). Players on all three can play together.
 - **Your own Theme Hospital game data** (GOG, EA or the original CD). It is
-  not included and must never be shared. Everybody in a game needs the same
-  edition: editions differ in their multiplayer maps and level settings, and
-  games with different ones drift apart. The servers eu1 and eu2 have the
-  GOG edition, and eu2 turns other editions away ("Your Theme Hospital files
-  differ from this server's").
+  not included and must never be shared. Editions differ in their
+  multiplayer maps and level settings; the servers eu1 and eu2 have the GOG
+  edition. With another edition (an old CD, say) you can play there too:
+  your game then starts from the server's own copy of the game (it takes a
+  moment longer to start).
 - **The multiplayer build of this fork**, the same one as everybody you play
   with. A server with a referee only lets in the build it runs; it tells
   you which release to download.

@@ -653,6 +653,70 @@ def test_teams_room(run):
     run(body)
 
 
+def test_other_theme_hospital_edition_gets_the_referees_game():
+    """With a referee, a player whose level files are of another edition is let
+    in; their game starts from the referee's (START resume=1), the others
+    hold at step 0 until it is there."""
+    referees = []
+
+    async def fake_referee(config, port, room, token):
+        referees.append(token)
+        return None
+
+    async def main():
+        orig = srv.start_referee
+        srv.start_referee = fake_referee
+        server = srv.Server(referee=srv.RefereeConfig(binary="x", source="", data=""),
+                            data_check=builds.DataCheck(data="899c66d0"))
+        port = await server.start("127.0.0.1", 0)
+        try:
+            ann = await Client.connect(port, "Ann")
+            r, w = await asyncio.open_connection("127.0.0.1", port)
+            frank = Client(r, w)
+            frank.send(encode("HELLO", proto=1, name="Frank", build="b1", data="b9023dec"))
+            await frank.expect("WELCOME")
+            ann.send(encode("CREATE", room="cd", password="", max=2, mode="coop", level=1))
+            await ann.expect("JOINED")
+            frank.send(encode("JOIN", room="cd", password=""))
+            await frank.expect("JOINED")
+            frank.send(encode("READY", ready=1))
+            await ann.expect("PLAYER", peer="2", ready="1")
+            ann.send(encode("START"))
+            assert "resume" not in await ann.expect("START")
+            assert (await frank.expect("START"))["resume"] == "1"
+            hold = await ann.expect("HOLD")
+            assert hold["step"] == "0" and hold["why"] == "rejoin"
+            ann.send(encode("HELD", step=0))
+            # The referee comes and is asked for its game at step 0.
+            for _ in range(100):
+                if referees:
+                    break
+                await asyncio.sleep(0.01)
+            r, w = await asyncio.open_connection("127.0.0.1", port)
+            ref = Client(r, w)
+            ref.send(encode("HELLO", proto=1, name="referee", build="b1", role="referee", room="cd",
+                            token=referees[0]))
+            await ref.expect("WELCOME")
+            assert (await ref.expect("SAVE"))["step"] == "0"
+            assert not any(line.startswith("HOLD") for line in frank.inbox)
+        finally:
+            srv.start_referee = orig
+            await server.close()
+    asyncio.run(main())
+
+    # Without a referee, another edition is still turned away.
+    async def no_referee():
+        server = srv.Server(data_check=builds.DataCheck(data="899c66d0"))
+        port = await server.start("127.0.0.1", 0)
+        try:
+            r, w = await asyncio.open_connection("127.0.0.1", port)
+            w.write(encode("HELLO", proto=1, name="Frank", build="b1", data="b9023dec").encode() + b"\n")
+            assert decode((await r.readline()).decode())[1]["code"] == "data_mismatch"
+        finally:
+            await server.close()
+    asyncio.run(no_referee())
+
+
 def run_with_bots(body):
     """A server that can run bots (and the referee); starting either only
     records what would have been started."""

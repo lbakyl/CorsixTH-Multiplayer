@@ -103,6 +103,9 @@ class Player:
     is_bot: bool = False
     bot_proc: object = None
     team: int = 0  # a "teams" room: 1 or 2
+    # Theme Hospital data of another edition (its identity; "" = the server's):
+    # this player's game never loads a level, it gets the referee's game.
+    other_data: str = ""
     diag_bytes: int = 0
 
     @property
@@ -133,6 +136,7 @@ class Recovery:
     held: dict[int, int | None] = field(default_factory=dict)
     asked: bool = False            # SAVE sent to the referee
     saver: "Player | None" = None  # who sends the save (the referee, or the host of a continued game)
+    start: bool = False            # the start of a game for players with another edition's files
     parts: list[str] = field(default_factory=list)
     size: int = 0
 
@@ -384,10 +388,17 @@ class Server:
             player.send(encode("ERROR", **self.build_check.refusal()))
             return False
         if self.data_check is not None and not self.data_check.accepts(f.get("data", "")):
-            log.info("player %d (%r) refused: Theme Hospital data %s, this server's %s", player.pid, name,
-                     f.get("data", ""), self.data_check.data)
-            player.send(encode("ERROR", **self.data_check.refusal()))
-            return False
+            if self.referee_config is None:
+                log.info("player %d (%r) refused: Theme Hospital data %s, this server's %s", player.pid,
+                         name, f.get("data", ""), self.data_check.data)
+                player.send(encode("ERROR", **self.data_check.refusal()))
+                return False
+            # Another edition (other maps and level settings): this player's
+            # game is never built from their own level files; it starts from
+            # the referee's game, like a player rejoining (_on_start).
+            player.other_data = f.get("data", "")
+            log.info("player %d (%r) has Theme Hospital data %s (this server's %s): gets the "
+                     "referee's game", player.pid, name, player.other_data, self.data_check.data)
         player.send(encode("WELCOME", proto=PROTOCOL_VERSION, id=player.pid,
                            server=SERVER_VERSION, motd=self.motd or None))
         log.info("player %d is %r, build %s", player.pid, name, player.build)
@@ -841,10 +852,21 @@ class Server:
             if room.mode in HOSPITAL_EACH:
                 room.start_fields["seats"] = ",".join(
                     f"{p}:{i}" for p, i in sorted(self._seats(room).items()))
+        # Players with another edition's level files (Player.other_data) load
+        # no level: everybody holds at the start until the referee's game is
+        # there, and all load it (a saved game is loaded by everybody anyway).
+        fresh = [] if room.continue_step is not None or self.referee_config is None else \
+            [peer for peer, pl in sorted(room.players.items()) if pl.other_data]
         for peer, pl in room.players.items():
             pl.last_step = room.continue_step or 0
-            pl.send(encode("START", peer=peer, **room.start_fields))
+            fields = dict(room.start_fields, resume=1) if peer in fresh else room.start_fields
+            pl.send(encode("START", peer=peer, **fields))
         room.broadcast(self._players_line(room))  # the player list from the start
+        if fresh:
+            log.info("room %r: player(s) %s start from the referee's game (other Theme Hospital "
+                     "data)", room.name, ",".join(map(str, fresh)))
+            self._start_recovery(room, 0, rejoining=fresh)
+            room.recovery.start = True
         if room.continue_step is not None:
             rec = room.recovery = Recovery(step=room.continue_step, asked=True, saver=room.owner)
             rec.held = {p: None for p in room.players}
@@ -1031,15 +1053,19 @@ class Server:
         room.desync_step = step
         room.broadcast(encode("DESYNC", step=step))
 
-    def _start_recovery(self, room: Room, step: int, rejoining: int | None = None) -> None:
+    def _start_recovery(self, room: Room, step: int, rejoining: int | list[int] | None = None) -> None:
+        """Hold everybody and give them the referee's game; `rejoining`: the
+        player(s) who have no game yet (they get it without holding)."""
         rec = room.recovery = Recovery(step=step)
-        if rejoining is not None:
-            rec.held[rejoining] = None
+        newcomers = [] if rejoining is None else \
+            [rejoining] if isinstance(rejoining, int) else list(rejoining)
+        for peer in newcomers:
+            rec.held[peer] = None
         # (why: the games tell their players about a repaired desync, not
         # about a player rejoining.)
         why = "desync" if rejoining is None else "rejoin"
         for peer, p in room.players.items():
-            if peer != rejoining:
+            if peer not in newcomers:
                 p.send(encode("HOLD", step=step, why=why))
         asyncio.get_running_loop().call_later(RECOVERY_TIMEOUT, self._recovery_timeout,
                                               room, rec)
@@ -1125,8 +1151,12 @@ class Server:
         for p in room.players.values():
             p.last_step = step
         room.recovery = None
-        room.recoveries += 1
         room.verified_step = min(room.verified_step, step)
+        if rec.start:
+            log.info("room %r: started from the referee's game at step %d (%d bytes, %d commands "
+                     "after it)", room.name, step, rec.size, len(replay))
+            return
+        room.recoveries += 1
         log.info("room %r: repaired: everybody loads the referee's game at step %d "
                  "(%d bytes, %d commands after it)", room.name, step, rec.size, len(replay))
 
