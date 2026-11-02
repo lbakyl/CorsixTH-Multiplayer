@@ -591,7 +591,7 @@ MultiplayerSession.success_sounds = {buy_plot = "cashreg.wav"}
 --! What the player is told when one of their own actions is turned down
 --! (by command kind, then by reason); the reason is shown otherwise.
 MultiplayerSession.rejection_texts = {
-  hire = {["no longer available"] = "That candidate is no longer available. The list changes every month.",
+  hire = {["no longer available"] = "Another hospital hired that candidate first. Here are the others.",
           ["invalid position"] = "Could not place the new member of staff there."},
   place_object = {["tile not free"] = "Could not place the object there: the spot was taken.",
                   ["someone is in the way"] = "Could not place the object there: someone was in the way.",
@@ -655,6 +655,7 @@ end
 --! turns it down alike; only the player who asked sees the notice.
 function MultiplayerSession:_tellRejected(cmd, why)
   if cmd.kind == "place_object" then self:_returnObject(cmd) end
+  if cmd.kind == "hire" and why == "no longer available" then self:_reopenHire(cmd.category) end
   local ui = self.world and self.world.ui
   if ui and MultiplayerSession.success_sounds[cmd.kind] then ui:playSound("wrong2.wav") end
   local texts = MultiplayerSession.rejection_texts[cmd.kind]
@@ -676,6 +677,19 @@ function MultiplayerSession:_tellRejected(cmd, why)
     text = "The room could not be built: " .. tostring(why) .. "."
   end
   self.notify(text or ("That could not be done (" .. tostring(why) .. ")."))
+end
+
+--! Somebody else hired the person this player was placing: the hire window
+--! again, on the same kind of staff, to pick another.
+function MultiplayerSession:_reopenHire(category)
+  local ui = self.world and self.world.ui
+  if not ui or not self.world.available_staff[category] then return end
+  local window = ui:getWindow(UIHireStaff)
+  if not window then
+    window = UIHireStaff(ui)
+    ui:addWindow(window)
+  end
+  window:setCategory(category)
 end
 
 --! An object this player clicked down was not placed: back into their list

@@ -143,13 +143,45 @@ function UIHireStaff:hire()
   end
   self.ui:playSound("YesX.wav")
   -- In multiplayer the profile leaves the shared pool when the hire command
-  -- runs on every peer, not here.
-  if not TheApp.mp_session then
+  -- runs on every peer, not here (and is then no news to this player).
+  if TheApp.mp_session then
+    self.mp_hiring = self.mp_hiring or {}
+    self.mp_hiring[MultiplayerSession.staffProfileKey(profile)] = true
+  else
     table.remove(self.world.available_staff[self.category], self.current_index)
   end
   local place_window = UIPlaceStaff(self.ui, profile, self.mouse_up_x, self.mouse_up_y)
   place_window.mp_pool_index = self.current_index -- used in multiplayer
   self.ui:addWindow(place_window)
+end
+
+--! Multiplayer: every hospital hires from the one list, so it changes under
+--! this window. Keep showing the same person; when another hospital hired
+--! them, show the next one in the list instead (and say so).
+function UIHireStaff:_mpFollow()
+  if not (TheApp.mp_session and self.category and self.current_index) then return end
+  local pool = self.world.available_staff[self.category] or {}
+  local key = MultiplayerSession.staffProfileKey
+  local shown = pool[self.current_index]
+  if self.mp_shown and not (shown and key(shown) == self.mp_shown) then
+    local found
+    for i, profile in ipairs(pool) do
+      if key(profile) == self.mp_shown then found = i break end
+    end
+    if found then
+      self.current_index = found
+    else
+      self.current_index = math.max(1, math.min(self.current_index, #pool))
+      local was_ours = self.mp_hiring and self.mp_hiring[self.mp_shown]
+      if not was_ours and pool[self.current_index] and self.ui.adviser then
+        self.ui.adviser:say({text = "That candidate was hired by another hospital. Here is the next one.",
+            priority = 5})
+      end
+    end
+    self:updateTooltips()
+  end
+  shown = pool[self.current_index]
+  self.mp_shown = shown and key(shown) or nil
 end
 
 function UIHireStaff:cannotAfford()
@@ -168,6 +200,7 @@ function UIHireStaff:draw(canvas, x, y)
   local s = TheApp.gfx:getUIScale()
   x, y = self.x * s + x, self.y * s + y
 
+  self:_mpFollow()
   local font = self.white_font
   local staff = self.world.available_staff
   local staff_label_x = x + 16 * s
@@ -245,6 +278,7 @@ function UIHireStaff:moveBy(n)
       self.current_index = #category
     else
       self.ui:playSound("selectx.wav")
+      self.mp_shown = nil -- (the player chose another one)
       self:updateTooltips()
       return true
     end
@@ -275,6 +309,7 @@ function UIHireStaff:setCategory(name)
     end
   end
   self.current_index = 1
+  self.mp_shown = nil
   self:updateTooltips()
 end
 
