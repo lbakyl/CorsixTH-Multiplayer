@@ -296,8 +296,10 @@ local function run_lobby()
       local lv = TheApp.ui:getWindow(UIMultiplayerLevels)
       lv:setShared(false)
       lv:select(7)
+      lv:scroll(3)
       tick()
       shot("levels-mp")
+      log(string.format("UI: levels briefing rows %d, showing from row %d", lv.scrollbar.max_value, lv.skip + 1))
       local names = {}
       for i = 1, lv:count() do names[i] = lv:levelName(i) end
       local mp_map = lv:preview() and true or false

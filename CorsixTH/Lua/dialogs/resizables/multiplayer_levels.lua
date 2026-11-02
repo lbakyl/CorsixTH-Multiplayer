@@ -45,7 +45,7 @@ local ROWS = 12
 local MAP_X, MAP_Y, TILE = 200, 75, 2 -- the preview: 2 pixels a tile (a map is 128 tiles)
 local INFO_X = MAP_X + 128 * TILE + 10
 local TEXT_Y, TEXT_ROWS = 340, 4
-local SCROLL_W = 45
+local SCROLL_W = 20
 
 -- The preview's colours: each player's starting plot in their hospital's
 -- colour (the building darker), land for sale grey, the rest of the town
@@ -102,11 +102,12 @@ function UIMultiplayerLevels:UIMultiplayerLevels(ui, level, players)
     self.rows[i] = self:addBevelPanel(20, MAP_Y + (i - 1) * 22, 170, 20, col.row, nil, nil, nil, col.active)
         :setLabel(""):makeToggleButton(0, 0, 170, 20, nil, function() self:select(i) end)
   end
-  -- (The briefing scrolls.)
-  self:addBevelPanel(WIDTH - 20 - SCROLL_W, TEXT_Y, SCROLL_W, 25, col.button):setLabel(S.levels_up)
-      :makeButton(0, 0, SCROLL_W, 25, nil, function() self:scroll(-2) end)
-  self:addBevelPanel(WIDTH - 20 - SCROLL_W, TEXT_Y + 30, SCROLL_W, 25, col.button):setLabel(S.levels_down)
-      :makeButton(0, 0, SCROLL_W, 25, nil, function() self:scroll(2) end)
+  -- The briefing scrolls (a scrollbar as in the game's other lists, or the
+  -- mouse wheel).
+  local bar_base = self:addBevelPanel(WIDTH - 20 - SCROLL_W, TEXT_Y, SCROLL_W, TEXT_ROWS * 14 + 2, col.bg)
+  bar_base.lowered = true
+  self.scrollbar = bar_base:makeScrollbar(col.row, function() self.skip = self.scrollbar.value - 1 end,
+      1, 1, TEXT_ROWS, 1)
   self:addBevelPanel(20, HEIGHT - 40, 150, 30, col.button):setLabel(S.back)
       :makeButton(0, 0, 150, 30, nil, self.close)
   self.choose_button = self:addBevelPanel(WIDTH - 220, HEIGHT - 40, 200, 30, col.button):setLabel("")
@@ -137,6 +138,11 @@ end
 function UIMultiplayerLevels:select(i)
   self.level = i
   self.skip = 0
+  -- The scrollbar: one step a row of the briefing.
+  local s = TheApp.gfx:getUIScale()
+  local _, text = self:details()
+  local _, _, count = self.font:drawWrapped(nil, text, 0, 0, self:textWidth() * s)
+  self.scrollbar:setRange(1, math.max(count or 1, TEXT_ROWS), TEXT_ROWS, 1)
   for k, row in ipairs(self.rows) do row:setToggleState(k == i) end
   self.choose_button.panel_for_sprite:setLabel(_S.multiplayer_window.levels_choose:format(i))
   self.players_button.panel_for_sprite:setLabel(_S.multiplayer_window.levels_map_players:format(self.players))
@@ -149,8 +155,22 @@ function UIMultiplayerLevels:buttonPlayers()
   self:select(self.level)
 end
 
+--! The briefing's width (unscaled).
+function UIMultiplayerLevels:textWidth()
+  return WIDTH - 20 - SCROLL_W - 10 - MAP_X
+end
+
+--! The mouse wheel scrolls the briefing.
+function UIMultiplayerLevels:onMouseWheel(x, y)
+  if y == 0 then return UIResizable.onMouseWheel(self, x, y) end
+  self:scroll(-y)
+  return true
+end
+
 function UIMultiplayerLevels:scroll(rows)
-  self.skip = math.max(0, self.skip + rows)
+  local bar = self.scrollbar
+  bar:setRange(bar.min_value, bar.max_value, bar.page_size, math.max(1, bar.value + rows))
+  self.skip = bar.value - 1
 end
 
 --! Back to the lobby with this level.
@@ -277,8 +297,6 @@ function UIMultiplayerLevels:draw(canvas, x, y)
     self.font:drawWrapped(canvas, _S.multiplayer_window.levels_legend, x + INFO_X * s, ly + 6 * s,
         (WIDTH - 20 - INFO_X) * s)
   end
-  local text_w = (WIDTH - 20 - SCROLL_W - 10 - MAP_X) * s
-  local _, _, count = self.font:drawWrapped(nil, text, 0, 0, text_w)
-  self.skip = math.min(self.skip, math.max(0, (count or 0) - TEXT_ROWS))
-  self.font:drawWrapped(canvas, text, x + MAP_X * s, y + TEXT_Y * s, text_w, nil, TEXT_ROWS, self.skip)
+  self.font:drawWrapped(canvas, text, x + MAP_X * s, y + TEXT_Y * s, self:textWidth() * s, nil,
+      TEXT_ROWS, self.skip)
 end
