@@ -560,6 +560,7 @@ multiplayer_window = {
   levels_shared = "One shared hospital",
   levels_map_players = "Map for %d players",
   levels_choose = "Choose level %d",
+  levels_map_by = "Map by %s",
   levels_money = "Money: $%s",
   levels_goals = "To win:",
   levels_goal_reputation = "Reputation %d",

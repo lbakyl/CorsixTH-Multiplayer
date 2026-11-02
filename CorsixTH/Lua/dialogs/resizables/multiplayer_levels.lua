@@ -270,6 +270,10 @@ function UIMultiplayerLevels:details()
     S.levels_goal_value:format(amount(g.value)), S.levels_goal_cured:format(g.cured),
     S.levels_goal_cure_rate:format(g.cure_rate),
   }
+  -- (A map a player made: who.)
+  if def.map_author and def.map_files and def.map_files[self.players] then
+    table.insert(lines, 1, S.levels_map_by:format(def.map_author))
+  end
   local text = plain(S.levels_from_campaign):format(plain(_S.level_names[def.campaign] or def.campaign):upper(),
       def.campaign)
   if def.intro then text = text .. " " .. plain(S[def.intro]) end

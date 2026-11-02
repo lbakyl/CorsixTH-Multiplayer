@@ -40,7 +40,8 @@ local REPUTATION, BALANCE, PERCENTAGE_CURED, NUM_CURED, PERCENTAGE_KILLED, VALUE
 --! level with events of its own (levels.SCENARIOS); intro: its briefing
 --! (a string of _S.multiplayer_window); name: the level's name; map_files:
 --! a map of our own (in CorsixTH's Levels folder) by number of players,
---! instead of the original one.
+--! instead of the original one; map_author: who made those maps (shown in
+--! the lobby's level browser).
 levels.LEVELS = {
   {campaign = 1, cash = 40000,
     goals = {reputation = 550, balance = 20000, value = 40000, cured = 40, cure_rate = 40}},
@@ -58,14 +59,14 @@ levels.LEVELS = {
   -- "Cutthroat", made for a race: level 8's rooms and research on map 3;
   -- with four players on Matroftt's map (Levels/cutthroat4.map, 2026-10-31).
   {campaign = 8, map = 3, cash = 50000, scenario = "cutthroat", intro = "level_intro_7",
-    name = "CUTTHROAT", map_files = {[4] = "cutthroat4.map"},
+    name = "CUTTHROAT", map_files = {[4] = "cutthroat4.map"}, map_author = "Matroftt",
     goals = {reputation = 650, balance = 150000, value = 150000, cured = 300, cure_rate = 55}},
   -- Made for two against two (Matroftt's map, Levels/level40teams.map,
   -- 2026-11-02): the four hospitals in pairs in the middle of town, team
   -- mates side by side, land for sale all around; level 3's rooms and
   -- goals. With two or three players the original map 0.
   {campaign = 5, map = 0, cash = 50000, intro = "level_intro_8",
-    name = "TEAM TOWN", map_files = {[4] = "level40teams.map"},
+    name = "TEAM TOWN", map_files = {[4] = "level40teams.map"}, map_author = "Matroftt",
     goals = {reputation = 650, balance = 100000, value = 110000, cured = 200, cure_rate = 50}},
 }
 levels.COUNT = #levels.LEVELS
