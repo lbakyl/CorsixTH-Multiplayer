@@ -79,6 +79,7 @@ function M.new(bot, ctx)
   self.noticed = {}        -- saboteur entity id -> day it was noticed
   self.boost = {}          -- project key -> extra score from the model's plan
   self.wishes = {}         -- project key -> last game day of a team mate's wish
+  self.hands_off = {}      -- project key -> last game day a team mate keeps it for themselves
   self.failed = {}         -- project key -> day it failed (try again later)
   self.history = {}        -- what it did lately (for the model's report and chat)
   self.left = {}           -- why patients left: cured, kicked, fed_up, over_priced
@@ -233,6 +234,8 @@ function M:projects(s)
   local list = {}
   local listed = {}
   local function add(key, score, run, cost)
+    -- (Not what a team mate said they would do themselves.)
+    if self.hands_off[key] and s.day <= self.hands_off[key] then return end
     score = score + (self.boost[key] or 0) + (self.wishes[key] and WISH or 0)
     listed[key] = true
     if self.failed[key] and s.day < self.failed[key] then return end
@@ -739,6 +742,14 @@ function M:wish(key)
     end
   end
   return false
+end
+
+--! A team mate keeps this project for themselves (or took back their
+--! wish): no wish for it, and the bot leaves it alone for 60 game days.
+function M:leaveTo(key)
+  self.wishes[key] = nil
+  self.hands_off[key] = self.bot:gameDay() + 60
+  self:note("left to a team mate: " .. key)
 end
 
 --! A plan from the model: {priorities = {{action, weight}}, price = percent,

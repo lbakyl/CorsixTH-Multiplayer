@@ -85,18 +85,22 @@ who you are or how you write."""
 
 TEAM_CHAT_EXTRA = """
 
-You can also act on a team mate's request at once. If the last message asks you to build, hire or buy
+You can also act on a team mate's request at once. Only if the last message asks YOU to build, hire or buy
 something, set "project" to the matching item from the menu, written exactly as there, and say you will do it;
-otherwise set it to an empty string. If what they ask for is not on the menu, say kindly that you cannot do that
-yet. Never promise anything you do not set as the project. "reply" is your chat line."""
+otherwise set it to an empty string. A team mate asking whether THEY may do something, or saying they will do it
+themselves, is not a request to you. If the last message says they will do something themselves, or that you
+should not do it (also taking back what they asked before), set "leave" to that item from the menu and say you
+leave it to them; otherwise set it to an empty string. If what they ask for is not on the menu, say kindly that
+you cannot do that yet. Never promise anything you do not set as the project. "reply" is your chat line."""
 
 TEAM_CHAT_SCHEMA = {
     "type": "object",
     "properties": {
         "reply": {"type": "string"},
         "project": {"type": "string"},
+        "leave": {"type": "string"},
     },
-    "required": ["reply", "project"],
+    "required": ["reply", "project", "leave"],
     "additionalProperties": False,
 }
 
@@ -245,7 +249,8 @@ class Advisor:
 
     async def team_chat(self, name: str, context: str, lines: list[str], menu: list[str]) -> dict | None:
         """A team mate's bot answers, and names the project from the menu they
-        asked for, if any: {"text": str, "wish": str or None}."""
+        asked for, if any, and one they keep for themselves (or take back):
+        {"text": str, "wish": str or None, "leave": str or None}."""
         system = CHAT_SYSTEM.format(name=name, stance=STANCES["friendly"]) + TEAM_CHAT_EXTRA
         text = (f"Your hospital: {context[:1500]}\n\nMenu of projects: {', '.join(menu)}\n\nChat so far:\n" +
                 "\n".join(line[:300] for line in lines[-8:]))
@@ -260,7 +265,9 @@ class Advisor:
         if reply is None:
             return None
         wish = str(data.get("project", ""))
-        return {"text": reply, "wish": wish if wish in menu else None}
+        leave = str(data.get("leave", ""))
+        return {"text": reply, "wish": wish if wish in menu and wish != leave else None,
+                "leave": leave if leave in menu else None}
 
 
 def _chat_line(name: str, answer: str) -> str | None:

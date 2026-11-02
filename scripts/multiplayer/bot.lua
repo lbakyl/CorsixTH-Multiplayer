@@ -475,6 +475,7 @@ function Bot:onChat(f)
         rival = rival and 1 or nil, menu = menu}, 10, function(answer)
       local reply = answer and answer.text or line
       if answer and answer.wish and self.manager then self.manager:wish(answer.wish) end
+      if answer and answer.leave and self.manager then self.manager:leaveTo(answer.leave) end
       self:say(reply, typing(reply), to)
     end)
     if asked then return end

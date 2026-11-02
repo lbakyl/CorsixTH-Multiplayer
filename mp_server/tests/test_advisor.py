@@ -65,18 +65,23 @@ def test_a_team_mate_asks_for_a_room():
     a = fake_advisor(json.dumps({"reply": "Bot Agnes:  On it,\nboss!", "project": "room:psych"}))
     menu = ["room:gp", "room:psych", "hire:Nurse"]
     answer = asyncio.run(a.team_chat("Bot Agnes", "fine", ["ann: build a psychiatry please"], menu))
-    assert answer == {"text": "On it, boss!", "wish": "room:psych"}
+    assert answer == {"text": "On it, boss!", "wish": "room:psych", "leave": None}
     call = a.client.messages.calls[0]
     assert call["output_config"]["format"]["type"] == "json_schema"
     assert "room:psych" in call["messages"][0]["content"] and "same team" in call["system"]
     # Only projects from the menu.
-    b = fake_advisor(json.dumps({"reply": "Sure.", "project": "loan:100000"}))
-    assert asyncio.run(b.team_chat("Bot Agnes", "fine", ["ann: take a loan"], menu)) == {"text": "Sure.", "wish": None}
+    b = fake_advisor(json.dumps({"reply": "Sure.", "project": "loan:100000", "leave": ""}))
+    assert asyncio.run(b.team_chat("Bot Agnes", "fine", ["ann: take a loan"], menu)) == \
+        {"text": "Sure.", "wish": None, "leave": None}
+    # "I'll build it myself": left to them, never both.
+    c = fake_advisor(json.dumps({"reply": "All yours.", "project": "room:psych", "leave": "room:psych"}))
+    assert asyncio.run(c.team_chat("Bot Agnes", "fine", ["ann: no, I build the psychiatry"], menu)) == \
+        {"text": "All yours.", "wish": None, "leave": "room:psych"}
 
 
 def test_a_team_mates_bot_gets_the_wish():
     async def body(server, port, bots):
-        server.advisor = fake_advisor(json.dumps({"reply": "Coming up!", "project": "hire:Nurse"}))
+        server.advisor = fake_advisor(json.dumps({"reply": "Coming up!", "project": "hire:Nurse", "leave": ""}))
         ann = await Client.connect(port, "Ann")
         ann.send(encode("CREATE", room="r", password="", max=2, mode="coop", level=1))
         await ann.expect("JOINED")
