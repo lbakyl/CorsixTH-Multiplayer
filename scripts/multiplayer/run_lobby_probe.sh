@@ -197,10 +197,10 @@ run_probe kate MP_ROLE=host MP_ROOM=fax MP_STEPS=1300 MP_UI_SCRIPT="100:vip;400:
 sleep 1
 run_probe liam MP_ROLE=join MP_ROOM=fax MP_STEPS=1300 MP_DRAW_EVERY=2   MP_UI_SCRIPT="160:answerfax:personality:2" & pids+=($!)
 run_probe mira MP_ROLE=host MP_ROOM=coop MP_COOP=1 MP_LEVEL=2 MP_STEPS=1200 \
-  MP_UI_SCRIPT="20:openhospital;60:buy:bench;80:hire:Doctor;200:givemoney:5000;250:loan;260:priceup;270:research:cure;280:heatup;330:acceptoffer;400:bonus:Doctor;410:raise:Doctor;500:buyplot" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;60:buy:bench;80:hire:Doctor;200:givemoney:5000;250:loan;260:priceup;270:research:cure;280:heatup;330:acceptoffer;400:bonus:Doctor;410:raise:Doctor;500:buyplot;700:wallcount" & pids+=($!)
 sleep 1
 run_probe nico MP_ROLE=join MP_ROOM=coop MP_STEPS=1200 MP_DRAW_EVERY=3 \
-  MP_UI_SCRIPT="10:transparent;30:openhospital;60:buy:plant;90:hire:Nurse;200:staffwindow:Nurse;300:sendstaff:Nurse;350:loan;360:heatup;370:heatup;520:buyplot:other;600:sendhome" & pids+=($!)
+  MP_UI_SCRIPT="10:transparent;30:openhospital;60:buy:plant;90:hire:Nurse;200:staffwindow:Nurse;300:sendstaff:Nurse;350:loan;360:heatup;370:heatup;520:buyplot:other;600:sendhome;700:wallcount" & pids+=($!)
 run_probe olga MP_ROLE=host MP_ROOM=events MP_COOP=1 MP_LEVEL=2 MP_STEPS=1600   MP_UI_SCRIPT="20:openhospital;100:emergency:2;400:vip:2" & pids+=($!)
 sleep 1
 run_probe paul MP_ROLE=join MP_ROOM=events MP_STEPS=1600 MP_DRAW_EVERY=3   MP_UI_SCRIPT="30:openhospital;130:answerfax:emergency:1;430:answerfax:personality:1" & pids+=($!)
@@ -498,7 +498,14 @@ ok8 = (icon8 and result('mira').startswith('IN SYNC') and result('nico').startsw
                                                'staff_bonus', 'raise_wage', 'send_home', 'buy_plot', 'buy_plot'])
        and plot8 is not None and int(plot8.group(2)) > 0
        and 'co-op: 2 hospitals' in m)
-print(f"8. Co-op, a hospital each:  {result('mira')}; commands {len(cm)} all ok: {ok_all}; identical: {cm == applied('nico')}; plot bought: {plot8.group(1, 2) if plot8 else '-'}; send icon in the staff window: {icon8}")
+# What the game takes for tiles by a wall (rat holes go there) is the same
+# in both games, though nico draws the walls transparent (before, his game
+# saw walls by most corridor tiles).
+walls8 = [re.search(r'corridor tiles by a wall at step 700: (\d+)', log(n)) for n in ('mira', 'nico')]
+walls8 = [w.group(1) if w else None for w in walls8]
+walls8_ok = walls8[0] is not None and walls8[0] == walls8[1]
+ok8 = ok8 and walls8_ok
+print(f"8. Co-op, a hospital each:  {result('mira')}; commands {len(cm)} all ok: {ok_all}; identical: {cm == applied('nico')}; plot bought: {plot8.group(1, 2) if plot8 else '-'}; send icon in the staff window: {icon8}; walls seen alike (transparent for nico): {walls8_ok} {walls8}")
 for line in re.findall(r'hospital \d (?:[A-Z]+:|settings:).*', m)[-4:]:
     print("   " + line)
 fail |= not ok8

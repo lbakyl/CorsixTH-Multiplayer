@@ -68,6 +68,7 @@
 --                       transparent                     transparent walls on (Shift+X): a view
 --                                                       of this player only (must not desync)
 --                       warmth:<n>                      warmth colours <n> (1-3), this view only
+--                       wallcount                       log how many corridor tiles count as by a wall
 --                       furnishroom:<id>:<w>:<h>        draw a room and place its furniture
 --                                                       by hand, one object at a time
 --                       cancelroom:<id>:<w>:<h>         draw a room, cancel while furnishing
@@ -2524,6 +2525,20 @@ local function run()
           world.ui.toggled_transparency = true
           world.ui:setWallsTransparent(true)
           log("UI: transparent walls on")
+        elseif a == "wallcount" then
+          -- How many of hospital 1's corridor tiles the game takes for tiles
+          -- by a wall (rat holes go there): the same in every game.
+          local hosp, th, n = world.hospitals[1], world.map.th, 0
+          local w, h = th:size()
+          for ty = 1, h do
+            for tx = 1, w do
+              if hosp:isInHospital(tx, ty) and th:getCellFlags(tx, ty).roomId == 0 and
+                  #hosp:getWallsAround(tx, ty) > 0 then
+                n = n + 1
+              end
+            end
+          end
+          log(string.format("UI: corridor tiles by a wall at step %d: %d", session.step, n))
         elseif a == "warmth" then
           world.map:setTemperatureDisplayMethod(tonumber(entry.arg) or 2)
           log("UI: warmth colours " .. tostring(world.map.temperature_display_method))
