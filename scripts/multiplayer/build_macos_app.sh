@@ -158,7 +158,7 @@ codesign --force --sign - --timestamp=none "$app"
 codesign --verify --strict --verbose=2 "$app"
 
 cat > "$pkg/README-MULTIPLAYER.txt" <<EOF
-CorsixTH-Multiplayer test build (macOS, Apple Silicon, macOS $MACOSX_DEPLOYMENT_TARGET or newer)
+CorsixTH-Multiplayer test build (macOS $MACOSX_DEPLOYMENT_TARGET or newer, $([[ $arch == arm64 ]] && echo "Apple Silicon" || echo "Intel; Apple Silicon runs it through Rosetta"))
 Commit $label of https://github.com/lbakyl/CorsixTH-Multiplayer
 
 Move CorsixTH.app to Applications (or anywhere) and open it. The app is not
