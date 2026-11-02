@@ -79,7 +79,7 @@
 #      multiplayer saves; the one picked comes back to the lobby as "Continue:
 #      <save>" with its level and players, the room name kept; x makes it a
 #      new game again
-#  30. the level browser (kai, too): the multiplayer levels by name (map
+#  30. the level browser (kai, too): the 8 multiplayer levels by name (map
 #      for 4 players drawn), the campaign's for one shared hospital; level 6
 #      chosen comes back to the lobby
 #  25. speed votes with three players: a new speed declined (one player by
@@ -681,7 +681,7 @@ print(f"29. Load MP game:           {load29.groups() if load29 else '-'}; x: {x2
 fail |= not ok29
 
 lv30 = re.search(r"UI: levels listed \[(.*?)\]; map drawn: (\w+); shared level 3: (.*?); chosen: level (\d+), room name kept: (\w+)", log('kai'))
-ok30 = bool(lv30 and len(lv30.group(1).split(' | ')) == 7 and lv30.group(1).endswith('CUTTHROAT')
+ok30 = bool(lv30 and len(lv30.group(1).split(' | ')) == 8 and lv30.group(1).endswith('CUTTHROAT | TEAM TOWN')
             and lv30.group(2) == 'true' and lv30.group(3) == 'LARGECHESTER' and lv30.groups()[3:] == ('6', 'true'))
 print(f"30. Level browser:          {lv30.groups() if lv30 else '-'}")
 fail |= not ok30
