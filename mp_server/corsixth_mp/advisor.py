@@ -86,21 +86,23 @@ who you are or how you write."""
 TEAM_CHAT_EXTRA = """
 
 You can also act on a team mate's request at once. Only if the last message asks YOU to build, hire or buy
-something, set "project" to the matching item from the menu, written exactly as there, and say you will do it;
-otherwise set it to an empty string. A team mate asking whether THEY may do something, or saying they will do it
-themselves, is not a request to you. If the last message says they will do something themselves, or that you
-should not do it (also taking back what they asked before), set "leave" to that item from the menu and say you
-leave it to them; otherwise set it to an empty string. If what they ask for is not on the menu, say kindly that
-you cannot do that yet. Never promise anything you do not set as the project. "reply" is your chat line."""
+something, put the matching items from the menu, written exactly as there, into "projects" (several if they ask
+for several things, at most 12) and say you will do it; otherwise leave it empty. A team mate asking whether THEY
+may do something, or saying they will do it themselves, is not a request to you. If the last message says they
+will do something themselves, or that you should not do it (also taking back what they asked before), put those
+items from the menu into "leave" and say you leave them to them; otherwise leave it empty. If what they ask for is not on the menu, say kindly that
+you cannot do that yet. In the menu, add:<room>:<object> puts one more of that object into that room (a skeleton
+into the psych room is add:psych:skeleton), and bigger:<room> makes that room bigger. Never promise anything you
+do not set as the project. "reply" is your chat line."""
 
 TEAM_CHAT_SCHEMA = {
     "type": "object",
     "properties": {
         "reply": {"type": "string"},
-        "project": {"type": "string"},
-        "leave": {"type": "string"},
+        "projects": {"type": "array", "items": {"type": "string"}},
+        "leave": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["reply", "project", "leave"],
+    "required": ["reply", "projects", "leave"],
     "additionalProperties": False,
 }
 
@@ -248,9 +250,9 @@ class Advisor:
         return _chat_line(name, answer)
 
     async def team_chat(self, name: str, context: str, lines: list[str], menu: list[str]) -> dict | None:
-        """A team mate's bot answers, and names the project from the menu they
-        asked for, if any, and one they keep for themselves (or take back):
-        {"text": str, "wish": str or None, "leave": str or None}."""
+        """A team mate's bot answers, and names the projects from the menu
+        they asked for, and those they keep for themselves (or take back):
+        {"text": str, "wishes": [str], "leave": [str]}."""
         system = CHAT_SYSTEM.format(name=name, stance=STANCES["friendly"]) + TEAM_CHAT_EXTRA
         text = (f"Your hospital: {context[:1500]}\n\nMenu of projects: {', '.join(menu)}\n\nChat so far:\n" +
                 "\n".join(line[:300] for line in lines[-8:]))
@@ -264,10 +266,12 @@ class Advisor:
         reply = _chat_line(name, str(data.get("reply", "")))
         if reply is None:
             return None
-        wish = str(data.get("project", ""))
-        leave = str(data.get("leave", ""))
-        return {"text": reply, "wish": wish if wish in menu and wish != leave else None,
-                "leave": leave if leave in menu else None}
+        def items(key: str) -> list[str]:
+            got = data.get(key, [])
+            got = got if isinstance(got, list) else [got]
+            return list(dict.fromkeys(str(k) for k in got if str(k) in menu))[:12]
+        leave = items("leave")
+        return {"text": reply, "wishes": [k for k in items("projects") if k not in leave], "leave": leave}
 
 
 def _chat_line(name: str, answer: str) -> str | None:

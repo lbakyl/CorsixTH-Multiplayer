@@ -368,7 +368,23 @@ function M:projects(s)
       self:note("wish over: " .. key)
     elseif not listed[key] then
       local kind, what = key:match("^(%a+):(.+)$")
-      if kind == "room" then room(what, 0) elseif kind == "hire" then hire(what, 0) elseif kind == "buy" then buy(what, 0) end
+      if kind == "room" then
+        room(what, 0)
+      elseif kind == "hire" then
+        hire(what, 0)
+      elseif kind == "buy" then
+        buy(what, 0)
+      elseif kind == "add" or kind == "bigger" then
+        -- An object more in a room, or the room bigger: edit it as a person
+        -- would (Bot:editRoom).
+        local room_id, obj = what:match("^([%w_]+):?([%w_]*)$")
+        local rm = self:roomOf(room_id)
+        if rm then
+          local steps = kind == "add" and {"buy:" .. obj, "place", "done"} or {"resize:1:1", "place", "done"}
+          local ok, cost = pcall(hosp.getObjectBuildCost, hosp, obj ~= "" and obj or "radiator")
+          add(key, 0, function() return bot:editRoom(rm, steps) end, kind == "add" and ok and cost or 1000)
+        end
+      end
     end
   end
   table.sort(list, function(a, b) return a.score > b.score end)
@@ -723,14 +739,42 @@ function M.menu()
   return items
 end
 
---! The projects a team mate may ask for now (rooms it has discovered).
+--! The projects a team mate may ask for now: rooms it has discovered, and
+--! for the rooms it has, an object more (add:<room>:<object>) or the room
+--! bigger (bigger:<room>).
 function M:wishMenu()
   local items = {}
   for _, k in ipairs(M.menu()) do
     local room_id = k:match("^room:(.+)$")
     if not room_id or self:available(room_id) then items[#items + 1] = k end
   end
+  local world = self.bot.world
+  local seen = {}
+  for _, rm in pairs(world.rooms) do
+    local id = rm.room_info.id
+    if rm.hospital == world.ui.hospital and rm.is_active and not seen[id] then
+      seen[id] = true
+      items[#items + 1] = "bigger:" .. id
+      for _, obj in ipairs(rm.room_info.objects_additional or {}) do
+        if self.bot:extraAllowed(rm, obj) then items[#items + 1] = "add:" .. id .. ":" .. obj end
+      end
+    end
+  end
   return items
+end
+
+--! The first active room of a type in this hospital (the one a team mate
+--! means), or nil.
+function M:roomOf(id)
+  local world = self.bot.world
+  local found
+  for _, rm in pairs(world.rooms) do
+    if rm.hospital == world.ui.hospital and rm.is_active and rm.room_info.id == id and
+        (not found or rm.id < found.id) then
+      found = rm
+    end
+  end
+  return found
 end
 
 --! How many of a project's thing this hospital has: rooms of the type (also
@@ -746,6 +790,19 @@ function M:howMany(key)
     end
   elseif kind == "hire" then
     n = hosp:countStaffOfCategory(what)
+  elseif kind == "add" then
+    local room_id, obj = what:match("^([%w_]+):([%w_]+)$")
+    for _, rm in pairs(world.rooms) do
+      if rm.hospital == hosp and rm.room_info.id == room_id then
+        for o in pairs(rm.objects or {}) do
+          if o.object_type and o.object_type.id == obj then n = n + 1 end
+        end
+      end
+    end
+  elseif kind == "bigger" then
+    for _, rm in pairs(world.rooms) do
+      if rm.hospital == hosp and rm.room_info.id == what then n = n + rm.width * rm.height end
+    end
   elseif kind == "buy" then
     for _, e in ipairs(world.entities) do
       if e.object_type and e.object_type.id == what and e.tile_x and hosp:isInHospital(e.tile_x, e.tile_y) and
@@ -757,13 +814,13 @@ function M:howMany(key)
   return n
 end
 
---! A team mate asked for this project in the chat: it comes next (for 30
---! game days; then it lapses, if it could not be done), unless somebody
+--! A team mate asked for this project in the chat: it comes next (for 60
+--! game days: a request for every room takes a while; then it lapses, if it could not be done), unless somebody
 --! does it first.
 function M:wish(key)
   for _, k in ipairs(self:wishMenu()) do
     if k == key then
-      self.wishes[key] = {until_day = self.bot:gameDay() + 30, had = self:howMany(key)}
+      self.wishes[key] = {until_day = self.bot:gameDay() + 60, had = self:howMany(key)}
       self.next_project = math.min(self.next_project, self.bot:gameDay())
       self:note("wish: " .. key)
       return true

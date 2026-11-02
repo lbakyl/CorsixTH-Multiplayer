@@ -110,7 +110,15 @@ environment):
   seconds the bot uses its stock line. A bot on the person's side also sends
   `menu` (the projects it can do now), and the model names the one asked for
   ("can you build a psychiatry?"); the bot does that next, without waiting
-  for the next plan. The wish lapses after 30 game days if it cannot be done.
+  for the next plan. One message may ask for several things ("a plant and a
+  radiator in every room"). Besides rooms, staff and corridor objects, a team
+  mate may ask for one more object in a room it has (add:<room>:<object>, the
+  room's own extras: a skeleton in the psych room) or a room bigger
+  (bigger:<room>: drawn again a tile wider and longer, where there is space,
+  and furnished again); the bot does both in the room editor as a person
+  would. A wish is over once anybody has done it, and lapses after 60 game
+  days if it cannot be done. What a team mate says they will do themselves, or
+  takes back, the bot leaves alone for 60 game days ("leave").
 - `ANSWER id=...` with `actions` ("action:weight,..."), `price`, `note`, or
   `text` (and `wish`, a menu item); `error=off|busy|none|failed`. Only bots
   may ask, a plan at most every 20 seconds and a chat line every 3 seconds per bot.

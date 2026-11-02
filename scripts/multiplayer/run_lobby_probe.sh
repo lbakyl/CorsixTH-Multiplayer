@@ -754,7 +754,7 @@ want12 = ['room_buy', 'room_delete', 'room_edit', 'room_finish', 'room_object', 
 # (Placed twice: after buying it and after the room moved.)
 radiator_puts12 = len(re.findall(r'UI: furnishing: put radiator at', ed))
 radiator12 = radiator_puts12 - len(re.findall(r'UI: furnishing: radiator is in the room', ed))
-moved12 = re.search(r'UI: edit: room now at (\d+),(\d+) \(was (\d+),(\d+)\)', ed)
+moved12 = re.search(r'UI: edit: room now at (\d+),(\d+) size \d+x\d+ \(was (\d+),(\d+) size \d+x\d+\)', ed)
 marks12 = re.findall(r'UI: overlay at step \d+: (\d+) marks', ed + fl)
 rooms12 = re.search(r'rooms built: (.*)', ed)
 clicks12 = 'world hit test on, edit_room false' in ''.join(l for l in ed.splitlines() if 'UI: state at step' in l)

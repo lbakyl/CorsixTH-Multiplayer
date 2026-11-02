@@ -689,6 +689,9 @@ end
 --!   buy:<object>      buy one more in the purchase window (first allowed if "first")
 --!   place             put every object waiting in the list into the room
 --!   move:<dx>:<dy>    cancel (walls down), draw the room again shifted
+--!   resize:<dw>:<dh>  cancel (walls down), draw the room again that much
+--!                     bigger (growing left or up where right or down is
+--!                     taken); without space it goes back as it was (FAILED)
 --!   done              confirm (the room opens again)
 --!   delete            cancel twice (walls down, then remove the room)
 --! Returns true when finished. Logs "UI: edit <step> ok" or "... FAILED".
@@ -713,7 +716,8 @@ function builder.edit_tick(world, state, log)
   if not state.room then
     for _, room in pairs(world.rooms) do
       if room.room_info.id == state.room_type and room.hospital == ui.hospital and room.built and
-          room.is_active and (not state.room or room.id < state.room.id) then
+          room.is_active and (not state.room or room.id < state.room.id) and
+          (not state.room_id or room.id == state.room_id) then
         state.room = room
       end
     end
@@ -770,7 +774,7 @@ function builder.edit_tick(world, state, log)
       shop:confirm()
     elseif name == "place" then
       state.placing = {no_confirm = true, clicks = true}
-    elseif name == "move" then
+    elseif name == "move" or name == "resize" then
       state.old = {x = dlg.room.x, y = dlg.room.y, w = dlg.room.width, h = dlg.room.height}
       dlg:cancel()
     elseif name == "done" then
@@ -796,14 +800,19 @@ function builder.edit_tick(world, state, log)
     if shown and dlg.phase == "objects" and builder.furnish_tick(world, state.placing, log) then
       finish_step(#dlg.objects == 0, "objects left")
     end
-  elseif name == "move" then
+  elseif name == "move" or name == "resize" then
     if shown and entry.unbuilt and dlg.phase == "walls" and not state.drawn then
-      -- Draw it again a little further (the first offset that works).
-      local dx, dy = tonumber(state.a1) or 1, tonumber(state.a2) or 0
-      local offsets = {{dx, dy}, {-dx, -dy}, {dy, dx}, {-dy, -dx}, {0, 0}}
-      for _, d in ipairs(offsets) do
+      -- Draw it again a little further (the first offset that works), or
+      -- bigger ({dx, dy, extra w, extra h}); the old place last.
+      local a, b = tonumber(state.a1) or 1, tonumber(state.a2) or 0
+      local tries = {{a, b, 0, 0}, {-a, -b, 0, 0}, {b, a, 0, 0}, {-b, -a, 0, 0}, {0, 0, 0, 0}}
+      if name == "resize" then
+        tries = {{0, 0, a, b}, {-a, 0, a, b}, {0, -b, a, b}, {-a, -b, a, b}, {0, 0, a, 0}, {-a, 0, a, 0},
+            {0, 0, 0, b}, {0, -b, 0, b}, {0, 0, 0, 0}}
+      end
+      for _, d in ipairs(tries) do
         if not state.drawn then
-          dlg:setBlueprintRect(state.old.x + d[1], state.old.y + d[2], state.old.w, state.old.h)
+          dlg:setBlueprintRect(state.old.x + d[1], state.old.y + d[2], state.old.w + d[3], state.old.h + d[4])
           if dlg.confirm_button.enabled then
             dlg:confirm()
             if dlg.phase == "door" then
@@ -827,9 +836,20 @@ function builder.edit_tick(world, state, log)
       end
       if not state.drawn then finish_step(false, "no place to move to") end
     elseif shown and state.drawn and not entry.unbuilt and dlg.phase == "objects" then
-      log(string.format("UI: edit: room now at %d,%d (was %d,%d)", dlg.room.x, dlg.room.y,
-          state.old.x, state.old.y))
+      log(string.format("UI: edit: room now at %d,%d size %dx%d (was %d,%d size %dx%d)", dlg.room.x, dlg.room.y,
+          dlg.room.width, dlg.room.height, state.old.x, state.old.y, state.old.w, state.old.h))
       state.drawn = nil
+      -- (A room that could not grow is back as it was: say so, then
+      -- put its things back and confirm as usual.)
+      local grown = dlg.room.width * dlg.room.height > state.old.w * state.old.h
+      if name == "resize" and not grown then
+        log("UI: edit resize FAILED: no space to grow at step " .. step)
+        state.grew = false
+        state.current, state.wait = nil, nil
+        state.i = state.i + 1
+        return false
+      end
+      state.grew = grown or nil
       finish_step(true)
     end
   elseif name == "done" then

@@ -933,8 +933,9 @@ class Server:
                 if answer is None:
                     player.send(encode("ANSWER", id=qid, error="none"))
                     return
-                player.send(encode("ANSWER", id=qid, text=answer["text"], wish=answer["wish"],
-                                   leave=answer["leave"]))
+                player.send(encode("ANSWER", id=qid, text=answer["text"],
+                                   wish=",".join(answer["wishes"]) or None,
+                                   leave=",".join(answer["leave"]) or None))
             else:
                 lines = [line for line in f.get("lines", "").split("\n") if line]
                 text = await advisor.chat(player.name, f.get("rival") == "1", f.get("text", ""), lines)

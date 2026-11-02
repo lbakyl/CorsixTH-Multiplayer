@@ -26,6 +26,8 @@
 --   MP_LUA_CPATH, MP_LUA_PATH  where to find LuaSocket (if not standard)
 -- Tests only:
 --   MP_BOT_SEED          seed for its choices (default: from the clock)
+--   MP_BOT_WISHES        tests: "<day>:<project>;..." a team mate's wishes on those game
+--                        days, as if asked in the chat (add:psych:skeleton, bigger:gp)
 --   MP_BOT_PACE          game days between its building steps are divided
 --                        by this (default 1: like a person)
 --   MP_BOT_FAST          1: run the game as fast as the others allow and
@@ -474,8 +476,11 @@ function Bot:onChat(f)
     local asked = self:ask("chat", {text = brief, lines = table.concat(self.chat_lines, "\n"),
         rival = rival and 1 or nil, menu = menu}, 10, function(answer)
       local reply = answer and answer.text or line
-      if answer and answer.wish and self.manager then self.manager:wish(answer.wish) end
-      if answer and answer.leave and self.manager then self.manager:leaveTo(answer.leave) end
+      -- (Several at once: "a plant and a radiator in every room".)
+      if answer and self.manager then
+        for key in (answer.wish or ""):gmatch("[^,]+") do self.manager:wish(key) end
+        for key in (answer.leave or ""):gmatch("[^,]+") do self.manager:leaveTo(key) end
+      end
       self:say(reply, typing(reply), to)
     end)
     if asked then return end
@@ -880,6 +885,29 @@ local function extra_allowed(world, rm, id)
   local progress = world.ui.hospital.research.research_progress[object]
   return listed and cfg[object.thob] and cfg[object.thob].AvailableForLevel == 1 and
       (not progress or progress.discovered) and true or false
+end
+
+--! Can a room of this hospital take one more of this object? (For the
+--! manager: what a team mate may ask to have added.)
+function Bot:extraAllowed(rm, id)
+  return extra_allowed(self.world, rm, id)
+end
+
+--! Edit one of this hospital's rooms like a person would (a team mate asked
+--! for it): steps as in builder.edit_tick ("buy:skeleton", "place", "done";
+--! "resize:1:1", "place", "done"). False if another edit is going on.
+function Bot:editRoom(rm, steps)
+  if self.editing or self.furnishing then return false, "busy" end
+  self.editing = {room_type = rm.room_info.id, room_id = rm.id, steps = steps}
+  log(string.format("editing %s #%d: %s", rm.room_info.id, rm.id, table.concat(steps, ", ")))
+  return true
+end
+
+--! A room being edited (Bot:editRoom): one step at a time. True while busy.
+function Bot:editTick()
+  if not self.editing then return false end
+  if builder.edit_tick(self.world, self.editing, log) then self.editing = nil end
+  return true
 end
 
 --! A room drawn for hand furnishing (Bot:drawRoom with extras): buy the
@@ -1332,6 +1360,17 @@ function Bot:think()
   local plan = self.plan
   local day = self:gameDay()
   self:answerOffers()
+  -- (Tests: wishes as if a team mate asked for them.)
+  if self.manager and os.getenv("MP_BOT_WISHES") then
+    self.test_wishes = self.test_wishes or {}
+    for wday, key in os.getenv("MP_BOT_WISHES"):gmatch("(%d+):([^;]+)") do
+      if day >= tonumber(wday) and not self.test_wishes[key] then
+        self.test_wishes[key] = true
+        log(string.format("test wish on day %d: %s (%s)", day, key,
+            tostring(self.manager:wish(key))))
+      end
+    end
+  end
   -- (A person sharing the hospital answers its emergencies.)
   if not (self.manager and self:sharesWithPerson()) then self:answerEmergencies() end
 
@@ -1347,8 +1386,9 @@ function Bot:think()
   end
 
   if self.manager then
-    -- The smart brain: a room being furnished first, then the manager.
-    if self:furnishTick() then return end
+    -- The smart brain: a room being furnished or edited first, then the
+    -- manager.
+    if self:furnishTick() or self:editTick() then return end
     if not hospital.mp_place and #hospital:getReceptionDesks() == 0 then
       if day >= plan.desk then
         plan.desk = self:later(3)

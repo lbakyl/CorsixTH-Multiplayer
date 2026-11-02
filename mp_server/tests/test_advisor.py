@@ -62,26 +62,31 @@ def test_the_daily_budget_stops_the_advice(tmp_path):
 
 
 def test_a_team_mate_asks_for_a_room():
-    a = fake_advisor(json.dumps({"reply": "Bot Agnes:  On it,\nboss!", "project": "room:psych"}))
+    a = fake_advisor(json.dumps({"reply": "Bot Agnes:  On it,\nboss!", "projects": ["room:psych"], "leave": []}))
     menu = ["room:gp", "room:psych", "hire:Nurse"]
     answer = asyncio.run(a.team_chat("Bot Agnes", "fine", ["ann: build a psychiatry please"], menu))
-    assert answer == {"text": "On it, boss!", "wish": "room:psych", "leave": None}
+    assert answer == {"text": "On it, boss!", "wishes": ["room:psych"], "leave": []}
     call = a.client.messages.calls[0]
     assert call["output_config"]["format"]["type"] == "json_schema"
     assert "room:psych" in call["messages"][0]["content"] and "same team" in call["system"]
     # Only projects from the menu.
-    b = fake_advisor(json.dumps({"reply": "Sure.", "project": "loan:100000", "leave": ""}))
+    b = fake_advisor(json.dumps({"reply": "Sure.", "projects": ["loan:100000"], "leave": []}))
     assert asyncio.run(b.team_chat("Bot Agnes", "fine", ["ann: take a loan"], menu)) == \
-        {"text": "Sure.", "wish": None, "leave": None}
+        {"text": "Sure.", "wishes": [], "leave": []}
     # "I'll build it myself": left to them, never both.
-    c = fake_advisor(json.dumps({"reply": "All yours.", "project": "room:psych", "leave": "room:psych"}))
+    c = fake_advisor(json.dumps({"reply": "All yours.", "projects": ["room:psych"], "leave": ["room:psych"]}))
     assert asyncio.run(c.team_chat("Bot Agnes", "fine", ["ann: no, I build the psychiatry"], menu)) == \
-        {"text": "All yours.", "wish": None, "leave": "room:psych"}
+        {"text": "All yours.", "wishes": [], "leave": ["room:psych"]}
+    # Several at once.
+    d = fake_advisor(json.dumps({"reply": "Will do.", "projects": ["room:gp", "hire:Nurse", "room:gp"], "leave": []}))
+    assert asyncio.run(d.team_chat("Bot Agnes", "fine", ["ann: a gp and a nurse"], menu))["wishes"] == \
+        ["room:gp", "hire:Nurse"]
 
 
 def test_a_team_mates_bot_gets_the_wish():
     async def body(server, port, bots):
-        server.advisor = fake_advisor(json.dumps({"reply": "Coming up!", "project": "hire:Nurse", "leave": ""}))
+        server.advisor = fake_advisor(json.dumps({"reply": "Coming up!", "projects": ["hire:Nurse", "room:gp"],
+                                                  "leave": []}))
         ann = await Client.connect(port, "Ann")
         ann.send(encode("CREATE", room="r", password="", max=2, mode="coop", level=1))
         await ann.expect("JOINED")
@@ -91,7 +96,7 @@ def test_a_team_mates_bot_gets_the_wish():
         await bot.expect("JOINED")
         bot.send(encode("ASK", id=3, kind="chat", text="x", lines="ann: hire a nurse", menu="room:gp,hire:Nurse"))
         answer = await bot.expect("ANSWER", id=3)
-        assert answer["text"] == "Coming up!" and answer["wish"] == "hire:Nurse"
+        assert answer["text"] == "Coming up!" and answer["wish"] == "hire:Nurse,room:gp"
     run_with_bots(body)
 
 
