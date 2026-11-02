@@ -554,7 +554,8 @@ multiplayer_window = {
   staff_on_the_way = "On the way to %s",
   saving_note = "Saving the game on every player's computer...",
   saved_note = "Game saved: %s",
-  continue_new = "New game",
+  load_game = "Load MP game",
+  load_caption = "Load a multiplayer game",
   continue_save = "Continue: %s",
   continuing = "saved %s",
   saved_flag = "  saved game",
@@ -798,7 +799,8 @@ tooltip.multiplayer_window = {
   level = "Which level to play: one shared hospital plays the campaign's levels; several hospitals play the multiplayer levels (1 to 7, a higher number plays level 7). Level 6 is Emergency!: emergencies four times a month in the first year, then epidemics; level 7 is Cutthroat, made for a competitive race: dirty tricks month by month, job fairs, race emergencies and earthquakes",
   players = "How many players the room is for",
   ready = "Tell the host you are ready to start",
-  continue_game = "Start a new game, or continue a multiplayer game saved earlier (File > Save, or the monthly autosave)",
+  continue_game = "Continue a multiplayer game saved earlier (File > Save, or the monthly autosave): pick it from the list. Without one the room starts a new game",
+  new_game = "Start a new game instead of the saved one",
   start = "Start the game for everybody in the room",
 }
 

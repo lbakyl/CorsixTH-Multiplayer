@@ -60,7 +60,7 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
 1. Main menu, **Multiplayer**. Click **EU1: stable** or **EU2: test builds**
    (or type another server's address), enter your name, then **Connect**.
 2. **To host:** type a room name, and a password if you like, choose the
-   level and the number of players (or a saved game with **Continue**, see
+   level and the number of players (or a saved game with **Load MP game**, see
    below), then **Create**. When everybody has pressed **Ready**, press
    **Start game**. You do not need a full room: with a seat still empty
    (somebody could not make it), **Start game** starts a game for the
@@ -418,9 +418,13 @@ Trading staff and money and sharing research work as in co-op.
 - **File > Save** saves the game on every player's computer at the same
   moment (folder `Multiplayer` in your saves folder). The game also saves
   itself at the end of every month ("<room> autosave").
-- To continue, the host chooses the save with **Continue** when creating a
-  room (it sets the mode, level and players). In a hospital-each game, every
-  player gets their own hospital back if they use the same name as before.
+- To continue, the host clicks **Load MP game** when creating a room and
+  picks the save in the list (the same window as the single-player Load
+  Game, with only the multiplayer saves, newest first). The room then says
+  **Continue: <save>** and takes its level, players, colours and teams; the
+  **x** next to it makes it a new game again. In a game with several
+  hospitals, every player gets their own hospital back if they use the same
+  name as before.
 - The normal Load menu does not load multiplayer saves.
 
 ## If the games go out of sync

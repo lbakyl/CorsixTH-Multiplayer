@@ -244,11 +244,15 @@ function UIMultiplayer:_buildRooms()
   self.new_max = form.max or 2
   self.level_button = button(self, 20, y, 180, S.level:format(self.new_level), self.buttonLevel, T.level)
   self.max_button = button(self, 205, y, WIDTH - 225, S.players:format(self.new_max), self.buttonMax, T.players)
-  -- New game, or one of the saved multiplayer games (newest first).
+  -- A new game, or a saved multiplayer game picked in the Load MP game
+  -- window (x: a new game again).
   self.saves = nil
   self.continue_index = 0
-  self.continue_button = button(self, 20, y + 35, WIDTH - 40, S.continue_new, self.buttonContinue,
+  self.continue_button = button(self, 20, y + 35, WIDTH - 75, S.load_game, self.buttonContinue,
       T.continue_game)
+  self.new_game_button = button(self, WIDTH - 50, y + 35, 30, "x", self.buttonNewGame, T.new_game)
+  self.new_game_button:setVisible(false)
+  if form.continue_path then self:_continueSave(form.continue_path) end
   y = heights.rooms - 50
   button(self, 20, y, 180, S.create, self.buttonCreate)
   button(self, WIDTH - 200, y, 180, S.disconnect, self.buttonDisconnect)
@@ -325,14 +329,43 @@ function UIMultiplayer:buttonMax()
   self.max_button.panel_for_sprite:setLabel(_S.multiplayer_window.players:format(self.new_max))
 end
 
---! Cycle through "New game" and the saved multiplayer games. A saved game
---! decides the mode, level and number of players.
+--! The new room's settings so far (kept while the Load MP game window is
+--! open, and for the next room).
+function UIMultiplayer:_rememberForm()
+  local save = self.saves and self.saves[self.continue_index]
+  last_room_form = {room = self.room_name_box.text, password = self.password_box.text,
+      mode = self.new_mode, level = self.new_level, max = self.new_max, continue_path = save and save.path}
+end
+
+--! Load MP game: the saved multiplayer games in a file list
+--! (UILoadMultiplayerGame), which opens this window again when done.
 function UIMultiplayer:buttonContinue()
+  self:_rememberForm()
+  local ui = self.ui
+  self.rebuilding = true
+  self:close()
+  ui:addWindow(UILoadMultiplayerGame(ui))
+end
+
+--! The Load MP game window chose a save (its path): the new room continues
+--! it (the lobby window shows it when it opens again).
+function UIMultiplayer.chooseSave(path)
+  last_room_form = last_room_form or {}
+  last_room_form.continue_path = path
+end
+
+--! The new room continues this save (a path in the multiplayer saves): it
+--! decides the level and the number of players.
+function UIMultiplayer:_continueSave(path)
   local S = _S.multiplayer_window
-  self.saves = self.saves or MultiplayerLobby.listSaves()
-  self.continue_index = (self.continue_index + 1) % (#self.saves + 1)
+  self.saves = MultiplayerLobby.listSaves()
+  self.continue_index = 0
+  for i, save in ipairs(self.saves) do
+    if save.path == path then self.continue_index = i end
+  end
   local save = self.saves[self.continue_index]
-  self.continue_button.panel_for_sprite:setLabel(save and S.continue_save:format(save.label) or S.continue_new)
+  self.continue_button.panel_for_sprite:setLabel(save and S.continue_save:format(save.label) or S.load_game)
+  self.new_game_button:setVisible(save ~= nil)
   if save then
     self.new_level = tonumber(save.info.level) or 1
     self.new_max = math.max(2, tonumber(save.info.players) or 2)
@@ -340,23 +373,25 @@ function UIMultiplayer:buttonContinue()
     self.max_button.panel_for_sprite:setLabel(S.players:format(self.new_max))
   end
   for _, b in ipairs({self.level_button, self.max_button}) do b:enable(not save) end
+  return save
+end
+
+--! x: a new game instead of the saved one.
+function UIMultiplayer:buttonNewGame()
+  self:_continueSave(nil)
 end
 
 --! For scripted tests: choose a saved game by label ("latest": the newest).
 function UIMultiplayer:selectContinue(wanted)
-  self.saves = MultiplayerLobby.listSaves()
-  for i, save in ipairs(self.saves) do
+  for _, save in ipairs(MultiplayerLobby.listSaves()) do
     if wanted == "latest" or save.label == wanted then
-      self.continue_index = i - 1
-      self:buttonContinue()
-      return save
+      return self:_continueSave(save.path)
     end
   end
 end
 
 function UIMultiplayer:buttonCreate()
-  last_room_form = {room = self.room_name_box.text, password = self.password_box.text,
-      mode = self.new_mode, level = self.new_level, max = self.new_max}
+  self:_rememberForm()
   self.lobby:createRoom({room = self.room_name_box.text, password = self.password_box.text,
       max = self.new_max, mode = self.new_mode, level = self.new_level, difficulty = "full",
       continue_save = self.saves and self.saves[self.continue_index]})

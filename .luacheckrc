@@ -59,7 +59,7 @@ globals = { -- Globals
             "UIDirectoryBrowser", "UIDropdown", "UIEditRoom", "UIFax",
             "UIFileBrowser", "UIFolder", "UIFullscreen", "UIFurnishCorridor",
             "UIGraphicSettings", "UIGraphs", "UIHireStaff", "UIHotkeyAssign",
-            "UIHotkeyAssignKeyPane", "UIInformation", "UIJukebox", "UILoadGame",
+            "UIHotkeyAssignKeyPane", "UIInformation", "UIJukebox", "UILoadGame", "UILoadMultiplayerGame",
             "UILoadMap", "UILuaConsole", "UIMachine", "UIMakeDebugPatient",
             "UIMainMenu", "UIMapEditor", "UIMenu", "UIMenuBar", "UIMenuList", "UIMultiplayer", "UIMultiplayerChooseHospital", "UIMultiplayerOffer", "UIMultiplayerAskMoney", "UIMultiplayerChat", "UIMultiplayerChatInput", "UIMultiplayerPlayers", "UIMultiplayerResearch", "UIMultiplayerSabotage", "UIMultiplayerSpy", "UIMultiplayerTrade",
             "UIMessage", "UINewGame", "UIOptions", "UIPatient", "UIMachineMenu",

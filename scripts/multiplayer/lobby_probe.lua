@@ -72,6 +72,8 @@
 --   MP_FURNISH_PACE   game hours between furnishing steps (default 0)
 --   MP_CONTINUE       host: create the room continuing a saved multiplayer
 --                     game (its label, or "latest"); UI action mpsave saves one
+--   MP_SHOW_LOAD      host: before creating the room, Load MP game with two made-up
+--                     saves: pick one, then x (a new game again)
 --   MP_UI_COMMANDS    optional file; every line added to it while the game
 --                     runs is done at once, as "action[:arg]" (the actions above),
 --                     to direct a scripted player during a game with a person
@@ -256,6 +258,36 @@ local function run_lobby()
   if role == "host" then
     w = lobby_window()
     w.room_name_box:setText(room)
+    if os.getenv("MP_SHOW_LOAD") then
+      -- Load MP game: two saved games (made up: only listed), the file list,
+      -- one picked, the lobby again with it; then "x", a new game.
+      local dir = MultiplayerLobby.savesDir()
+      require("lfs").mkdir(dir)
+      for i, name in ipairs({"Jan's room y1-03-01", "Jan's room autosave"}) do
+        local f = assert(io.open(dir .. name .. ".sav", "wb")) f:write("x") f:close()
+        f = assert(io.open(dir .. name .. ".mpinfo", "w"))
+        f:write("room=Jan's room\nmode=teamshared\nlevel=" .. (i + 2) .. "\ndifficulty=full\nstep=300\n",
+            "date=1-03-01T00\nhospitals=JAN + BOT CLIVE,ANNA\ncolours=1,3\nteams=1,2\nplayers=3\n")
+        f:close()
+      end
+      w:buttonContinue()
+      local list = TheApp.ui:getWindow(UILoadMultiplayerGame)
+      tick()
+      shot("lobby-load")
+      local root = list.control.tree_root
+      local shown = {}
+      for i = 1, root:getChildCount() do shown[i] = root:getChildByIndex(i):getLabel() end
+      local first = root:getChildByIndex(1)
+      list:choiceMade(first.path)
+      w = lobby_window()
+      local picked = tostring(w.continue_button.panel_for_sprite.label or ""):gsub("^<LocalisedString> Current value:%s*", "")
+      log(string.format("UI: load window listed [%s]; picked: %s; level %d, %d players; room name kept: %s",
+          table.concat(shown, " | "), picked, w.new_level, w.new_max, tostring(w.room_name_box.text == room)))
+      shot("lobby-load-picked")
+      w:buttonNewGame()
+      log("UI: x: " .. tostring(w.continue_button.panel_for_sprite.label or ""):gsub("^<LocalisedString> Current value:%s*", "")
+          .. ", continue index " .. w.continue_index)
+    end
     w.password_box:setText(password)
     w.new_mode = room_mode -- (the newcomers' first colours and teams)
     for _ = 2, tonumber(os.getenv("MP_LEVEL") or 1) do w:buttonLevel() end

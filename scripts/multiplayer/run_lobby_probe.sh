@@ -75,6 +75,10 @@
 #      layout -> IN SYNC
 #  27. the reception desk moved one tile over (right, then down) -> both
 #      moves accepted, IN SYNC
+#  29. Load MP game (kai, before creating the room): the file list shows the
+#      multiplayer saves; the one picked comes back to the lobby as "Continue:
+#      <save>" with its level and players, the room name kept; x makes it a
+#      new game again
 #  25. speed votes with three players: a new speed declined (one player by
 #      clicking in the vote fax, one by itself), one agreed in the fax (2 of
 #      3 is a majority), one nobody answers lapses after 30 s of play; the
@@ -281,7 +285,7 @@ run_probe quin MP_ROLE=join MP_ROOM=slowest MP_STEPS=400 MP_FAST=0 MP_REALTIME=1
 # kai creates the room, types the password and never clicks Refresh.
 run_probe lina MP_ROLE=join MP_ROOM=autolist MP_STEPS=100 MP_AUTO_ROOMS=1 & pids+=($!)
 sleep 6
-run_probe kai MP_ROLE=host MP_ROOM=autolist MP_STEPS=100   MP_UI_SCRIPT="40:moveobject:reception_desk:1:0;70:moveobject:reception_desk:0:1" & pids+=($!)
+run_probe kai MP_ROLE=host MP_ROOM=autolist MP_STEPS=100 MP_SHOW_LOAD=1 MP_UI_SCRIPT="40:moveobject:reception_desk:1:0;70:moveobject:reception_desk:0:1" & pids+=($!)
 # Speed votes with three players (check 25).
 run_probe vic MP_ROLE=host MP_ROOM=vote MP_PLAYERS=3 MP_STEPS=1400 \
   MP_UI_SCRIPT="50:speedother;300:speedother;450:speedother" & pids+=($!)
@@ -664,6 +668,14 @@ ok26 = auto26 is not None and result('kai').startswith('IN SYNC') and result('li
 print(f"26. Room list refreshes:    {result('lina')}; room shown by itself after {auto26.group(1) if auto26 else '-'} s, "
       f"password kept: {auto26 is not None}")
 fail |= not ok26
+
+load29 = re.search(r"UI: load window listed \[(.*?)\]; picked: (.*?); level (\d+), (\d+) players; room name kept: (\w+)", log('kai'))
+x29 = re.search(r"UI: x: (.*?), continue index (\d+)", log('kai'))
+ok29 = bool(load29 and load29.group(1) == "Jan's room autosave.sav | Jan's room y1-03-01.sav"
+            and load29.group(2) == "Continue: Jan's room autosave" and load29.groups()[2:] == ('4', '3', 'true')
+            and x29 and x29.groups() == ('Load MP game', '0'))
+print(f"29. Load MP game:           {load29.groups() if load29 else '-'}; x: {x29.groups() if x29 else '-'}")
+fail |= not ok29
 
 # The reception desk moved one tile over, twice (its own tiles do not count
 # as taken while it is moved).
