@@ -60,7 +60,7 @@ levels.LEVELS = {
   {campaign = 8, map = 3, cash = 50000, scenario = "cutthroat", intro = "level_intro_7",
     name = "CUTTHROAT", map_files = {[4] = "cutthroat4.map"},
     goals = {reputation = 650, balance = 150000, value = 150000, cured = 300, cure_rate = 55}},
-  -- Made for two against two (a player's map, Levels/level40teams.map,
+  -- Made for two against two (Matroftt's map, Levels/level40teams.map,
   -- 2026-11-02): the four hospitals in pairs in the middle of town, team
   -- mates side by side, land for sale all around; level 3's rooms and
   -- goals. With two or three players the original map 0.

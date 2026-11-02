@@ -228,7 +228,7 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 
 **One shared hospital** plays the campaign levels 1 to 12, as in single
 player. **A hospital each** (co-op and the race) has eight levels of its own,
-on Theme Hospital's multiplayer maps (levels 6 and 7 are scenarios, below; level 8 is a player's map). Each takes its diseases, rooms and
+on Theme Hospital's multiplayer maps (levels 6 and 7 are scenarios, below; level 8 is Matroftt's Team Town). Each takes its diseases, rooms and
 research from a campaign level, so level 1 is the smallest. From level 2 on
 the training room is there from the start (there are few staff to hire, so
 training should begin early):
@@ -242,7 +242,7 @@ training should begin early):
 | 5 | $70,000 | 33 | as level 4 (also DNA fixer, jelly vat) |
 | 6 | $60,000 | 15 | as level 3, on the map EMERGENCY! |
 | 7 | $50,000 | 26 | as level 4, on map 3 (with four players on Matroftt's map): Cutthroat, made for the race |
-| 8 | $50,000 | 15 | as level 3; with four players on Team Town, a player's map made for two against two (team mates' hospitals side by side); with two or three on map 0 |
+| 8 | $50,000 | 15 | as level 3; with four players on Team Town, Matroftt's map made for two against two (team mates' hospitals side by side); with two or three on map 0 |
 
 To win, a hospital needs all of these at once, and no bank loan (when it
 meets the goals but still owes the bank, the adviser says so: pay off the
