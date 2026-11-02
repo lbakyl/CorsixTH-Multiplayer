@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Build a self-contained macOS app of CorsixTH multiplayer for Apple Silicon
-# (arm64), macOS 26 Tahoe or newer: CorsixTH.app, and a zip of it.
+# (arm64), macOS 26 Tahoe or newer (MACOSX_DEPLOYMENT_TARGET, default 26.0; CI
+# builds on macOS 15 with 15.0 when no macOS 26 machine is free): CorsixTH.app,
+# and a zip of it.
 #
 # Players need the same Lua runtime as the Windows and Linux builds (Lua 5.5:
 # it is part of the multiplayer build id), so Lua 5.5 and the Lua modules the
@@ -153,7 +155,7 @@ codesign --force --sign - --timestamp=none "$app"
 codesign --verify --strict --verbose=2 "$app"
 
 cat > "$pkg/README-MULTIPLAYER.txt" <<EOF
-CorsixTH-Multiplayer test build (macOS, Apple Silicon, macOS 26 Tahoe or newer)
+CorsixTH-Multiplayer test build (macOS, Apple Silicon, macOS $MACOSX_DEPLOYMENT_TARGET or newer)
 Commit $label of https://github.com/lbakyl/CorsixTH-Multiplayer
 
 Move CorsixTH.app to Applications (or anywhere) and open it. The app is not

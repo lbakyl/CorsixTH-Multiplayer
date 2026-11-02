@@ -8,17 +8,31 @@ permissions:
 # multiplayer testing, with Lua 5.5 like the Windows and Linux builds (the
 # multiplayer build id contains the Lua version). Signed ad hoc, not
 # notarized. See scripts/multiplayer/build_macos_app.sh.
+#
+# GitHub sometimes has no macOS 26 machine free for a while and cancels the
+# queued job. The "fallback" job then starts this workflow again on macOS 15;
+# that app runs on macOS 15 or newer (so on 26 as well).
 on:
   push:
     branches:
       - master
       - 'mp/macos-build'
   workflow_dispatch:
+    inputs:
+      runner:
+        description: macOS machine to build on
+        type: choice
+        options:
+          - macos-26
+          - macos-15
+        default: macos-26
 
 jobs:
   app:
-    runs-on: macos-26
+    runs-on: ${{ inputs.runner || 'macos-26' }}
     timeout-minutes: 90
+    env:
+      MACOSX_DEPLOYMENT_TARGET: ${{ inputs.runner == 'macos-15' && '15.0' || '26.0' }}
     steps:
       - uses: actions/checkout@v7
       - name: Install build packages
@@ -31,7 +45,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: build-macos-app/prefix
-          key: macos-app-prefix-${{ hashFiles('scripts/multiplayer/build_macos_app.sh') }}
+          key: macos-app-prefix-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('scripts/multiplayer/build_macos_app.sh') }}
       - name: Build the app
         run: bash scripts/multiplayer/build_macos_app.sh "$(git rev-parse --short=8 HEAD)"
       - name: Videos (FFmpeg linked and bundled)
@@ -70,3 +84,24 @@ jobs:
           name: CorsixTH-macos
           path: dist/*.zip
           if-no-files-found: error
+
+  fallback:
+    needs: app
+    if: cancelled() && inputs.runner != 'macos-15'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Build on macOS 15 if no macOS 26 machine came
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Only when the app job never started (no machine), not when
+          # somebody cancelled a running build.
+          started=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs"             --jq '[.jobs[] | select(.name == "app") | .steps | length] | add')
+          if [ "${started:-0}" != 0 ]; then
+            echo "The app job had started ($started steps): no fallback"
+            exit 0
+          fi
+          gh workflow run macOS.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f runner=macos-15
+          echo "Started the build again on macos-15"
