@@ -682,7 +682,7 @@ function Bot:layoutSpot(min, size)
   -- A wall, a room, or the outside: not floor, and not floor kept clear.
   local function solid(x, y) return not f(x, y) and not keep[y * 1000 + x] end
   local ax, ay = self:anchor()
-  local best, bx, by, bw, bh
+  local spots = {} -- {score, x, y, w, h}
   local shapes = {}
   for s = size, min, -1 do
     shapes[#shapes + 1] = {s, s}
@@ -715,12 +715,63 @@ function Bot:layoutSpot(min, size)
             if f(x + w, ty) and solid(x + w + 1, ty) then score = score - 1.5 end
           end
           score = score - 0.12 * (math.abs(x + w / 2 - ax) + math.abs(y + h / 2 - ay))
-          if not best or score > best then best, bx, by, bw, bh = score, x, y, w, h end
+          spots[#spots + 1] = {score, x, y, w, h}
         end
       end
     end
   end
-  return bx, by, bw, bh
+  -- The best that leaves the corridor in one piece.
+  table.sort(spots, function(a, b) return a[1] > b[1] end)
+  for i, spot in ipairs(spots) do
+    if self:keepsCorridor(spot[2], spot[3], spot[4], spot[5]) then
+      if i > 1 then log(string.format("layout: %d better spots would cut the corridor in two", i - 1)) end
+      return spot[2], spot[3], spot[4], spot[5]
+    end
+  end
+end
+
+--! Would a w x h room at x, y leave the hospital's corridor in one piece?
+--! The room editor only asks that the floor around a new room stays
+--! connected, and a way out at one entrance and in at another counts: a room
+--! from wall to wall could cut the reception off from the rooms. Here the
+--! corridor around the room must still connect inside the building.
+function Bot:keepsCorridor(x, y, w, h)
+  local world, hosp = self.world, self.world.ui.hospital
+  local th = world.map.th
+  local mw, mh = th:size()
+  local function corridor(tx, ty)
+    if tx < 1 or ty < 1 or tx > mw or ty > mh then return false end
+    if tx >= x and tx < x + w and ty >= y and ty < y + h then return false end
+    if not hosp:isInHospital(tx, ty) or world:getRoom(tx, ty) then return false end
+    return th:getCellFlags(tx, ty).passable
+  end
+  local around = {}
+  for tx = x, x + w - 1 do
+    if corridor(tx, y - 1) then around[#around + 1] = {tx, y - 1} end
+    if corridor(tx, y + h) then around[#around + 1] = {tx, y + h} end
+  end
+  for ty = y, y + h - 1 do
+    if corridor(x - 1, ty) then around[#around + 1] = {x - 1, ty} end
+    if corridor(x + w, ty) then around[#around + 1] = {x + w, ty} end
+  end
+  if #around < 2 then return true end
+  local seen, queue, head = {[around[1][2] * 1000 + around[1][1]] = true}, {around[1]}, 1
+  while head <= #queue do
+    local cx, cy = queue[head][1], queue[head][2]
+    head = head + 1
+    for _, d in ipairs({{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) do
+      local nx, ny = cx + d[1], cy + d[2]
+      local k = ny * 1000 + nx
+      if not seen[k] and corridor(nx, ny) then
+        seen[k] = true
+        queue[#queue + 1] = {nx, ny}
+      end
+    end
+  end
+  for _, t in ipairs(around) do
+    if not seen[t[2] * 1000 + t[1]] then return false end
+  end
+  return true
 end
 
 --! The nearest place for a packed w x h room (see Bot:roomFits).
@@ -758,23 +809,18 @@ function Bot:drawRoom(room_type, size, extras)
   end
   -- Else a free tile more below and to the right (where the door goes), so
   -- the corridor in front of it is two tiles wide.
-  for s = size, min, -1 do
-    if not x then
-      x, y = builder.find_free_rect(self.world, ax, ay, s + 1, s + 1, 40)
-      w = s
-    end
+  -- (Each only if it leaves the corridor in one piece.)
+  local function try(s, fx, fy)
+    if not x and fx and self:keepsCorridor(fx, fy, s, s) then x, y, w = fx, fy, s end
   end
   for s = size, min, -1 do
-    if not x then
-      x, y = builder.find_free_rect(self.world, ax, ay, s, s, 40)
-      w = s
-    end
+    if not x then try(s, builder.find_free_rect(self.world, ax, ay, s + 1, s + 1, 40)) end
   end
   for s = size, min, -1 do
-    if not x then
-      x, y = self:packedSpot(ax, ay, s, s)
-      w = s
-    end
+    if not x then try(s, builder.find_free_rect(self.world, ax, ay, s, s, 40)) end
+  end
+  for s = size, min, -1 do
+    if not x then try(s, self:packedSpot(ax, ay, s, s)) end
   end
   if not x then
     log(string.format("no space for a %s (%dx%d)", room_type.id, min, min))
