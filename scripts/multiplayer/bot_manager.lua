@@ -78,7 +78,7 @@ function M.new(bot, ctx)
   self.answered = {}       -- message number -> true
   self.noticed = {}        -- saboteur entity id -> day it was noticed
   self.boost = {}          -- project key -> extra score from the model's plan
-  self.wishes = {}         -- project key -> last game day of a team mate's wish
+  self.wishes = {}         -- project key -> {until = last game day, had = how many then} (a team mate's wish)
   self.hands_off = {}      -- project key -> last game day a team mate keeps it for themselves
   self.failed = {}         -- project key -> day it failed (try again later)
   self.history = {}        -- what it did lately (for the model's report and chat)
@@ -359,10 +359,13 @@ function M:projects(s)
     if (s.objects.plant or 0) < 2 + s.room_count / 4 then buy("plant", 0.8 + (1 - s.happiness)) end
     if (s.objects.extinguisher or 0) < 1 and s.room_count >= 6 then buy("extinguisher", 0.7) end
   end
-  -- What a team mate asked for in the chat, if nothing above wanted it.
-  for key, until_day in pairs(self.wishes) do
-    if s.day > until_day then
+  -- What a team mate asked for in the chat, if nothing above wanted it. A
+  -- wish somebody has done meanwhile (the team mate built the room
+  -- themselves, say) is over.
+  for key, w in pairs(self.wishes) do
+    if s.day > w.until_day or self:howMany(key) > w.had then
       self.wishes[key] = nil
+      self:note("wish over: " .. key)
     elseif not listed[key] then
       local kind, what = key:match("^(%a+):(.+)$")
       if kind == "room" then room(what, 0) elseif kind == "hire" then hire(what, 0) elseif kind == "buy" then buy(what, 0) end
@@ -730,12 +733,37 @@ function M:wishMenu()
   return items
 end
 
+--! How many of a project's thing this hospital has: rooms of the type (also
+--! ones still being built), staff of the kind, or corridor objects.
+function M:howMany(key)
+  local world = self.bot.world
+  local hosp = world.ui.hospital
+  local kind, what = key:match("^(%a+):(.+)$")
+  local n = 0
+  if kind == "room" then
+    for _, r in pairs(world.rooms) do
+      if r.hospital == hosp and r.room_info.id == what and not r.crashed then n = n + 1 end
+    end
+  elseif kind == "hire" then
+    n = hosp:countStaffOfCategory(what)
+  elseif kind == "buy" then
+    for _, e in ipairs(world.entities) do
+      if e.object_type and e.object_type.id == what and e.tile_x and hosp:isInHospital(e.tile_x, e.tile_y) and
+          not world:getRoom(e.tile_x, e.tile_y) then
+        n = n + 1
+      end
+    end
+  end
+  return n
+end
+
 --! A team mate asked for this project in the chat: it comes next (for 30
---! game days; then it lapses, if it could not be done).
+--! game days; then it lapses, if it could not be done), unless somebody
+--! does it first.
 function M:wish(key)
   for _, k in ipairs(self:wishMenu()) do
     if k == key then
-      self.wishes[key] = self.bot:gameDay() + 30
+      self.wishes[key] = {until_day = self.bot:gameDay() + 30, had = self:howMany(key)}
       self.next_project = math.min(self.next_project, self.bot:gameDay())
       self:note("wish: " .. key)
       return true
