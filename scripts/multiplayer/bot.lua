@@ -22,7 +22,7 @@
 --   MP_BOT_ROOM          room to join
 --   MP_BOT_TOKEN         token the server gave this bot
 --   MP_BOT_NAME          its name (also the name of its hospital)
---   MP_BOT_MODE          the room's mode (shared, coop, competitive)
+--   MP_BOT_MODE          the room's mode (shared, coop, competitive, teams, ...)
 --   MP_LUA_CPATH, MP_LUA_PATH  where to find LuaSocket (if not standard)
 -- Tests only:
 --   MP_BOT_SEED          seed for its choices (default: from the clock)
@@ -252,8 +252,9 @@ function Bot.new(lobby)
   local self = setmetatable({}, Bot)
   self.lobby = lobby
   self.mode = lobby.start_params and lobby.start_params.mode or os.getenv("MP_BOT_MODE") or "coop"
-  -- (A race, of two teams too: tricks, and rivals' offers refused.)
-  self.fiery = self.mode == "competitive" or self.mode == "teams" or self.mode == "teamshared"
+  -- (A race, of teams too: tricks, and rivals' offers refused.)
+  self.fiery = self.mode == "competitive" or self.mode == "teams" or self.mode == "teamshared" or
+      self.mode == "mixed"
   self.outbox = {}         -- {at = real time, text =, to = peer or nil, fn = optional}
   self.offers_seen = {}    -- message number -> true
   self.last_reply = -1000

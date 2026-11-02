@@ -22,8 +22,13 @@
 #   6. team chat: dee's Tab once is "To team", read by gus only, and the next
 #      line (no Tab) goes to the team again; cat, alone on her team, has no
 #      "To team" (Tab once is ann)
+#   8. three teams (room "three", 800 steps): pam and quin share a hospital
+#      (team 1; the host gives each team one colour), rae (team 2) and sol
+#      (team 3) have one each. Rae reaches the goals first: 1st place, the
+#      others race on; then team 1: 2nd, sol last, and the race is over (the
+#      standings fax builds); all four IN SYNC to the end
 # With MP_REFEREE=1 the server also runs its headless referee, and a 7th
-# check needs it to agree with the players to the end (both rooms).
+# check needs it to agree with the players to the end (every room).
 # Exits 0 only if all checks behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
@@ -52,7 +57,7 @@ if [[ "${MP_REFEREE:-0}" == 1 ]]; then
   export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
   export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/referee"
   export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
-  export MP_REFEREE_PROBE_SCENARIO="trio=light;duo=light" # the probes' own start on every hospital
+  export MP_REFEREE_PROBE_SCENARIO="trio=light;duo=light;three=none" # the probes' own start on every hospital
 fi
 PYTHONPATH="$source_dir/mp_server" python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
@@ -106,6 +111,15 @@ sleep 1
 run_probe fay MP_ROLE=join MP_ROOM=duo MP_TEAM=2 MP_STEPS=800 MP_UI_SCRIPT="30:openhospital;60:teams" & pids+=($!)
 sleep 1
 run_probe gus MP_ROLE=join MP_ROOM=duo MP_TEAM=1 MP_STEPS=800 MP_UI_SCRIPT="30:openhospital;60:teams" & pids+=($!)
+three="60:teams;300:goals:2:win;310:wincheck;350:race;600:goals:1:win;610:wincheck;650:race"
+run_probe pam MP_ROLE=host MP_ROOM=three MP_MODE=teamshared MP_TEAM=1 MP_PLAYERS=4 MP_LEVEL=2 MP_STEPS=800 \
+  MP_SCENARIO=none MP_UI_SCRIPT="$three" & pids+=($!)
+sleep 1
+for who in quin:1 rae:2 sol:3; do
+  run_probe "${who%%:*}" MP_ROLE=join MP_ROOM=three MP_TEAM="${who##*:}" MP_STEPS=800 MP_SCENARIO=none \
+    MP_UI_SCRIPT="$three" & pids+=($!)
+  sleep 1
+done
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 python3 - "$out" "${MP_REFEREE:-0}" <<'PY'
@@ -194,8 +208,21 @@ print(f"6. Team chat:               dee to {chat_to('dee', 'hello team')} then {
       f"read by {team_in}; seen by the other team: {leaked}; cat to {chat_to('cat', 'just me')}")
 fail |= not ok6
 
+# 8. Three teams
+three = ('pam', 'quin', 'rae', 'sol')
+seats = {n: teams(n) for n in three}
+races = {n: re.findall(r'UI: race at step (\d+): (.*?); over: (\w+)', log(n)) for n in three}
+errors = [n for n in three if 'could not be done' in log(n)]
+ok8 = (all(t and t[1] == '1=PAM + QUIN:1 2=RAE:2 3=SOL:3' for t in seats.values())
+       and all([r[1:] for r in rs] == [('1=- 2=1(won)* 3=-', 'false'), ('1=2(won)* 2=1(won)* 3=3(last)', 'true')]
+               for rs in races.values())
+       and not errors and all(result(n).startswith('IN SYNC') for n in three))
+print(f"8. Three teams:             {seats['pam'][1] if seats['pam'] else '-'}; {[r[1:] for r in races['pam']]}; "
+      f"errors {errors}; {' / '.join(result(n) for n in three)}")
+fail |= not ok8
+
 if with_referee:
-    for room, least in (('trio', 1100), ('duo', 800)):
+    for room, least in (('trio', 1100), ('duo', 800), ('three', 800)):
         confirmed = re.search(rf"room '{room}': referee confirmed steps through (\d+)", server)
         clean = not re.search(rf"room '{room}': (the players differ|repaired)", server)
         ok6 = bool(confirmed and int(confirmed.group(1)) >= least - 100 and clean)

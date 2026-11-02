@@ -114,23 +114,30 @@ function levels.hospitalTiles(app, players, level)
   return tiles
 end
 
---! A race of two teams: which hospital each player gets, so that the
---! members of a team are neighbours. Of all the ways to give team 1 its
+--! A race of teams: which hospital each player (or each colour: a hospital
+--! its players share) gets, so that the members of a team are neighbours.
+--! Teams choose in team order: of all the ways to give each team its
 --! hospitals, the one with the smallest sum of squared distances between
---! team mates (both teams) wins; the first one in order on a tie. Team
---! members get their hospitals in peer order. Without `tiles`, team 1 gets
---! the first hospitals.
---!param peers (table) the peer numbers in start order
---!param teams (table) peer -> team (1 or 2)
+--! team mates (all teams) wins; the first one in order on a tie. Team members
+--! get their hospitals in the given order. Without `tiles`, the lowest team
+--! gets the first hospitals.
+--!param peers (table) the peer (or colour) numbers in start order
+--!param teams (table) peer -> team (1 to 4)
 --!param tiles (table) levels.hospitalTiles, or nil
 --!return peer -> hospital index
 function levels.teamSeats(peers, teams, tiles)
   local n = #peers
-  local members = {{}, {}}
+  local order, members = {}, {}
   for _, p in ipairs(peers) do
-    local list = members[teams[p] == 2 and 2 or 1]
+    local t = teams[p] or 1
+    if not members[t] then
+      members[t] = {}
+      order[#order + 1] = t
+    end
+    local list = members[t]
     list[#list + 1] = p
   end
+  table.sort(order)
   local function spread(set)
     local sum = 0
     for i = 1, #set do
@@ -143,32 +150,37 @@ function levels.teamSeats(peers, teams, tiles)
     return sum
   end
   local best, best_cost
-  local size = #members[1]
-  -- Every set of `size` hospitals for team 1, in increasing order.
-  local function try(set, from)
-    if #set == size then
-      local others = {}
-      for i = 1, n do
-        local taken = false
-        for _, s in ipairs(set) do taken = taken or s == i end
-        if not taken then others[#others + 1] = i end
-      end
-      local cost = tiles and spread(set) + spread(others) or 0
+  local taken, sets = {}, {}
+  -- Team k (in `order`) takes every set of its size from the hospitals the
+  -- teams before it left, in increasing order.
+  local function try(k, set, from, cost)
+    if k > #order then
       if not best_cost or cost < best_cost then
-        best, best_cost = {{(table.unpack or unpack)(set)}, others}, cost
+        best, best_cost = {}, cost
+        for i, s in ipairs(sets) do best[i] = {(table.unpack or unpack)(s)} end
       end
       return
     end
+    if #set == #members[order[k]] then
+      sets[k] = set
+      try(k + 1, {}, 1, cost + (tiles and spread(set) or 0))
+      sets[k] = nil
+      return
+    end
     for i = from, n do
-      set[#set + 1] = i
-      try(set, i + 1)
-      set[#set] = nil
+      if not taken[i] then
+        taken[i] = true
+        set[#set + 1] = i
+        try(k, set, i + 1, cost)
+        set[#set] = nil
+        taken[i] = nil
+      end
     end
   end
-  try({}, 1)
+  try(1, {}, 1, 0)
   local seats = {}
-  for team = 1, 2 do
-    for k, p in ipairs(members[team]) do seats[p] = best[team][k] end
+  for k, team in ipairs(order) do
+    for j, p in ipairs(members[team]) do seats[p] = best[k][j] end
   end
   return seats
 end

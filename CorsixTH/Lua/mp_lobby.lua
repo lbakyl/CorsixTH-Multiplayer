@@ -36,27 +36,88 @@ local MultiplayerLobby = _G["MultiplayerLobby"] ---@type MultiplayerLobby
 MultiplayerLobby.PROTOCOL = 1
 MultiplayerLobby.DEFAULT_PORT = 47800
 
---! Room modes: one shared hospital; a hospital each, as a team (co-op); a
---! hospital each, racing to the level's goals (competitive); a race of two
---! teams, a hospital each (teams: 2 against 2, 2 against 1, ...); or a race
---! of two teams, one hospital per team that its players run together
---! (teamshared).
-MultiplayerLobby.MODES = {"shared", "coop", "competitive", "teams", "teamshared"}
+--! In a room every player picks a colour, the hospital they play in (the
+--! same colour, the same hospital), and a team, who they win with (the same
+--! team wins together, different teams race). What that makes is a mode: one
+--! shared hospital; a hospital each, as a team (co-op); a hospital each,
+--! racing to the level's goals (competitive); a race of two teams, a hospital
+--! each (teams); a race of two teams, a hospital per team (teamshared); or
+--! any other race of teams (mixed: 2 against 1 against 1, ...).
+MultiplayerLobby.MODES = {"shared", "coop", "competitive", "teams", "teamshared", "mixed"}
+MultiplayerLobby.COLOURS = 4
+MultiplayerLobby.TEAMS = 4
 
 --! Does a game of this mode have several hospitals (the co-op machinery:
---! world.mp_coop)? A hospital per player, or with "teamshared" one per team.
+--! world.mp_coop)?
 function MultiplayerLobby.hospitalEach(mode)
-  return mode == "coop" or mode == "competitive" or mode == "teams" or mode == "teamshared"
+  return mode ~= "shared" and mode ~= nil
 end
 
 --! Is a game of this mode a race (places, dirty tricks)?
 function MultiplayerLobby.isRace(mode)
-  return mode == "competitive" or mode == "teams" or mode == "teamshared"
+  return mode == "competitive" or mode == "teams" or mode == "teamshared" or mode == "mixed"
 end
 
---! Do the players of a room of this mode pick a team (Team A / Team B)?
-function MultiplayerLobby.isTeams(mode)
-  return mode == "teams" or mode == "teamshared"
+--! What players' colours and teams make (the server's derive_mode):
+--!param seats (table) {{colour, team}, ...}
+function MultiplayerLobby.deriveMode(seats)
+  local colours, teams, nc, nt = {}, {}, 0, 0
+  for _, s in ipairs(seats) do
+    if not colours[s[1]] then colours[s[1]], nc = true, nc + 1 end
+    if not teams[s[2]] then teams[s[2]], nt = true, nt + 1 end
+  end
+  if nc <= 1 then return "shared" end
+  if nt == 1 then return "coop" end
+  if nc == #seats and nt == #seats then return "competitive" end
+  if nt == 2 and nc == #seats then return "teams" end
+  if nt == 2 and nc == 2 then return "teamshared" end
+  return "mixed"
+end
+
+--! A new game's hospitals from the players' colours and teams: a hospital
+--! per colour; in a race of teams with several hospitals a team's are
+--! neighbours (mp_levels.teamSeats), else they go in colour order.
+--!param peers (table) the peers in start order
+--!param colour_of (table) peer -> colour (1-4)
+--!param team_of (table) peer -> team (1-4)
+--!param tiles_for (function) hospital count -> mp_levels.hospitalTiles (or nil)
+--!return {mode, count, peer_hospital = peer -> index, colours = index ->
+--! colour, teams = index -> team (a race of teams: nil when every player
+--! races alone)}
+function MultiplayerLobby.layout(peers, colour_of, team_of, tiles_for)
+  local seats, colours, colour_team, seen = {}, {}, {}, {}
+  for _, p in ipairs(peers) do
+    local c, t = colour_of[p] or 1, team_of[p] or 1
+    seats[#seats + 1] = {c, t}
+    if not seen[c] then
+      seen[c] = true
+      colours[#colours + 1] = c
+      colour_team[c] = t
+    end
+  end
+  table.sort(colours)
+  local mode = MultiplayerLobby.deriveMode(seats)
+  local result = {mode = mode, count = #colours, peer_hospital = {}, colours = {}}
+  local index_of = {}
+  local team_colours = {}
+  for _, c in ipairs(colours) do
+    local t = colour_team[c]
+    team_colours[t] = (team_colours[t] or 0) + 1
+  end
+  local spread = false
+  for _, n in pairs(team_colours) do spread = spread or n > 1 end
+  if MultiplayerLobby.isRace(mode) and spread then
+    index_of = corsixth.require("mp_levels").teamSeats(colours, colour_team, tiles_for and tiles_for(#colours))
+  else
+    for i, c in ipairs(colours) do index_of[c] = i end
+  end
+  for _, c in ipairs(colours) do result.colours[index_of[c]] = c end
+  for _, p in ipairs(peers) do result.peer_hospital[p] = index_of[colour_of[p] or 1] end
+  if MultiplayerLobby.isRace(mode) and mode ~= "competitive" then
+    result.teams = {}
+    for _, c in ipairs(colours) do result.teams[index_of[c]] = colour_team[c] end
+  end
+  return result
 end
 
 --! The lobby's name for a mode.
@@ -66,12 +127,14 @@ function MultiplayerLobby.modeLabel(mode)
   if mode == "competitive" then return S.mode_competitive end
   if mode == "teams" then return S.mode_teams end
   if mode == "teamshared" then return S.mode_teamshared end
+  if mode == "mixed" then return S.mode_mixed end
   return S.mode_shared
 end
 
 --! The mode of a running game, from its world.
 function MultiplayerLobby.worldMode(world)
   if not (world and world.mp_coop) then return "shared" end
+  if world.mp_coop.mode then return world.mp_coop.mode end
   if world.mp_coop.teams then
     return world.mp_coop.team_hospitals and "teamshared" or "teams"
   end
@@ -395,6 +458,8 @@ function MultiplayerLobby:createRoom(opts)
     opts.level = info.level
     opts.difficulty = info.difficulty
     opts.seats = info.hospitals
+    opts.seat_colours = info.colours
+    opts.seat_teams = info.teams
     opts.max = math.max(2, tonumber(info.players) or 2)
   end
   self:send("CREATE", opts)
@@ -456,8 +521,13 @@ function MultiplayerLobby:_writeLocalSave(session, kind)
   session:withHiddenShown(TheApp.save, TheApp, path)
   local p = self.start_params or {}
   local hospitals, n = {}, world.mp_coop and world.mp_coop.players or 1
+  -- Each hospital's colour and team (shown in the room when continuing).
+  local colours, teams = {}, {}
   for i = 1, n do
     hospitals[#hospitals + 1] = tostring(world.hospitals[i].name):gsub(",", " ")
+    colours[i] = tostring(MultiplayerSession.hospitalColour(world, world.hospitals[i]) or 1)
+    local race = world.mp_coop and world.mp_coop.competitive
+    teams[i] = tostring(world:mpTeam(world.hospitals[i]) or (race and i or 1))
   end
   local f = assert(io.open(dir .. label .. ".mpinfo", "w"))
   f:write("room=", self.room and self.room.room or "", "\n",
@@ -467,6 +537,8 @@ function MultiplayerLobby:_writeLocalSave(session, kind)
       "step=", tostring(session.step), "\n",
       "date=", date:tostring(), "\n",
       "hospitals=", table.concat(hospitals, ","), "\n",
+      "colours=", table.concat(colours, ","), "\n",
+      "teams=", table.concat(teams, ","), "\n",
       "players=", tostring(world.mp_coop and n or #session.peers), "\n")
   f:close()
   self.log(string.format("multiplayer: SAVED %s at step %d: %s", label, session.step,
@@ -504,11 +576,18 @@ end
 
 function MultiplayerLobby:startGame() self.error = nil; self:send("START") end
 
---! A room of two teams: put this player (or, the owner only, the player
---! `peer`) on team 1 or 2.
-function MultiplayerLobby:setTeam(team, peer)
+--! Give this player (or, the owner only, the player `peer`) a colour (1-4,
+--! the hospital) and/or a team (1-4); nil leaves it as it is. (A colour
+--! somebody has brings their team; a team moves the whole colour.)
+function MultiplayerLobby:setSeat(colour, team, peer)
   self.error = nil
-  self:send("TEAM", {team = team, peer = peer})
+  self:send("SEAT", {colour = colour, team = team, peer = peer})
+end
+
+--! Is this room's setup free to change (a new game; a saved one keeps its
+--! colours and teams)?
+function MultiplayerLobby:isFreeRoom()
+  return self.room ~= nil and self.room.free == "1"
 end
 
 --! The room owner adds a computer player (the server starts it; it joins
@@ -650,7 +729,7 @@ function MultiplayerLobby:_onCHAT(f)
     local index = tonumber(f.peer)
     local world = TheApp.world
     if world and world.mp_coop and self.peer_hospital and self.peer_hospital[index] then
-      index = self.peer_hospital[index]
+      index = MultiplayerSession.hospitalColour(world, world.hospitals[self.peer_hospital[index]]) or index
     end
     local colour = UIMultiplayerChat.colourOf(index, sender and sender.bot == "1")
     if window then window:add(text, private, colour) else session.notify(text) end
@@ -1051,8 +1130,15 @@ function MultiplayerLobby:_addMultiplayerMenu(ui, mode)
     local current = TheApp.ui -- the menu bar outlives a desync repair's load
     current:addWindow(UIMultiplayerPlayers(current))
   end)
-  -- With a hospital per team nobody has a team mate's hospital to trade with.
-  if coop and mode ~= "teamshared" then
+  -- (Only if some other hospital may trade with this one: with a hospital per
+  -- team nobody has a team mate's hospital to trade with.)
+  local world, partner = TheApp.world, false
+  if coop and world and world.mp_coop then
+    for i = 1, world.mp_coop.players do
+      partner = partner or world:mpMayTrade(ui.hospital, world.hospitals[i])
+    end
+  end
+  if partner then
     menu:appendItem(_S.multiplayer_window.menu_trade, function()
       local current = TheApp.ui
       current:addWindow(UIMultiplayerTrade(current))
@@ -1119,77 +1205,64 @@ function MultiplayerLobby:_beginGame(f)
   app.config.grant_wage_increase = f.grant_wage_increase == "1"
   app.config.free_build_mode = f.free_build_mode == "1"
 
-  local coop = MultiplayerLobby.hospitalEach(f.mode)
   local my_index = 1
-  -- A race of two teams: each player's team, and team mates seated on
-  -- neighbouring plots (worked out the same way on every peer).
-  local team_of, team_seats = {}, nil
+  -- A new game: each player's colour (their hospital) and team decide the
+  -- hospitals, worked out the same way on every peer (MultiplayerLobby.layout).
+  -- A continued game comes with its mode, and the server's seats.
+  local colour_of, team_of = {}, {}
+  for p, c in (f.colours or ""):gmatch("(%d+):(%d+)") do colour_of[tonumber(p)] = tonumber(c) end
   for p, team in (f.teams or ""):gmatch("(%d+):(%d+)") do team_of[tonumber(p)] = tonumber(team) end
-  -- A hospital per team: team A runs hospital 1, team B hospital 2, so the
-  -- game has two hospitals however many players there are.
-  local team_hospitals = f.mode == "teamshared"
-  local hospital_count = team_hospitals and 2 or #peers
-  if team_hospitals and not f.seats then
-    team_seats = {}
-    for _, p in ipairs(peers) do team_seats[p] = team_of[p] == 2 and 2 or 1 end
-  elseif coop and f.mode == "teams" and next(team_of) and not f.seats then
-    local mp_levels = corsixth.require("mp_levels")
-    team_seats = mp_levels.teamSeats(peers, team_of,
-        mp_levels.hospitalTiles(app, #peers, tonumber(f.level) or 1))
+  local layout
+  if f.colours and not f.seats then
+    layout = MultiplayerLobby.layout(peers, colour_of, team_of, function(count)
+      local mp_levels = corsixth.require("mp_levels")
+      return mp_levels.hospitalTiles(app, count, tonumber(f.level) or 1)
+    end)
   end
-  -- Each player's hospital (for the player list): one each in peer order
-  -- (or by team), or as the server seated them in a continued game; all
-  -- share hospital 1.
+  local mode = layout and layout.mode or f.mode
+  local coop = MultiplayerLobby.hospitalEach(mode)
+  -- Each player's hospital (for the player list): from the layout, or as the
+  -- server seated them in a continued game; or all share hospital 1.
   self.peer_hospital = {}
   for i, p in ipairs(peers) do
-    self.peer_hospital[p] = coop and (team_seats and team_seats[p] or i) or 1
+    self.peer_hospital[p] = coop and (layout and layout.peer_hospital[p] or i) or 1
   end
   for p, index in (f.seats or ""):gmatch("(%d+):(%d+)") do
     if coop then self.peer_hospital[tonumber(p)] = tonumber(index) end
   end
   self.game_players = nil
   if coop then
-    -- One hospital per player, in peer order; this machine runs its own.
     -- Names from START (in peer order), so a peer that never saw the room
-    -- (the server's referee) names the hospitals the same way.
+    -- (the server's referee) names the hospitals the same way. A hospital is
+    -- named after all its players ("ANN + BEN").
     local start_names = {}
     for n in (f.names or ""):gmatch("[^,]+") do start_names[#start_names + 1] = n end
-    local names, teams = {}, nil
+    local names = {}
     for i, p in ipairs(peers) do
       local player = self.players[p]
-      local index = team_seats and team_seats[p] or i
+      local index = self.peer_hospital[p]
       local name = (start_names[i] or (player and player.name) or ("Player " .. p)):upper()
-      if team_hospitals then
-        -- A team's hospital is named after all its players ("ANN + BEN").
-        names[index] = names[index] and (names[index] .. " + " .. name) or name
-      else
-        names[index] = name
-      end
+      names[index] = names[index] and (names[index] .. " + " .. name) or name
       if p == tonumber(f.peer) then my_index = index end
-      if team_seats then
-        teams = teams or {}
-        teams[index] = team_of[p] == 2 and 2 or 1
-      end
     end
-    if team_hospitals then
-      teams = {1, 2}
-      for t = 1, 2 do names[t] = names[t] or ("TEAM " .. string.char(64 + t)) end
-    end
+    local count = layout and layout.count or #peers
     -- A saved game continued: the server gave every player a hospital.
     for p, index in (f.seats or ""):gmatch("(%d+):(%d+)") do
       if tonumber(p) == tonumber(f.peer) then my_index = tonumber(index) end
     end
-    app.mp_coop = {players = hospital_count, local_index = my_index, names = names,
-        competitive = MultiplayerLobby.isRace(f.mode), teams = teams,
-        team_hospitals = team_hospitals or nil}
+    app.mp_coop = {players = count, local_index = my_index, names = names,
+        competitive = MultiplayerLobby.isRace(mode), teams = layout and layout.teams,
+        team_hospitals = mode == "teamshared" or nil, colours = layout and layout.colours,
+        mode = mode}
   end
+  f.mode = mode -- (the menu, the bots)
 
   self.restore_order = MultiplayerLobby.useCanonicalOrder(app)
   local world
   if not resume then
     math.randomseed(tonumber(f.seed))
     local level = tonumber(f.level) or 1
-    local level_id = coop and MultiplayerLobby.coopLevelId(hospital_count, level) or level
+    local level_id = coop and MultiplayerLobby.coopLevelId(app.mp_coop.players, level) or level
     local loaded = app:loadLevel(level_id, f.difficulty or "full", nil, nil, nil, nil,
         _S.errors.load_level_prefix, nil)
     if not loaded or not app.world then

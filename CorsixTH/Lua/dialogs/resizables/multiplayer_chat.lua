@@ -48,7 +48,7 @@ local TEAM_MARK = {70, 210, 90}
 
 --! The colour of a player's chat lines.
 --!param peer (integer) the sender's peer number (or, in a game with a
---! hospital each, their hospital's number)
+--! hospital each, their hospital's colour: MultiplayerSession.hospitalColour)
 --!param bot (boolean) the sender is a computer player
 function UIMultiplayerChat.colourOf(peer, bot)
   if bot then return BOT_COLOUR end

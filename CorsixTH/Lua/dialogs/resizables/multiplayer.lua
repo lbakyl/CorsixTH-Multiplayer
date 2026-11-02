@@ -50,7 +50,7 @@ local function view_of(lobby)
   return "rooms"
 end
 
-local heights = {connect = 225, rooms = 435, room = 300}
+local heights = {connect = 225, rooms = 435, room = 325}
 
 -- The new room's settings as last sent with Create: shown again when the
 -- player leaves the room or a game ends, forgotten on Disconnect.
@@ -236,12 +236,14 @@ function UIMultiplayer:_buildRooms()
   self.room_name_box = textbox(self, 135, y, WIDTH - 155, form.room or (lobby.name or "My") .. "'s room", 20,
       {"alpha", "numbers", "misc"})
   y = y + 30
-  self.new_mode = form.mode or "shared"
+  -- (Who shares a hospital and who races whom is picked in the room: each
+  -- player's colour and team. `new_mode` is only for scripted tests: a
+  -- preset of the newcomers' colours and teams.)
+  self.new_mode = form.mode
   self.new_level = form.level or 1
   self.new_max = form.max or 2
-  self.mode_button = button(self, 20, y, 160, MultiplayerLobby.modeLabel(self.new_mode), self.buttonMode, T.mode)
-  self.level_button = button(self, 185, y, 90, S.level:format(self.new_level), self.buttonLevel, T.level)
-  self.max_button = button(self, 280, y, WIDTH - 300, S.players:format(self.new_max), self.buttonMax, T.players)
+  self.level_button = button(self, 20, y, 180, S.level:format(self.new_level), self.buttonLevel, T.level)
+  self.max_button = button(self, 205, y, WIDTH - 225, S.players:format(self.new_max), self.buttonMax, T.players)
   -- New game, or one of the saved multiplayer games (newest first).
   self.saves = nil
   self.continue_index = 0
@@ -306,22 +308,9 @@ end
 
 function UIMultiplayer:buttonRefresh() self.lobby:refreshRooms() end
 
-function UIMultiplayer:buttonMode()
-  local modes = MultiplayerLobby.MODES
-  local next_mode = modes[1]
-  for i, mode in ipairs(modes) do
-    if mode == self.new_mode then next_mode = modes[i % #modes + 1] end
-  end
-  self.new_mode = next_mode
-  self.mode_button.panel_for_sprite:setLabel(MultiplayerLobby.modeLabel(self.new_mode))
-  self.new_level = math.min(self.new_level, self:_levelCount())
-  self.level_button.panel_for_sprite:setLabel(_S.multiplayer_window.level:format(self.new_level))
-end
-
---! How many levels the chosen mode has: the campaign's 12 for one shared
---! hospital, the multiplayer levels (mp_levels) for a hospital each.
+--! How many levels there are: the campaign's 12 (one shared hospital; with
+--! several hospitals a level above the multiplayer levels plays the last).
 function UIMultiplayer:_levelCount()
-  if MultiplayerLobby.hospitalEach(self.new_mode) then return corsixth.require("mp_levels").COUNT end
   return 12
 end
 
@@ -345,14 +334,12 @@ function UIMultiplayer:buttonContinue()
   local save = self.saves[self.continue_index]
   self.continue_button.panel_for_sprite:setLabel(save and S.continue_save:format(save.label) or S.continue_new)
   if save then
-    self.new_mode = MultiplayerLobby.hospitalEach(save.info.mode) and save.info.mode or "shared"
     self.new_level = tonumber(save.info.level) or 1
     self.new_max = math.max(2, tonumber(save.info.players) or 2)
-    self.mode_button.panel_for_sprite:setLabel(MultiplayerLobby.modeLabel(self.new_mode))
     self.level_button.panel_for_sprite:setLabel(S.level:format(self.new_level))
     self.max_button.panel_for_sprite:setLabel(S.players:format(self.new_max))
   end
-  for _, b in ipairs({self.mode_button, self.level_button, self.max_button}) do b:enable(not save) end
+  for _, b in ipairs({self.level_button, self.max_button}) do b:enable(not save) end
 end
 
 --! For scripted tests: choose a saved game by label ("latest": the newest).
@@ -386,26 +373,28 @@ end
 function UIMultiplayer:_buildRoom()
   local S, T = _S.multiplayer_window, _S.tooltip.multiplayer_window
   self.player_panels = {}
-  -- A race of two teams (not a continued one: its teams come with the save):
-  -- each player's team on a button at the end of their line.
-  local room = self.lobby.room
-  local team_w = (MultiplayerLobby.isTeams(room.mode) and room["continue"] ~= "1") and 80 or 0
-  local line_w = WIDTH - 40 - (team_w > 0 and team_w + 5 or 0)
-  self.team_buttons = team_w > 0 and {} or nil
+  -- Each player's colour (the hospital: the same colour, the same hospital)
+  -- and team (the same team wins together) on buttons at the end of their
+  -- line. (A continued game shows its saved ones, fixed.)
+  local colour_w, team_w = 30, 70
+  local line_w = WIDTH - 40 - colour_w - team_w - 10
+  self.colour_buttons, self.team_buttons = {}, {}
   for i = 1, 4 do
     local y = 40 + (i - 1) * 27
     self.player_panels[i] = label(self, 20, y, line_w, "")
     -- The host clicks an empty place to add a bot there, or a bot to take
     -- it away again.
     self.player_panels[i]:makeButton(0, 0, line_w, 25, nil, function() self:clickPlace(i) end)
-    if self.team_buttons then
-      self.team_buttons[i] = self:addBevelPanel(WIDTH - 20 - team_w, y, team_w, 25, col.button)
-          :setLabel(""):makeButton(0, 0, team_w, 25, nil, function() self:clickTeam(i) end)
-          :setTooltip(T.team)
-    end
+    self.colour_buttons[i] = self:addBevelPanel(WIDTH - 20 - team_w - 5 - colour_w, y, colour_w, 25, col.button)
+        :makeButton(0, 0, colour_w, 25, nil, function() self:clickColour(i) end)
+        :setTooltip(T.colour)
+    self.team_buttons[i] = self:addBevelPanel(WIDTH - 20 - team_w, y, team_w, 25, col.button)
+        :setLabel(""):makeButton(0, 0, team_w, 25, nil, function() self:clickTeam(i) end)
+        :setTooltip(T.team)
   end
   self.summary_panel = label(self, 20, 40 + 4 * 27 + 5, WIDTH - 40, "")
   self.mode_panel = label(self, 20, 40 + 5 * 27 + 5, WIDTH - 40, "")
+  self.hint_panel = label(self, 20, 40 + 6 * 27 + 5, WIDTH - 40, S.room_hint)
   local y = heights.room - 50
   -- The host starts the game; the others say they are ready. Both buttons
   -- sit in the same place, and only the one for this player is shown.
@@ -439,19 +428,34 @@ function UIMultiplayer:_updateRoom()
       text = bots and S.add_bot or S.waiting_player
     end
     self.player_panels[i]:setLabel(text)
-    local team_button = self.team_buttons and self.team_buttons[i]
-    if team_button then
-      team_button:setVisible(p ~= nil)
-      team_button:enable(p ~= nil and (lobby:isOwner() or p.peer == lobby.room.peer))
-      if p then
-        team_button.panel_for_sprite:setLabel(S.team_button:format(S.team_letters[tonumber(p.team) == 2 and 2 or 1]))
-      end
+    -- (Only one's own, and the host anybody's, in a new game.)
+    local seated = p ~= nil and tonumber(p.colour) ~= nil
+    local may = seated and lobby:isFreeRoom() and (lobby:isOwner() or p.peer == lobby.room.peer)
+    local colour_button, team_button = self.colour_buttons[i], self.team_buttons[i]
+    colour_button:setVisible(seated)
+    colour_button:enable(may)
+    team_button:setVisible(seated)
+    team_button:enable(may)
+    if seated then
+      local rgb = MultiplayerSession.colourRGB(tonumber(p.colour))
+      local panel = colour_button.panel_for_sprite
+      panel:setColour({red = rgb[1], green = rgb[2], blue = rgb[3]})
+      panel.disabled_colour = panel.colour -- (the colour shows when fixed too)
+      colour_button:setTooltip(S.colour_names[tonumber(p.colour)] .. ": " .. _S.tooltip.multiplayer_window.colour)
+      team_button.panel_for_sprite:setLabel(S.team_button:format(tonumber(p.team) or 1))
     end
   end
   local s = lobby.summary
   self.summary_panel:setLabel(s and S.recommendation:format(s.speed, s.latency or "?") or S.measuring)
-  self.mode_panel:setLabel(MultiplayerLobby.modeLabel(lobby.room.mode) ..
-      ", " .. S.level:format(tonumber(lobby.room.level) or 1) ..
+  -- What the colours and teams make now, and the level it plays.
+  local mode = s and s.mode or lobby.room.mode
+  local level = tonumber(lobby.room.level) or 1
+  local level_text = S.level:format(level)
+  local mp_count = corsixth.require("mp_levels").COUNT
+  if MultiplayerLobby.hospitalEach(mode) and level > mp_count then
+    level_text = S.mp_level:format(level_text, mp_count)
+  end
+  self.mode_panel:setLabel(MultiplayerLobby.modeLabel(mode) .. ", " .. level_text ..
       (lobby.room["continue"] == "1" and (", " .. S.continuing:format((lobby.room.date or ""):gsub("T.*", ""))) or ""))
   local owner = lobby:isOwner()
   self.start_button:setVisible(owner)
@@ -473,16 +477,31 @@ function UIMultiplayer:clickPlace(i)
   end
 end
 
---! A race of two teams: a player changes sides; the host may move anybody.
+--! A player's colour button: the next colour (a colour somebody has means
+--! sharing their hospital); the host may change anybody's.
+function UIMultiplayer:clickColour(i)
+  local lobby = self.lobby
+  local p = lobby.players[i]
+  if not (p and lobby:isFreeRoom()) then return end
+  local colour = (tonumber(p.colour) or 1) % MultiplayerLobby.COLOURS + 1
+  if p.peer == lobby.room.peer then
+    lobby:setSeat(colour, nil)
+  elseif lobby:isOwner() then
+    lobby:setSeat(colour, nil, i)
+  end
+end
+
+--! A player's team button: the next team (for everybody of their colour);
+--! the host may change anybody's.
 function UIMultiplayer:clickTeam(i)
   local lobby = self.lobby
   local p = lobby.players[i]
-  if not p then return end
-  local team = tonumber(p.team) == 2 and 1 or 2
+  if not (p and lobby:isFreeRoom()) then return end
+  local team = (tonumber(p.team) or 1) % MultiplayerLobby.TEAMS + 1
   if p.peer == lobby.room.peer then
-    lobby:setTeam(team)
+    lobby:setSeat(nil, team)
   elseif lobby:isOwner() then
-    lobby:setTeam(team, i)
+    lobby:setSeat(nil, team, i)
   end
 end
 

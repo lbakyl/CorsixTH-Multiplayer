@@ -59,29 +59,45 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
 
 1. Main menu, **Multiplayer**. Click **EU1: stable** or **EU2: test builds**
    (or type another server's address), enter your name, then **Connect**.
-2. **To host:** type a room name, and a password if you like. Choose **One
-   shared hospital**, **A hospital each** (co-op), **Competitive race**,
-   **Race of two teams** or **Race of team hospitals** (click the button to
-   cycle through them), the level and the number of
-   players (or a saved game with **Continue**, see below), then **Create**.
-   When everybody has pressed **Ready**, press **Start game**. You do not
-   need a full room: with a seat still empty (somebody could not make it),
-   **Start game** starts a game for the players who are there (two or more;
-   with a hospital each, the map is the one for that many). If you leave
-   the room (or a game ends), your choices are still there for the next
-   room, until you **Disconnect**.
+2. **To host:** type a room name, and a password if you like, choose the
+   level and the number of players (or a saved game with **Continue**, see
+   below), then **Create**. When everybody has pressed **Ready**, press
+   **Start game**. You do not need a full room: with a seat still empty
+   (somebody could not make it), **Start game** starts a game for the
+   players who are there (two or more). If you leave the room (or a game
+   ends), your choices are still there for the next room, until you
+   **Disconnect**.
 3. **To join:** pick the room in the list, type its password, **Join**, then
    **Ready**.
-4. **Race of two teams:** each player's line in the room has a **Team A** /
-   **Team B** button: click yours to change sides (the host can move anybody,
-   bots too). Any split works: 2 against 2, 2 against 1, 3 against 1. The
-   game seats team mates next to each other on the map.
-5. **Race of team hospitals:** the same team buttons, but each team runs
-   **one hospital together**, as in a shared game: team mates build, hire
-   and answer faxes in the same hospital, and the two hospitals race. The
-   hospitals are named after their players ("JAN + ABI"). A bot can be your
-   team mate too: it builds in your hospital along with you (a desk, rooms,
-   staff), and whatever you have already built it leaves alone.
+4. **Who plays where, and with whom:** each player's line in the room has
+   two buttons. The **colour** is your hospital: players with the same
+   colour build one hospital together. The **team** is who you win with:
+   the same team wins together, different teams race each other (and may
+   play dirty tricks on each other). Click yours to change it; the host can
+   change anybody's, bots' too. A newcomer gets a colour of their own on the
+   host's team, so a new room starts as co-op. The line under the players
+   says what the colours and teams make:
+
+   | Colours and teams | The game |
+   |---|---|
+   | Everybody one colour | **One shared hospital** |
+   | Different colours, all one team | **Co-op**: a hospital each (or shared by some), everybody wins together |
+   | Different colours, different teams | **Race**: everyone for themselves |
+   | Different colours, two teams | **Race of two teams**: a hospital each, team mates help each other |
+   | Two colours, two teams | **Race of team hospitals**: each team builds one hospital |
+   | Anything else | **Race of teams**: 2 against 1 against 1, three or four teams, ... |
+
+   A hospital never holds rivals: picking a colour somebody has puts you on
+   their team, and changing the team changes it for everybody of that
+   colour. With several hospitals the game seats team mates next to each
+   other on the map and names each hospital after its players ("JAN + ABI").
+   One shared hospital plays the campaign's levels (1 to 12); several
+   hospitals play the multiplayer levels (1 to 7; a higher number plays
+   level 7, as the room says). A saved game keeps its colours and teams.
+5. **Sharing a hospital:** team mates build, hire and answer faxes in the
+   same hospital. A bot can share yours too: it builds in your hospital along
+   with you (a desk, rooms, staff), and whatever you have already built it
+   leaves alone.
 
 **Nobody to play with?** As the host, click an empty place in your room
 ("click: add a bot") and a computer player takes it; click the bot to take it
@@ -356,6 +372,14 @@ they are switched on).
   into your team mate's hospital, not into the other team's. Dirty tricks
   work on the other team only. In the chat, **Tab** once picks **To
   team** (only your team mates read it).
+
+- **Race of teams** (three or four teams, or teams of different shapes,
+  such as two players sharing a hospital against two who each have one):
+  the same rules as a race of two teams, with places for every team. The
+  first team whose hospitals have all reached the goals takes 1st place and
+  everybody is told; the others race on for 2nd, and so on. A team with all
+  its hospitals out takes the lowest place left. When only one team is still
+  racing, it takes the place left and everybody gets the final standings.
 
 ## Dirty tricks (competitive race)
 

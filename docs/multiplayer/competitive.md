@@ -10,12 +10,18 @@ co-op and shared games are unchanged.
 
 ## Mode plumbing
 
-- `MultiplayerLobby.MODES` = shared, coop, competitive;
-  `MultiplayerLobby.hospitalEach(mode)`, `modeLabel(mode)`,
+- The room decides the mode: every player picks a colour (1-4, the
+  hospital; the same colour shares one) and a team (1-4, who they win
+  with). `MultiplayerLobby.deriveMode` (and the server's `derive_mode`) say
+  what that makes: shared, coop, competitive, teams, teamshared or mixed
+  (`MultiplayerLobby.MODES`); `MultiplayerLobby.layout` turns it into the
+  hospitals at the start (`world.mp_coop.colours`, `.teams`, `.mode`).
+  `hospitalEach(mode)`, `isRace(mode)`, `modeLabel(mode)`,
   `worldMode(world)` (for the `.mpinfo` of a save and the menu).
-- Lobby window: the mode button cycles through them (teams: below).
-- Server: `MODES` and `HOSPITAL_EACH` (continued games seat players by name
-  in both co-op and competitive).
+- Lobby window: a colour and a team button on each player's line (`SEAT`,
+  protocol.md); a continued game shows its saved colours and teams, fixed.
+- Server: `MODES` and `HOSPITAL_EACH` (continued games seat players by the
+  names in the saved hospitals' names, "ANN + BEN" for a shared one).
 
 ## The race (world.lua)
 
@@ -195,20 +201,23 @@ Probe actions: `sabotage:<trick>:<level>:<hospital>`, `kickevil`, `shootrat`, `r
 `answerraise:accept`, `learn`;
 `MP_MODE=competitive` for the host.
 
-## A race of two teams (mode `teams`)
+## A race of teams (modes `teams`, `teamshared`, `mixed`)
 
-Two teams race each other (2 against 2, 2 against 1, 3 against 1, ...): a
-competitive game (`world.mp_coop.competitive`) with
-`world.mp_coop.teams = {[hospital index] = 1 or 2}`.
+Two to four teams race each other (2 against 2, 2 against 1, 2 against 1
+against 1, ...): a competitive game (`world.mp_coop.competitive`) with
+`world.mp_coop.teams = {[hospital index] = team (1-4)}`. Mode `teams` is two
+teams with a hospital per player, `teamshared` two teams with a hospital per
+team (below), `mixed` anything else.
 
-- Lobby and server: mode `teams` (`MultiplayerLobby.isRace(mode)`: competitive
-  or teams). A team button on each player's line (`UIMultiplayer:clickTeam`,
-  verb `TEAM`); the host moves anybody, bots too. `START` carries
-  `teams=peer:team`; `MultiplayerLobby:_beginGame` seats team mates on the
-  closest hospitals of the map (`mp_levels.hospitalTiles` reads the map's
-  starting camera tiles, `mp_levels.teamSeats` picks the split with the
-  smallest spread), the same on every peer, the referee and bots included.
-  A continued game keeps the teams of its save (no team buttons).
+- Lobby and server: the players' colours and teams (verb `SEAT`,
+  `UIMultiplayer:clickColour`, `clickTeam`); the host changes anybody's, bots'
+  too. `START` carries `colours=peer:colour` and `teams=peer:team`;
+  `MultiplayerLobby.layout` gives every colour a hospital and, when a team has
+  several, seats team mates on the closest hospitals of the map
+  (`mp_levels.hospitalTiles` reads the map's starting camera tiles,
+  `mp_levels.teamSeats` picks the split with the smallest spread, team by
+  team), the same on every peer, the referee and bots included. A continued
+  game keeps the teams of its save (fixed buttons).
 - `World:mpTeam(hosp)`, `World:mpRivals(a, b)` (a race, not team mates),
   `World:mpMayTrade(from, to)` (any other hospital, but in a team race only
   team mates).
@@ -223,14 +232,17 @@ competitive game (`world.mp_coop.competitive`) with
 - Looking in: a team mate's hospital is open to the mouse (`GameUI:_isRivals`),
   their room outlines and the blue floor of a room they furnish are shown.
 - The race (`World:_mpTeamRaceCheck`): a hospital that reaches the goals is
-  marked (`mp_goals_reached`) and plays on; a team takes 1st place once every
-  hospital of it that still counts has reached them, and the other team 2nd
-  (`World:_mpTeamPlace`, `_mpTeamRaceCheckOver`: the standings fax). A
-  hospital failing the goals at two year ends in a row is out
-  (`mp_place = 0`, "out"), its team races on; a team with all its hospitals
-  out is 2nd. A hospital whose player left does not count until they rejoin
+  marked (`mp_goals_reached`) and plays on; a team takes the next place once
+  every hospital of it that still counts has reached them
+  (`World:_mpTeamPlace`; with more than two teams everybody is told and the
+  others race on). A hospital failing the goals at two year ends in a row is
+  out (`mp_place = 0`, "out"), its team races on; a team with all its
+  hospitals out takes the lowest place left. Once at most one team still
+  races (`_mpTeamRaceCheckOver`), it takes the place left and everybody gets
+  the standings fax. With two teams this is the first place given. A
+  hospital whose player left does not count until they rejoin
   (`player_away`, as in co-op).
-- PLAYERS window: the team letter after each hospital.
+- PLAYERS window: the team number after each hospital.
 - Bots: offers and money from a team mate are welcome, tricks only on the
   other team (`World:mpRivals`).
 - Team chat: Tab in the chat line goes everybody, **To team**, then each
@@ -242,34 +254,31 @@ competitive game (`world.mp_coop.competitive`) with
 
 Tests: `scripts/multiplayer/run_teams_probe.sh BIN DATA` (rooms trio, 2
 against 1, and duo, 2 against 2; `MP_REFEREE=1` adds the referee check).
-Probe settings and actions: `MP_MODE=teams`, `MP_TEAM=1|2`, `teams`,
-`giveto:<hospital>:<amount>`, `teamview`, `chat:<tabs>:<text>`. Specs: `mp_levels_spec.lua`
-("two teams"). Server: `test_teams_room`.
+Probe settings and actions: `MP_MODE=teams` (the room's preset for
+newcomers), `MP_TEAM=1-4`, `teams`, `giveto:<hospital>:<amount>`, `teamview`,
+`chat:<tabs>:<text>`. Specs: `mp_levels_spec.lua` ("two teams"),
+`mp_lobby_spec.lua` (the layout). Server: `test_colours_and_teams`,
+`test_derive_mode`.
 
 ## A race of team hospitals (mode `teamshared`)
 
 The race of two teams with one hospital per team: team mates run it
 together, as in a shared game, and the two hospitals race. Same machinery
 as `teams` (`world.mp_coop.competitive`, `world.mp_coop.teams = {1, 2}`),
-plus `world.mp_coop.team_hospitals = true`.
+plus `world.mp_coop.team_hospitals = true`. Any game where players share a
+colour works the same way: co-op with a shared hospital, or a `mixed` race.
 
-- Lobby and server: mode `teamshared` (`MultiplayerLobby.isTeams(mode)`:
-  teams or teamshared; `hospitalEach` and `isRace` include it; server
-  `TEAM_MODES`). Same team buttons and `TEAM` verb; `START` carries
-  `teams=peer:team`.
-- Game start (`MultiplayerLobby:_beginGame`): two hospitals whatever the
-  number of players, so the level loads the 2-player map
-  (`coopLevelId(2, level)`); team A plays hospital 1, team B hospital 2
-  (`peer_hospital[peer] = team`); each hospital is named after its players
-  in peer order ("ANN + BEN"). Commands carry the team's hospital
-  (`session.hospital_index`), so everything a team mate does goes to the
-  shared hospital, as in a shared game.
-- Menu: no TRADE or RESEARCH entries (no team mate's hospital to trade
-  with); dirty tricks and the race as in `teams`.
+- Game start (`MultiplayerLobby:_beginGame`): a hospital per colour, so the
+  level loads the map for that many (`coopLevelId(count, level)`); each
+  hospital is named after its players in peer order ("ANN + BEN"). Commands
+  carry the hospital (`session.hospital_index`), so everything a team mate
+  does goes to the shared hospital, as in a shared game.
+- Menu: TRADE and RESEARCH only when some other hospital may trade with this
+  one (`World:mpMayTrade`): not with a hospital per team.
 - Leaving: `MultiplayerSession:_markPlayerAway` marks a hospital away only
   when none of its players is left in the game.
 - Continued games: the save names each hospital after its players; the
-  server (`Server._team_seats`) seats every player in the hospital whose name
+  server (`Server._seats`) seats every player in the hospital whose name
   lists theirs, anybody else in the hospital with fewer players, and sizes
   the room by the number of saved names.
 - Bots: a bot may share its team's hospital with people (or other bots). It

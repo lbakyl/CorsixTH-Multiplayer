@@ -259,6 +259,12 @@ function UIProgressReport:draw(canvas, x, y)
   -- Names of the players playing
   local ly = 73 * s
   for pnum, hospital in ipairs(world.hospitals) do
+    -- (Multiplayer: the square before the name in the hospital's colour, as
+    -- picked in the room, over the picture's red, yellow, green and blue.)
+    local rgb = world.mp_coop and MultiplayerSession.markerColour(world, hospital)
+    if rgb then
+      canvas:drawRect(canvas:mapRGB(rgb[1], rgb[2], rgb[3]), x + 246 * s, y + ly - 2 * s, 19 * s, 19 * s)
+    end
     local font = (pnum == self.selected) and self.red_font or self.normal_font
     font:draw(canvas, self:fitName(font, hospital.name:upper(), 136 * s), x + 272 * s, y + ly)
     ly = ly + 25 * s

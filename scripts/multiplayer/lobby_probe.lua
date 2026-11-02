@@ -14,8 +14,11 @@
 --   MP_COOP           1: the host creates a co-op room (a hospital each)
 --   MP_ADD_BOTS       the host clicks this many empty places in the room to
 --                     add bots (the server must run them)
---   MP_MODE           the room mode the host picks: shared, coop, competitive, teams or teamshared
---   MP_TEAM           in a room of two teams: this player's team (1 or 2)
+--   MP_MODE           the setup the host wants: shared, coop, competitive, teams or teamshared
+--                     (the room seats newcomers that way; with teamshared the host then
+--                     gives every team one colour, as a person would)
+--   MP_TEAM           in a race of teams: this player's team (1 to 4), picked with the
+--                     team button on their line
 --   MP_SCENARIO       light | busy | none                (default light; none: no
 --                     test setup, to join a game a person hosts)
 --   MP_STEPS          game hours to play                 (default 1500)
@@ -164,23 +167,34 @@ local function lobby_window()
   return TheApp.ui:getWindow(UIMultiplayer)
 end
 
---! A room of two teams: MP_TEAM (1 or 2) is this player's team, picked with
---! the team button on their line (as a person clicks it).
+--! MP_TEAM (1 to 4) is this player's team, picked with the team button on
+--! their line (as a person clicks it: once per team further on).
 local function pick_team(lobby)
   local want = tonumber(os.getenv("MP_TEAM") or "")
   if not want then return end
-  local clicked = false
+  local clicked_at, clicked_team = nil, nil
   wait_for("team " .. want, function()
     local me = lobby.players[tonumber(lobby.room.peer)]
     if me and tonumber(me.team) == want then return true end
     local win = lobby_window()
-    if me and not clicked and win and win.team_buttons then
-      clicked = true
+    -- (One click at a time: the next once the last one is shown.)
+    if me and win and win.team_buttons and clicked_team ~= me.team then
+      clicked_at, clicked_team = socket.gettime(), me.team
       win:clickTeam(tonumber(lobby.room.peer))
     end
     return false
   end, 15)
-  log("UI: on team " .. want)
+  log(string.format("UI: on team %d (clicked %s)", want, clicked_at and "yes" or "no"))
+end
+
+--! The room's colours and teams, for the log ("peer=colour/team ...").
+local function seats_text(lobby)
+  local parts = {}
+  for peer = 1, 4 do
+    local p = lobby.players[peer]
+    if p then parts[#parts + 1] = string.format("%s=%s/%s", p.name, tostring(p.colour), tostring(p.team)) end
+  end
+  return table.concat(parts, " ")
 end
 
 local shots_taken = {}
@@ -243,9 +257,7 @@ local function run_lobby()
     w = lobby_window()
     w.room_name_box:setText(room)
     w.password_box:setText(password)
-    for _ = 2, #MultiplayerLobby.MODES do -- one press per mode after "One shared hospital"
-      if w.new_mode ~= room_mode then w:buttonMode() end
-    end
+    w.new_mode = room_mode -- (the newcomers' first colours and teams)
     for _ = 2, tonumber(os.getenv("MP_LEVEL") or 1) do w:buttonLevel() end
     -- Room size: MP_PLAYERS (2 to 4).
     for _ = 1, 3 do
@@ -297,6 +309,23 @@ local function run_lobby()
       end
       return n >= want_players and ready and lobby.summary ~= nil
     end, 60)
+    if room_mode == "teamshared" and not os.getenv("MP_CONTINUE") then
+      -- A hospital per team: everybody takes their team's colour (the
+      -- teams as they are now; the host may change anybody's).
+      local team_of = {}
+      for peer, p in pairs(lobby.players) do team_of[peer] = tonumber(p.team) end
+      for peer = 1, 4 do
+        if team_of[peer] then lobby:setSeat(team_of[peer], team_of[peer], peer) end
+      end
+      wait_for("a colour per team", function()
+        for peer, team in pairs(team_of) do
+          local p = lobby.players[peer]
+          if not p or tonumber(p.colour) ~= team or tonumber(p.team) ~= team then return false end
+        end
+        return true
+      end, 15)
+    end
+    log("UI: room seats " .. seats_text(lobby) .. " (" .. tostring(lobby.summary.mode) .. ")")
     shot("lobby-room-host")
     log(string.format("lobby: %d players, recommended speed %s, delay %s, one way %s ms",
         want_players, lobby.summary.speed, lobby.summary.delay, lobby.summary.one_way))

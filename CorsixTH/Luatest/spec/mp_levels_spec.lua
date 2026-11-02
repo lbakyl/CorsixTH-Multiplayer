@@ -584,6 +584,12 @@ describe("Multiplayer levels", function()
       assert.same({[1] = 3, [2] = 1, [3] = 2}, seats)
     end)
 
+    it("seats three teams, each team's members together", function()
+      -- Map 41 again: team 1 (peers 1, 4) on one side, teams 2 and 3 alone.
+      local seats = levels.teamSeats({1, 2, 3, 4}, {[1] = 1, [2] = 2, [3] = 3, [4] = 1}, MAP41)
+      assert.same({[1] = 1, [4] = 3, [2] = 2, [3] = 4}, seats)
+    end)
+
     it("seats by team in hospital order without the map", function()
       local seats = levels.teamSeats({2, 3, 5}, {[2] = 2, [3] = 1, [5] = 2})
       assert.same({[3] = 1, [2] = 2, [5] = 3}, seats)

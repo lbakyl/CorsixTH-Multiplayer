@@ -614,42 +614,73 @@ def test_competitive_room_and_continued_seats(run):
     run(body)
 
 
-def test_teams_room(run):
+def test_derive_mode():
+    assert srv.derive_mode([(1, 1), (1, 1)]) == "shared"
+    assert srv.derive_mode([(1, 1), (2, 1), (2, 1)]) == "coop"
+    assert srv.derive_mode([(1, 1), (2, 2), (3, 3)]) == "competitive"
+    assert srv.derive_mode([(1, 1), (2, 1), (3, 2)]) == "teams"
+    assert srv.derive_mode([(1, 1), (1, 1), (2, 2)]) == "teamshared"
+    assert srv.derive_mode([(1, 1), (1, 1), (2, 2), (3, 3)]) == "mixed"
+
+
+def test_colours_and_teams(run):
     async def body(server, port):
         a = await Client.connect(port, "Ann")
-        a.send(encode("CREATE", room="2v1", password="", max=3, mode="teams", level=2))
-        assert (await a.expect("JOINED"))["mode"] == "teams"
-        assert (await a.expect("PLAYER"))["team"] == "1"
+        a.send(encode("CREATE", room="free", password="", max=4, level=2))
+        joined = await a.expect("JOINED")
+        assert joined["free"] == "1" and joined["mode"] == "coop"
+        me = await a.expect("PLAYER")
+        assert (me["colour"], me["team"]) == ("1", "1")
         b = await Client.connect(port, "Ben")
-        b.send(encode("JOIN", room="2v1", password=""))
+        b.send(encode("JOIN", room="free", password=""))
         await b.expect("JOINED")
-        # A newcomer joins the smaller team.
-        assert (await b.expect("PLAYER", peer="2"))["team"] == "2"
+        # A newcomer gets the next colour, on the host's team: co-op.
+        ben = await b.expect("PLAYER", peer="2")
+        assert (ben["colour"], ben["team"]) == ("2", "1")
+        assert (await b.expect("LOBBY"))["mode"] == "coop"
+        # Ben races Ann.
+        b.send(encode("SEAT", team=2))
+        await b.expect("PLAYER", peer="2", team="2")
+        assert (await b.expect("LOBBY"))["mode"] == "competitive"
         c = await Client.connect(port, "Cleo")
-        c.send(encode("JOIN", room="2v1", password=""))
+        c.send(encode("JOIN", room="free", password=""))
         await c.expect("JOINED")
-        assert (await c.expect("PLAYER", peer="3"))["team"] == "1"
-        # Everybody on one team: the host cannot start.
-        b.send(encode("TEAM", team=1))
-        await b.expect("PLAYER", peer="2", team="1")
+        cleo = await c.expect("PLAYER", peer="3")
+        assert (cleo["colour"], cleo["team"]) == ("3", "1")
+        assert (await c.expect("LOBBY"))["mode"] == "teams"
+        # Ben's colour brings his team: Cleo shares his hospital.
+        c.send(encode("SEAT", colour=2))
+        await c.expect("PLAYER", peer="3", colour="2", team="2")
+        assert (await c.expect("LOBBY"))["mode"] == "teamshared"
+        # A new team for one of them moves the hospital's whole team.
+        a.send(encode("SEAT", team=3, peer=2))
+        await a.expect("PLAYER", peer="2", team="3")
+        await a.expect("PLAYER", peer="3", team="3")
+        # Only the owner changes somebody else; colours and teams are 1 to 4.
+        b.send(encode("SEAT", colour=4, peer=3))
+        assert (await b.expect("ERROR"))["code"] == "not_owner"
+        b.send(encode("SEAT", team=5))
+        assert (await b.expect("ERROR"))["code"] == "bad_seat"
+        # One colour for all: one shared hospital.
+        a.send(encode("SEAT", colour=2))
+        await a.expect("PLAYER", peer="1", colour="2", team="3")
+        assert (await a.expect("LOBBY"))["mode"] == "shared"
+        a.send(encode("SEAT", colour=1))
+        a.send(encode("SEAT", team=1))
+        await a.expect("PLAYER", peer="1", colour="1", team="1")
         b.send(encode("READY", ready=1))
         c.send(encode("READY", ready=1))
         a.send(encode("START"))
-        assert (await a.expect("ERROR"))["code"] == "one_team"
-        # Only the owner moves somebody else.
-        b.send(encode("TEAM", team=2, peer=3))
-        assert (await b.expect("ERROR"))["code"] == "not_owner"
-        b.send(encode("TEAM", team=3))
-        assert (await b.expect("ERROR"))["code"] == "bad_team"
-        a.send(encode("TEAM", team=2, peer=3))
-        await a.expect("PLAYER", peer="3", team="2")
-        a.send(encode("START"))
         st = await a.expect("START")
-        assert st["mode"] == "teams" and st["teams"] == "1:1,2:1,3:2"
-        # Not in other modes.
+        assert st["mode"] == "teamshared" and st["colours"] == "1:1,2:2,3:2" and st["teams"] == "1:1,2:3,3:3"
+        # A preset seats newcomers as that mode would (the scripted tests).
         d = await Client.connect(port, "Dan")
         d.send(encode("CREATE", room="race", password="", max=2, mode="competitive", level=1))
-        assert "team" not in await d.expect("PLAYER")
+        assert (await d.expect("JOINED"))["mode"] == "competitive"
+        e = await Client.connect(port, "Eve")
+        e.send(encode("JOIN", room="race", password=""))
+        eve = await e.expect("PLAYER", peer="2")
+        assert (eve["colour"], eve["team"]) == ("2", "2")
     run(body)
 
 
@@ -900,24 +931,25 @@ def test_team_hospitals_room_and_bots():
         ann.send(encode("CREATE", room="pair", password="", max=3, mode="teamshared", level=2))
         assert (await ann.expect("JOINED"))["mode"] == "teamshared"
         assert (await ann.expect("PLAYER"))["team"] == "1"
-        # A bot joins the smaller team, the next person the other one.
+        # (The preset "teamshared":) a bot joins the smaller team, the next
+        # person the other one, each with a colour of their own.
         ann.send(encode("BOT", add=1))
         await started_bots(bots, 1)
         assert bots[0]["mode"] == "teamshared"
         agnes = await connect_bot(port, bots[0])
         await agnes.expect("JOINED")
-        await ann.expect("PLAYER", name="Bot Agnes", team="2")
+        await ann.expect("PLAYER", name="Bot Agnes", colour="2", team="2")
         ben = await Client.connect(port, "Ben")
         ben.send(encode("JOIN", room="pair", password=""))
         await ben.expect("JOINED")
-        await ann.expect("PLAYER", name="Ben", team="1")
+        await ann.expect("PLAYER", name="Ben", colour="3", team="1")
         ben.send(encode("READY", ready=1))
-        # A bot may share its team's hospital with a person.
-        ben.send(encode("TEAM", team=2))
-        await ann.expect("PLAYER", name="Ben", team="2")
+        # A bot may share its hospital with a person.
+        ben.send(encode("SEAT", colour=2))
+        await ann.expect("PLAYER", name="Ben", colour="2", team="2")
         ann.send(encode("START"))
         st = await ann.expect("START")
-        assert st["mode"] == "teamshared" and st["teams"] == "1:1,2:2,3:2"
+        assert st["mode"] == "teamshared" and st["teams"] == "1:1,2:2,3:2" and st["colours"] == "1:1,2:2,3:2"
     run_with_bots(body)
 
 
@@ -928,11 +960,17 @@ def test_team_hospitals_continued_seats():
         # team's hospital.
         ann = await Client.connect(port, "Ann")
         ann.send(encode("CREATE", room="again", password="", max=2, mode="teamshared", level=2,
-                        step=300, date="1-02-10T05", seats="ANN + BEN,CAT", **{"continue": 1}))
-        assert (await ann.expect("JOINED"))["max"] == "3"
+                        step=300, date="1-02-10T05", seats="ANN + BEN,CAT", seat_colours="3,1",
+                        seat_teams="1,2", **{"continue": 1}))
+        joined = await ann.expect("JOINED")
+        assert joined["max"] == "3" and "free" not in joined
         cat = await Client.connect(port, "Cat")
         cat.send(encode("JOIN", room="again", password=""))
         await cat.expect("JOINED")
+        # Everybody shows their saved hospital's colour and team, fixed.
+        await cat.expect("PLAYER", name="Cat", colour="1", team="2")
+        cat.send(encode("SEAT", colour=3))
+        assert (await cat.expect("ERROR"))["code"] == "locked"
         ben = await Client.connect(port, "Ben")
         ben.send(encode("JOIN", room="again", password=""))
         await ben.expect("JOINED")

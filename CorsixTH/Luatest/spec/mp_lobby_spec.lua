@@ -180,6 +180,43 @@ describe("MultiplayerLobby", function()
     assert.same({}, lobby:teamMates(world, 3))
   end)
 
+  it("works out the mode from the colours and teams, like the server", function()
+    assert.equal("shared", MultiplayerLobby.deriveMode({{1, 1}, {1, 1}}))
+    assert.equal("coop", MultiplayerLobby.deriveMode({{1, 1}, {2, 1}, {2, 1}}))
+    assert.equal("competitive", MultiplayerLobby.deriveMode({{1, 1}, {2, 2}, {3, 3}}))
+    assert.equal("teams", MultiplayerLobby.deriveMode({{1, 1}, {2, 1}, {3, 2}}))
+    assert.equal("teamshared", MultiplayerLobby.deriveMode({{1, 1}, {1, 1}, {2, 2}}))
+    assert.equal("mixed", MultiplayerLobby.deriveMode({{1, 1}, {1, 1}, {2, 2}, {3, 3}}))
+  end)
+
+  it("gives every colour a hospital", function()
+    -- Two people share red (2), white (4) has one: hospitals in colour order.
+    local layout = MultiplayerLobby.layout({1, 2, 3}, {[1] = 4, [2] = 2, [3] = 2}, {[1] = 1, [2] = 1, [3] = 1})
+    assert.equal("coop", layout.mode)
+    assert.equal(2, layout.count)
+    assert.same({[1] = 2, [2] = 1, [3] = 1}, layout.peer_hospital)
+    assert.same({2, 4}, layout.colours)
+    assert.is_nil(layout.teams)
+    -- Everybody alone races alone (no teams).
+    layout = MultiplayerLobby.layout({1, 2}, {[1] = 1, [2] = 3}, {[1] = 1, [2] = 2})
+    assert.equal("competitive", layout.mode)
+    assert.is_nil(layout.teams)
+    -- 2 against 1 against 1: three teams, one hospital shared.
+    layout = MultiplayerLobby.layout({1, 2, 3, 4}, {[1] = 1, [2] = 1, [3] = 2, [4] = 3},
+        {[1] = 1, [2] = 1, [3] = 2, [4] = 3})
+    assert.equal("mixed", layout.mode)
+    assert.same({[1] = 1, [2] = 1, [3] = 2, [4] = 3}, layout.peer_hospital)
+    assert.same({1, 2, 3}, layout.teams)
+    -- Two teams of two hospitals each: team mates are neighbours on the map.
+    local MAP41 = {{55, 62}, {71, 62}, {56, 72}, {72, 72}}
+    layout = MultiplayerLobby.layout({1, 2, 3, 4}, {[1] = 1, [2] = 2, [3] = 3, [4] = 4},
+        {[1] = 1, [2] = 1, [3] = 2, [4] = 2}, function(count) return count == 4 and MAP41 end)
+    assert.equal("teams", layout.mode)
+    assert.same({[1] = 1, [2] = 3, [3] = 2, [4] = 4}, layout.peer_hospital)
+    assert.same({1, 2, 1, 2}, layout.teams)
+    assert.same({1, 3, 2, 4}, layout.colours)
+  end)
+
   it("leaves a room and asks for the room list again", function()
     local lobby, t = make_lobby()
     t.inbox = {"WELCOME id=1 proto=1", "JOINED max=2 mode=shared owner=1 peer=1 room=r"}

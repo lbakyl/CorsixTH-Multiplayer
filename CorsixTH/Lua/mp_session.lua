@@ -1054,11 +1054,24 @@ MultiplayerSession.markers = "others" -- (a new sight: own people plain at first
 MultiplayerSession.CLOTHES = {0, 6, 4, 2}
 local MARKER_COLOURS = {{232, 186, 52}, {236, 130, 118}, {160, 146, 232}, {236, 236, 236}}
 
---! The marker colour of a hospital.
-function MultiplayerSession.markerColour(world, hospital)
+--! The colour (1-4) of a hospital: the one its players picked in the room
+--! (world.mp_coop.colours), else its index (a game from before colours).
+function MultiplayerSession.hospitalColour(world, hospital)
   local index = world:getHospitalIndex(hospital)
   if not index then return nil end
-  return MARKER_COLOURS[(index - 1) % #MARKER_COLOURS + 1]
+  local colours = world.mp_coop and world.mp_coop.colours
+  return (colours and colours[index]) or (index - 1) % #MARKER_COLOURS + 1
+end
+
+--! The marker colour of a hospital ({r, g, b}).
+function MultiplayerSession.markerColour(world, hospital)
+  local colour = MultiplayerSession.hospitalColour(world, hospital)
+  return colour and MARKER_COLOURS[colour]
+end
+
+--! A colour's {r, g, b} (1-4: the lobby's colour buttons).
+function MultiplayerSession.colourRGB(colour)
+  return MARKER_COLOURS[(colour - 1) % #MARKER_COLOURS + 1]
 end
 
 --! A tab in a hospital's colour (a game with a hospital each), so a window
@@ -1117,9 +1130,9 @@ function MultiplayerSession.dressPatient(patient)
   if not (world and world.mp_coop and world.mp_coop.players > 1 and patient.hospital) then return end
   local class = patient.humanoid_class
   if class == "Elvis Patient" or class == "Invisible Patient" then return end
-  local index = world:getHospitalIndex(patient.hospital)
-  if not index then return end
-  patient:setLayer(1, MultiplayerSession.CLOTHES[(index - 1) % #MultiplayerSession.CLOTHES + 1])
+  local colour = MultiplayerSession.hospitalColour(world, patient.hospital)
+  if not colour then return end
+  patient:setLayer(1, MultiplayerSession.CLOTHES[colour])
 end
 
 --! Before the map is drawn (GameUI:draw): give every person the bar of
