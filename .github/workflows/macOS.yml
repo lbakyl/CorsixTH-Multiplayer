@@ -11,7 +11,8 @@ permissions:
 #
 # GitHub sometimes has no macOS 26 machine free for a while and cancels the
 # queued job. The "fallback" job then starts this workflow again on macOS 15;
-# that app runs on macOS 15 or newer (so on 26 as well).
+# that app runs on macOS 15 or newer (so on 26 as well). macos-15-intel (by
+# hand) builds an Intel app, which Apple Silicon Macs run through Rosetta.
 on:
   push:
     branches:
@@ -25,6 +26,7 @@ on:
         options:
           - macos-26
           - macos-15
+          - macos-15-intel
         default: macos-26
 
 jobs:
@@ -32,7 +34,7 @@ jobs:
     runs-on: ${{ inputs.runner || 'macos-26' }}
     timeout-minutes: 90
     env:
-      MACOSX_DEPLOYMENT_TARGET: ${{ inputs.runner == 'macos-15' && '15.0' || '26.0' }}
+      MACOSX_DEPLOYMENT_TARGET: ${{ startsWith(inputs.runner, 'macos-15') && '15.0' || '26.0' }}
     steps:
       - uses: actions/checkout@v7
       - name: Install build packages
@@ -45,7 +47,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: build-macos-app/prefix
-          key: macos-app-prefix-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('scripts/multiplayer/build_macos_app.sh') }}
+          key: macos-app-prefix-${{ inputs.runner || 'macos-26' }}-${{ hashFiles('scripts/multiplayer/build_macos_app.sh') }}
       - name: Build the app
         run: bash scripts/multiplayer/build_macos_app.sh "$(git rev-parse --short=8 HEAD)"
       - name: Videos (FFmpeg linked and bundled)
@@ -87,7 +89,7 @@ jobs:
 
   fallback:
     needs: app
-    if: cancelled() && inputs.runner != 'macos-15'
+    if: cancelled() && (inputs.runner || 'macos-26') == 'macos-26'
     runs-on: ubuntu-latest
     permissions:
       actions: write

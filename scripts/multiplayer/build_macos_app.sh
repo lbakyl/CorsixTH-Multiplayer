@@ -23,7 +23,9 @@
 # .github/workflows/macOS.yml.
 # Usage: bash scripts/multiplayer/build_macos_app.sh [VERSION_LABEL]
 # Result: dist/CorsixTH-Multiplayer/CorsixTH.app and
-#         dist/CorsixTH-Multiplayer-<label>-macos-arm64.zip
+#         dist/CorsixTH-Multiplayer-<label>-macos-<arch>.zip (ARCH, default this
+#         Mac's: arm64, or x86_64 on an Intel Mac, which Apple Silicon runs
+#         through Rosetta)
 set -euo pipefail
 src=$(cd "$(dirname "$0")/../.." && pwd)
 label=${1:-$(git -C "$src" rev-parse --short=8 HEAD 2>/dev/null || echo dev)}
@@ -31,6 +33,7 @@ work=${WORK_DIR:-$src/build-macos-app}
 dist=${DIST_DIR:-$src/dist}
 jobs=$(sysctl -n hw.ncpu)
 export MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-26.0}
+arch=${ARCH:-$(uname -m)}
 brew_prefix=$(brew --prefix)
 P=$work/prefix
 mkdir -p "$work/src" "$P" "$dist"
@@ -40,7 +43,7 @@ cd "$work/src"
 if [[ ! -f "$P/lib/libSDL3.dylib" ]]; then
   [[ -d SDL ]] || git clone -q --depth 1 --branch release-3.4.18 https://github.com/libsdl-org/SDL.git SDL
   cmake -S SDL -B SDL/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$P" \
-    -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_OSX_ARCHITECTURES=arm64 \
+    -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_OSX_ARCHITECTURES="$arch" \
     -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF
   cmake --build SDL/build -j"$jobs"
   cmake --install SDL/build
@@ -48,7 +51,7 @@ fi
 if [[ ! -f "$P/lib/libSDL3_mixer.dylib" ]]; then
   [[ -d SDL_mixer ]] || git clone -q --depth 1 --branch release-3.2.4 https://github.com/libsdl-org/SDL_mixer.git SDL_mixer
   cmake -S SDL_mixer -B SDL_mixer/build -G Ninja -DCMAKE_PREFIX_PATH="$P" -DCMAKE_INSTALL_PREFIX="$P" \
-    -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 \
+    -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="$arch" \
     -DSDLMIXER_TESTS=OFF -DSDLMIXER_EXAMPLES=OFF \
     -DSDLMIXER_VENDORED=OFF -DSDLMIXER_FLAC_LIBFLAC=OFF -DSDLMIXER_GME=OFF -DSDLMIXER_MOD=OFF \
     -DSDLMIXER_MP3_MPG123=OFF -DSDLMIXER_OPUS=OFF -DSDLMIXER_VORBIS_VORBISFILE=OFF -DSDLMIXER_WAVPACK=OFF
@@ -62,7 +65,7 @@ fi
 # Homebrew; bundled with the other libraries below.
 if [[ ! -f "$P/lib/libavcodec.dylib" ]]; then
   [[ -d ffmpeg ]] || git clone -q --depth 1 --branch n8.0 https://github.com/FFmpeg/FFmpeg.git ffmpeg
-  (cd ffmpeg && ./configure --prefix="$P" --arch=arm64 --target-os=darwin --cc=clang \
+  (cd ffmpeg && ./configure --prefix="$P" --arch="$arch" --target-os=darwin --cc=clang --disable-x86asm \
     --extra-cflags="-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET" \
     --extra-ldflags="-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET" \
     --enable-shared --disable-static --disable-programs --disable-doc --disable-network \
@@ -118,7 +121,7 @@ fi
 # program.
 cmake -S "$src" -B "$work/build" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -DCMAKE_PREFIX_PATH="$P;$brew_prefix" -DCMAKE_INSTALL_PREFIX="$work/stage" \
-  -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
+  -DCMAKE_OSX_ARCHITECTURES="$arch" -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
   -DWITH_FIXUP_BUNDLE=OFF -DWITH_MOVIES=ON -DWITH_UPDATE_CHECK=OFF -DWITH_MIDI_DEVICE=OFF -DWITH_LUAROCKS=OFF \
   -DFETCH_SOUNDFONT=ON -DFETCH_UNICODE_FONT=ON -DWITH_FONT="" \
   -DLUA_INCLUDE_DIR="$P/include-cmake" -DLUA_LIBRARY="$P/lib/liblua.a" \
@@ -177,7 +180,7 @@ Electronic Arts; this build contains none of its data.
 EOF
 cp "$src/LICENSE.txt" "$pkg/" 2>/dev/null || true
 
-zip=$dist/CorsixTH-Multiplayer-$label-macos-arm64.zip
+zip=$dist/CorsixTH-Multiplayer-$label-macos-$arch.zip
 rm -f "$zip"
 (cd "$dist" && ditto -c -k --keepParent CorsixTH-Multiplayer "$zip")
 echo "Bundled libraries:"; ls "$app/Contents/Frameworks" 2>/dev/null || true
