@@ -218,6 +218,30 @@ function UIProgressReport:drawMarkers(canvas, x, y)
   end
 end
 
+--! A hospital name that fits in `width` pixels: a team hospital's name (its
+--! players' names joined) first leaves out the bots' "BOT ", then each name
+--! is cut short in turn, the longest first ("BARTHOL. + CHRISTO.").
+function UIProgressReport:fitName(font, name, width)
+  if font:sizeOf(name) <= width then return name end
+  local parts = {}
+  for part in (name:gsub("%f[%w]BOT ", "") .. " + "):gmatch("(.-) %+ ") do parts[#parts + 1] = part end
+  local cut = {}
+  local short = table.concat(parts, " + ")
+  while font:sizeOf(short) > width do
+    local longest
+    for i, part in ipairs(parts) do
+      if not longest or #part > #parts[longest] then longest = i end
+    end
+    if #parts[longest] <= 1 then break end
+    parts[longest] = parts[longest]:sub(1, -2)
+    cut[longest] = true
+    local shown = {}
+    for i, part in ipairs(parts) do shown[i] = cut[i] and (part .. ".") or part end
+    short = table.concat(shown, " + ")
+  end
+  return short
+end
+
 function UIProgressReport:draw(canvas, x, y)
   local s = TheApp.gfx:getUIScale()
   canvas:scale(s, "bitmap")
@@ -236,7 +260,7 @@ function UIProgressReport:draw(canvas, x, y)
   local ly = 73 * s
   for pnum, hospital in ipairs(world.hospitals) do
     local font = (pnum == self.selected) and self.red_font or self.normal_font
-    font:draw(canvas, hospital.name:upper(), x + 272 * s, y + ly)
+    font:draw(canvas, self:fitName(font, hospital.name:upper(), 136 * s), x + 272 * s, y + ly)
     ly = ly + 25 * s
     total_visitors = total_visitors + hospital.num_visitors_pm
   end
