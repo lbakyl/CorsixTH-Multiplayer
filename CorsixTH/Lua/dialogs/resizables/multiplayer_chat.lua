@@ -101,17 +101,40 @@ function UIMultiplayerChat:draw(canvas, x, y)
     table.insert(shown, 1, line)
   end
   local ly = y + 28 * s -- below the menu bar
+  -- (A long line wraps onto more rows, each on a bar as wide as its text.)
+  local max_w = math.min(560 * s, (TheApp.config.width or 640) - 40 * s)
   for _, line in ipairs(shown) do
-    local w = math.min(560, 12 + 7 * #line.text) * s
     local c = line.colour
-    canvas:drawRect(canvas:mapRGB(c[1], c[2], c[3]), x + 6 * s, ly, w, 16 * s)
-    if line.private then
-      local m = line.private == "team" and TEAM_MARK or PRIVATE_MARK
-      canvas:drawRect(canvas:mapRGB(m[1], m[2], m[3]), x + 6 * s, ly, 3 * s, 16 * s)
+    for _, row in ipairs(self:_rows(line, max_w)) do
+      local w = self.font:sizeOf(row) + 8 * s
+      canvas:drawRect(canvas:mapRGB(c[1], c[2], c[3]), x + 6 * s, ly, w, 16 * s)
+      if line.private then
+        local m = line.private == "team" and TEAM_MARK or PRIVATE_MARK
+        canvas:drawRect(canvas:mapRGB(m[1], m[2], m[3]), x + 6 * s, ly, 3 * s, 16 * s)
+      end
+      self.font:draw(canvas, row, x + 10 * s, ly + 3 * s)
+      ly = ly + 18 * s
     end
-    self.font:draw(canvas, line.text, x + 10 * s, ly + 3 * s)
-    ly = ly + 18 * s
   end
+end
+
+--! A line's text word-wrapped to `max_w` pixels (kept until the width
+--! changes).
+function UIMultiplayerChat:_rows(line, max_w)
+  if line.rows and line.rows_w == max_w then return line.rows end
+  local rows, cur = {}, nil
+  for word in line.text:gmatch("%S+") do
+    local try = cur and (cur .. " " .. word) or word
+    if cur and self.font:sizeOf(try) > max_w then
+      rows[#rows + 1] = cur
+      cur = word
+    else
+      cur = try
+    end
+  end
+  rows[#rows + 1] = cur or ""
+  line.rows, line.rows_w = rows, max_w
+  return rows
 end
 
 --! The chat key (ingame_mp_chat, Y by default): open the input line. In

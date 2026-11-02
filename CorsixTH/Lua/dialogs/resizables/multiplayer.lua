@@ -248,7 +248,7 @@ function UIMultiplayer:_buildRooms()
   -- window (x: a new game again).
   self.saves = nil
   self.continue_index = 0
-  self.continue_button = button(self, 20, y + 35, WIDTH - 75, S.load_game, self.buttonContinue,
+  self.continue_button = button(self, 20, y + 35, WIDTH - 40, S.load_game, self.buttonContinue,
       T.continue_game)
   self.new_game_button = button(self, WIDTH - 50, y + 35, 30, "x", self.buttonNewGame, T.new_game)
   self.new_game_button:setVisible(false)
@@ -365,6 +365,10 @@ function UIMultiplayer:_continueSave(path)
   end
   local save = self.saves[self.continue_index]
   self.continue_button.panel_for_sprite:setLabel(save and S.continue_save:format(save.label) or S.load_game)
+  -- (As wide as the buttons above it; shorter with the x beside it.)
+  local w = save and WIDTH - 75 or WIDTH - 40
+  self.continue_button.panel_for_sprite.w = w
+  self.continue_button.r = self.continue_button.x + w
   self.new_game_button:setVisible(save ~= nil)
   if save then
     self.new_level = tonumber(save.info.level) or 1
