@@ -385,13 +385,23 @@ function Bot:expireAsks()
   end
 end
 
---! Once a game month: the hospital's report to the model, whose plan the
---! manager follows (it still checks everything itself).
+--! Once a game week (at most every 25 seconds): the hospital's report, and
+--! what its team mates said lately, to the model, whose plan the manager
+--! follows (it still checks everything itself). False if it did not ask.
 function Bot:askPlan()
   local manager = self.manager
   local report = manager and manager:report()
-  if not report then return end
-  self:ask("plan", {text = report, menu = table.concat(Manager.menu(), ",")}, 60, function(f)
+  if not report then return false end
+  if self.last_plan and self:now() - self.last_plan < 25 then return false end
+  local said = {}
+  for _, l in ipairs(self.mate_lines or {}) do
+    if self:gameDay() - l.day <= 30 then said[#said + 1] = string.format("day %d, %s", l.day, l.text) end
+  end
+  if #said > 0 then
+    report = report .. "\nTeam mates said lately (today is day " .. self:gameDay() .. "):\n" .. table.concat(said, "\n")
+  end
+  self.last_plan = self:now()
+  return self:ask("plan", {text = report, menu = table.concat(Manager.menu(), ",")}, 60, function(f)
     if not f then return end
     local plan = {priorities = {}, price = tonumber(f.price)}
     for action, weight in (f.actions or ""):gmatch("([%w_:]+):(%d+)") do
@@ -422,6 +432,17 @@ function Bot:onChat(f)
   local name, is_bot = self:playerName(peer)
   if is_bot or not name then return end -- bots do not chat with each other
   local text = f.text or ""
+  -- (In a race of two teams: friendly to its team mate.)
+  local world, hosp = self.world, self.lobby.peer_hospital and self.lobby.peer_hospital[peer]
+  local mine = world and world.ui and world.ui.hospital
+  local mate = hosp and mine and world:mpTeam(mine) and not world:mpRivals(world.hospitals[hosp], mine)
+  local rival = self.fiery and not mate
+  -- What people on its side say goes into its next plan (wishes, worries).
+  if not rival and text ~= "" then
+    self.mate_lines = self.mate_lines or {}
+    table.insert(self.mate_lines, {day = self:gameDay(), text = name .. ": " .. text:sub(1, 200)})
+    if #self.mate_lines > 8 then table.remove(self.mate_lines, 1) end
+  end
   local private = f.to ~= nil
   local first = my_name:lower():match("(%a+)$") or my_name:lower()
   local named = text:lower():find(first, 1, true) ~= nil
@@ -439,20 +460,20 @@ function Bot:onChat(f)
   end
   self.last_reply = self:now()
   local kind = reply_kind(text)
-  -- (In a race of two teams: friendly to its team mate.)
-  local world, hosp = self.world, self.lobby.peer_hospital and self.lobby.peer_hospital[peer]
-  local mine = world and world.ui and world.ui.hospital
-  local mate = hosp and mine and world:mpTeam(mine) and not world:mpRivals(world.hospitals[hosp], mine)
-  local line = pick(REPLIES[kind][(self.fiery and not mate) and "fiery" or "friendly"]):format(name)
+  local line = pick(REPLIES[kind][rival and "fiery" or "friendly"]):format(name)
   -- Spoken to: the model answers if the server has one (the stock line if
   -- it does not answer within a few seconds).
   local to = private and peer or nil
   if (private or named) and self.ai ~= "off" then
     local report = self.manager and self.manager:report() or ""
     local brief = report:match("^[^\n]*\n[^\n]*") or report
+    -- (On the person's side it may also do what it is asked: the projects
+    -- it can do now go along.)
+    local menu = not rival and self.manager and table.concat(self.manager:wishMenu(), ",") or nil
     local asked = self:ask("chat", {text = brief, lines = table.concat(self.chat_lines, "\n"),
-        rival = (self.fiery and not mate) and 1 or nil}, 10, function(answer)
+        rival = rival and 1 or nil, menu = menu}, 10, function(answer)
       local reply = answer and answer.text or line
+      if answer and answer.wish and self.manager then self.manager:wish(answer.wish) end
       self:say(reply, typing(reply), to)
     end)
     if asked then return end

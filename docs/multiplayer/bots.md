@@ -94,9 +94,10 @@ installs the `anthropic` package in `/opt/corsixth-mp/venv`) the bots ask the
 server, never the API (the key is removed from the bots' and referee's
 environment):
 
-- `ASK kind=plan` once a game month: the hospital's report (`Manager:report`:
-  money, goals, rooms and queues, rooms patients needed, staff, comfort,
-  prices, why patients left, rivals) and the menu of projects
+- `ASK kind=plan` once a game week (at most every 25 seconds): the hospital's
+  report (`Manager:report`: money, goals, rooms and queues, rooms patients
+  needed, staff, comfort, prices, why patients left, rivals, and what its team
+  mates said in the last 30 game days) and the menu of projects
   (`Manager.menu`). The model (default `claude-haiku-5-5`, low effort,
   structured output) answers up to six priorities with weights, a price and a
   one-line note. The server keeps only actions from the menu; the manager adds
@@ -104,11 +105,15 @@ environment):
   price at the next monthly round. A team mate sometimes says the note in the
   chat; a rival keeps it to itself.
 - `ASK kind=chat` when a person writes to the bot (privately or by name): the
-  model answers in the bot's voice (friendly, or a cheeky rival), under 30
-  words; if no answer comes within 10 seconds the bot uses its stock line.
+  model answers in the bot's voice (friendly, or a cheeky rival), in one short
+  line that leaves the money out unless asked; if no answer comes within 10
+  seconds the bot uses its stock line. A bot on the person's side also sends
+  `menu` (the projects it can do now), and the model names the one asked for
+  ("can you build a psychiatry?"); the bot does that next, without waiting
+  for the next plan. The wish lapses after 30 game days if it cannot be done.
 - `ANSWER id=...` with `actions` ("action:weight,..."), `price`, `note`, or
-  `text`; `error=off|busy|none|failed`. Only bots may ask, a plan at most every
-  20 seconds and a chat line every 3 seconds per bot.
+  `text` (and `wish`, a menu item); `error=off|busy|none|failed`. Only bots
+  may ask, a plan at most every 20 seconds and a chat line every 3 seconds per bot.
 - A daily budget (`CORSIXTH_MP_AI_DAILY_USD`, default $3; kept in
   `/var/lib/corsixth/ai-spend.json` across restarts) stops the advice for the
   rest of the day (UTC). Without a key, or over the budget, the bots play on

@@ -806,8 +806,9 @@ class Server:
         """A bot asks for advice (advisor.py): kind=plan (text = its hospital's
         report, menu = its projects, comma-separated) or kind=chat (text =
         its hospital in brief, lines = the chat so far, newline-separated,
-        rival=1 in a race). The answer comes back as ANSWER id=... with
-        actions ("action:weight,..."), price, note, or text; or error=..."""
+        rival=1 in a race; a team mate's bot adds menu, and may get a wish).
+        The answer comes back as ANSWER id=... with actions
+        ("action:weight,..."), price, note, or text (and wish); or error=..."""
         if not player.is_bot:
             self._error(player, "not_bot", "Only bots ask for advice")
             return
@@ -835,6 +836,15 @@ class Server:
                 actions = ",".join(f"{a}:{w}" for a, w in plan["actions"])
                 player.send(encode("ANSWER", id=qid, actions=actions, price=plan["price"],
                                    note=plan["note"] or None))
+            elif f.get("menu") and f.get("rival") != "1":
+                # A team mate's bot: it may also do what it was asked (wish).
+                lines = [line for line in f.get("lines", "").split("\n") if line]
+                menu = [m for m in f.get("menu", "").split(",") if m]
+                answer = await advisor.team_chat(player.name, f.get("text", ""), lines, menu)
+                if answer is None:
+                    player.send(encode("ANSWER", id=qid, error="none"))
+                    return
+                player.send(encode("ANSWER", id=qid, text=answer["text"], wish=answer["wish"]))
             else:
                 lines = [line for line in f.get("lines", "").split("\n") if line]
                 text = await advisor.chat(player.name, f.get("rival") == "1", f.get("text", ""), lines)

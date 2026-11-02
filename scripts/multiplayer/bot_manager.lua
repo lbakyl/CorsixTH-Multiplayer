@@ -37,6 +37,9 @@ local COPIES = {gp = 3, pharmacy = 2, general_diag = 2, psych = 2, ward = 2, toi
     jelly_vat = 1, decontamination = 1, operating_theatre = 2, research = 1}
 -- Queue per room above which another room of the type helps.
 local BUSY_QUEUE = 5
+-- The score a team mate's wish adds: before the bot's own ideas, after the
+-- basics of an opening hospital (90 and more).
+local WISH = 50
 -- The size a player gives a room (square), when there is space.
 local SIZES = {gp = 5, pharmacy = 5, general_diag = 5, psych = 6, ward = 7, staff_room = 6, toilets = 5,
     research = 6, operating_theatre = 7, x_ray = 6, scanner = 6, decontamination = 6, dna_fixer = 6,
@@ -75,6 +78,7 @@ function M.new(bot, ctx)
   self.answered = {}       -- message number -> true
   self.noticed = {}        -- saboteur entity id -> day it was noticed
   self.boost = {}          -- project key -> extra score from the model's plan
+  self.wishes = {}         -- project key -> last game day of a team mate's wish
   self.failed = {}         -- project key -> day it failed (try again later)
   self.history = {}        -- what it did lately (for the model's report and chat)
   self.left = {}           -- why patients left: cured, kicked, fed_up, over_priced
@@ -227,8 +231,10 @@ end
 function M:projects(s)
   local bot, hosp = self.bot, s.hosp
   local list = {}
+  local listed = {}
   local function add(key, score, run, cost)
-    score = score + (self.boost[key] or 0)
+    score = score + (self.boost[key] or 0) + (self.wishes[key] and WISH or 0)
+    listed[key] = true
     if self.failed[key] and s.day < self.failed[key] then return end
     if score > 0.5 then list[#list + 1] = {key = key, score = score, run = run, cost = cost or 0} end
   end
@@ -350,6 +356,15 @@ function M:projects(s)
     if (s.objects.plant or 0) < 2 + s.room_count / 4 then buy("plant", 0.8 + (1 - s.happiness)) end
     if (s.objects.extinguisher or 0) < 1 and s.room_count >= 6 then buy("extinguisher", 0.7) end
   end
+  -- What a team mate asked for in the chat, if nothing above wanted it.
+  for key, until_day in pairs(self.wishes) do
+    if s.day > until_day then
+      self.wishes[key] = nil
+    elseif not listed[key] then
+      local kind, what = key:match("^(%a+):(.+)$")
+      if kind == "room" then room(what, 0) elseif kind == "hire" then hire(what, 0) elseif kind == "buy" then buy(what, 0) end
+    end
+  end
   table.sort(list, function(a, b) return a.score > b.score end)
   return list
 end
@@ -366,6 +381,7 @@ function M:doProject(s)
       if ok then
         self:note(string.format("day %d: %s (score %.1f, $%d)", s.day, p.key, p.score, math.floor(s.balance)))
         self.boost[p.key] = nil
+        self.wishes[p.key] = nil
         -- Rooms take a few days to build; staff and objects less.
         self.next_project = bot:later(p.key:find("^room:") and self.rand(2, 4) or self.rand(1, 2))
         return
@@ -701,6 +717,30 @@ function M.menu()
   return items
 end
 
+--! The projects a team mate may ask for now (rooms it has discovered).
+function M:wishMenu()
+  local items = {}
+  for _, k in ipairs(M.menu()) do
+    local room_id = k:match("^room:(.+)$")
+    if not room_id or self:available(room_id) then items[#items + 1] = k end
+  end
+  return items
+end
+
+--! A team mate asked for this project in the chat: it comes next (for 30
+--! game days; then it lapses, if it could not be done).
+function M:wish(key)
+  for _, k in ipairs(self:wishMenu()) do
+    if k == key then
+      self.wishes[key] = self.bot:gameDay() + 30
+      self.next_project = math.min(self.next_project, self.bot:gameDay())
+      self:note("wish: " .. key)
+      return true
+    end
+  end
+  return false
+end
+
 --! A plan from the model: {priorities = {{action, weight}}, price = percent,
 --! loan = amount, say = text}. Raises those projects' scores until done.
 function M:applyPlan(plan)
@@ -745,8 +785,10 @@ function M:think()
     self.last_month = s.month
     -- (Prices, the loan and research belong to a person sharing the hospital.)
     if bot:sharesWithPerson() then self.log(self:monthLine(s)) else self:monthly(s) end
-    bot:askPlan()
+    self.next_plan = s.day
   end
+  -- A fresh plan once a game week (and at each month's start).
+  if s.day >= (self.next_plan or 0) and bot:askPlan() then self.next_plan = s.day + 7 end
   self:doProject(s)
 end
 
