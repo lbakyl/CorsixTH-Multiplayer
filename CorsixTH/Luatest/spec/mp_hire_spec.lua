@@ -72,6 +72,20 @@ describe("Multiplayer hire window", function()
     assert.equal(b, pool[w.current_index])
   end)
 
+  it("does not hire somebody else when the one shown was just taken", function()
+    local a, b = doctor(50, 0.5), doctor(60, 0.6)
+    local pool = {a, b}
+    local w = window(pool, 1)
+    local sounds = {}
+    w.ui.playSound = function(_, name) sounds[#sounds + 1] = name end
+    w.ui.tutorialStep = function() end
+    w:_mpFollow() -- (drawn, showing a)
+    table.remove(pool, 1) -- a hired elsewhere before the click
+    w:hire()
+    assert.same({"wrong2.wav"}, sounds)
+    assert.equal(b, pool[w.current_index]) -- now showing b; a second click hires b
+  end)
+
   it("says nothing when this player hired the one shown", function()
     local a, b = doctor(50, 0.5), doctor(60, 0.6)
     local pool = {a, b}

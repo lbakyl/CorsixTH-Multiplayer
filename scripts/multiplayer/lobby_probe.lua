@@ -65,6 +65,9 @@
 --                       speed:<name>                    choose a speed in the menu
 --                       quit                            close the connection and stop
 --                       cheat                           change money locally only (must desync)
+--                       transparent                     transparent walls on (Shift+X): a view
+--                                                       of this player only (must not desync)
+--                       warmth:<n>                      warmth colours <n> (1-3), this view only
 --                       furnishroom:<id>:<w>:<h>        draw a room and place its furniture
 --                                                       by hand, one object at a time
 --                       cancelroom:<id>:<w>:<h>         draw a room, cancel while furnishing
@@ -628,8 +631,9 @@ local function run()
         if class.is(win, UIInformation) then popups = popups + 1 end
       end
       local vx, vy = world.ui:getScreenOffset()
-      log(string.format("REPAIRED: loaded the shared save at step %d (repair %d); popups %d; view kept %s; messages shown: %s; watches: %s",
+      log(string.format("REPAIRED: loaded the shared save at step %d (repair %d); popups %d; view kept %s; walls %s, warmth %s; messages shown: %s; watches: %s",
           session.step, repairs, popups, tostring(vx == view_before[1] and vy == view_before[2]),
+          world.ui.transparent_walls and "transparent" or "solid", tostring(world.map.temperature_display_method),
           table.concat(shown, ","), table.concat(watches, ",")))
     end
     if TheApp.world ~= world then log("LEVEL ENDED at step " .. session.step) break end
@@ -2516,6 +2520,13 @@ local function run()
         elseif a == "cheat" then
           world.hospitals[1].balance = world.hospitals[1].balance + 1
           log("UI: changed money locally only (cheat)")
+        elseif a == "transparent" then
+          world.ui.toggled_transparency = true
+          world.ui:setWallsTransparent(true)
+          log("UI: transparent walls on")
+        elseif a == "warmth" then
+          world.map:setTemperatureDisplayMethod(tonumber(entry.arg) or 2)
+          log("UI: warmth colours " .. tostring(world.map.temperature_display_method))
         elseif live then log("UI: unknown action " .. a .. " (ignored)") -- a typo must not end a person's game
         else error("unknown UI action " .. a) end
       end

@@ -1213,7 +1213,8 @@ function Room:countWindows()
   local map, count = self.world.ui.app.map.th, 0
   for x = self.x, self.x + self.width do
     for y = self.y, self.y + self.height do
-      if window_tile[map:getCell(x, y, 2)] or window_tile[map:getCell(x, y, 3)] then
+      if window_tile[World.wallBlock(map:getCell(x, y, 2))] or
+          window_tile[World.wallBlock(map:getCell(x, y, 3))] then
         count = count + 1
       end
     end

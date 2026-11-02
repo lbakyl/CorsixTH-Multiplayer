@@ -1084,7 +1084,7 @@ function MultiplayerSession.mapRows(world)
       for i, name in ipairs(ROW_FLAGS) do bits[i] = flags[name] and "1" or "0" end
       local _, nw, ww = th:getCell(x, y)
       cells[x] = table.concat(bits) .. ":" .. tostring(flags.roomId or 0) .. ":" ..
-          tostring(nw ~= 0) .. tostring(ww ~= 0) .. ":" .. tostring(flags.thob or 0)
+          tostring(nw % 256 ~= 0) .. tostring(ww % 256 ~= 0) .. ":" .. tostring(flags.thob or 0)
     end
     rows[y] = string.format("%d:%08x", y, TH.CRC32File(table.concat(cells, ";")))
   end

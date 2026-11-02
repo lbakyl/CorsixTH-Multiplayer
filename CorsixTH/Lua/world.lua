@@ -794,28 +794,26 @@ function World:initWallTypes()
   end
 end
 
+-- A wall tile's value carries drawing flags in its high byte (transparent
+-- walls, Shift+X, set them on every wall tile of the map, empty ones too);
+-- what the wall is, is the low byte. The flags are this player's view only,
+-- so the game must never go by them (multiplayer games drifted apart: rat
+-- holes, plot walls and windows looked at the walls of one player's view).
+--! The wall sprite of a wall tile's value, without its drawing flags.
+function World.wallBlock(value)
+  return value % 256
+end
+
 function World:getWallIdFromBlockId(block_id)
-  -- Remove the transparency flag if present.
-  if self.ui.transparent_walls then
-    block_id = block_id - 1024
-  end
-  return self.wall_id_by_block_id[block_id]
+  return self.wall_id_by_block_id[World.wallBlock(block_id)]
 end
 
 function World:getWallSetFromBlockId(block_id)
-  -- Remove the transparency flag if present.
-  if self.ui.transparent_walls then
-    block_id = block_id - 1024
-  end
-  return self.wall_set_by_block_id[block_id]
+  return self.wall_set_by_block_id[World.wallBlock(block_id)]
 end
 
 function World:getWallDirFromBlockId(block_id)
-  -- Remove the transparency flag if present.
-  if self.ui.transparent_walls then
-    block_id = block_id - 1024
-  end
-  return self.wall_dir_by_block_id[block_id]
+  return self.wall_dir_by_block_id[World.wallBlock(block_id)]
 end
 
 

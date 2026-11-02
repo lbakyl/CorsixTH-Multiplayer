@@ -2123,6 +2123,7 @@ function Hospital:getWallsAround(x, y)
   local flags = th:getCellFlags(x, y)
 
   _, nw, ww = th:getCell(x, y) -- floor, north wall, west wall
+  nw, ww = World.wallBlock(nw), World.wallBlock(ww) -- (not this view's drawing flags)
   if ww ~= 0 then
     walls[#walls + 1] = {wall = "west", parcel = flags.parcelId}
   end
@@ -2132,14 +2133,14 @@ function Hospital:getWallsAround(x, y)
 
   if x ~= map.width then
     _, _, ww = th:getCell(x + 1, y)
-    if ww ~= 0 then
+    if World.wallBlock(ww) ~= 0 then
       walls[#walls + 1] = {wall = "east", parcel = flags.parcelId}
     end
   end
 
   if y ~= map.height then
     _, nw, _ = th:getCell(x, y + 1)
-    if nw ~= 0 then
+    if World.wallBlock(nw) ~= 0 then
       walls[#walls + 1] = {wall = "south", parcel = flags.parcelId}
     end
   end

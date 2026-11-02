@@ -471,13 +471,13 @@ function UIEditRoom:_finishRoomFoundation()
   local function check_external_window(x, y, layer)
     -- Test it is a wall, but not spr_num.
     local function is_wall_and_not(wall_x, wall_y, spr_num)
-      return map:getCell(wall_x, wall_y, layer) ~= 0
-          and map:getCell(wall_x, wall_y, layer) ~= spr_num
+      local wall = World.wallBlock(map:getCell(wall_x, wall_y, layer))
+      return wall ~= 0 and wall ~= spr_num
     end
     -- Test that the wall is either spr_num1 or spr_num2.
     local function is_one_of_wall(wall_x, wall_y, spr_num1, spr_num2)
-      return  map:getCell(wall_x, wall_y, layer) == spr_num1
-          or map:getCell(wall_x, wall_y, layer) == spr_num2
+      local wall = World.wallBlock(map:getCell(wall_x, wall_y, layer))
+      return wall == spr_num1 or wall == spr_num2
     end
 
     -- If a wall is built which is normal to an external window, then said
@@ -490,14 +490,14 @@ function UIEditRoom:_finishRoomFoundation()
     if dir == "north_window_1" then
       if x ~= rect.x then
         map:setCell(x, y, layer, flag + tiles.north)
-        if map:getCell(x + 1, y, layer) ~= 0 then
+        if World.wallBlock(map:getCell(x + 1, y, layer)) ~= 0 then
           map:setCell(x + 1, y, layer, flag + tiles.north)
         end
       end
 
     elseif dir == "north_window_2" then
       if x == rect.x then
-        if map:getCell(x - 1, y, layer) ~= 0 then
+        if World.wallBlock(map:getCell(x - 1, y, layer)) ~= 0 then
           map:setCell(x - 1, y, layer, flag + tiles.north)
         end
         map:setCell(x, y, layer, flag + tiles.north)
@@ -506,14 +506,14 @@ function UIEditRoom:_finishRoomFoundation()
     elseif dir == "west_window_1" then
       if y == rect.y then
         map:setCell(x, y, layer, flag + tiles.west)
-        if map:getCell(x, y - 1, layer) ~= 0 then
+        if World.wallBlock(map:getCell(x, y - 1, layer)) ~= 0 then
           map:setCell(x, y - 1, layer, flag + tiles.west)
         end
       end
 
     elseif dir == "west_window_2" then
       if y ~= rect.y then
-        if map:getCell(x, y + 1, layer) ~= 0 then
+        if World.wallBlock(map:getCell(x, y + 1, layer)) ~= 0 then
           map:setCell(x, y + 1, layer, flag + tiles.west)
         end
         map:setCell(x, y, layer, flag + tiles.west)

@@ -382,6 +382,8 @@ function Map:setPlotOwner(plot_number, new_owner)
     local y = coordinates[2]
 
     local _, north_wall, west_wall = self.th:getCell(x, y)
+    -- (Without this view's drawing flags: transparent walls set them on every tile.)
+    north_wall, west_wall = World.wallBlock(north_wall), World.wallBlock(west_wall)
     local cell_flags = self.th:getCellFlags(x, y)
     local north_cell_flags = self.th:getCellFlags(x, y - 1)
     local west_cell_flags = self.th:getCellFlags(x - 1, y)

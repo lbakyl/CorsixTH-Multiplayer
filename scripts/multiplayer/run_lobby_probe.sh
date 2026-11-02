@@ -89,7 +89,9 @@
 # With MP_REFEREE=1 the local server also runs its headless referee for every
 # room, and four more checks: 13. the referee agrees with the players in every
 # room except 'cheat' (that one desyncs before the referee is there); 14, 15.
-# desync repair in a shared and a co-op game; 16. rejoin after a quit.
+# desync repair in a shared and a co-op game (in the shared one rosa has
+# transparent walls and other warmth colours, kept through the repair); 16.
+# rejoin after a quit.
 # Exits 0 only if all checks behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
@@ -313,7 +315,7 @@ if [[ "${MP_REFEREE:-0}" == 1 ]]; then
     MP_UI_SCRIPT="500:buy:bench" & pids+=($!)
   sleep 1
   run_probe rosa MP_ROLE=join MP_ROOM=fix MP_STEPS=1000 MP_EXPECT_REPAIR=1 \
-    MP_UI_SCRIPT="300:cheat;520:hire:Nurse" & pids+=($!)
+    MP_UI_SCRIPT="100:transparent;110:warmth:3;300:cheat;520:hire:Nurse" & pids+=($!)
   # (Each has a VIP fax waiting when the game is repaired: after loading the
   # referee's save, each shows only their own. Player 2 opens their hospital
   # only after the repair, with their own opening countdown, which the
@@ -841,6 +843,13 @@ if with_referee:
               and int(confirmed_after(room)) >= 900)
         where = f"at step {fixed.group(1)}, save {int(fixed.group(2)) // 1024} KiB" if fixed else "not repaired"
         own = ''
+        if room == 'fix':
+            # Rosa's own view, transparent walls and warmth colours 3, stays
+            # through the repair (and her walls never differ from the game's).
+            kept = (re.search(r'REPAIRED: .*walls transparent, warmth 3;', jl) is not None
+                    and re.search(r'REPAIRED: .*walls solid, warmth 1;', hl) is not None)
+            own = f"; rosa's transparent walls and warmth colours kept: {kept}"
+            ok = ok and kept
         if room == 'fixcoop':
             # After the repair each player's bar shows their own VIP fax only.
             shown = [re.search(r'REPAIRED: .*messages shown: ([^;]*)', x) for x in (hl, jl)]

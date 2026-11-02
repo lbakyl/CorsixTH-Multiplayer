@@ -127,6 +127,14 @@ end
 function UIHireStaff:hire()
   self.ui:tutorialStep(2, {3, 4, 5}, 6)
   self.ui:tutorialStep(4, 3, 4)
+  -- (Multiplayer: the list may have changed since the window was last drawn;
+  -- hire the person the player saw, or say they are gone.)
+  local shown = self.mp_shown
+  self:_mpFollow()
+  if shown and self.mp_shown ~= shown then
+    self.ui:playSound("wrong2.wav")
+    return
+  end
   local profile
   if self.category and self.current_index then
     profile = self.world.available_staff[self.category]

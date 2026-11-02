@@ -988,11 +988,14 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
   local persist = require("persist")
   local raw = assert(persist.decompress(data))
   local old_world = app.world
-  -- This player's view (the save has the referee's): kept through a repair.
+  -- This player's view (the save has the referee's): kept through a repair,
+  -- with the transparent walls (Shift+X) and the warmth colours chosen.
   local view
   if old_world and app.ui and app.ui.getScreenOffset and not self.is_referee then
     local x, y = app.ui:getScreenOffset()
-    view = {x = x, y = y, zoom = app.ui.zoom_factor}
+    view = {x = x, y = y, zoom = app.ui.zoom_factor, walls = app.ui.transparent_walls,
+        walls_toggled = app.ui.toggled_transparency,
+        warmth = old_world.map and old_world.map.temperature_display_method}
   end
   LoadGame(raw)
   local world = app.world
@@ -1067,6 +1070,11 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
   if view and app.ui.scrollMap then
     if view.zoom and view.zoom ~= app.ui.zoom_factor then app.ui:setZoom(view.zoom) end
     app.ui:scrollMap(view.x - app.ui.screen_offset_x, view.y - app.ui.screen_offset_y)
+    if app.ui.setWallsTransparent then
+      app.ui.toggled_transparency = view.walls_toggled
+      app.ui:setWallsTransparent(view.walls or false)
+    end
+    if view.warmth and world.map then world.map:setTemperatureDisplayMethod(view.warmth) end
   end
   self.log(string.format("multiplayer: loaded the shared save at step %d (%d bytes): %s", step, #data,
       MultiplayerSession.defaultFingerprint(world)))
