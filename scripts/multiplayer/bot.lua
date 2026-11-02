@@ -883,11 +883,16 @@ end
 --!param size (integer) optional: the size it would like (a bigger ward, say)
 --!return true, or nil and why not ("money", "space": it needs more land,
 --! "refused": the room editor did not take it)
+-- Rooms whose furniture does not fit in the game's smallest size: a 4x4
+-- staff room has no place for the sofa beside the pool table and TV (Bot
+-- Agnes drew one four times in a game, and pulled each down again).
+local SMALLEST = {staff_room = 5}
+
 function Bot:drawRoom(room_type, size, extras)
   local hospital = self.world.ui.hospital
   if self.furnishing then return nil, "busy" end
   if hospital.balance - self:roomCost(room_type) < RESERVE then return nil, "money" end
-  local min = room_type.minimum_size or 4
+  local min = math.max(room_type.minimum_size or 4, SMALLEST[room_type.id] or 0)
   local ax, ay = self:anchor()
   size = math.max(min, size or math.min(7, math.max(5, min + 1)))
   self.reserved = self:reservedTiles()
