@@ -59,7 +59,7 @@ if [[ "${MP_REFEREE:-0}" == 1 ]]; then
   export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
   export MP_REFEREE_PROBE_SCENARIO="trio=light;duo=light;mixed=none;clinic=light" # the probes' own start on every hospital
   # Bots act twenty times sooner than a person would, and answer at once.
-  export MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7
+  export MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_AWAY_SECONDS=100000 # (ivy stays its helper)
 fi
 PYTHONPATH="$source_dir/mp_server" python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &

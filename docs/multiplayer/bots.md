@@ -73,7 +73,11 @@ best project it can afford is done, one every one to four game days.
   hospital): the bot only helps. It builds, furnishes, hires, sends handymen
   and buys corridor items, and leaves prices, loans, heating, research, opening
   the hospital and its faxes (patients, VIPs, epidemics, emergencies) to the
-  person (`Bot:sharesWithPerson`).
+  person (`Bot:sharesWithPerson`). A person who has given no command for 30
+  seconds and 7 game days is away: the bot runs the whole hospital and says so
+  to them in the chat, until they give a command again ("Welcome back"); it
+  sees every command just before it runs (`Bot:watchCommands`). Tests set the
+  seconds with `MP_BOT_AWAY_SECONDS`.
 - **Dirty tricks** (race): on the rival closest to winning (a person before a
   bot), the kind that hurts it most (an evil handyman for a hospital with
   machines, an epidemic or emergency for a staffed desk, else rats).

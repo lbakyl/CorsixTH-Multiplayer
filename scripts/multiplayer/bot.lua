@@ -26,6 +26,8 @@
 --   MP_LUA_CPATH, MP_LUA_PATH  where to find LuaSocket (if not standard)
 -- Tests only:
 --   MP_BOT_SEED          seed for its choices (default: from the clock)
+--   MP_BOT_AWAY_SECONDS  tests: seconds without a command before a team mate sharing the
+--                        hospital counts as away (default 30; and 7 game days)
 --   MP_BOT_WISHES        tests: "<day>:<project>;..." a team mate's wishes on those game
 --                        days, as if asked in the chat (add:psych:skeleton, bigger:gp)
 --   MP_BOT_PACE          game days between its building steps are divided
@@ -75,6 +77,9 @@ local function pick(list) return list[rand(1, #list)] end
 --------------------------------------------------------------------------------
 
 local LINES = {
+  -- To a person sharing the hospital (Bot:sharesWithPerson).
+  mate_away = {"You seem to be away, %s. I'll run the whole hospital until you're back."},
+  mate_back = {"Welcome back, %s! Prices, loans and the faxes are yours again."},
   greet = {
     friendly = {
       "Hi everyone! Building my hospital nice and slowly over here.",
@@ -326,16 +331,71 @@ end
 --! Does a person run this hospital too (one shared hospital, or a team
 --! hospital)? Then the bot only helps: it builds and staffs, and leaves the
 --! hospital's decisions (prices, loans, heating, research, faxes) to them.
-function Bot:sharesWithPerson()
+-- A person sharing the hospital counts as away after this long without a
+-- command (both: real seconds and game days); the bot then runs everything
+-- until they give a command again.
+local AWAY_SECONDS, AWAY_DAYS = tonumber(os.getenv("MP_BOT_AWAY_SECONDS") or "") or 30, 7
+
+--! The people (not bots) who share this bot's hospital: their peers.
+function Bot:hospitalMates()
   local session = TheApp.mp_session
   local mine = self:hospitalIndex()
+  local mates = {}
   for peer, h in pairs(self.lobby.peer_hospital or {}) do
     if h == mine and peer ~= (session and session.peer_id) then
       local _, is_bot = self:playerName(peer)
-      if not is_bot then return true end
+      if not is_bot then mates[#mates + 1] = peer end
     end
   end
-  return false
+  return mates
+end
+
+--! Note who gives commands (every command, just before it runs): a person
+--! sharing the hospital is there while they play.
+function Bot:watchCommands()
+  local session = TheApp.mp_session
+  if not session or self.watched_session == session then return end
+  self.watched_session = session
+  local bot = self
+  local before = session.beforeStep
+  session.beforeStep = function(s)
+    local n = s.step + 1
+    for _, cmd in ipairs(s.pending) do
+      if cmd.step == n and cmd.peer then
+        bot.last_command = bot.last_command or {}
+        bot.last_command[cmd.peer] = {time = bot:now(), day = bot.world and bot:gameDay() or 0}
+      end
+    end
+    return before(s)
+  end
+end
+
+--! Does a person run this hospital with the bot now? Then the bot only
+--! helps (builds, hires, buys) and leaves the hospital's decisions (prices,
+--! loans, heating, research, faxes, opening) to them. A person who has given
+--! no command for AWAY_SECONDS and AWAY_DAYS is away: the bot runs it all
+--! until they are back (any command), and says so in the chat.
+function Bot:sharesWithPerson()
+  local mates = self:hospitalMates()
+  if #mates == 0 then return false end
+  local now, day = self:now(), self:gameDay()
+  self.since = self.since or {time = now, day = day} -- (the start counts as their last command)
+  local here = false
+  for _, peer in ipairs(mates) do
+    local last = self.last_command and self.last_command[peer] or self.since
+    if now - last.time < AWAY_SECONDS or day - last.day < AWAY_DAYS then here = true end
+  end
+  if here ~= (self.mates_here ~= false) then
+    self.mates_here = here
+    local line = here and LINES.mate_back[1] or LINES.mate_away[1]
+    log(here and "a team mate is back: they run the hospital's decisions again" or
+        "the team mates are away: running the whole hospital")
+    for _, peer in ipairs(mates) do
+      local name = self:playerName(peer)
+      self:say(line:format(name or "friend"), typing(line), peer)
+    end
+  end
+  return here
 end
 
 function Bot:hospitalIndex()
@@ -1358,6 +1418,7 @@ function Bot:closeWindows()
 end
 
 function Bot:think()
+  self:watchCommands()
   local world = self.world
   local hospital = world.ui.hospital
   local plan = self.plan
