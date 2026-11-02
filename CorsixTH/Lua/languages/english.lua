@@ -621,7 +621,17 @@ multiplayer_window = {
   race_failing_other = "%s has failed this level's goals; it is out if it still fails them next year.",
   race_left_end = "You left the race. The others play on for the next places.",
   -- A race of two teams
-  team_race_reached = "Your hospital has reached this level's goals! Keep it running and help your team mates: your team wins once all its hospitals get there.",
+  -- A fax to the hospital that got there, and one to each of its team mates.
+  team_race_reached_fax = {
+    "Your hospital has reached this level's goals!",
+    "The race is not won yet: your team wins once every hospital of it gets there. Still to go: %s.",
+    "Keep your hospital running, and help them with money, staff or patients.",
+  },
+  team_race_mate_reached_fax = {
+    "Your team mate %s has reached this level's goals!",
+    "Your team wins once your hospital gets there too. Still to go: %s.",
+    "Your team mate can help you with money, staff or patients.",
+  },
   team_race_reached_other = "%s has reached this level's goals (team %s).",
   team_member_out = "Your hospital failed this level's goals two years running and is out of the race. Your team races on.",
   team_member_out_other = "%s failed the goals two years running and is out of the race; its team races on.",

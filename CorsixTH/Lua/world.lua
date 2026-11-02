@@ -1955,16 +1955,12 @@ end
 --! teams'; the race is over when at most one team still races.
 function World:_mpTeamRaceCheck()
   if self.mp_race_over then return end
-  local S = _S.multiplayer_window
   for i = 1, self.mp_coop.players do
     local hosp = self.hospitals[i]
     if not hosp.mp_place and not hosp.mp_goals_reached then
       if self.endconditions:checkEndGame(hosp) == "win" then
         hosp.mp_goals_reached = true
-        local team = self:mpTeam(hosp)
-        MultiplayerSession.tellPlayer(self, hosp, S.team_race_reached)
-        MultiplayerSession.tellOthers(self, hosp, S.team_race_reached_other:format(hosp.name,
-            self:mpTeamName(team)))
+        self:_mpTellTeamReached(hosp)
       else
         self:_mpTellLoan(hosp)
       end
@@ -1985,6 +1981,38 @@ function World:_mpTeamRaceCheck()
     end
   end
   self:_mpTeamRaceCheckOver()
+end
+
+--! A race of teams: `hosp` has reached the goals. Its player and its team
+--! mates get a fax that says so and who is still to get there (an adviser
+--! line alone was missed, and "reached the goals" read as a win); the other
+--! teams hear it from the adviser.
+function World:_mpTellTeamReached(hosp)
+  local S = _S.multiplayer_window
+  local team = self:mpTeam(hosp)
+  local to_go = {}
+  for _, mate in ipairs(self:mpTeamHospitals(team)) do
+    if not mate.mp_goals_reached and not mate.mp_place and not mate.mp_player_away then
+      to_go[#to_go + 1] = mate.name
+    end
+  end
+  local still = table.concat(to_go, ", ")
+  -- (The last of its team: the team's place, or the standings, say it.)
+  for _, mate in ipairs(#to_go > 0 and self:mpTeamHospitals(team) or {}) do
+    local lines = mate == hosp and S.team_race_reached_fax or S.team_race_mate_reached_fax
+    local message = {
+      {text = mate == hosp and lines[1] or lines[1]:format(hosp.name)},
+      {text = lines[2]:format(still)},
+      {text = lines[3]},
+      choices = {{text = _S.fax.emergency_result.close_text, choice = "close"}},
+    }
+    self.ui.bottom_panel:queueMessage("information", message, nil, nil, nil, nil, mate)
+    if self.ui.hospital == mate then self.ui.bottom_panel:openLastMessage() end
+  end
+  local ui = self.ui
+  if ui and ui.adviser and self:mpTeam(ui.hospital) ~= team then
+    ui.adviser:say({text = S.team_race_reached_other:format(hosp.name, self:mpTeamName(team)), priority = 10})
+  end
 end
 
 --! A race of teams: has `team` its place already?
