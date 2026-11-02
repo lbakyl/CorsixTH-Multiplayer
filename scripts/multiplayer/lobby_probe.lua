@@ -74,6 +74,8 @@
 --                     game (its label, or "latest"); UI action mpsave saves one
 --   MP_SHOW_LOAD      host: before creating the room, Load MP game with two made-up
 --                     saves: pick one, then x (a new game again)
+--   MP_SHOW_LEVELS    host: before creating the room, the level browser: level 7 on the
+--                     map for 4 players, the shared hospital's level 3, then level 6 chosen
 --   MP_UI_COMMANDS    optional file; every line added to it while the game
 --                     runs is done at once, as "action[:arg]" (the actions above),
 --                     to direct a scripted player during a game with a person
@@ -263,9 +265,9 @@ local function run_lobby()
       -- one picked, the lobby again with it; then "x", a new game.
       local dir = MultiplayerLobby.savesDir()
       require("lfs").mkdir(dir)
-      for i, name in ipairs({"Jan's room y1-03-01", "Jan's room autosave"}) do
-        local f = assert(io.open(dir .. name .. ".sav", "wb")) f:write("x") f:close()
-        f = assert(io.open(dir .. name .. ".mpinfo", "w"))
+      for i, label in ipairs({"Jan's room y1-03-01", "Jan's room autosave"}) do
+        local f = assert(io.open(dir .. label .. ".sav", "wb")) f:write("x") f:close()
+        f = assert(io.open(dir .. label .. ".mpinfo", "w"))
         f:write("room=Jan's room\nmode=teamshared\nlevel=" .. (i + 2) .. "\ndifficulty=full\nstep=300\n",
             "date=1-03-01T00\nhospitals=JAN + BOT CLIVE,ANNA\ncolours=1,3\nteams=1,2\nplayers=3\n")
         f:close()
@@ -288,9 +290,33 @@ local function run_lobby()
       log("UI: x: " .. tostring(w.continue_button.panel_for_sprite.label or ""):gsub("^<LocalisedString> Current value:%s*", "")
           .. ", continue index " .. w.continue_index)
     end
+    if os.getenv("MP_SHOW_LEVELS") then
+      w.new_max = 4
+      w:buttonLevel()
+      local lv = TheApp.ui:getWindow(UIMultiplayerLevels)
+      lv:setShared(false)
+      lv:select(7)
+      tick()
+      shot("levels-mp")
+      local names = {}
+      for i = 1, lv:count() do names[i] = lv:levelName(i) end
+      local mp_map = lv:preview() and true or false
+      lv:setShared(true)
+      lv:select(3)
+      tick()
+      shot("levels-shared")
+      local shared_name = lv:levelName(3)
+      lv:setShared(false)
+      lv:select(6)
+      lv:buttonChoose()
+      w = lobby_window()
+      log(string.format("UI: levels listed [%s]; map drawn: %s; shared level 3: %s; chosen: level %d, room name kept: %s",
+          table.concat(names, " | "), tostring(mp_map), shared_name, w.new_level, tostring(w.room_name_box.text == room)))
+      w:setLevel(tonumber(os.getenv("MP_LEVEL") or 1))
+    end
     w.password_box:setText(password)
     w.new_mode = room_mode -- (the newcomers' first colours and teams)
-    for _ = 2, tonumber(os.getenv("MP_LEVEL") or 1) do w:buttonLevel() end
+    w:setLevel(tonumber(os.getenv("MP_LEVEL") or 1))
     -- Room size: MP_PLAYERS (2 to 4).
     for _ = 1, 3 do
       if (w.new_max or 2) ~= math.max(2, math.min(4, want_players)) then w:buttonMax() end
@@ -1876,7 +1902,14 @@ local function run()
               win = world.ui:getWindow(UIPlaceStaff)
             end
             local dest
+            -- (A room this member of staff works in first: a doctor dropped
+            -- into the pharmacy walks out again.)
+            local rooms = {}
             for _, rm in pairs(world.rooms) do
+              local works = rm.room_info.required_staff and rm.room_info.required_staff[st.humanoid_class]
+              table.insert(rooms, works and 1 or #rooms + 1, rm)
+            end
+            for _, rm in ipairs(rooms) do
               if not dest and rm.hospital == world.ui.hospital and rm.built and not rm.crashed and
                   rm ~= st:getRoom() and (want_room == "" or rm.room_info.id == want_room) then
                 for ty = rm.y + 1, rm.y + rm.height - 2 do

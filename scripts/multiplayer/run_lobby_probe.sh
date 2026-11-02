@@ -79,6 +79,9 @@
 #      multiplayer saves; the one picked comes back to the lobby as "Continue:
 #      <save>" with its level and players, the room name kept; x makes it a
 #      new game again
+#  30. the level browser (kai, too): the multiplayer levels by name (map
+#      for 4 players drawn), the campaign's for one shared hospital; level 6
+#      chosen comes back to the lobby
 #  25. speed votes with three players: a new speed declined (one player by
 #      clicking in the vote fax, one by itself), one agreed in the fax (2 of
 #      3 is a majority), one nobody answers lapses after 30 s of play; the
@@ -285,7 +288,7 @@ run_probe quin MP_ROLE=join MP_ROOM=slowest MP_STEPS=400 MP_FAST=0 MP_REALTIME=1
 # kai creates the room, types the password and never clicks Refresh.
 run_probe lina MP_ROLE=join MP_ROOM=autolist MP_STEPS=100 MP_AUTO_ROOMS=1 & pids+=($!)
 sleep 6
-run_probe kai MP_ROLE=host MP_ROOM=autolist MP_STEPS=100 MP_SHOW_LOAD=1 MP_UI_SCRIPT="40:moveobject:reception_desk:1:0;70:moveobject:reception_desk:0:1" & pids+=($!)
+run_probe kai MP_ROLE=host MP_ROOM=autolist MP_STEPS=100 MP_SHOW_LOAD=1 MP_SHOW_LEVELS=1 MP_UI_SCRIPT="40:moveobject:reception_desk:1:0;70:moveobject:reception_desk:0:1" & pids+=($!)
 # Speed votes with three players (check 25).
 run_probe vic MP_ROLE=host MP_ROOM=vote MP_PLAYERS=3 MP_STEPS=1400 \
   MP_UI_SCRIPT="50:speedother;300:speedother;450:speedother" & pids+=($!)
@@ -676,6 +679,12 @@ ok29 = bool(load29 and load29.group(1) == "Jan's room autosave.sav | Jan's room 
             and x29 and x29.groups() == ('Load MP game', '0'))
 print(f"29. Load MP game:           {load29.groups() if load29 else '-'}; x: {x29.groups() if x29 else '-'}")
 fail |= not ok29
+
+lv30 = re.search(r"UI: levels listed \[(.*?)\]; map drawn: (\w+); shared level 3: (.*?); chosen: level (\d+), room name kept: (\w+)", log('kai'))
+ok30 = bool(lv30 and len(lv30.group(1).split(' | ')) == 7 and lv30.group(1).endswith('CUTTHROAT')
+            and lv30.group(2) == 'true' and lv30.group(3) == 'LARGECHESTER' and lv30.groups()[3:] == ('6', 'true'))
+print(f"30. Level browser:          {lv30.groups() if lv30 else '-'}")
+fail |= not ok30
 
 # The reception desk moved one tile over, twice (its own tiles do not count
 # as taken while it is moved).

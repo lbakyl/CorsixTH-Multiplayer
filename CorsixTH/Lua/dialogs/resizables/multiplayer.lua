@@ -312,14 +312,27 @@ end
 
 function UIMultiplayer:buttonRefresh() self.lobby:refreshRooms() end
 
---! How many levels there are: the campaign's 12 (one shared hospital; with
---! several hospitals a level above the multiplayer levels plays the last).
-function UIMultiplayer:_levelCount()
-  return 12
+--! The Level button: the level browser (UIMultiplayerLevels), which opens
+--! this window again when done.
+function UIMultiplayer:buttonLevel()
+  self:_rememberForm()
+  local ui = self.ui
+  self.rebuilding = true
+  self:close()
+  ui:addWindow(UIMultiplayerLevels(ui, self.new_level, self.new_max))
 end
 
-function UIMultiplayer:buttonLevel()
-  self.new_level = self.new_level % self:_levelCount() + 1
+--! The level browser chose a level (1-12: the campaign's for one shared
+--! hospital; with several hospitals a level above the multiplayer levels
+--! plays the last).
+function UIMultiplayer.chooseLevel(level)
+  last_room_form = last_room_form or {}
+  last_room_form.level = level
+end
+
+--! For scripted tests: the level, as the browser would choose it.
+function UIMultiplayer:setLevel(level)
+  self.new_level = math.max(1, math.min(12, level))
   self.level_button.panel_for_sprite:setLabel(_S.multiplayer_window.level:format(self.new_level))
 end
 

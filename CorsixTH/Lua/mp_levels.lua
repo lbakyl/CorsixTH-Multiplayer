@@ -93,15 +93,33 @@ function levels.parseLevelId(id)
   return tonumber(players), players .. map, tonumber(level) or tonumber(map) + 1
 end
 
+--! The map file of a level for `players` (for App:readDataFile "Levels"):
+--! the original multiplayer map, or one of our own.
+function levels.mapFile(app, players, level)
+  local _, digits, mp_level = levels.parseLevelId(levels.levelId(players, level))
+  local def = levels.LEVELS[levels.clamp(mp_level)]
+  local own_map = def.map_files and def.map_files[players]
+  return own_map and (app.level_dir .. own_map) or ("LEVEL.L" .. digits)
+end
+
+--! A level's name for `players`: its own, or its original map's (the
+--! NET<players>.DAT index), or nil.
+function levels.levelName(app, players, level)
+  local def = levels.LEVELS[levels.clamp(level)]
+  if def.name then return def.name end
+  local _, digits = levels.parseLevelId(levels.levelId(players, level))
+  local ok, index = pcall(app.fs.readContents, app.fs, "Levels", "NET" .. digits:sub(1, 1) .. ".DAT")
+  if not ok or not index then return nil end
+  local block = index:match("#" .. digits .. "[^#]*")
+  local name = block and block:match("&0[ \t]*([^\r\n]+)")
+  return name and (name:gsub("%s+$", "")) or nil
+end
+
 --! Where each player's hospital lies on the map of a level for `players`:
 --! {[player] = {x, y}}, the map's starting camera tiles (the same map file
 --! Map:load uses), or nil if the file cannot be read.
 function levels.hospitalTiles(app, players, level)
-  local _, digits, mp_level = levels.parseLevelId(levels.levelId(players, level))
-  local def = levels.LEVELS[levels.clamp(mp_level)]
-  local own_map = def.map_files and def.map_files[players]
-  local ok, data = pcall(app.readDataFile, app, "Levels",
-      own_map and (app.level_dir .. own_map) or ("LEVEL.L" .. digits))
+  local ok, data = pcall(app.readDataFile, app, "Levels", levels.mapFile(app, players, level))
   -- (th_map.cpp: the player count is the first byte; camera tiles at 163876,
   -- two bytes each, y * 128 + x)
   if not ok or type(data) ~= "string" or #data < 163876 + 2 * players then return nil end
