@@ -524,6 +524,16 @@ def test_diagnostics_after_a_desync_go_to_the_log(run, caplog):
             await a.expect("PONG")
         assert any("12:Doctor@3,4" in r.getMessage() and "'Alice'" in r.getMessage()
                    for r in caplog.records)
+        # Each desync has its own budget: a long report does not cut the next short.
+        big = "x" * 60_000  # (a line is at most 64 KiB)
+        for step in (20, 30):
+            for part in range(1, 5):
+                a.send(encode("DIAG", step=step, part=part, text=big))
+            a.send(encode("DIAG", step=step, part=5, text="end of step %d" % step))
+        a.send(encode("PING", id=3))
+        await a.expect("PONG")
+        for step in (20, 30):
+            assert any("end of step %d" % step in r.getMessage() for r in caplog.records)
         # Nothing is relayed to the other player.
         b.send(encode("PING", id=2))
         await b.expect("PONG")
