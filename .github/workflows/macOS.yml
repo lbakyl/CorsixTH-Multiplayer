@@ -89,7 +89,9 @@ jobs:
 
   fallback:
     needs: app
-    if: cancelled() && (inputs.runner || 'macos-26') == 'macos-26'
+    # (A job GitHub gives up on in the queue makes the run "failed", not
+    # "cancelled"; the step below tells a job that never started apart.)
+    if: always() && needs.app.result != 'success' && (inputs.runner || 'macos-26') == 'macos-26'
     runs-on: ubuntu-latest
     permissions:
       actions: write
