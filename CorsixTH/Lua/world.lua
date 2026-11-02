@@ -1819,6 +1819,14 @@ local function place_text(place)
   return _S.multiplayer_window.places[place] or tostring(place)
 end
 
+--! The standings lines in one text, comma-separated. (They are localised
+--! strings: table.concat cannot join them, `..` can.)
+local function join_standings(lines)
+  local text = lines[1] or ""
+  for i = 2, #lines do text = text .. ", " .. lines[i] end
+  return text
+end
+
 --! Multiplayer competitive: the players race to the level's goals. A
 --! hospital that reaches them takes the next place (hospital order when
 --! several get there at the same check). It is then out of the race: no new
@@ -1895,7 +1903,7 @@ function World:_mpRaceCheckOver()
   end
   local message = {
     {text = S.race_over[1]},
-    {text = table.concat(lines, ", ")},
+    {text = join_standings(lines)},
     {text = S.race_over[2]},
     choices = {
       {text = S.back_to_lobby, choice = "return_to_main_menu"},
@@ -2000,7 +2008,7 @@ function World:_mpTeamRaceCheckOver()
   end
   local message = {
     {text = S.race_over[1]},
-    {text = table.concat(lines, ", ")},
+    {text = join_standings(lines)},
     {text = S.race_over[2]},
     choices = {
       {text = S.back_to_lobby, choice = "return_to_main_menu"},
