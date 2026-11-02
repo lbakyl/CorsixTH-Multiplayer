@@ -1407,6 +1407,10 @@ function Bot:attach(world)
 end
 
 --! Close the windows a person would close (they would pause this game).
+--! A pay rise is answered: a request left open makes the member of staff
+--! quit after a while (Bot Agnes lost staff that way, game after game). The
+--! bot pays it while the money and the loan still allow a year of it, and
+--! otherwise lets them go; a person sharing the hospital answers it instead.
 local CLOSE_WINDOWS = {"UIAnnualReport", "UIInformation", "UIStaffRise"}
 function Bot:closeWindows()
   local ui = TheApp.ui
@@ -1415,11 +1419,25 @@ function Bot:closeWindows()
     for _, name in ipairs(CLOSE_WINDOWS) do
       local cls = rawget(_G, name)
       if cls and class.is(win, cls) then
-        win:close()
+        if name == "UIStaffRise" and win.staff and not self:sharesWithPerson() then
+          self:answerPayRise(win)
+        else
+          win:close()
+        end
         break
       end
     end
   end
+end
+
+function Bot:answerPayRise(win)
+  local hospital = self.world.ui.hospital
+  local max_loan = math.floor((hospital.value or 0) * 0.33 / 5000) * 5000 + 10000
+  local can_spend = hospital.balance + math.max(0, max_loan - (hospital.loan or 0))
+  local accept = can_spend > (win.rise_amount or 0) * 12
+  log(string.format("pay rise of $%d for %s: %s", win.rise_amount or 0,
+      tostring(win.staff.profile and win.staff.profile:getFullName()), accept and "paid" or "let go"))
+  if accept then win:increaseSalary() else win:fireStaff() end
 end
 
 function Bot:think()

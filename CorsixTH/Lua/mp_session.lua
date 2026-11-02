@@ -1055,8 +1055,40 @@ function MultiplayerSession.diagnostics(world)
     parts[#parts + 1] = string.format("%s:%s@%s,%s%s", tostring(e.mp_id), kind,
         tostring(e.tile_x), tostring(e.tile_y), doing)
   end
+  parts[#parts + 1] = "map rows " .. MultiplayerSession.mapRows(world)
   parts[#parts + 1] = "random " .. MultiplayerSession.randomDraws()
   return table.concat(parts, "; ")
+end
+
+-- The tile flags a map row's checksum covers (the ones the game decides by:
+-- walking, building, rat holes, litter, rooms).
+local ROW_FLAGS = {"passable", "buildable", "hospital", "room", "travelNorth", "travelEast",
+    "travelSouth", "travelWest", "buildableNorth", "buildableEast", "buildableSouth", "buildableWest",
+    "avoidTile", "doNotIdle", "tallWest", "tallNorth", "doorWest", "doorNorth"}
+
+--! A checksum of every map row's tile flags, walls and room ids ("y:crc",
+--! comma-separated). The fingerprint does not cover the map; a desync in
+--! which one game's tiles differ (a corridor tile seen as free in one game
+--! only) shows here as the rows that differ.
+function MultiplayerSession.mapRows(world)
+  local th = world.map and world.map.th
+  if not th then return "" end
+  local TH = require("TH")
+  local w, h = th:size()
+  local flags, rows = {}, {}
+  for y = 1, h do
+    local cells = {}
+    for x = 1, w do
+      th:getCellFlags(x, y, flags)
+      local bits = {}
+      for i, name in ipairs(ROW_FLAGS) do bits[i] = flags[name] and "1" or "0" end
+      local _, nw, ww = th:getCell(x, y)
+      cells[x] = table.concat(bits) .. ":" .. tostring(flags.roomId or 0) .. ":" ..
+          tostring(nw ~= 0) .. tostring(ww ~= 0) .. ":" .. tostring(flags.thob or 0)
+    end
+    rows[y] = string.format("%d:%08x", y, TH.CRC32File(table.concat(cells, ";")))
+  end
+  return table.concat(rows, ",")
 end
 
 --------------------------------------------------------------------------------
