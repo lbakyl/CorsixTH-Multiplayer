@@ -200,7 +200,7 @@ run_probe mira MP_ROLE=host MP_ROOM=coop MP_COOP=1 MP_LEVEL=2 MP_STEPS=1200 \
   MP_UI_SCRIPT="20:openhospital;60:buy:bench;80:hire:Doctor;200:givemoney:5000;250:loan;260:priceup;270:research:cure;280:heatup;330:acceptoffer;400:bonus:Doctor;410:raise:Doctor;500:buyplot" & pids+=($!)
 sleep 1
 run_probe nico MP_ROLE=join MP_ROOM=coop MP_STEPS=1200 MP_DRAW_EVERY=3 \
-  MP_UI_SCRIPT="30:openhospital;60:buy:plant;90:hire:Nurse;200:staffwindow:Nurse;300:sendstaff:Nurse;350:loan;360:heatup;370:heatup;520:buyplot:other;600:sendhome" & pids+=($!)
+  MP_UI_SCRIPT="10:transparent;30:openhospital;60:buy:plant;90:hire:Nurse;200:staffwindow:Nurse;300:sendstaff:Nurse;350:loan;360:heatup;370:heatup;520:buyplot:other;600:sendhome" & pids+=($!)
 run_probe olga MP_ROLE=host MP_ROOM=events MP_COOP=1 MP_LEVEL=2 MP_STEPS=1600   MP_UI_SCRIPT="20:openhospital;100:emergency:2;400:vip:2" & pids+=($!)
 sleep 1
 run_probe paul MP_ROLE=join MP_ROOM=events MP_STEPS=1600 MP_DRAW_EVERY=3   MP_UI_SCRIPT="30:openhospital;130:answerfax:emergency:1;430:answerfax:personality:1" & pids+=($!)
@@ -482,6 +482,8 @@ m, n = log('mira'), log('nico')
 cm = applied('mira')
 kinds = [re.search(r'#\d+ (\w+) ->', x).group(1) for x in cm]
 # nico's try to buy a plot on mira's side is refused; everything else is ok.
+# (nico plays with transparent walls: mira's new plot gets its walls in his
+# game too, so the games stay in sync.)
 other8 = [x for x in cm if "buy_plot -> rejected: another player's side" in x]
 ok_all = len(other8) == 1 and all(is_ok(x) for x in cm if x not in other8)
 # mira buys a plot with entrance doors on it: they are made in the same
