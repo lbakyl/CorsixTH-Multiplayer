@@ -92,8 +92,8 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
    colour. With several hospitals the game seats team mates next to each
    other on the map and names each hospital after its players ("JAN + ABI").
    One shared hospital plays the campaign's levels (1 to 12); several
-   hospitals play the multiplayer levels (1 to 7; a higher number plays
-   level 7, as the room says). A saved game keeps its colours and teams.
+   hospitals play the multiplayer levels (1 to 8; a higher number plays
+   level 8, as the room says). A saved game keeps its colours and teams.
 5. **Sharing a hospital:** team mates build, hire and answer faxes in the
    same hospital. A bot can share yours too: it builds in your hospital along
    with you (a desk, rooms, staff), and whatever you have already built it
@@ -227,8 +227,8 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 ## Levels
 
 **One shared hospital** plays the campaign levels 1 to 12, as in single
-player. **A hospital each** (co-op and the race) has seven levels of its own,
-on Theme Hospital's multiplayer maps (levels 6 and 7 are scenarios, below). Each takes its diseases, rooms and
+player. **A hospital each** (co-op and the race) has eight levels of its own,
+on Theme Hospital's multiplayer maps (levels 6 and 7 are scenarios, below; level 8 is a player's map). Each takes its diseases, rooms and
 research from a campaign level, so level 1 is the smallest. From level 2 on
 the training room is there from the start (there are few staff to hire, so
 training should begin early):
@@ -242,6 +242,7 @@ training should begin early):
 | 5 | $70,000 | 33 | as level 4 (also DNA fixer, jelly vat) |
 | 6 | $60,000 | 15 | as level 3, on the map EMERGENCY! |
 | 7 | $50,000 | 26 | as level 4, on map 3 (with four players on Matroftt's map): Cutthroat, made for the race |
+| 8 | $50,000 | 15 | as level 3; with four players on Team Town, a player's map made for two against two (team mates' hospitals side by side); with two or three on map 0 |
 
 To win, a hospital needs all of these at once, and no bank loan (when it
 meets the goals but still owes the bank, the adviser says so: pay off the
@@ -256,6 +257,7 @@ loan by clicking your money in the bottom bar):
 | 5 | 750 | $350,000 | plot + $200,000 | 500 | 60% |
 | 6 | 550 | $60,000 | plot + $80,000 | 150 | 40% |
 | 7 | 650 | $150,000 | plot + $150,000 | 300 | 55% |
+| 8 | 650 | $100,000 | plot + $110,000 | 200 | 50% |
 
 **Level 6, Emergency!** (2 to 4 players). In the first year (months 2 to
 12) an emergency comes four times a month, to each hospital in turn (a
