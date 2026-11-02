@@ -99,8 +99,9 @@ function UIMultiplayerLevels:UIMultiplayerLevels(ui, level, players)
       :makeButton(0, 0, 180, 25, nil, self.buttonPlayers):setTooltip(_S.tooltip.multiplayer_window.levels_players)
   self.rows = {}
   for i = 1, ROWS do
+    -- (A name too long for its row ends in "...".)
     self.rows[i] = self:addBevelPanel(20, MAP_Y + (i - 1) * 22, 170, 20, col.row, nil, nil, nil, col.active)
-        :setLabel(""):makeToggleButton(0, 0, 170, 20, nil, function() self:select(i) end)
+        :setLabel(""):setAutoClip(true):makeToggleButton(0, 0, 170, 20, nil, function() self:select(i) end)
   end
   -- The briefing scrolls (a scrollbar as in the game's other lists, or the
   -- mouse wheel).
@@ -130,7 +131,11 @@ function UIMultiplayerLevels:setShared(shared)
   for i = 1, ROWS do
     local row = self.rows[i]
     row:setVisible(i <= count)
-    if i <= count then row.panel_for_sprite:setLabel(i .. "  " .. self:levelName(i)) end
+    if i <= count then
+      local name = self:levelName(i)
+      row.panel_for_sprite:setLabel(i .. "  " .. name)
+      row:setTooltip(name) -- (the whole name, also when the row cuts it short)
+    end
   end
   self:select(math.min(self.level, count))
 end

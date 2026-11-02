@@ -304,9 +304,10 @@ local function run_lobby()
       for i = 1, lv:count() do names[i] = lv:levelName(i) end
       local mp_map = lv:preview() and true or false
       lv:setShared(true)
-      lv:select(3)
+      lv:select(6)
       tick()
       shot("levels-shared")
+      lv:select(3)
       local shared_name = lv:levelName(3)
       lv:setShared(false)
       lv:select(6)
