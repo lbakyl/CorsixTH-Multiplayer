@@ -931,7 +931,8 @@ function Bot:drawRoom(room_type, size, extras)
     return nil, "space"
   end
   local by_hand = extras and next(extras) ~= nil
-  local ok, res = pcall(builder.ui_room, self.world, ax, ay, room_type.id, w, h or w, true, log, {x, y}, by_hand)
+  local ok, res = pcall(builder.ui_room, self.world, ax, ay, room_type.id, w, h or w, true, log, {x, y}, by_hand,
+      {ax, ay})
   if not ok then log("could not draw " .. room_type.id .. ": " .. tostring(res)) end
   if ok and res then
     if by_hand then self.furnishing = {extras = extras, room_id = room_type.id} end

@@ -28,6 +28,10 @@ on:
           - macos-15
           - macos-15-intel
         default: macos-26
+      fallback:
+        description: build on macOS 15 if no macOS 26 machine comes
+        type: boolean
+        default: true
 
 jobs:
   app:
@@ -91,7 +95,9 @@ jobs:
     needs: app
     # (A job GitHub gives up on in the queue makes the run "failed", not
     # "cancelled"; the step below tells a job that never started apart.)
-    if: always() && needs.app.result != 'success' && (inputs.runner || 'macos-26') == 'macos-26'
+    if: >-
+      always() && needs.app.result != 'success' && (inputs.runner || 'macos-26') == 'macos-26' &&
+      inputs.fallback != false
     runs-on: ubuntu-latest
     permissions:
       actions: write

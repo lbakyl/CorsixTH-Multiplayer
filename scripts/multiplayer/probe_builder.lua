@@ -468,7 +468,10 @@ end
 --!param at (table) optional {x, y}: exact top-left corner instead of a search
 --!param by_hand (bool) optional; multiplayer: place the furniture by hand
 --!  afterwards (builder.furnish_tick); otherwise it is placed automatically
-function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at, by_hand)
+--!param door_toward (table) optional {x, y}: the door on whichever wall is
+--!  the shortest walk from there (a bot: its reception), not the first one
+--!  found clockwise (which put every door on the south wall)
+function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at, by_hand, door_toward)
   local ui = world.ui
   local room_type = assert(TheApp.rooms[room_id], "unknown room " .. room_id)
   local x, y
@@ -490,10 +493,35 @@ function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at, by_
   local candidates = {}
   for tx = x + 1, x + w - 2 do candidates[#candidates + 1] = {x = tx, y = y + h - 1, wall = "south"} end
   for ty = y + 1, y + h - 2 do candidates[#candidates + 1] = {x = x + w - 1, y = ty, wall = "east"} end
+  if door_toward then
+    for tx = x + 1, x + w - 2 do candidates[#candidates + 1] = {x = tx, y = y, wall = "north"} end
+    for ty = y + 1, y + h - 2 do candidates[#candidates + 1] = {x = x, y = ty, wall = "west"} end
+    -- The tile in front of each door, and how far it is to walk from there.
+    local th = world.map.th
+    local function outside(c)
+      if c.wall == "south" then return c.x, c.y + 1 elseif c.wall == "north" then return c.x, c.y - 1
+      elseif c.wall == "east" then return c.x + 1, c.y else return c.x - 1, c.y end
+    end
+    local mw, mh = th:size()
+    for i, c in ipairs(candidates) do
+      local ox, oy = outside(c)
+      local d
+      if ox >= 1 and oy >= 1 and ox <= mw and oy <= mh and th:getCellFlags(ox, oy).passable then
+        d = world:getPathDistance(door_toward[1], door_toward[2], ox, oy)
+      end
+      -- (Equal walks: the middle of a wall, then the order above.)
+      local mid = (c.wall == "south" or c.wall == "north") and math.abs(c.x - (x + (w - 1) / 2))
+          or math.abs(c.y - (y + (h - 1) / 2))
+      c.cost = (d or 100000) + mid * 0.1 + i * 0.001
+    end
+    table.sort(candidates, function(a, b) return a.cost < b.cost end)
+  end
+  local door_wall
   for _, c in ipairs(candidates) do
     dlg:setDoorBlueprint(c.x, c.y, c.wall)
     if dlg.blueprint_door.valid then
       dlg:placeDoorBlueprint()
+      door_wall = c.wall
       break
     end
   end
@@ -527,8 +555,8 @@ function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at, by_
     end
   end
   dlg:confirm()
-  log(string.format("UI: drew %s at %d,%d size %dx%d%s (editor %s)", room_id, x, y, w, h,
-      with_window and " with a window" or "", dlg.phase))
+  log(string.format("UI: drew %s at %d,%d size %dx%d%s (editor %s; door on the %s wall)", room_id, x, y, w, h,
+      with_window and " with a window" or "", dlg.phase, tostring(door_wall)))
   -- Until the room is built its floor stays blue (layer 4, value 24).
   local blue, th = 0, world.map.th
   for ty = y, y + h - 1 do
