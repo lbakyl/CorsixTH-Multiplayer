@@ -69,6 +69,7 @@
 --                                                       of this player only (must not desync)
 --                       warmth:<n>                      warmth colours <n> (1-3), this view only
 --                       wallcount                       log how many corridor tiles count as by a wall
+--                       faxtexts                        log the first line of each of this player's faxes
 --                       furnishroom:<id>:<w>:<h>        draw a room and place its furniture
 --                                                       by hand, one object at a time
 --                       cancelroom:<id>:<w>:<h>         draw a room, cancel while furnishing
@@ -2525,6 +2526,16 @@ local function run()
           world.ui.toggled_transparency = true
           world.ui:setWallsTransparent(true)
           log("UI: transparent walls on")
+        elseif a == "faxtexts" then
+          -- The first line of every fax this player has (own or for everyone).
+          local lines = {}
+          for _, i in ipairs(world.ui.bottom_panel:allMessageIcons()) do
+            if not world.mp_coop or i.everyone or i.hospital == world.ui.hospital then
+              local first = i.message and i.message[1] and i.message[1].text
+              lines[#lines + 1] = tostring(first)
+            end
+          end
+          log(string.format("UI: own faxes at step %d: %s", session.step, table.concat(lines, " | ")))
         elseif a == "wallcount" then
           -- How many of hospital 1's corridor tiles the game takes for tiles
           -- by a wall (rat holes go there): the same in every game.

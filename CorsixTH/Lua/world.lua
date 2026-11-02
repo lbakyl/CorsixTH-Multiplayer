@@ -2054,7 +2054,10 @@ function World:_mpTeamsRacing()
 end
 
 --! A race of teams: once at most one team still races, the race is over;
---! that team takes the place left, and the standings go to everybody.
+--! that team takes the place left, and the standings go to everybody: a fax
+--! for each hospital, answered by its own player ("Back to the lobby" takes
+--! only them out, with their team's video). (One fax for all, answered by the
+--! first to click, was gone from a team mate's screen before he saw it.)
 function World:_mpTeamRaceCheckOver()
   if self.mp_race_over or self:_mpTeamsRacing() > 1 then return end
   local teams = self:mpTeamList()
@@ -2071,17 +2074,22 @@ function World:_mpTeamRaceCheckOver()
     lines[#lines + 1] = S.race_standing:format(place_text(p.place), self:mpTeamName(team)) ..
         (p.how == "out" and S.race_standing_out or "")
   end
-  local message = {
-    {text = S.race_over[1]},
-    {text = join_standings(lines)},
-    {text = S.race_over[2]},
-    choices = {
-      {text = S.back_to_lobby, choice = "return_to_main_menu"},
-      {text = S.keep_playing, choice = "stay_on_level"},
-    },
-  }
-  self.ui.bottom_panel:queueMessage("information", message, nil, nil, 2, nil, nil, true)
-  self.ui.bottom_panel:openLastMessage()
+  local standings = join_standings(lines)
+  for i = 1, self.mp_coop.players do
+    local hosp = self.hospitals[i]
+    local mine = self.mp_team_places[self:mpTeam(hosp)]
+    local message = {
+      {text = mine and mine.place == 1 and S.race_over_won or S.race_over[1]},
+      {text = standings},
+      {text = S.race_over[2]},
+      choices = {
+        {text = S.back_to_lobby, choice = "mp_leave_game"},
+        {text = S.keep_playing, choice = "stay_on_level"},
+      },
+    }
+    self.ui.bottom_panel:queueMessage("information", message, nil, nil, 2, nil, hosp)
+    if self.ui.hospital == hosp then self.ui.bottom_panel:openLastMessage() end
+  end
 end
 
 --! Multiplayer: the video for a player whose game ends ("win" or "lose").

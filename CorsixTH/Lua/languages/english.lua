@@ -611,6 +611,7 @@ multiplayer_window = {
     "The race is over. Final standings:",
     "Go back to the lobby, or keep playing?",
   },
+  race_over_won = "Congratulations, your team has won the race! Final standings:",
   race_standing = "%s %s",
   race_standing_out = " (out)",
   race_out_short = "out",

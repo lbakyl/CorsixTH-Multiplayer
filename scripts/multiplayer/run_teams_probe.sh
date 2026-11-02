@@ -95,13 +95,13 @@ EOF
 
 pids=()
 run_probe ann MP_ROLE=host MP_ROOM=trio MP_MODE=teams MP_TEAM=1 MP_PLAYERS=3 MP_LEVEL=2 MP_STEPS=1100 \
-  MP_UI_SCRIPT="20:openhospital;60:teams;100:givemoney:1000;120:giveto:2:1000;200:sabotage:rats:1:3;210:sabotage:rats:1:2;400:teamview;600:goals:1:win;610:wincheck;650:race;900:goals:3:win;910:wincheck;950:race" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;60:teams;100:givemoney:1000;120:giveto:2:1000;200:sabotage:rats:1:3;210:sabotage:rats:1:2;400:teamview;600:goals:1:win;610:wincheck;650:race;900:goals:3:win;910:wincheck;950:race;1010:faxtexts" & pids+=($!)
 sleep 1
 run_probe ben MP_ROLE=join MP_ROOM=trio MP_TEAM=1 MP_STEPS=1100 \
-  MP_UI_SCRIPT="30:openhospital;60:teams;400:teamview;650:race;950:race" & pids+=($!)
+  MP_UI_SCRIPT="30:openhospital;60:teams;400:teamview;650:race;950:race;1010:faxtexts" & pids+=($!)
 sleep 1
 run_probe cat MP_ROLE=join MP_ROOM=trio MP_TEAM=2 MP_STEPS=1100 \
-  MP_UI_SCRIPT="40:openhospital;60:teams;130:giveto:1:500;150:chat:1:just me;250:sabotage:smear:1:1;400:teamview;650:race;950:race" & pids+=($!)
+  MP_UI_SCRIPT="40:openhospital;60:teams;130:giveto:1:500;150:chat:1:just me;250:sabotage:smear:1:1;400:teamview;650:race;950:race;960:answerfax:information:2:wait;1010:faxtexts" & pids+=($!)
 sleep 1
 run_probe dee MP_ROLE=host MP_ROOM=duo MP_MODE=teams MP_TEAM=1 MP_PLAYERS=4 MP_LEVEL=2 MP_STEPS=800 \
   MP_UI_SCRIPT="20:openhospital;60:teams;150:chat:1:hello team;200:chat:0:still team" & pids+=($!)
@@ -191,7 +191,14 @@ ok5 = (first is not None and first[1] == '1=-* 2=- 3=-' and first[2] == 'false'
        and last is not None and last[1] == '1=1(won)* 2=2(last) 3=1(won)*' and last[2] == 'true'
        and all(r and r[-1][1:] == last[1:] for r in races.values())
        and all(result(n).startswith('IN SYNC') for n in ('ann', 'ben', 'cat', 'dee', 'eli', 'fay', 'gus')))
-print(f"5. Team race:               after ann {first[1:] if first else '-'}; at the end {last[1:] if last else '-'}; "
+# Each player has a race-over fax of their own: cat answering hers ("keep
+# playing") leaves ann's and ben's ("your team has won") where they are.
+faxes5 = {n: re.search(r'UI: own faxes at step \d+: (.*)', log(n)) for n in ('ann', 'ben', 'cat')}
+faxes5 = {n: (m.group(1) if m else '') for n, m in faxes5.items()}
+own5 = (all('your team has won the race' in faxes5[n] for n in ('ann', 'ben'))
+        and 'The race is over' not in faxes5['cat'] and 'clicked choice 2 of information fax' in log('cat'))
+ok5 = ok5 and own5
+print(f"5. Team race:               own race-over faxes: {own5}; after ann {first[1:] if first else '-'}; at the end {last[1:] if last else '-'}; "
       f"{result('ann')} / {result('ben')} / {result('cat')}; duo: {result('dee')} / {result('eli')} / {result('fay')} / {result('gus')}")
 fail |= not ok5
 
