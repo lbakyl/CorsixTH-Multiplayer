@@ -28,7 +28,11 @@
 #      others race on; then team 1: 2nd, sol last, and the race is over (the
 #      standings fax builds); all four IN SYNC to the end
 # With MP_REFEREE=1 the server also runs its headless referee, and a 7th
-# check needs it to agree with the players to the end (every room).
+# check needs it to agree with the players to the end (every room), and a
+# 9th: room "cd", hal and kim against ida and jon, where kim's Theme
+# Hospital files are of "another edition" (a copy with the 4-player maps of
+# levels 2 and 3 swapped): the server lets kim in, kim's game starts from
+# the referee's, and kim plays the hospital the others see as kim's.
 # Exits 0 only if all checks behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
@@ -71,7 +75,7 @@ run_probe() { # name, then extra VAR=value assignments
   local dir="$out/$name"
   mkdir -p "$dir/config" "$dir/saves"
   cat > "$dir/config.txt" <<EOF
-theme_hospital_install = [[$game_data]]
+theme_hospital_install = [[${PROBE_DATA:-$game_data}]]
 savegames = [[$dir/saves]]
 player_name = "$name"
 fullscreen = false
@@ -92,6 +96,23 @@ EOF
     "--config-file=$dir/config.txt" > "$dir/log.txt" 2>&1 || true
   grep -q 'PROBE: DONE' "$dir/log.txt" || { echo "$name failed:"; tail -20 "$dir/log.txt"; return 1; }
 }
+
+# Another edition for kim: the same files, but two multiplayer maps swapped.
+other_data="$out/other-edition"
+mkdir -p "$other_data"
+for entry in "$game_data"/*; do
+  base=$(basename "$entry")
+  if [[ $(echo "$base" | tr a-z A-Z) == LEVELS ]]; then
+    mkdir "$other_data/$base"
+    for f in "$entry"/*; do ln -s "$f" "$other_data/$base/$(basename "$f")"; done
+    levels="$other_data/$base"
+    l41=$(ls "$entry" | grep -i '^level\.l41$'); l42=$(ls "$entry" | grep -i '^level\.l42$')
+    rm "$levels/$l41" "$levels/$l42"
+    ln -s "$entry/$l42" "$levels/$l41"; ln -s "$entry/$l41" "$levels/$l42"
+  else
+    ln -s "$entry" "$other_data/$base"
+  fi
+done
 
 pids=()
 run_probe ann MP_ROLE=host MP_ROOM=trio MP_MODE=teams MP_TEAM=1 MP_PLAYERS=3 MP_LEVEL=2 MP_STEPS=1100 \
@@ -120,6 +141,19 @@ for who in quin:1 rae:2 sol:3; do
     MP_UI_SCRIPT="$three" & pids+=($!)
   sleep 1
 done
+if [[ "${MP_REFEREE:-0}" == 1 ]]; then
+  export MP_REFEREE_PROBE_SCENARIO="$MP_REFEREE_PROBE_SCENARIO;cd=light"
+  sleep 1
+  run_probe hal MP_ROLE=host MP_ROOM=cd MP_MODE=teams MP_TEAM=1 MP_PLAYERS=4 MP_LEVEL=2 MP_STEPS=800 \
+    MP_UI_SCRIPT="20:openhospital;60:teams;300:hospitals" & pids+=($!)
+  sleep 1
+  run_probe ida MP_ROLE=join MP_ROOM=cd MP_TEAM=2 MP_STEPS=800 MP_UI_SCRIPT="30:openhospital;60:teams" & pids+=($!)
+  sleep 1
+  run_probe jon MP_ROLE=join MP_ROOM=cd MP_TEAM=2 MP_STEPS=800 MP_UI_SCRIPT="30:openhospital;60:teams" & pids+=($!)
+  sleep 1
+  PROBE_DATA="$other_data" run_probe kim MP_ROLE=join MP_ROOM=cd MP_TEAM=1 MP_STEPS=800 \
+    MP_UI_SCRIPT="30:openhospital;60:teams;300:hospitals" & pids+=($!)
+fi
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 python3 - "$out" "${MP_REFEREE:-0}" <<'PY'
@@ -229,11 +263,26 @@ print(f"8. Three teams:             {seats['pam'][1] if seats['pam'] else '-'}; 
 fail |= not ok8
 
 if with_referee:
-    for room, least in (('trio', 1100), ('duo', 800), ('three', 800)):
+    for room, least in (('trio', 1100), ('duo', 800), ('three', 800), ('cd', 800)):
         confirmed = re.search(rf"room '{room}': referee confirmed steps through (\d+)", server)
         clean = not re.search(rf"room '{room}': (the players differ|repaired)", server)
         ok6 = bool(confirmed and int(confirmed.group(1)) >= least - 100 and clean)
         print(f"7. Referee in '{room}':       confirmed through {confirmed.group(1) if confirmed else '-'}, no differences: {clean}")
         fail |= not ok6
+    # 9. Another edition's Theme Hospital files (kim)
+    cd = {n: teams(n) for n in ('hal', 'ida', 'jon', 'kim')}
+    let_in = re.search(r"player \d+ \('kim'\) has Theme Hospital data (\w+) \(this server's (\w+)\)", server)
+    from_save = ('rejoining; waiting for the shared save' in log('kim')
+                 and "room 'cd': started from the referee's game at step 0" in server)
+    same = len({t[1] if t else None for t in cd.values()}) == 1 and cd['kim'] is not None
+    mine = {n: t[0] if t else None for n, t in cd.items()}
+    ok9 = (bool(let_in) and let_in.group(1) != let_in.group(2) and from_save and same
+           and cd['hal'] and cd['hal'][1] == '1=HAL:1 2=IDA:2 3=KIM:1 4=JON:2'
+           and mine == {'hal': '1', 'ida': '2', 'jon': '4', 'kim': '3'}
+           and all(result(n).startswith('IN SYNC') for n in cd))
+    print(f"9. Another edition:         let in: {let_in.groups() if let_in else '-'}; kim from the referee's game: "
+          f"{from_save}; seats {cd['hal'][1] if cd['hal'] else '-'}, kim's {cd['kim'][1] if cd['kim'] else '-'}; "
+          f"own hospitals {mine}; {' / '.join(result(n) for n in cd)}")
+    fail |= not ok9
 sys.exit(1 if fail else 0)
 PY

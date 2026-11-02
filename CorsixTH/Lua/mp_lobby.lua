@@ -983,6 +983,28 @@ function MultiplayerLobby.showOwnWatches(world, ui)
   end
 end
 
+--! Each player's hospital from a loaded game's hospital names (a race of two
+--! teams names every hospital after its player, MultiplayerLobby:_beginGame);
+--! kept as it was unless every player has exactly one.
+function MultiplayerLobby:_seatsFromSave(world, session)
+  local seats, taken = {}, {}
+  for p, name in pairs(self.peer_names or {}) do
+    local found
+    for i = 1, world.mp_coop.players do
+      local hospital = world.hospitals[i]
+      if hospital and tostring(hospital.name):upper() == name then
+        if found then return end -- two hospitals of that name
+        found = i
+      end
+    end
+    if not found or taken[found] then return end
+    seats[p], taken[found] = found, true
+  end
+  if not seats[session.peer_id] then return end
+  for p, index in pairs(seats) do self.peer_hospital[p] = index end
+  session.hospital_index = seats[session.peer_id]
+end
+
 function MultiplayerLobby:_loadShared(session, step, data, peers)
   local app = TheApp
   local persist = require("persist")
@@ -1008,6 +1030,10 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
   end
   -- The save is the referee's: show this player's own hospital again.
   if world.mp_coop then
+    -- A race of two teams entered from the referee's game (a rejoin, or Theme
+    -- Hospital files of another edition, whose map would seat the teams
+    -- differently): each player's hospital is the one named after them.
+    if session.rejoining and world.mp_coop.teams then self:_seatsFromSave(world, session) end
     world.mp_local_index = session.hospital_index
     app.ui.hospital = world:getUIHospital()
     -- (and this player's messages and countdowns, not the referee's)
@@ -1245,6 +1271,8 @@ function MultiplayerLobby:_beginGame(f)
     -- named after all its players ("ANN + BEN").
     local start_names = {}
     for n in (f.names or ""):gmatch("[^,]+") do start_names[#start_names + 1] = n end
+    self.peer_names = {}
+    for i, p in ipairs(peers) do self.peer_names[p] = start_names[i] and start_names[i]:upper() end
     local names = {}
     for i, p in ipairs(peers) do
       local player = self.players[p]

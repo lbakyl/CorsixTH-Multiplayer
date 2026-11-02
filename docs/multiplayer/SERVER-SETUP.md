@@ -25,10 +25,10 @@ takes about 15 minutes.
 - **Your own copy of Theme Hospital** (the full game, not the demo). The
   referee plays the game too, so the server needs the game files. They are not
   part of any download here and must not be shared publicly.
-- **The same edition of Theme Hospital as your players.** The server turns
-  away players whose game files differ from its own, because different
-  editions make games drift out of sync. eu1 and eu2 use the **GOG** edition;
-  if your players also play on eu1/eu2, use GOG too.
+- **Theme Hospital game files for the referee.** Players with another
+  edition (other multiplayer maps and level settings) can play too: their
+  game starts from the referee's instead of their own level files. eu1 and
+  eu2 use the **GOG** edition.
 
 ## 2. Firewall and security
 
@@ -181,8 +181,9 @@ players must have build 8f59465a (mp-stable-ee780da1)
 players must have Theme Hospital data 899c66d0
 ```
 
-`899c66d0` means the GOG edition. Another number means another edition: then
-only players with that edition can play on your server.
+`899c66d0` means the GOG edition. Players with another edition get the
+referee's game at the start of each game (the log says `has Theme Hospital
+data ... gets the referee's game`).
 
 Then try it from the game: main menu, **Multiplayer**, type your server's
 address with the port into the address box (for example
@@ -232,9 +233,9 @@ sudo bash setup-referee-host.sh --release mp-stable-NEWNUMBER --motd "Welcome to
   (`systemctl status corsixth-mp`).
 - **"Other game version: get ... on GitHub":** the player's game is not the
   release the server runs. They download the release it names.
-- **"Your Theme Hospital files differ from this server's":** the player's
-  edition differs from the server's (step 1). They need the same edition, for
-  example GOG; the game then explains how to point CorsixTH at it.
+- **"Your Theme Hospital files differ from this server's":** only on a
+  server without the referee (`CORSIXTH_MP_DATA` set): the player's edition
+  differs from the server's. With the referee such players are let in.
 - **The script stops with "the game binary misses libraries":** the server
   is not Ubuntu 24.04+/Debian 13, or not x86_64.
 - **The log says "referee build ... differs":** the server code and the
