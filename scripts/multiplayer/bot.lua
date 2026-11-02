@@ -253,6 +253,9 @@ local EXTRAS = {{"bench", 3}, {"plant", 2}, {"drinks_machine", 1}, {"bench", 5},
 function Bot.new(lobby)
   local self = setmetatable({}, Bot)
   self.lobby = lobby
+  -- A bot keeps no saves of its own (the people and the server do); its
+  -- monthly autosave sometimes failed on its own windows.
+  lobby._writeLocalSave = function() end
   self.mode = lobby.start_params and lobby.start_params.mode or os.getenv("MP_BOT_MODE") or "coop"
   -- (A race, of teams too: tricks, and rivals' offers refused.)
   self.fiery = self.mode == "competitive" or self.mode == "teams" or self.mode == "teamshared" or

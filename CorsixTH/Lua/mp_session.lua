@@ -1030,8 +1030,16 @@ function MultiplayerSession.diagnostics(world)
   for _, r in ipairs(rooms) do parts[#parts + 1] = r end
   for _, e in ipairs(world.entities) do
     local kind = e.humanoid_class or (e.object_type and e.object_type.id) or "entity"
-    parts[#parts + 1] = string.format("%s:%s@%s,%s", tostring(e.mp_id), kind,
-        tostring(e.tile_x), tostring(e.tile_y))
+    -- (A person: what they are doing, and where a walk goes; a desync of one
+    -- person a tile off says more with it.)
+    local doing = ""
+    local action = e.action_queue and e.action_queue[1]
+    if action then
+      doing = " " .. tostring(action.name)
+      if action.name == "walk" and action.x then doing = doing .. ">" .. action.x .. "," .. action.y end
+    end
+    parts[#parts + 1] = string.format("%s:%s@%s,%s%s", tostring(e.mp_id), kind,
+        tostring(e.tile_x), tostring(e.tile_y), doing)
   end
   parts[#parts + 1] = "random " .. MultiplayerSession.randomDraws()
   return table.concat(parts, "; ")
