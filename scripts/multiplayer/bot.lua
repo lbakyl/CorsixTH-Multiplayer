@@ -618,12 +618,34 @@ function Bot:roomCost(room_type)
   return cost
 end
 
+--! The tiles nobody may build on now although they look free: a room being
+--! furnished or edited (by anybody; while a person edits a room its walls
+--! are down, but it is coming back), and the outline another player is
+--! drawing; a tile of margin around each. Kept for one drawRoom.
+function Bot:reservedTiles()
+  local reserved = {}
+  local function mark(r)
+    for y = r.y - 1, r.y + r.h do
+      for x = r.x - 1, r.x + r.w do reserved[y * 1000 + x] = true end
+    end
+  end
+  for _, entry in pairs(self.world.mp_furnishing or {}) do
+    if entry.x and entry.w then mark(entry) end
+  end
+  local session = TheApp.mp_session
+  for _, r in pairs(session and session.remote_blueprints or {}) do
+    if (r.w or 0) > 0 then mark(r) end
+  end
+  return reserved
+end
+
 --! Is this tile free floor of this hospital (no room, no object on it)?
 function Bot:freeTile(x, y)
   local world = self.world
   local th = world.map.th
   local mw, mh = th:size()
   if x < 1 or y < 1 or x > mw or y > mh then return false end
+  if self.reserved and self.reserved[y * 1000 + x] then return false end
   if not world.ui.hospital:isInHospital(x, y) or world:getRoom(x, y) or world:getObject(x, y) then return false end
   local flags = th:getCellFlags(x, y)
   return flags.buildable and flags.passable
@@ -800,6 +822,7 @@ function Bot:drawRoom(room_type, size, extras)
   local min = room_type.minimum_size or 4
   local ax, ay = self:anchor()
   size = math.max(min, size or math.min(7, math.max(5, min + 1)))
+  self.reserved = self:reservedTiles()
   local x, y, w, h
   -- Where a player would put it (against walls and rooms, in rows).
   local ok_layout, lx, ly, lw, lh = pcall(self.layoutSpot, self, min, size)
@@ -812,7 +835,13 @@ function Bot:drawRoom(room_type, size, extras)
   -- the corridor in front of it is two tiles wide.
   -- (Each only if it leaves the corridor in one piece.)
   local function try(s, fx, fy)
-    if not x and fx and self:keepsCorridor(fx, fy, s, s) then x, y, w = fx, fy, s end
+    if x or not fx then return end
+    for ty = fy, fy + s - 1 do
+      for tx = fx, fx + s - 1 do
+        if self.reserved[ty * 1000 + tx] then return end -- (a room being edited, an outline)
+      end
+    end
+    if self:keepsCorridor(fx, fy, s, s) then x, y, w = fx, fy, s end
   end
   for s = size, min, -1 do
     if not x then try(s, builder.find_free_rect(self.world, ax, ay, s + 1, s + 1, 40)) end
@@ -823,6 +852,7 @@ function Bot:drawRoom(room_type, size, extras)
   for s = size, min, -1 do
     if not x then try(s, self:packedSpot(ax, ay, s, s)) end
   end
+  self.reserved = nil
   if not x then
     log(string.format("no space for a %s (%dx%d)", room_type.id, min, min))
     return nil, "space"
