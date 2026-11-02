@@ -251,6 +251,18 @@ function levels.apply(config, campaign, level, players)
     goal(REPUTATION, 100, 3, 200, 0),
   }
   config.mp_level = levels.clamp(level)
+  -- The map's own hiring list (NET<n>.SAM) is for one hospital, but all the
+  -- hospitals hire from it (map 43 has two receptionists for four): enough
+  -- for each, with one receptionist and one handyman to spare.
+  local n = players or 2
+  local least = {Receptionists = n + 1, Handymen = n + 1, Doctors = 3 * n, Nurses = 2 * n}
+  local staff = {}
+  for i, entry in pairs(config.staff_levels or {}) do
+    local copy = {}
+    for k, v in pairs(entry) do copy[k] = least[k] and math.max(v, least[k]) or v end
+    staff[i] = copy
+  end
+  config.staff_levels = staff
   if def.scenario then levels.SCENARIOS[def.scenario].apply(config, players or 2) end
 end
 

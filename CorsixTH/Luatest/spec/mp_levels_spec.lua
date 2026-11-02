@@ -206,6 +206,26 @@ describe("Multiplayer levels", function()
     assert.is_nil(plain.mp_events)
   end)
 
+  it("gives every hospital enough staff to hire on the map's own list", function()
+    -- NET43.SAM (map 4 with four players): two receptionists for all of them.
+    local sam = {
+      [0] = {Month = 0, Nurses = 8, Doctors = 8, Handymen = 5, Receptionists = 2, ShrkRate = 3},
+      {Month = 10, Nurses = 7, Doctors = 5, Handymen = 4, Receptionists = 3, ShrkRate = 4},
+    }
+    local config = {staff_levels = sam}
+    levels.apply(config, {objects = {}}, 4, 4)
+    local staff = config.staff_levels
+    assert.same({Month = 0, Nurses = 8, Doctors = 12, Handymen = 5, Receptionists = 5, ShrkRate = 3}, staff[0])
+    assert.same({Month = 10, Nurses = 8, Doctors = 12, Handymen = 5, Receptionists = 5, ShrkRate = 4}, staff[1])
+    -- The map's own table is left as it was.
+    assert.equal(2, sam[0].Receptionists)
+    -- Two players: the map's numbers are enough.
+    local two = {staff_levels = sam}
+    levels.apply(two, {objects = {}}, 4, 2)
+    assert.equal(8, two.staff_levels[0].Doctors)
+    assert.equal(3, two.staff_levels[0].Receptionists)
+  end)
+
   -- The level's random emergencies, and the May slack tongue ones apart.
   local function split(world)
     local random, slack = {}, {}
