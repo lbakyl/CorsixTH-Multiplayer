@@ -554,18 +554,20 @@ function M:projects(s)
     end
   end
   -- What the model's plan named that no rule above listed (one nurse more,
-  -- say): tried with the plan's weight as its score, staff within the caps.
-  -- (Before, such a plan item was dropped without a word.)
+  -- say): tried, within the staff caps and the copies of a room, and never
+  -- urgent (no loan for it). (Before, such a plan item was dropped without a
+  -- word; tried without those limits, the bots built six pharmacies on loans.)
   for key, b in pairs(self.boost) do
     if b > 0 and not listed[key] then
       local kind, what = key:match("^(%a+):(.+)$")
+      local score = math.min(0, URGENT - 5 - b)
       if kind == "hire" then
         local base = SPECIALISTS[what] and "Doctor" or what
-        if hosp:countStaffOfCategory(base) < (cap[base] or 99) then hire(what, 0) end
+        if hosp:countStaffOfCategory(base) < (cap[base] or 99) then hire(what, score) end
       elseif kind == "room" then
-        room(what, 0)
+        if (s.rooms[what] or 0) < (COPIES[what] or 1) then room(what, score) end
       elseif kind == "buy" then
-        buy(what, 0)
+        buy(what, score)
       end
     end
   end
