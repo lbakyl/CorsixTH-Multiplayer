@@ -34,6 +34,9 @@ local col = {
   title   = {red = 70, green = 30, blue = 108},
   caption = {red = 120, green = 74, blue = 168},
   button  = {red = 140, green = 90, blue = 190},
+  -- The price, hard to miss: gold, or green when it is free.
+  price   = {red = 196, green = 136, blue = 16},
+  free    = {red = 40, green = 140, blue = 60},
 }
 
 local WIDTH = 380
@@ -53,22 +56,26 @@ local function describe(entity, offer)
   if offer.kind == "staff" then
     local profile = entity.profile
     local job = StaffProfile.translateStaffClass(entity.humanoid_class) or entity.humanoid_class
+    -- A doctor's special skills, or that there are none.
+    local skills
     if entity.humanoid_class == "Doctor" then
       -- (Names and titles are localised strings: joined with .., not tostring.)
       job = profile.is_consultant and _S.staff_title.consultant or
           (profile.is_junior and _S.staff_title.junior or _S.staff_title.doctor)
-      if (profile.is_surgeon or 0) >= 1 then job = job .. ", " .. _S.staff_title.surgeon end
-      if (profile.is_psychiatrist or 0) >= 1 then job = job .. ", " .. _S.staff_title.psychiatrist end
-      if (profile.is_researcher or 0) >= 1 then job = job .. ", " .. _S.staff_title.researcher end
+      for _, s in ipairs({{"is_surgeon", "surgeon"}, {"is_psychiatrist", "psychiatrist"}, {"is_researcher", "researcher"}}) do
+        if (profile[s[1]] or 0) >= 1 then skills = skills and (skills .. ", " .. _S.staff_title[s[2]]) or _S.staff_title[s[2]] end
+      end
     end
     lines[#lines + 1] = profile:getFullName()
     lines[#lines + 1] = S.offer_job:format(job)
+    if entity.humanoid_class == "Doctor" then
+      lines[#lines + 1] = skills and S.offer_skills:format(skills) or S.offer_no_skills
+    end
     lines[#lines + 1] = S.offer_ability:format(pct(profile.skill))
     lines[#lines + 1] = S.offer_wage:format(profile.wage)
     lines[#lines + 1] = S.offer_tired:format(pct(entity:getAttribute("fatigue")))
     lines[#lines + 1] = S.offer_happy:format(pct(entity:getAttribute("happiness")))
     if entity.quitting_in then lines[#lines + 1] = S.offer_raise end
-    if (offer.price or 0) > 0 then lines[#lines + 1] = S.offer_price_line:format(offer.price) end
   else
     if entity.diagnosed and entity.disease then
       lines[#lines + 1] = S.offer_illness:format(entity.disease.name)
@@ -92,7 +99,9 @@ function UIMultiplayerOffer:UIMultiplayerOffer(ui, icon)
   local from = world.hospitals[self.offer.from]
   local lines = describe(self.entity, self.offer)
   local face = self.offer.kind == "staff" and self.entity and self.entity.profile
-  local height = 40 + 22 + math.max(#lines * 22, face and 80 or 0) + 60
+  -- (Staff: a strip with the price, or "free", above the buttons.)
+  local price = self.offer.kind == "staff" and (self.offer.price or 0) or nil
+  local height = 40 + 22 + math.max(#lines * 22, face and 80 or 0) + 60 + (price and 28 or 0)
   self:UIResizable(ui, WIDTH, height, col.bg)
   self.esc_closes = true
   self.resizable = false
@@ -115,8 +124,13 @@ function UIMultiplayerOffer:UIMultiplayerOffer(ui, icon)
   end
 
   local y = height - 45
+  if price then
+    self:addBevelPanel(20, y - 30, WIDTH - 40, 24, price > 0 and col.price or col.free)
+        :setLabel(price > 0 and S.offer_price_banner:format(price) or S.offer_free_banner).lowered = true
+  end
   local w = math.floor((WIDTH - 40 - 30) / 4)
-  self:addBevelPanel(20, y, w, 30, col.button):setLabel(S.offer_accept)
+  self:addBevelPanel(20, y, w, 30, col.button):setLabel(price and price > 0 and S.offer_accept_pay:format(price)
+      or S.offer_accept)
       :makeButton(0, 0, w, 30, nil, self.accept)
   self:addBevelPanel(30 + w, y, w, 30, col.button):setLabel(S.offer_decline)
       :makeButton(0, 0, w, 30, nil, self.decline)

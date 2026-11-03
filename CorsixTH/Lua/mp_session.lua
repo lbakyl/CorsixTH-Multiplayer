@@ -2263,7 +2263,13 @@ local function create_offer(world, kind, from, to, entity, price)
     mp_offer = {kind = kind, from = world:getHospitalIndex(from), to = world:getHospitalIndex(to),
         entity = entity.mp_id, name = name, price = price > 0 and price or nil},
   }
-  if price > 0 then table.insert(message, 3, {text = S.offer_price_line:format(price)}) end
+  -- (The price straight after who offers it, before the details, on a line
+  -- of its own.)
+  if price > 0 then
+    table.insert(message, 2, {text = " "})
+    table.insert(message, 3, {text = S.offer_price_line:format(price)})
+    table.insert(message, 4, {text = " "})
+  end
   panel:queueMessage("mp_offer", message, nil, Date.hoursPerDay() * MultiplayerSession.OFFER_DAYS, 2, nil, to)
   entity.mp_offer = world.next_message_id
   MultiplayerSession.tellPlayer(world, from, price > 0 and S.offer_sent_price_note:format(name, to.name, price)
@@ -2488,8 +2494,12 @@ function handlers.offer_research(world, cmd)
   local names = research_names(items)
   local message = {
     {text = S.research_offer_line:format(from.name)},
-    {text = names},
+    -- (The price before the list of what is offered, which can be long, on
+    -- a line of its own.)
+    {text = " "},
     {text = price > 0 and S.research_price_line:format(price) or S.research_free_line},
+    {text = " "},
+    {text = names},
     choices = {
       {text = price > 0 and S.research_accept_price:format(price) or S.research_accept, choice = "mp_offer_accept"},
       {text = S.research_decline, choice = "mp_offer_decline"},
