@@ -59,7 +59,7 @@ export MP_REFEREE_PROBE_SCENARIO="${scenarios#;}"
 realtime=${MP_YEAR_REALTIME:-0}
 bot_fast=1 watch="MP_FAST=1" first=""
 if [[ "$realtime" == 1 ]]; then bot_fast=0 watch="MP_FAST=0 MP_REALTIME=1" first="5:speed:Normal;"; fi
-MP_BOT_BRAIN="${brains#;}" MP_BOT_FAST=$bot_fast MP_BOT_SEED="${MP_BOT_SEED:-7}" CORSIXTH_MP_AI_STATE="$out/ai-spend.json" \
+MP_BOT_DIAG="${MP_BOT_DIAG:-}" MP_BOT_BRAIN="${brains#;}" MP_BOT_FAST=$bot_fast MP_BOT_SEED="${MP_BOT_SEED:-7}" CORSIXTH_MP_AI_STATE="$out/ai-spend.json" \
   PYTHONPATH="$source_dir/mp_server" "$python" -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
 server_pid=$!

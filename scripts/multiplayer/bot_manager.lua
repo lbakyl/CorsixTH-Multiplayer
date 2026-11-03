@@ -36,7 +36,7 @@ local SPECIALISTS = {Psychiatrist = true, Surgeon = true, Researcher = true}
 -- Kept in the bank for wages and repairs.
 local RESERVE = 3000
 -- Rooms worth a second (third) copy when their queues grow.
-local COPIES = {gp = 3, pharmacy = 2, general_diag = 2, psych = 2, ward = 2, toilets = 3, staff_room = 2,
+local COPIES = {gp = 5, pharmacy = 2, general_diag = 3, psych = 2, ward = 2, toilets = 3, staff_room = 2,
     cardiogram = 2, scanner = 2, ultrascan = 2, blood_machine = 2, x_ray = 2, inflation = 2,
     fracture_clinic = 2, hair_restoration = 2, tongue_clinic = 2, electrolysis = 2, dna_fixer = 1,
     jelly_vat = 1, decontamination = 1, operating_theatre = 2, research = 1}
@@ -652,7 +652,30 @@ function M:answerFaxes(s)
         if c.enabled ~= false then index[c.choice] = i end
       end
       local pick, why
-      if index.send_home or index.wait then
+      local diagnosis = false
+      for _, c in ipairs(choices) do
+        if c.choice == "guess_cure" then diagnosis = true end
+      end
+      if diagnosis then
+        -- A patient who has been to every diagnosis room it has and is
+        -- still not sure: a guess (a waiting patient stands in the corridor
+        -- for two months, then leaves or dies), or a diagnosis room more.
+        local patient = icon.owner
+        local missing = false
+        for _, r in ipairs(patient and patient.disease and patient.disease.diagnosis_rooms or {}) do
+          if not s.rooms[r] and self:available(r) then
+            missing = true
+            self.demand[r] = (self.demand[r] or 0) + 1
+          end
+        end
+        if index.guess_cure then
+          pick, why = index.guess_cure, "a good guess"
+        elseif missing and s.balance > 15000 then
+          pick, why = index.wait, "building a diagnosis room"
+        else
+          pick, why = index.send_home, "cannot diagnose it"
+        end
+      elseif index.send_home or index.wait then
         -- A patient whose room it does not have (or cannot diagnose).
         local patient = icon.owner
         local rooms = patient and patient.disease and patient.disease.treatment_rooms or {}
@@ -1018,6 +1041,72 @@ function M:applyPlan(plan)
   self:note(string.format("plan: %s%s", table.concat(taken, ", "), price and (", prices " .. price .. "%") or ""))
 end
 
+--! (MP_BOT_DIAG) Where the GP's offices, their doctors, the patients and
+--! the doctors are, in the log once a month.
+function M:diagnose(s)
+  local world, hosp = self.bot.world, s.hosp
+  local function act(h)
+    local a = h.action_queue and h.action_queue[1]
+    return a and a.name or "-"
+  end
+  local function where(h)
+    local r = h.tile_x and world:getRoom(h.tile_x, h.tile_y)
+    return r and (r.room_info.id .. "#" .. r.id) or (h.tile_x and "corridor" or "nowhere")
+  end
+  for _, r in pairs(world.rooms) do
+    if r.hospital == hosp and r.room_info.id == "gp" then
+      local q = r.door and r.door.queue
+      local st = r.staff_member
+      local inside = 0
+      for _ in pairs(r.humanoids or {}) do inside = inside + 1 end
+      self.log(string.format("diag gp#%d door %s,%s active %s: doctor %s, inside %d, queue %d (size %d, expected %d,"
+          .. " max %s)", r.id, tostring(r.door and r.door.tile_x), tostring(r.door and r.door.tile_y),
+          tostring(r.is_active), st and (act(st) .. " fatigue " .. string.format("%.2f", st.attributes.fatigue or 0)) or "none",
+          inside, q and q:reportedSize() or -1, q and q:size() or -1, q and q:expectedSize() or -1,
+          tostring(q and q.max_size)))
+    end
+  end
+  local pat, gpv, prog, diag, n = {}, {}, 0, 0, 0
+  local gp_name
+  for _, rt in ipairs(TheApp.rooms) do
+    if rt.id == "gp" then gp_name = tostring(rt.name) end
+  end
+  for _, p in ipairs(hosp.patients or {}) do
+    if p.tile_x and not p.dead then
+      n = n + 1
+      local k = act(p) .. "@" .. where(p):gsub("#%d+", "")
+      pat[k] = (pat[k] or 0) + 1
+      prog = prog + (p.diagnosis_progress or 0)
+      if p.diagnosed then diag = diag + 1 end
+      local visits = 0
+      for _, room in ipairs(p.treatment_history or {}) do
+        if tostring(room) == gp_name then visits = visits + 1 end
+      end
+      local vk = visits >= 4 and "4+" or tostring(visits)
+      gpv[vk] = (gpv[vk] or 0) + 1
+    end
+  end
+  local list = {}
+  for k, v in pairs(pat) do list[#list + 1] = k .. "=" .. v end
+  table.sort(list)
+  local vl = {}
+  for k, v in pairs(gpv) do vl[#vl + 1] = k .. ":" .. v end
+  table.sort(vl)
+  self.log(string.format("diag patients %d, diagnosed %d, progress %.2f; gp visits %s; %s", n, diag,
+      n > 0 and prog / n or 0, table.concat(vl, " "), table.concat(list, " ")))
+  local docs = {}
+  for _, st in ipairs(hosp.staff) do
+    if st.humanoid_class == "Doctor" and not st.fired then
+      local k = act(st) .. "@" .. where(st):gsub("#%d+", "")
+      docs[k] = (docs[k] or 0) + 1
+    end
+  end
+  list = {}
+  for k, v in pairs(docs) do list[#list + 1] = k .. "=" .. v end
+  table.sort(list)
+  self.log("diag doctors: " .. table.concat(list, " "))
+end
+
 --------------------------------------------------------------------------------
 
 --! Called from Bot:think twice a second.
@@ -1040,6 +1129,7 @@ function M:think()
     -- (Prices, the loan and research belong to a person sharing the hospital.)
     if bot:sharesWithPerson() then self.log(self:monthLine(s)) else self:monthly(s) end
     for _, p in ipairs(self:problems(s)) do self.log("problem: " .. p) end
+    if (os.getenv("MP_BOT_DIAG") or "") ~= "" then self:diagnose(s) end
     self.next_plan = s.day
   end
   -- A fresh plan once a game week (and at each month's start).

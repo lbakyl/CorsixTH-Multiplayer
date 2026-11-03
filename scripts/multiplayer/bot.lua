@@ -1598,7 +1598,40 @@ function Bot:think()
   end
 end
 
+-- The game's random numbers are game state: the bot's own code, and the
+-- game's windows and functions it uses, must leave them as they were, or
+-- this computer's game drifts from the others' (a desync). Only this
+-- computer runs that code, so a number drawn there anyway is undone (and
+-- where it was drawn logged, once per place).
+local random_seen = {}
+local function pack(...) return {n = select("#", ...), ...} end
+local function keepRandom(what, fn, ...)
+  local saved = math.randomdump()
+  local random, where = math.random, nil
+  -- (rawset: luacheck keeps the standard library read-only.)
+  rawset(math, "random", function(...)
+    where = where or debug.traceback("", 2)
+    return random(...)
+  end)
+  local results = pack(pcall(fn, ...))
+  rawset(math, "random", random)
+  if math.randomdump() ~= saved then
+    math.randomseed(saved)
+    local key = where or "?"
+    if not random_seen[key] then
+      random_seen[key] = true
+      log("random number drawn by the bot's own code (undone) in " .. what .. ":" .. key)
+    end
+  end
+  if not results[1] then error(results[2], 0) end
+  return unpack_args(results, 2, results.n)
+end
+
 function Bot:update()
+  return keepRandom("update", Bot._update, self)
+end
+
+function Bot:_update()
   local session = TheApp.mp_session
   local world = TheApp.world
   self:flushOutbox()
@@ -1640,7 +1673,7 @@ local function run()
     local session = TheApp.mp_session
     if ok and bot and session and tonumber(cmd.to) == session.hospital_index and
         tonumber(cmd.peer) ~= session.peer_id then
-      bot:moneyReceived(tonumber(cmd.hospital), tonumber(cmd.amount))
+      keepRandom("money", bot.moneyReceived, bot, tonumber(cmd.hospital), tonumber(cmd.amount))
     end
     return ok, why
   end
@@ -1695,10 +1728,10 @@ local function run()
   log("game started")
   bot = Bot.new(lobby)
   lobby:addListener(function(_, event, f)
-    if event == "chat" then bot:onChat(f) end
+    if event == "chat" then keepRandom("chat", bot.onChat, bot, f) end
   end)
   -- The server's answers to its questions (advice; not a game message).
-  lobby._onANSWER = function(_, f) bot:onAnswer(f) end
+  lobby._onANSWER = function(_, f) keepRandom("answer", bot.onAnswer, bot, f) end
   local session = TheApp.mp_session
   -- Speed votes are for the people (MultiplayerSession:voterCount).
   if session then session.abstains = true end
