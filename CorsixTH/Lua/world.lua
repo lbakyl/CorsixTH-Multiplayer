@@ -120,8 +120,10 @@ function World:World(app, free_build_mode)
     -- teams: a race of teams, hospital index -> team (1-4), World:mpTeam;
     -- colours: hospital index -> the colour its players picked (1-4);
     -- mode: what the players' colours and teams made, MultiplayerLobby.MODES)
+    -- (bot_hospitals: hospital index -> true for those only bots play)
     self.mp_coop = {players = coop.players, competitive = coop.competitive or nil, teams = coop.teams,
-        team_hospitals = coop.team_hospitals, colours = coop.colours, mode = coop.mode}
+        team_hospitals = coop.team_hospitals, colours = coop.colours, mode = coop.mode,
+        bot_hospitals = coop.bot_hospitals}
     self.mp_local_index = coop.local_index
     for i = 1, coop.players do
       local hospital = PlayerHospital(self, avail_rooms, coop.names[i] or ("PLAYER " .. i), i)
@@ -1676,6 +1678,9 @@ end
 
 -- Called immediately prior to the ingame month changing.
 -- returns true if the game was killed due to the player losing
+-- Multiplayer: what a hospital only bots play gets every month, hidden.
+World.MP_BOT_BONUS = 2000
+
 function World:onEndMonth()
   -- Multiplayer checks the level's goals at the end of every month (single
   -- player: months 3, 6 and 9, PlayerHospital:onEndMonth), so a hospital
@@ -1700,6 +1705,21 @@ function World:onEndMonth()
   self:_prepareSpawnDates(false)
 
   self:makeAvailableStaff(self.game_date:monthOfGame())
+  -- Multiplayer: a hospital only bots play gets a hidden bonus every month
+  -- (no line on its bank statement); not one a person plays too.
+  local paid = {}
+  for index in pairs(self.mp_coop and self.mp_coop.bot_hospitals or {}) do
+    local hospital = self.hospitals[index]
+    if hospital then
+      hospital.balance = hospital.balance + World.MP_BOT_BONUS
+      paid[#paid + 1] = index
+    end
+  end
+  local session = self.app.mp_session
+  if #paid > 0 and session then
+    table.sort(paid)
+    session.log("bot bonus for hospital(s) " .. table.concat(paid, ","))
+  end
   for _, entity in ipairs(self.entities) do
     if entity.checkForDeadlock and not entity.to_destroy then
       self.current_tick_entity = entity

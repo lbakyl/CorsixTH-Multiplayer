@@ -1011,6 +1011,12 @@ class Server:
                                  names=",".join(room.players[n].name.replace(",", " ")
                                                 for n in sorted(room.players)),
                                  **DEFAULT_SETTINGS)
+        # The bots (computer players): a hospital only they play gets a hidden
+        # monthly bonus (World:onEndMonth); every peer, the referee too, needs
+        # to know which.
+        bots = [str(n) for n in sorted(room.players) if room.players[n].is_bot]
+        if bots:
+            room.start_fields["bots"] = ",".join(bots)
         if free:
             # Every peer works out the hospitals and teams from these
             # (MultiplayerLobby:_beginGame).

@@ -27,6 +27,8 @@
 #      bot): the bot (it discovers something on day 20, a test command)
 #      offers it to frank for free and tells him; a research room it builds
 #      has a second desk
+#  11. the hidden monthly bonus: in "team" hospitals 2 and 3 (bots), never
+#      ann's; in "duel" hospital 2 (the bot)
 #  10. tricks on a bot ("duel", competitive: eve and one bot): eve sends
 #      rats, an evil handyman (level 3), a smear campaign and a broken
 #      boiler. The bot shoots the rats and throws the handyman out, each at
@@ -260,6 +262,12 @@ ok10 = (late_rats and late_handyman and 'smear' in noticed and 'boiler' in notic
 print(f"10. Tricks on a bot:        played {played} {tricks10}; rats shot from step {min(shots) if shots else '-'} "
       f"({len(shots)} shots), handyman out at {fired}; noticed {noticed}; to eve: {to_eve}; eve {result('eve')}")
 fail |= not ok10
+# 11. The hidden monthly bonus, for hospitals only bots play.
+bonus_team = re.findall(r'bot bonus for hospital\(s\) ([\d,]+)', a)
+bonus_duel = re.findall(r'bot bonus for hospital\(s\) ([\d,]+)', e)
+ok11 = bool(bonus_team) and set(bonus_team) == {'2,3'} and bool(bonus_duel) and set(bonus_duel) == {'2'}
+print(f"11. Bot bonus:              team {bonus_team}; duel {bonus_duel}")
+fail |= not ok11
 for name, text in sorted(bots.items()):
     errors = [l for l in text.splitlines() if 'ERROR' in l or 'could not' in l]
     if errors: print(f"   {name} problems: {errors[:5]}")

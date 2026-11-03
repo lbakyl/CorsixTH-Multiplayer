@@ -1287,6 +1287,22 @@ function MultiplayerLobby:_beginGame(f)
       if p == tonumber(f.peer) then my_index = index end
     end
     local count = layout and layout.count or #peers
+    -- Hospitals that only bots play (none of their players a person): a
+    -- hidden monthly bonus, World:onEndMonth. (From START: the referee never
+    -- saw the room's list of players.)
+    local is_bot, bot_only = {}, {}
+    for p in (f.bots or ""):gmatch("%d+") do is_bot[tonumber(p)] = true end
+    for _, p in ipairs(peers) do
+      local index = self.peer_hospital[p]
+      if index then bot_only[index] = (bot_only[index] ~= false) and is_bot[p] or false end
+    end
+    local bot_hospitals
+    for index, only in pairs(bot_only) do
+      if only then
+        bot_hospitals = bot_hospitals or {}
+        bot_hospitals[index] = true
+      end
+    end
     -- A saved game continued: the server gave every player a hospital.
     for p, index in (f.seats or ""):gmatch("(%d+):(%d+)") do
       if tonumber(p) == tonumber(f.peer) then my_index = tonumber(index) end
@@ -1294,7 +1310,7 @@ function MultiplayerLobby:_beginGame(f)
     app.mp_coop = {players = count, local_index = my_index, names = names,
         competitive = MultiplayerLobby.isRace(mode), teams = layout and layout.teams,
         team_hospitals = mode == "teamshared" or nil, colours = layout and layout.colours,
-        mode = mode}
+        mode = mode, bot_hospitals = bot_hospitals}
   end
   f.mode = mode -- (the menu, the bots)
 
