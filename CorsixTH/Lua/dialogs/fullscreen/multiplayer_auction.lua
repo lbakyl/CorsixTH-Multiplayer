@@ -85,6 +85,8 @@ function UIMultiplayerAuction:UIMultiplayerAuction(ui)
   self.loan_panel = self:addBevelPanel(LOAN_X, LOAN_Y, LOAN_W, LOAN_H, loan_col.text)
   self.loan_panel.lowered = true
   self.loan_panel:setTooltip(_S.multiplayer_window.auction_loan_tooltip)
+  self.loan_panel:setLabel(_S.multiplayer_window.auction_loan:format(math.floor(ui.hospital.balance),
+      ui.hospital.loan or 0))
   self.repay_button = self:addBevelPanel(LOAN_X + LOAN_W + 6, LOAN_Y, 32, LOAN_H, loan_col.button):setLabel("-")
       :makeButton(0, 0, 32, LOAN_H, nil, self.repayLoan):setTooltip(_S.multiplayer_window.auction_repay_tooltip)
   self.borrow_button = self:addBevelPanel(LOAN_X + LOAN_W + 42, LOAN_Y, 32, LOAN_H, loan_col.button):setLabel("+")
@@ -277,6 +279,9 @@ end
 
 function UIMultiplayerAuction:onTick()
   self.timer = self.timer + 1
+  -- The bank: balance and loan.
+  local hospital = self.ui.hospital
+  self.loan_panel:setLabel(_S.multiplayer_window.auction_loan:format(math.floor(hospital.balance), hospital.loan or 0))
   if self.blow then
     self.gavel_frame = BLOW[self.blow]
     self.blow = self.blow + 1
@@ -323,7 +328,7 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
   -- middle of a bar or box.) A name too long ends in "...".
   -- (This font has no "+", as in a shared hospital's "JAN + BOT AGNES":
   -- that one is drawn by hand, in the font's colour.)
-  local plus_w = 9 * s
+  local plus_w = 13 * s -- (with a little room on both sides)
   local function shorten(text, w)
     if name_font:sizeOf(text) <= w then return text end
     local n = #text
@@ -338,11 +343,11 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
     local px = tx
     for i, part in ipairs(parts) do
       if i > 1 then
-        local cx, cy = px + 2 * s, ty + 13 * s
+        local cx, cy = px, ty + 16 * s -- (the middle of the letters; the name before has room after it)
         local colour = canvas:mapRGB(244, 228, 140)
         canvas:drawRect(colour, cx, cy + 3 * s, 7 * s, s)
         canvas:drawRect(colour, cx + 3 * s, cy, s, 7 * s)
-        px = px + plus_w + 2 * s
+        px = px + plus_w
       end
       local left = w - (px - tx)
       if left <= 0 then break end
@@ -393,10 +398,6 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
     name_text(leader and leader.name or "", x + LEAD_X * s, y + BID_Y * s, LEAD_W * s, ROW_H * s)
     sum_text(tostring(auction.bid), x + LEAD_VALUE_X * s, y + BID_Y * s, LEAD_VALUE_W * s, ROW_H * s)
   end
-
-  -- The bank: balance and loan.
-  local hospital = self.ui.hospital
-  self.loan_panel:setLabel(S.auction_loan:format(math.floor(hospital.balance), hospital.loan or 0))
 
   -- What is going on, at the top.
   local status
