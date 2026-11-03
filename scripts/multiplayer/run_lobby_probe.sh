@@ -84,6 +84,9 @@
 #  30. the level browser (kai, too): the 8 multiplayer levels by name (map
 #      for 4 players drawn), the campaign's for one shared hospital; level 6
 #      chosen comes back to the lobby
+#  32. the start pause ("pause", MP_START_PAUSE=1500, off in the other
+#      rooms): both players' first step runs 1.5 s after the start at the
+#      earliest (the loading picture stays up meanwhile) -> IN SYNC
 #  31. two languages in one game ("lang"): otis plays in English, greta in
 #      German (the build id no longer has the language); a busy hospital,
 #      staff hired by both, past the first month's new hiring lists -> IN
@@ -246,6 +249,10 @@ run_probe lea MP_ROLE=join MP_ROOM=research MP_STEPS=900 \
 # rise window, one accepted and one declined; a nurse fired; queues
 # reordered by dragging in the queue window; a corridor plant moved into the
 # GP's office (allowed there, as in single player).
+# The start pause, on here only.
+MP_START_PAUSE=1500 run_probe rex MP_ROLE=host MP_ROOM=pause MP_STEPS=200 MP_UI_SCRIPT="1:startpause" & pids+=($!)
+sleep 1
+MP_START_PAUSE=1500 run_probe ida1 MP_ROLE=join MP_ROOM=pause MP_STEPS=200 MP_UI_SCRIPT="1:startpause" & pids+=($!)
 # Two languages in one game: otis in English, greta in German.
 run_probe otis MP_ROLE=host MP_ROOM=lang MP_STEPS=2000 MP_SCENARIO=busy \
   MP_UI_SCRIPT="1600:hire:Doctor;1700:hire:Handyman" & pids+=($!)
@@ -723,6 +730,14 @@ ok30 = bool(lv30 and len(lv30.group(1).split(' | ')) == 8 and lv30.group(1).ends
             and lv30.group(2) == 'true' and lv30.group(3) == 'LARGECHESTER' and lv30.groups()[3:] == ('6', 'true'))
 print(f"30. Level browser:          {lv30.groups() if lv30 else '-'}")
 fail |= not ok30
+
+# The start pause.
+pause32 = [re.search(r'UI: step \d+ ran (\d+) ms after the start \(pause 1500 ms\)', log(n)) for n in ('rex', 'ida1')]
+pause32 = [int(m.group(1)) if m else None for m in pause32]
+ok32 = (None not in pause32 and all(p >= 1500 for p in pause32)
+        and result('rex').startswith('IN SYNC through step 200') and result('ida1').startswith('IN SYNC'))
+print(f"32. Start pause:            first step after {pause32} ms; {result('rex')} / {result('ida1')}")
+fail |= not ok32
 
 # Two languages in one game.
 builds31 = [re.search(r'connected as (\S+)', log(n)) for n in ('otis', 'greta')]

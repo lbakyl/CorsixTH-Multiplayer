@@ -287,8 +287,11 @@ function GameUI:draw(canvas)
   end
   Window.draw(self, canvas, 0, 0) -- NB: not calling UI.draw on purpose
   self:drawTooltip(canvas)
-  -- Multiplayer: the map is there, the first step not yet (MultiplayerLobby.isStarting).
-  if app.mp_starting and MultiplayerLobby.isStarting(app) then MultiplayerLobby.drawLoading(canvas, false) end
+  -- Multiplayer: the map is there, the first step not yet (MultiplayerLobby.isStarting):
+  -- the loading picture during the start pause, then a box over the map.
+  if app.mp_starting and MultiplayerLobby.isStarting(app) then
+    MultiplayerLobby.drawLoading(canvas, MultiplayerLobby.inStartPause(app))
+  end
   if self.simulated_cursor then
     self.simulated_cursor.draw(canvas, self.cursor_x, self.cursor_y)
   end

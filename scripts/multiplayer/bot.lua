@@ -1805,6 +1805,9 @@ local function run()
     if not results[1] then error(results[2], 0) end
     return unpack_args(results, 2)
   end
+  -- (No loading picture to show: no start pause. The people wait for each
+  -- other anyway.)
+  MultiplayerSession.START_PAUSE_MS = 0
   -- The game ends for everybody (lost, or all back to the lobby): stop.
   local finished = false
   MultiplayerSession.finishGame = function(self)

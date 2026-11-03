@@ -109,6 +109,9 @@ local draw_every = tonumber(os.getenv("MP_DRAW_EVERY") or "0")
 local coop = os.getenv("MP_COOP") == "1"
 local room_mode = os.getenv("MP_MODE") or (coop and "coop" or "shared")
 local shot_dir = os.getenv("MP_SHOT_DIR")
+-- The start pause (MultiplayerSession.START_PAUSE_MS): off in tests unless
+-- MP_START_PAUSE gives one (timing checks count from the start).
+local start_pause = tonumber(os.getenv("MP_START_PAUSE") or "") or 0
 -- With the server's referee a desync is repaired: keep playing through it.
 local expect_repair = os.getenv("MP_EXPECT_REPAIR") == "1"
 -- Join a running game again (this name left it earlier).
@@ -458,6 +461,8 @@ local function run()
   assert(TheApp.good_install_folder, "Game data was not accepted")
   socket = require("socket")
   probe_started = socket.gettime()
+  corsixth.require("mp_session")
+  MultiplayerSession.START_PAUSE_MS = start_pause
 
   local lobby = run_lobby()
   if not lobby then log("PROBE: DONE") return end
@@ -1362,6 +1367,10 @@ local function run()
           local list = {}
           for s in steps:gmatch("[^+]+") do list[#list + 1] = s end
           editing = {room_type = id, steps = list}
+        elseif a == "startpause" then
+          -- How long after START the first steps ran (the start pause).
+          log(string.format("UI: step %d ran %d ms after the start (pause %d ms)", session.step,
+              MultiplayerSession.defaultClock()() - (TheApp.mp_starting_ms or 0), MultiplayerSession.START_PAUSE_MS))
         elseif a == "loadingshot" then
           -- The game-start loading picture and box (MultiplayerLobby.drawLoading),
           -- as screenshots to look at (MP_SHOT_DIR).

@@ -1232,6 +1232,15 @@ end
 MultiplayerLobby.LOADING_LIMIT = 120
 local loading_picture
 
+--! Is the game's start pause still on (MultiplayerSession.START_PAUSE_MS
+--! since START)? The loading picture stays up meanwhile.
+function MultiplayerLobby.inStartPause(app)
+  local since = app and app.mp_starting_ms
+  local pause = MultiplayerSession.START_PAUSE_MS
+  if not since or pause <= 0 then return false end
+  return MultiplayerSession.defaultClock()() - since < pause
+end
+
 --! Is the game still starting (TheApp.mp_starting set, no step yet)?
 function MultiplayerLobby.isStarting(app)
   local since = app.mp_starting
@@ -1278,8 +1287,10 @@ end
 
 function MultiplayerLobby:_beginGame(f)
   local app = TheApp
+  app.mp_starting_ms = nil
   if not self.is_referee then
     app.mp_starting = os.time()
+    app.mp_starting_ms = MultiplayerSession.defaultClock()()
     MultiplayerLobby.showLoadingNow(app)
   end
   local peers = {}

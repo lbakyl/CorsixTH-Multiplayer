@@ -328,6 +328,12 @@ function MultiplayerSession:voterCount()
   return n
 end
 
+-- The game's start: its first step waits until the loading picture has been
+-- up this long on this computer (MultiplayerLobby.drawLoading), so every
+-- player sees it while the game connects; the others wait for the last one.
+-- Not for the referee, which shows nothing. 0: no pause (tests, bots).
+MultiplayerSession.START_PAUSE_MS = 1500
+
 --! Is every other peer far enough along for us to run the next step?
 function MultiplayerSession:canStep()
   self:poll()
@@ -335,6 +341,8 @@ function MultiplayerSession:canStep()
       (self.local_save and self.step >= self.local_save.at) then
     return false
   end
+  local lobby = rawget(_G, "MultiplayerLobby")
+  if self.step == 0 and not self.observer and lobby and lobby.inStartPause(rawget(_G, "TheApp")) then return false end
   local needed = self.step + 1 - self.delay + 1
   local waiting_for
   for p, step in pairs(self.peer_step) do
