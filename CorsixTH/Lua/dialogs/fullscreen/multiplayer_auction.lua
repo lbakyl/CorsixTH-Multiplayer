@@ -34,7 +34,7 @@ local UIMultiplayerAuction = _G["UIMultiplayerAuction"] ---@type UIMultiplayerAu
 local ROW_Y, ROW_H = {88, 151, 214, 277}, 32 -- the four bidder bars
 local NAME_X, NAME_W = 22, 160
 local VALUE_X, VALUE_W = 188, 78 -- (left of the colour)
-local SWATCH_X, SWATCH_W = 268, 12
+local SWATCH_X, SWATCH_W = 269, 12
 local MAP_X, MAP_Y, MAP_W, MAP_H = 330, 70, 262, 268 -- the frame's inside
 local GAVEL_X, GAVEL_Y = 14, 452 -- bottom left of the gavel frames
 local TICK_X, TICK_Y = 158, 392
@@ -58,8 +58,10 @@ function UIMultiplayerAuction:UIMultiplayerAuction(ui)
     self.background = gfx:loadRaw("Bid01V", 640, 480, "QData", "QData", "Bid01V.pal", true)
     local palette = gfx:getPalette("Bid01V.pal")
     self.panel_sprites = gfx:loadSpriteTable("QData", "Bid02V", true, palette)
-    -- Names light yellow on the bars, sums in the white boxes.
-    self.name_font = gfx:loadFontAndSpriteTable("QData", "Font45V", false, palette, {apply_ui_scale = true})
+    -- Names light yellow on the bars (the awards screen's font, in its own
+    -- colours: with this picture's it looks worn), sums in the white boxes.
+    self.name_font = gfx:loadFontAndSpriteTable("QData", "Font45V", false, gfx:getPalette("Award02V.pal"),
+        {apply_ui_scale = true})
     self.sum_font = gfx:loadFontAndSpriteTable("QData", "Font60V", false, palette, {apply_ui_scale = true})
     self.status_font = gfx:loadFontAndSpriteTable("QData", "Font01V", nil, nil,
         {ttf_shadow = true, apply_ui_scale = true})
@@ -300,7 +302,7 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
       sum_text(value, x + VALUE_X * s, y + ry * s, VALUE_W * s, ROW_H * s)
       local c = hospital and MultiplayerSession.markerColour(world, hospital)
       if c then
-        canvas:drawRect(canvas:mapRGB(c[1], c[2], c[3]), x + SWATCH_X * s, y + (ry + 8) * s, SWATCH_W * s, 24 * s)
+        canvas:drawRect(canvas:mapRGB(c[1], c[2], c[3]), x + SWATCH_X * s, y + (ry + 11) * s, SWATCH_W * s, 23 * s)
       end
     end
   end
