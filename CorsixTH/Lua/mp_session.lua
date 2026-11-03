@@ -1391,9 +1391,9 @@ end
 local handlers = {}
 MultiplayerSession.default_handlers = handlers
 
-local function tile_free_for_object(world, hospital, x, y, tile)
+local function tile_free_for_object(world, hospital, x, y, tile, room)
   local th = world.map.th
-  if not hospital:isInHospital(x, y) or world:getRoom(x, y) then return false end
+  if not hospital:isInHospital(x, y) or world:getRoom(x, y) ~= room then return false end
   local flags = th:getCellFlags(x, y)
   if tile.only_passable then return flags.passable end
   return flags.buildable and flags.passable and not world:getObject(x, y)
@@ -1515,18 +1515,30 @@ function handlers.move_object(world, cmd)
   if not orientation then return false, "unknown orientation" end
   local old_x, old_y, old_direction = obj.tile_x, obj.tile_y, obj.direction
   if world:anyHumanoidObscuringArea(cmd.x, cmd.y) then return false, "someone is in the way" end
+  -- Into a room, as in single player (UIPlaceObjects:placeObject): one of
+  -- this hospital's open rooms whose kind takes the object (a plant into a
+  -- ward), not while it is being edited or furnished.
+  local room = world:getRoom(cmd.x, cmd.y)
+  if room then
+    local allowed = world:willObjectsFootprintTileBeWithinItsAllowedRoomIfLocatedAt(cmd.x, cmd.y, obj.object_type)
+    if room.hospital ~= hospital or not room.is_active or room.crashed or room.mp_edit or
+        (world.mp_furnishing and world.mp_furnishing[room.id]) or not allowed.within_room then
+      return false, "tile not free"
+    end
+  end
   pick_up(obj)
   obj:setTile(nil)
   obj:rebuildPassableCellFlags()
   local free = true
   for _, t in ipairs(orientation.footprint) do
-    if not tile_free_for_object(world, hospital, cmd.x + t[1], cmd.y + t[2], t) then free = false end
+    if not tile_free_for_object(world, hospital, cmd.x + t[1], cmd.y + t[2], t, room) then free = false end
   end
   if not free then
     put_down(world, obj, old_x, old_y, old_direction)
     return false, "tile not free"
   end
   put_down(world, obj, cmd.x, cmd.y, cmd.orientation)
+  if room then room.objects[obj] = true end
   if obj.object_type.id == "reception_desk" then hospital:buildReceptionDesksCache() end
   return true
 end

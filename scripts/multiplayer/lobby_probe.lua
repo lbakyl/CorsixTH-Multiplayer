@@ -1362,6 +1362,55 @@ local function run()
           local list = {}
           for s in steps:gmatch("[^+]+") do list[#list + 1] = s end
           editing = {room_type = id, steps = list}
+        elseif a == "moveinto" then
+          -- moveinto:<object>:<room>: pick up a corridor object of this
+          -- hospital and put it down inside its room of that kind (a plant
+          -- into a ward), on the first tile there the screen accepts.
+          local id, room_id = entry.arg:match("^([%w_]+):([%w_]+)$")
+          local obj, rm
+          for _, e in ipairs(world.entities) do
+            if not obj and class.is(e, Object) and e.object_type.id == id and e.tile_x and
+                not e:getRoom() and world.ui.hospital:isInHospital(e.tile_x, e.tile_y) then
+              obj = e
+            end
+          end
+          for _, r in pairs(world.rooms) do
+            if not rm and r.hospital == world.ui.hospital and r.room_info.id == room_id and r.is_active then rm = r end
+          end
+          local place = obj and rm and (obj:onClick(world.ui, "right") or true) and world.ui:getWindow(UIPlaceObjects)
+          local spot
+          if place then
+            for ty = rm.y, rm.y + rm.height - 1 do
+              for tx = rm.x, rm.x + rm.width - 1 do
+                if not spot and not world:anyHumanoidObscuringArea(tx, ty) then
+                  place:setBlueprintCell(tx, ty)
+                  if place.object_blueprint_good then spot = {tx, ty} end
+                end
+              end
+            end
+          end
+          if spot then
+            place.object_cell_x, place.object_cell_y = spot[1], spot[2]
+            place:onMouseUp("left", 100000, 100000)
+            log(string.format("UI: moved %s #%d into %s #%d at %d,%d, step %d", id, obj.mp_id, room_id, rm.id,
+                spot[1], spot[2], session.step))
+          else
+            if place then place:close(true) end
+            log(string.format("UI: no spot for %s in a %s (object %s, room %s)", id, room_id, tostring(obj and obj.mp_id),
+                tostring(rm and rm.id)))
+          end
+        elseif a == "objectroom" then
+          -- objectroom:<object>: which room of this hospital each one is in.
+          local where = {}
+          for _, r in pairs(world.rooms) do
+            for o in pairs(r.objects or {}) do
+              if o.object_type and o.object_type.id == entry.arg and r.hospital == world.ui.hospital then
+                where[#where + 1] = string.format("#%d %s", o.mp_id or -1, r.room_info.id)
+              end
+            end
+          end
+          table.sort(where)
+          log(string.format("UI: %s in rooms at step %d: %s", entry.arg, session.step, table.concat(where, ", ")))
         elseif a == "moveobject" or a == "sellobject" then
           -- Pick up a corridor object of this hospital (right click), then
           -- put it down a few tiles away (or <id>:<dx>:<dy> tiles away,

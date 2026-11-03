@@ -240,12 +240,13 @@ run_probe lea MP_ROLE=join MP_ROOM=research MP_STEPS=900 \
 
 # Staff and queues: pay rises asked (test command) and answered in the pay
 # rise window, one accepted and one declined; a nurse fired; queues
-# reordered by dragging in the queue window.
+# reordered by dragging in the queue window; a corridor plant moved into the
+# GP's office (allowed there, as in single player).
 run_probe wade MP_ROLE=host MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
-  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;620:patients:5;640:breakroom:gp;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench;860:movestaff:Doctor;870:whereis:Doctor;950:overlay" & pids+=($!)
+  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;620:patients:5;640:breakroom:gp;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench;820:buy:plant;840:moveinto:plant:gp;920:objectroom:plant;860:movestaff:Doctor;870:whereis:Doctor;950:overlay" & pids+=($!)
 sleep 1
 run_probe yara MP_ROLE=join MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
-  MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront;500:furnishroom:gp:5:5;750:cancelroom:toilets:4:4;870:whereis:Doctor;900:uistate;950:overlay" & pids+=($!)
+  MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront;500:furnishroom:gp:5:5;750:cancelroom:toilets:4:4;870:whereis:Doctor;900:uistate;920:objectroom:plant;950:overlay" & pids+=($!)
 # Room editing: ed builds a GP's office, then edits it while patients are
 # about (pick up, place, buy, move, confirm) and later removes it; flo watches.
 run_probe ed MP_ROLE=host MP_ROOM=edit MP_STEPS=1400 MP_SCENARIO=busy \
@@ -756,7 +757,12 @@ moved10 = bool(moving10 and where_w and where_y and where_w.groups() == where_y.
                and where_w.group(1) == moving10.group(1) and where_w.group(3) == moving10.group(4)
                # gone from the mover's screen at once, seen again where they landed
                and moving10.group(5) == 'true' and where_w.group(4) == 'true')
-ok10 = moved10 and 'move_staff' in kinds10 and clean10 and clicks10 and (result('wade').startswith('IN SYNC through step 1000') and result('yara').startswith('IN SYNC')
+# A corridor plant moved into the GP's office (as in single player): in the
+# room on both screens.
+plant10 = [re.search(r'UI: plant in rooms at step \d+: (#\d+ gp)', t) for t in (w_, y_)]
+plant10 = [m.group(1) if m else None for m in plant10]
+into10 = 'UI: moved plant' in w_ and plant10[0] is not None and plant10[0] == plant10[1]
+ok10 = moved10 and into10 and 'move_staff' in kinds10 and clean10 and clicks10 and (result('wade').startswith('IN SYNC through step 1000') and result('yara').startswith('IN SYNC')
         and cw == applied('yara') and kinds10.count('pay_rise') == 2 and kinds10.count('probe_raise') == 2
         and 'fire_staff' in kinds10 and kinds10.count('queue_move') >= 1 and 'probe_patients' in kinds10
         and 'move_object' in kinds10 and 'sell_object' in kinds10
@@ -764,7 +770,7 @@ ok10 = moved10 and 'move_staff' in kinds10 and clean10 and clicks10 and (result(
         and rooms10 == re.search(r'rooms built: (.*)', y_).group(1)
         and drawn10.get('gp', '-') in rooms10.split() and drawn10.get('toilets', '-') not in rooms10.split()
         and 'accepted the pay rise' in y_ and 'declined the pay rise' in y_)
-print(f"10. Staff and queues:       {result('wade')}; commands {len(okw)}/{len(cw)} ok, identical: {cw == applied('yara')}; {' '.join(kinds10)}; rooms {rooms10 or 'none'}; clicks after furnishing: {clicks10}; markers left: {'/'.join(marks10) or '-'}; staff moved: {moved10} {where_w.group(2, 3) if where_w else '-'}")
+print(f"10. Staff and queues:       {result('wade')}; commands {len(okw)}/{len(cw)} ok, identical: {cw == applied('yara')}; {' '.join(kinds10)}; rooms {rooms10 or 'none'}; clicks after furnishing: {clicks10}; markers left: {'/'.join(marks10) or '-'}; staff moved: {moved10} {where_w.group(2, 3) if where_w else '-'}; plant moved into the GP's office: {into10} {plant10}")
 fail |= not ok10
 
 ed, fl = log('ed'), log('flo')
