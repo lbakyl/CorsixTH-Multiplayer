@@ -18,7 +18,9 @@
 # bots' hospitals at the end. Exits 0 if both games stayed in sync.
 # MP_YEAR_MATCH=1 plays one race instead: room "match", the watcher (its
 # hospital stays closed) and two bots of the first room's brain against each
-# other (STEPS 36000 for two game years).
+# other (STEPS 36000 for two game years); MP_YEAR_BOTS=3 for three bots.
+# MP_YEAR_PHOTOS="6,12" saves pictures of the bots' hospitals at those game
+# months in <output>/shots (MP_YEAR_SCREEN, default 2880x1800, sets the size).
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it, or
 # MP_LUA_CPATH/MP_LUA_PATH set) and python3 (MP_PYTHON).
@@ -73,13 +75,18 @@ script="$script;$((steps - 5)):map:2"
 run_watcher() { # name room
   local name=$1 room=$2 dir="$out/$1"
   local mode=coop players=2 bots=1
-  if [[ "$match" == 1 ]]; then mode=competitive players=3 bots=2; fi
+  if [[ "$match" == 1 ]]; then mode=competitive bots=${MP_YEAR_BOTS:-2} players=$((${MP_YEAR_BOTS:-2} + 1)); fi
+  local screen=${MP_YEAR_SCREEN:-2880x1800} photos=()
+  if [[ -n "${MP_YEAR_PHOTOS:-}" ]]; then
+    mkdir -p "$out/shots"
+    photos=(MP_SHOT_DIR="$out/shots" MP_PHOTO_MONTHS="$MP_YEAR_PHOTOS")
+  fi
   mkdir -p "$dir/config" "$dir/saves"
-  printf 'theme_hospital_install = [[%s]]\nsavegames = [[%s]]\nplayer_name = "%s"\nlanguage = [[English]]\naudio = false\nplay_intro = false\nmovies = false\ngrant_wage_increase = false\n' \
-    "$game_data" "$dir/saves" "$name" > "$dir/config.txt"
+  printf 'theme_hospital_install = [[%s]]\nsavegames = [[%s]]\nplayer_name = "%s"\nlanguage = [[English]]\naudio = false\nplay_intro = false\nmovies = false\ngrant_wage_increase = false\nwidth = %s\nheight = %s\n' \
+    "$game_data" "$dir/saves" "$name" "${screen%x*}" "${screen#*x}" > "$dir/config.txt"
   env XDG_CONFIG_HOME="$dir/config" MP_NAME="$name" MP_ROLE=host MP_ROOM="$room" MP_MODE=$mode MP_LEVEL="$level" \
     MP_PLAYERS=$players MP_ADD_BOTS=$bots MP_SCENARIO=none MP_STEPS="$steps" MP_STALL_LIMIT=300 $watch \
-    MP_UI_SCRIPT="$first${script#;}" timeout $((5400 + steps / 10)) "$binary" \
+    MP_UI_SCRIPT="$first${script#;}" "${photos[@]}" timeout $((5400 + steps / 10)) "$binary" \
     "--interpreter=$source_dir/scripts/multiplayer/lobby_probe.lua" \
     "--config-file=$dir/config.txt" > "$dir/log.txt" 2>&1 || true
 }
@@ -99,7 +106,7 @@ for spec in sys.argv[2:]:
     print(f"{room}: {res.group(1) if res else 'no result'}")
     fail |= not (res and res.group(1).startswith('IN SYNC'))
     for step, date, rest in re.findall(r'UI: hospitals at step (\d+) \(([^)]*)\): (.*)', text):
-        for bot in re.findall(r'\[([23] .*?)\]', rest):
+        for bot in re.findall(r'\[([234] .*?)\]', rest):
             print(f"  step {step} ({date}): {bot}")
 server = (out / 'server.log').read_text()
 asks = len(re.findall(r'advice: \d+ in', server))

@@ -88,6 +88,10 @@
 --   MP_SHOT_DIR       if set, save screenshots (PNG) of the lobby views and of
 --                     moments in the game there, named <player>-<what>.png;
 --                     the UI script action shot:<what> takes one more
+--   MP_PHOTO_MONTHS   with MP_SHOT_DIR: ","-separated game months (6 = six
+--                     months in); at each, a picture of every other hospital,
+--                     zoomed to fit its buildings (where the renderer can zoom;
+--                     else 1:1, centred), named h<n>-m<months>.png
 --   MP_LUA_CPATH, MP_LUA_PATH  where to find LuaSocket
 local args = {...}
 local unpack_args = table.unpack or unpack
@@ -109,6 +113,9 @@ local draw_every = tonumber(os.getenv("MP_DRAW_EVERY") or "0")
 local coop = os.getenv("MP_COOP") == "1"
 local room_mode = os.getenv("MP_MODE") or (coop and "coop" or "shared")
 local shot_dir = os.getenv("MP_SHOT_DIR")
+local photo_months = {}
+for m in (os.getenv("MP_PHOTO_MONTHS") or ""):gmatch("%d+") do photo_months[#photo_months + 1] = tonumber(m) end
+local photos_done = {}
 -- The start pause (MultiplayerSession.START_PAUSE_MS): off in tests unless
 -- MP_START_PAUSE gives one (timing checks count from the start).
 local start_pause = tonumber(os.getenv("MP_START_PAUSE") or "") or 0
@@ -236,6 +243,39 @@ local function look_at(tx, ty)
   local ui = TheApp.ui
   local x, y = TheApp.map:WorldToScreen(tx, ty)
   ui:scrollMapTo(x, y)
+end
+
+--! A picture of hospital h: its buildings zoomed to fit the screen.
+local function photo_hospital(world, h, what)
+  local hosp, ui = world.hospitals[h], world.ui
+  local index = hosp:getPlayerIndex()
+  local th = world.map.th
+  local mw, mh = th:size()
+  local sx0, sy0, sx1, sy1
+  local flags = {}
+  for ty = 1, mh do
+    for tx = 1, mw do
+      th:getCellFlags(tx, ty, flags)
+      if flags.hospital and flags.owner == index then
+        local x, y = TheApp.map:WorldToScreen(tx, ty)
+        sx0, sy0 = math.min(sx0 or x, x), math.min(sy0 or y, y)
+        sx1, sy1 = math.max(sx1 or x, x), math.max(sy1 or y, y)
+      end
+    end
+  end
+  if not sx0 then return end
+  local sw, sh = TheApp.video:getRenderSize()
+  local zoom = math.min(1, sw / (sx1 - sx0 + 160), (sh - 70) / (sy1 - sy0 + 160))
+  zoom = math.max(zoom, ui:calculateMinimumZoom())
+  -- (GameUI:draw falls back to 1:1 where the renderer cannot scale.)
+  if zoom < 1 and not TheApp.video:scale(zoom) then zoom = 1 end
+  TheApp.video:scale(1)
+  ui:setZoom(zoom)
+  ui:scrollMapTo((sx0 + sx1) / 2, (sy0 + sy1) / 2 + 40 / zoom)
+  log(string.format("UI: photo of hospital %d (%s) at step %d, zoom %.2f", h, hosp.name,
+      TheApp.mp_session and TheApp.mp_session.step or 0, zoom))
+  shot(what)
+  ui:setZoom(1)
 end
 
 local function run_lobby()
@@ -827,6 +867,18 @@ local function run()
       filming.n = filming.n + 1
       shot(string.format("film-%03d", filming.n))
       filming.left = filming.left - 1
+    end
+    -- MP_PHOTO_MONTHS: pictures of the other hospitals at those game months.
+    if shot_dir and #photo_months > 0 then
+      local months = world:date():monthOfGame() - 1
+      for _, m in ipairs(photo_months) do
+        if months >= m and not photos_done[m] then
+          photos_done[m] = true
+          for h, hosp in ipairs(world.hospitals) do
+            if hosp ~= world.ui.hospital then photo_hospital(world, h, string.format("h%d-m%02d", h, m)) end
+          end
+        end
+      end
     end
     for i, entry in ipairs(ui_script) do
       if not done[i] and session.step >= entry.hour then
