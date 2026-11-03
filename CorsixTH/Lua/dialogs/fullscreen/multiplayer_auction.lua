@@ -33,12 +33,12 @@ local UIMultiplayerAuction = _G["UIMultiplayerAuction"] ---@type UIMultiplayerAu
 -- part of it).
 local ROW_Y, ROW_H = {88, 151, 214, 277}, 32 -- the four bidder bars
 local NAME_X, NAME_W = 22, 160
-local VALUE_X, VALUE_W = 190, 78
-local SWATCH_X, SWATCH_W = 271, 13
+local VALUE_X, VALUE_W = 188, 78 -- (left of the colour)
+local SWATCH_X, SWATCH_W = 268, 12
 local MAP_X, MAP_Y, MAP_W, MAP_H = 330, 70, 262, 268 -- the frame's inside
 local GAVEL_X, GAVEL_Y = 14, 452 -- bottom left of the gavel frames
 local TICK_X, TICK_Y = 158, 392
-local BID_X, BID_W, BID_Y = 190, 96, 388
+local BID_X, BID_W, BID_Y = 190, 96, 383
 local LEAD_X, LEAD_W, LEAD_VALUE_X, LEAD_VALUE_W = 322, 178, 508, 96
 local CROSS_X, CROSS_Y = 608, 448
 local STATUS_X, STATUS_Y, STATUS_W = 16, 6, 608
@@ -274,8 +274,19 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
   local shown = auction or last
   local S = _S.multiplayer_window
   local name_font, sum_font = self.name_font, self.sum_font
+  -- (The fonts' letters sit a little high: a few pixels lower is the
+  -- middle of a bar or box.) A name too long ends in "...".
   local function name_text(text, tx, ty, w, h)
-    name_font:draw(canvas, text, tx, ty + 3 * s, w, h, "left") -- (a little lower: the bar's middle)
+    text = tostring(text)
+    if name_font:sizeOf(text) > w then
+      local n = #text
+      while n > 1 and name_font:sizeOf(text:sub(1, n) .. "...") > w do n = n - 1 end
+      text = text:sub(1, n) .. "..."
+    end
+    name_font:draw(canvas, text, tx, ty + 5 * s, w, h, "left")
+  end
+  local function sum_text(text, tx, ty, w, h)
+    sum_font:draw(canvas, text, tx, ty + 4 * s, w, h, "center")
   end
 
   -- The bidders: name, bid (or "out"), colour.
@@ -286,10 +297,10 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
       local hospital = world.hospitals[index]
       name_text(hospital and hospital.name or "?", x + NAME_X * s, y + ry * s, NAME_W * s, ROW_H * s)
       local value = shown.out[index] and S.auction_out or tostring(shown.bids[index] or 0)
-      sum_font:draw(canvas, value, x + VALUE_X * s, y + ry * s, VALUE_W * s, ROW_H * s, "left")
+      sum_text(value, x + VALUE_X * s, y + ry * s, VALUE_W * s, ROW_H * s)
       local c = hospital and MultiplayerSession.markerColour(world, hospital)
       if c then
-        canvas:drawRect(canvas:mapRGB(c[1], c[2], c[3]), x + SWATCH_X * s, y + (ry + 3) * s, SWATCH_W * s, 26 * s)
+        canvas:drawRect(canvas:mapRGB(c[1], c[2], c[3]), x + SWATCH_X * s, y + (ry + 8) * s, SWATCH_W * s, 24 * s)
       end
     end
   end
@@ -311,10 +322,10 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
   local standing = self:standing()
   if auction then
     local next_bid = (standing == "bid" or standing == "poor") and tostring(auction.bid + auction.step) or ""
-    sum_font:draw(canvas, next_bid, x + BID_X * s, y + BID_Y * s, BID_W * s, ROW_H * s, "left")
+    sum_text(next_bid, x + BID_X * s, y + BID_Y * s, BID_W * s, ROW_H * s)
     local leader = world.hospitals[auction.leader]
     name_text(leader and leader.name or "", x + LEAD_X * s, y + BID_Y * s, LEAD_W * s, ROW_H * s)
-    sum_font:draw(canvas, tostring(auction.bid), x + LEAD_VALUE_X * s, y + BID_Y * s, LEAD_VALUE_W * s, ROW_H * s, "left")
+    sum_text(tostring(auction.bid), x + LEAD_VALUE_X * s, y + BID_Y * s, LEAD_VALUE_W * s, ROW_H * s)
   end
 
   -- What is going on, at the top.
