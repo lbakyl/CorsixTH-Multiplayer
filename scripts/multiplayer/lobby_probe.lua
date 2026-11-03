@@ -1394,14 +1394,29 @@ local function run()
           end
           log(string.format("UI: asking for plot %s at step %d", tostring(best), session.step))
           if best then session:issue({kind = "buy_plot", plot = best}) end
+        elseif a == "auctionhide" or a == "auctionback" then
+          -- Close the auction screen as a player who only watches does, or
+          -- press "Back to the auction" in the box shown meanwhile.
+          local window = world.ui:getWindow(rawget(_G, "UIMultiplayerAuction"))
+          local wait = world.ui:getWindow(rawget(_G, "UIMultiplayerAuctionWait"))
+          log(string.format("UI: %s at step %d: screen %s, waiting box %s", a, session.step,
+              tostring(window ~= nil), tostring(wait ~= nil)))
+          if a == "auctionhide" and window then
+            session.auction_closed = window.auction_id
+            window:close()
+          elseif a == "auctionback" and wait then
+            wait:back()
+          end
         elseif a == "auctionbid" or a == "auctionpass" or a == "auctionshot" then
           -- The auction screen: press the tick (bid), the cross (drop out),
           -- or take a picture of it.
           local window = world.ui:getWindow(rawget(_G, "UIMultiplayerAuction"))
           local auction = world.mp_auction
-          log(string.format("UI: %s at step %d: screen %s, auction %s, bid %s, %s, game hours %d", a, session.step,
-              tostring(window ~= nil), auction and tostring(auction.id) or "none",
-              auction and tostring(auction.bid) or "-", window and window:standing() or "-", world.mp_hours or 0))
+          local wait = world.ui:getWindow(rawget(_G, "UIMultiplayerAuctionWait"))
+          log(string.format("UI: %s at step %d: screen %s, auction %s, bid %s, %s, game hours %d, waiting box %s", a,
+              session.step, tostring(window ~= nil), auction and tostring(auction.id) or "none",
+              auction and tostring(auction.bid) or "-", window and window:standing() or "-", world.mp_hours or 0,
+              tostring(wait ~= nil)))
           if window and a == "auctionbid" then window:bid()
           elseif window and a == "auctionpass" then window:dropOut()
           elseif a == "auctionshot" then shot("auction-" .. session.step) end

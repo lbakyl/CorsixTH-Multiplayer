@@ -90,7 +90,9 @@
 #  33. a land auction ("auction", co-op level 2): ana asks for a plot on
 #      ben's side, so it is auctioned; both see the auction screen, ben bids
 #      in it, then ana, who gets it for her bid; no game hours pass during
-#      the auction -> IN SYNC, the same sale in both games
+#      the auction; ben closes the screen meanwhile and gets the "please
+#      wait" box, and goes back to the auction from it -> IN SYNC, the same
+#      sale in both games
 #  31. two languages in one game ("lang"): otis plays in English, greta in
 #      German (the build id no longer has the language); a busy hospital,
 #      staff hired by both, past the first month's new hiring lists -> IN
@@ -261,7 +263,7 @@ MP_START_PAUSE=1500 run_probe ida1 MP_ROLE=join MP_ROOM=pause MP_STEPS=200 MP_UI
 # outbids him.
 run_probe ana MP_ROLE=host MP_ROOM=auction MP_COOP=1 MP_LEVEL=2 MP_STEPS=600   MP_UI_SCRIPT="20:openhospital;100:auctionbuy;104:auctionshot;140:auctionshot;200:auctionbid;204:auctionshot" & pids+=($!)
 sleep 1
-run_probe ben MP_ROLE=join MP_ROOM=auction MP_STEPS=600   MP_UI_SCRIPT="30:openhospital;110:auctionshot;150:auctionbid" & pids+=($!)
+run_probe ben MP_ROLE=join MP_ROOM=auction MP_STEPS=600   MP_UI_SCRIPT="30:openhospital;110:auctionshot;150:auctionbid;170:auctionhide;176:auctionshot;190:auctionback;196:auctionshot" & pids+=($!)
 # Two languages in one game: otis in English, greta in German.
 run_probe otis MP_ROLE=host MP_ROOM=lang MP_STEPS=2000 MP_SCENARIO=busy \
   MP_UI_SCRIPT="1600:hire:Doctor;1700:hire:Handyman" & pids+=($!)
@@ -752,16 +754,20 @@ fail |= not ok32
 
 # The land auction.
 sold33 = [re.findall(r'auction 1: plot \d+ sold to hospital \d+ for \$\d+', log(n)) for n in ('ana', 'ben')]
-screens33 = [re.findall(r'UI: auction\w+ at step \d+: screen (\w+), auction (\w+), bid (\S+), (\w+), game hours (\d+)', log(n))
-             for n in ('ana', 'ben')]
+screens33 = [re.findall(r'UI: auctionshot at step (\d+): screen (\w+), auction (\w+), bid (\S+), ([\w-]+), game hours (\d+), '
+                        r'waiting box (\w+)', log(n)) for n in ('ana', 'ben')]
+screens33 = [[x[1:] for x in s if x[0] != '176'] for s in screens33] + [[x[1:] for x in screens33[1] if x[0] == '176']]
+# (ben at step 176, the screen closed: the waiting box instead.)
+hidden33 = screens33.pop()
 hours33 = [int(x[4]) for x in screens33[0] if x[1] == '1']
 ok33 = (len(sold33[0]) == 1 and sold33 == [sold33[0], sold33[0]] and sold33[0][0].startswith('auction 1: plot')
         and 'sold to hospital 1 for' in sold33[0][0]
-        and all(x[0] == 'true' and x[1] == '1' for s in screens33 for x in s)
+        and all(x[0] == 'true' and x[1] == '1' and x[5] == 'false' for s in screens33 for x in s)
+        and len(hidden33) == 1 and hidden33[0][0] == 'false' and hidden33[0][5] == 'true' and len(screens33[1]) == 2
         and ('true', '1', '3850', 'bid', ) == screens33[1][0][:4]
         and len(hours33) >= 2 and len(set(hours33)) == 1
         and result('ana').startswith('IN SYNC') and result('ben').startswith('IN SYNC'))
-print(f"33. Land auction:           {sold33[0]}; screens {screens33}; {result('ana')} / {result('ben')}")
+print(f"33. Land auction:           {sold33[0]}; screens {screens33}; closed by ben {hidden33}; {result('ana')} / {result('ben')}")
 fail |= not ok33
 
 # Two languages in one game.

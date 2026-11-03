@@ -3087,7 +3087,8 @@ function MultiplayerSession:tickAuction()
 end
 
 --! Show the auction window while there is an auction (again after a load
---! or a repair), unless this player closed it; close it after.
+--! or a repair), unless this player closed it (then a box to wait in, with
+--! the way back); close it after.
 function MultiplayerSession:syncAuction(world)
   local ui = world and world.ui
   local class_ = rawget(_G, "UIMultiplayerAuction")
@@ -3102,6 +3103,15 @@ function MultiplayerSession:syncAuction(world)
     ui:addWindow(class_(ui))
   elseif window and not auction then
     window:finish() -- the gavel, then it closes
+  end
+  -- Closed by this player: "Auction in progress, please wait..." and the way
+  -- back, until it is over.
+  local wait_class = rawget(_G, "UIMultiplayerAuctionWait")
+  local waiting = wait_class and ui:getWindow(wait_class)
+  if auction and not ui:getWindow(class_) and self.auction_closed == auction.id then
+    if not waiting then ui:addWindow(wait_class(ui)) end
+  elseif waiting then
+    waiting:close()
   end
 end
 

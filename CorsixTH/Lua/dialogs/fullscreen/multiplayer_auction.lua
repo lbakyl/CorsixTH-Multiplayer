@@ -348,3 +348,46 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
   end
   self.status_font:drawWrapped(canvas, status, x + STATUS_X * s, y + STATUS_Y * s, STATUS_W * s)
 end
+
+--------------------------------------------------------------------------------
+
+--! While an auction this player closed the screen of is still on: the game
+--! stands still, and this box says why, with the way back to the auction.
+--! It cannot be closed; it goes when the auction is over
+--! (MultiplayerSession:syncAuction).
+class "UIMultiplayerAuctionWait" (UIResizable)
+
+---@class UIMultiplayerAuctionWait: UIResizable
+---@operator call: UIMultiplayerAuctionWait
+local UIMultiplayerAuctionWait = _G["UIMultiplayerAuctionWait"] ---@type UIMultiplayerAuctionWait
+
+local wait_col = {
+  bg     = {red = 92, green = 60, blue = 40},
+  text   = {red = 70, green = 44, blue = 28},
+  button = {red = 132, green = 92, blue = 56},
+}
+
+function UIMultiplayerAuctionWait:UIMultiplayerAuctionWait(ui)
+  local S = _S.multiplayer_window
+  self:UIResizable(ui, 320, 96, wait_col.bg)
+  self.esc_closes = false
+  self.resizable = false
+  self.on_top = true
+  self:setDefaultPosition(0.5, 0.4)
+  self.default_button_sound = "selectx.wav"
+  self:addBevelPanel(20, 12, 280, 26, wait_col.text):setLabel(S.auction_wait).lowered = true
+  self:addBevelPanel(70, 52, 180, 30, wait_col.button):setLabel(S.auction_back)
+      :makeButton(0, 0, 180, 30, nil, self.back)
+end
+
+--! Back to the auction screen.
+function UIMultiplayerAuctionWait:back()
+  local session = TheApp.mp_session
+  local ui = self.ui
+  self:close()
+  if session then session.auction_closed = nil end
+  local world = ui.app.world
+  if world and world.mp_auction and not ui:getWindow(UIMultiplayerAuction) then
+    ui:addWindow(UIMultiplayerAuction(ui))
+  end
+end
