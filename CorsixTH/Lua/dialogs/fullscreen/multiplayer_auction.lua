@@ -42,6 +42,12 @@ local BID_X, BID_W, BID_Y = 190, 96, 383
 local LEAD_X, LEAD_W, LEAD_VALUE_X, LEAD_VALUE_W = 330, 170, 508, 96
 local CROSS_X, CROSS_Y = 608, 448
 local STATUS_X, STATUS_Y, STATUS_W = 16, 6, 608
+local LOAN_X, LOAN_Y, LOAN_W, LOAN_H = 30, 334, 186, 26 -- the bank, under the bars
+local LOAN_STEP = 5000
+local loan_col = {
+  text   = {red = 70, green = 44, blue = 28},
+  button = {red = 132, green = 92, blue = 56},
+}
 local MAP_BG = {44, 96, 52}
 local LOT_COLOUR = {236, 52, 28}
 
@@ -75,6 +81,14 @@ function UIMultiplayerAuction:UIMultiplayerAuction(ui)
   -- (Pressed: the sprite over the picture's tick or cross.)
   self.tick = self:addPanel(0, TICK_X, TICK_Y):makeButton(0, 0, 28, 28, 1, self.bid)
   self.cross = self:addPanel(0, CROSS_X, CROSS_Y):makeButton(0, 0, 25, 25, 2, self.dropOut)
+  -- The bank: borrow (or pay back) $5,000 without leaving the auction.
+  self.loan_panel = self:addBevelPanel(LOAN_X, LOAN_Y, LOAN_W, LOAN_H, loan_col.text)
+  self.loan_panel.lowered = true
+  self.loan_panel:setTooltip(_S.multiplayer_window.auction_loan_tooltip)
+  self.repay_button = self:addBevelPanel(LOAN_X + LOAN_W + 6, LOAN_Y, 32, LOAN_H, loan_col.button):setLabel("-")
+      :makeButton(0, 0, 32, LOAN_H, nil, self.repayLoan):setTooltip(_S.multiplayer_window.auction_repay_tooltip)
+  self.borrow_button = self:addBevelPanel(LOAN_X + LOAN_W + 42, LOAN_Y, 32, LOAN_H, loan_col.button):setLabel("+")
+      :makeButton(0, 0, 32, LOAN_H, nil, self.borrow):setTooltip(_S.multiplayer_window.auction_borrow_tooltip)
   self.gavel_frame = GAVEL_REST
   self.blow = nil
   self.going = 0
@@ -208,6 +222,35 @@ function UIMultiplayerAuction:bid()
   session:issue({kind = "auction_bid", auction = auction.id, amount = auction.bid + auction.step})
 end
 
+--! The largest loan this hospital may have (as at the bank).
+function UIMultiplayerAuction:maxLoan()
+  local hospital = self.ui.hospital
+  if self.world.free_build_mode then return 0 end
+  return math.floor((hospital.value * 0.33) / 5000) * 5000 + 10000
+end
+
+--! "+": borrow $5,000 (a shared command, as the bank manager's).
+function UIMultiplayerAuction:borrow()
+  local hospital, session = self.ui.hospital, TheApp.mp_session
+  if not session or hospital.loan + LOAN_STEP > self:maxLoan() then
+    self.ui:playSound("wrong2.wav")
+    return
+  end
+  session:issue({kind = "loan", amount = LOAN_STEP})
+  self.ui:playSound("selectx.wav")
+end
+
+--! "-": pay $5,000 of the loan back.
+function UIMultiplayerAuction:repayLoan()
+  local hospital, session = self.ui.hospital, TheApp.mp_session
+  if not session or hospital.loan < LOAN_STEP or hospital.balance < LOAN_STEP then
+    self.ui:playSound("wrong2.wav")
+    return
+  end
+  session:issue({kind = "loan", amount = -LOAN_STEP})
+  self.ui:playSound("selectx.wav")
+end
+
 --! The cross: a bidder drops out (and the screen closes); for the others it
 --! only closes the screen.
 function UIMultiplayerAuction:dropOut()
@@ -278,14 +321,35 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
   local name_font, sum_font = self.name_font, self.sum_font
   -- (The fonts' letters sit a little high: a few pixels lower is the
   -- middle of a bar or box.) A name too long ends in "...".
+  -- (This font has no "+", as in a shared hospital's "JAN + BOT AGNES":
+  -- that one is drawn by hand, in the font's colour.)
+  local plus_w = 9 * s
+  local function shorten(text, w)
+    if name_font:sizeOf(text) <= w then return text end
+    local n = #text
+    while n > 1 and name_font:sizeOf(text:sub(1, n) .. "...") > w do n = n - 1 end
+    return text:sub(1, n):gsub("[%s_]+$", "") .. "..." -- (this font draws _ as a blank)
+  end
   local function name_text(text, tx, ty, w, h)
-    text = tostring(text)
-    if name_font:sizeOf(text) > w then
-      local n = #text
-      while n > 1 and name_font:sizeOf(text:sub(1, n) .. "...") > w do n = n - 1 end
-      text = text:sub(1, n):gsub("[%s_]+$", "") .. "..." -- (this font draws _ as a blank)
+    local parts = {}
+    for part in (tostring(text) .. "+"):gmatch("([^+]*)%+") do
+      parts[#parts + 1] = part:match("^%s*(.-)%s*$")
     end
-    name_font:draw(canvas, text, tx, ty + 5 * s, w, h, "left")
+    local px = tx
+    for i, part in ipairs(parts) do
+      if i > 1 then
+        local cx, cy = px + 2 * s, ty + 13 * s
+        local colour = canvas:mapRGB(244, 228, 140)
+        canvas:drawRect(colour, cx, cy + 3 * s, 7 * s, s)
+        canvas:drawRect(colour, cx + 3 * s, cy, s, 7 * s)
+        px = px + plus_w + 2 * s
+      end
+      local left = w - (px - tx)
+      if left <= 0 then break end
+      part = shorten(part, left)
+      name_font:draw(canvas, part, px, ty + 5 * s, left, h, "left")
+      px = px + name_font:sizeOf(part) + 2 * s
+    end
   end
   local function sum_text(text, tx, ty, w, h)
     sum_font:draw(canvas, text, tx, ty + 4 * s, w, h, "center")
@@ -330,6 +394,10 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
     sum_text(tostring(auction.bid), x + LEAD_VALUE_X * s, y + BID_Y * s, LEAD_VALUE_W * s, ROW_H * s)
   end
 
+  -- The bank: balance and loan.
+  local hospital = self.ui.hospital
+  self.loan_panel:setLabel(S.auction_loan:format(math.floor(hospital.balance), hospital.loan or 0))
+
   -- What is going on, at the top.
   local status
   if not auction then
@@ -342,7 +410,7 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
     elseif standing == "watch" then status = S.auction_watching
     elseif standing == "lead" then status = S.auction_leading
     elseif standing == "out" then status = S.auction_dropped
-    elseif standing == "poor" then status = S.auction_no_money
+    elseif standing == "poor" then status = S.auction_no_money_loan
     else status = S.auction_price:format(auction.price, auction.step) end
     status = S.auction_title:format(auction.plot) .. ". " .. status .. " " .. S.auction_paused
   end
