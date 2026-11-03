@@ -252,21 +252,6 @@ function levels.apply(config, campaign, level, players)
   }
   config.mp_level = levels.clamp(level)
   if def.scenario then levels.SCENARIOS[def.scenario].apply(config, players or 2) end
-  -- The hiring lists (the map's NET<n>.SAM, or a scenario's) are thin: two
-  -- to ten doctors, on some maps one or two of each later on, and all the
-  -- hospitals hire from the one list (map 43 had two receptionists for
-  -- four). Every month's list has plenty of each, at least 20 doctors; the
-  -- specialists stay as rare as the list makes them.
-  local n = players or 2
-  local least = {Doctors = math.max(20, 5 * n), Nurses = math.max(15, 4 * n),
-      Handymen = math.max(8, 2 * n), Receptionists = math.max(6, 2 * n)}
-  local staff = {}
-  for i, entry in pairs(config.staff_levels or {}) do
-    local copy = {}
-    for k, v in pairs(entry) do copy[k] = least[k] and math.max(v, least[k]) or v end
-    staff[i] = copy
-  end
-  config.staff_levels = staff
 end
 
 --! The value goal: what the biggest of the players' starting plots is worth

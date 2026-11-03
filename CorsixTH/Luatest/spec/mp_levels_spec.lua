@@ -186,7 +186,7 @@ describe("Multiplayer levels", function()
     assert.equal(0, staff[0].Month)
     assert.equal(2, staff[0].ConsRate)
     assert.equal(0, staff[0].JrRate)
-    assert.equal(20, staff[0].Doctors) -- 4 per hospital and 2, but at least 20
+    assert.equal(14, staff[0].Doctors) -- 4 per hospital and 2
     for i = 0, #staff do
       if staff[i].Month >= 8 then
         assert.equal(1, staff[i].JrRate)
@@ -204,36 +204,6 @@ describe("Multiplayer levels", function()
     levels.apply(plain, campaign, 3, 3)
     assert.equal(campaign.emergency_control, plain.emergency_control)
     assert.is_nil(plain.mp_events)
-  end)
-
-  it("gives every hospital plenty of staff to hire, on every level", function()
-    -- NET43.SAM (map 4 with four players): two receptionists for all of them.
-    local sam = {
-      [0] = {Month = 0, Nurses = 8, Doctors = 8, Handymen = 5, Receptionists = 2, ShrkRate = 3},
-      {Month = 10, Nurses = 7, Doctors = 5, Handymen = 4, Receptionists = 3, ShrkRate = 4},
-    }
-    local config = {staff_levels = sam}
-    levels.apply(config, {objects = {}}, 4, 4)
-    local staff = config.staff_levels
-    assert.same({Month = 0, Nurses = 16, Doctors = 20, Handymen = 8, Receptionists = 8, ShrkRate = 3}, staff[0])
-    assert.same({Month = 10, Nurses = 16, Doctors = 20, Handymen = 8, Receptionists = 8, ShrkRate = 4}, staff[1])
-    -- The map's own table is left as it was.
-    assert.equal(2, sam[0].Receptionists)
-    -- Two players: still at least 20 doctors, 15 nurses, 8 handymen, 6 receptionists.
-    local two = {staff_levels = sam}
-    levels.apply(two, {objects = {}}, 4, 2)
-    assert.same({Month = 0, Nurses = 15, Doctors = 20, Handymen = 8, Receptionists = 6, ShrkRate = 3},
-        two.staff_levels[0])
-    -- The scenario levels' own lists too (level 7 keeps its rare specialists).
-    for _, level in ipairs({6, 7}) do
-      local c = {staff_levels = sam}
-      levels.apply(c, {objects = {}}, level, 4)
-      for i = 0, #c.staff_levels do
-        local e = c.staff_levels[i]
-        assert.truthy(e.Doctors >= 20 and e.Nurses >= 16 and e.Handymen >= 8 and e.Receptionists >= 8)
-      end
-      if level == 7 then assert.equal(10, c.staff_levels[0].ShrkRate) end
-    end
   end)
 
   -- The level's random emergencies, and the May slack tongue ones apart.

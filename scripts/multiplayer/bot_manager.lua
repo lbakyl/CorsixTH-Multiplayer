@@ -189,7 +189,8 @@ function M:assess()
       elseif t and not world:getRoom(e.tile_x, e.tile_y) then
         s.objects[t] = (s.objects[t] or 0) + 1
       end
-      if class.is(e, Machine) and e.hospital == hosp and e.getRemainingUses then
+      -- (A machine's second part, like the operating table's, has no strength.)
+      if class.is(e, Machine) and e.hospital == hosp and e.strength and e.getRemainingUses then
         local left = e:getRemainingUses()
         if left <= 3 then s.worn[#s.worn + 1] = e end
       end
