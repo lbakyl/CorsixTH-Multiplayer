@@ -311,11 +311,11 @@ function MultiplayerLobby.buildId(app)
     end
   end
   local runtime = rawget(_G, "jit") and "luajit" or _VERSION:gsub("Lua ", "lua")
-  -- The language matters too: random staff names are picked from its lists,
-  -- whose lengths decide how much randomness is used.
-  local language = tostring(app.config.language or "?"):gsub("%W", ""):lower()
-  local build = string.format("%s-sv%d-%s-mp%d-%s-%08x", app:getReleaseString(),
-      app.savegame_version, runtime, MultiplayerLobby.PROTOCOL, language,
+  -- (Not the language: players in different languages play together. What
+  -- depended on it, how many random numbers a staff description takes, uses
+  -- the cosmetic ones in multiplayer, StaffProfile:randomiseOrganical.)
+  local build = string.format("%s-sv%d-%s-mp%d-%08x", app:getReleaseString(),
+      app.savegame_version, runtime, MultiplayerLobby.PROTOCOL,
       TH.CRC32File(table.concat(parts, "\0")))
   MultiplayerLobby.cached_build = build
   return build

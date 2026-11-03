@@ -209,9 +209,11 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
     draws; one command builds the room everywhere through a hidden editor
     that is never added to the UI (adding it would close the local player's
     windows: windows with the same modal class replace each other).
-16. **`__random` strings use gameplay randomness**, and the number of
-    candidates depends on the language: players must use the same language
-    (it is part of the build id).
+16. **`__random` strings use gameplay randomness** (one draw, whatever the
+    language), but a staff description dropped a phrase that made it too long
+    and then shuffled what was left with one draw per phrase: how many depended
+    on the language. In multiplayer that shuffle uses the cosmetic random
+    numbers, and the language is no longer part of the build id.
 17. **Local config leaks into building**: average room contents and the
     blocking-off-areas rule are fixed while a room command runs.
 18. **`getLocalPlayerHospital()` is called by simulation code**, so in co-op

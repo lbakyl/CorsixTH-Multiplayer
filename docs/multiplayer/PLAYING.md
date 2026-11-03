@@ -31,8 +31,8 @@ It is a test version: expect rough edges, and please report what you find.
    needed). Unzip it into a new folder.
 2. Start `CorsixTH.exe`. The first time it asks for your Theme Hospital
    folder.
-3. Use **English** as the game language for now: everybody in a game needs
-   the same language.
+3. Any game language works: players in different languages play together
+   (from the test build after 174c9927).
 
 **Linux** (x86_64; Linux Mint 22, Ubuntu 24.04 or newer): download the
 `...-linux-x86_64.tar.gz` of the same release, unpack it

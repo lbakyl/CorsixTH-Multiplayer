@@ -64,11 +64,11 @@ end
 
 local name_parts = {_S.humanoid_name_starts, _S.humanoid_name_ends}
 
-local function shuffle(t)
+local function shuffle(t, random)
   local r = {}
   local i = {}
   for k in ipairs(t) do
-    r[k] = math.random()
+    r[k] = random()
     i[k] = k
   end
   table.sort(i, function(x, y) return r[x] < r[y] end)
@@ -173,7 +173,10 @@ function StaffProfile:randomiseOrganical()
   while #our_concat(descs) > 96 do
     descs[#descs] = nil
   end
-  self.desc = our_concat(shuffle(descs))
+  -- (Multiplayer: the cosmetic random numbers. How many phrases fit depends
+  -- on the language, and the shared ones must not: players may play in
+  -- different languages, MultiplayerLobby.buildId.)
+  self.desc = our_concat(shuffle(descs, TheApp and TheApp.mp_session and math.cosmetic_random or math.random))
   if self:isType("Doctor") then
     self.is_black = math.random(0, 1) == 0
     if self.is_black then

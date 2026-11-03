@@ -84,6 +84,10 @@
 #  30. the level browser (kai, too): the 8 multiplayer levels by name (map
 #      for 4 players drawn), the campaign's for one shared hospital; level 6
 #      chosen comes back to the lobby
+#  31. two languages in one game ("lang"): otis plays in English, greta in
+#      German (the build id no longer has the language); a busy hospital,
+#      staff hired by both, past the first month's new hiring lists -> IN
+#      SYNC, and with MP_REFEREE=1 the (English) referee agrees
 #  25. speed votes with three players: a new speed declined (one player by
 #      clicking in the vote fax, one by itself), one agreed in the fax (2 of
 #      3 is a majority), one nobody answers lapses after 30 s of play; the
@@ -131,7 +135,7 @@ else
     export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
     export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/referee"
     export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
-    export MP_REFEREE_PROBE_SCENARIO="crowd=busy;staff=busy;edit=busy;cardio=none;epi=busy;wreck=none" # the probes' own start, see below
+    export MP_REFEREE_PROBE_SCENARIO="crowd=busy;staff=busy;edit=busy;cardio=none;epi=busy;wreck=none;lang=busy" # the probes' own start, see below
   fi
   PYTHONPATH="$source_dir/mp_server" python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
     --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
@@ -155,7 +159,7 @@ player_name = "$name"
 fullscreen = false
 width = 800
 height = 600
-language = [[English]]
+language = [[${PROBE_LANG:-English}]]
 audio = $audio
 play_music = false
 play_sounds = false
@@ -242,6 +246,12 @@ run_probe lea MP_ROLE=join MP_ROOM=research MP_STEPS=900 \
 # rise window, one accepted and one declined; a nurse fired; queues
 # reordered by dragging in the queue window; a corridor plant moved into the
 # GP's office (allowed there, as in single player).
+# Two languages in one game: otis in English, greta in German.
+run_probe otis MP_ROLE=host MP_ROOM=lang MP_STEPS=2000 MP_SCENARIO=busy \
+  MP_UI_SCRIPT="1600:hire:Doctor;1700:hire:Handyman" & pids+=($!)
+sleep 1
+PROBE_LANG=German run_probe greta MP_ROLE=join MP_ROOM=lang MP_STEPS=2000 MP_SCENARIO=busy \
+  MP_UI_SCRIPT="1650:hire:Nurse;1750:hire:Doctor" & pids+=($!)
 run_probe wade MP_ROLE=host MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
   MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;620:patients:5;640:breakroom:gp;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench;820:buy:plant;840:moveinto:plant:gp;920:objectroom:plant;860:movestaff:Doctor;870:whereis:Doctor;950:overlay" & pids+=($!)
 sleep 1
@@ -713,6 +723,20 @@ ok30 = bool(lv30 and len(lv30.group(1).split(' | ')) == 8 and lv30.group(1).ends
 print(f"30. Level browser:          {lv30.groups() if lv30 else '-'}")
 fail |= not ok30
 
+# Two languages in one game.
+builds31 = [re.search(r'connected as (\S+)', log(n)) for n in ('otis', 'greta')]
+builds31 = [m.group(1) if m else None for m in builds31]
+# (Hires from the second month's hiring list, made in both languages.)
+hired31 = sorted(set(re.search(r'step \d+: peer \d+ #\d+', x).group(0) for n in ('otis', 'greta')
+                     for x in applied(n) if ' hire -> ok' in x))
+ok31 = (result('otis').startswith('IN SYNC through step 2000') and result('greta').startswith('IN SYNC through step 2000')
+        and applied('otis') == applied('greta') and len(hired31) >= 3
+        and None not in builds31 and builds31[0] == builds31[1] and 'german' not in builds31[1])
+print(f"31. Two languages:          otis (English) {result('otis')}, greta (German) {result('greta')}; same build id: "
+      f"{builds31[0] == builds31[1]} {builds31[0]}; same commands: {applied('otis') == applied('greta')}; "
+      f"hires after the new month's list: {hired31}")
+fail |= not ok31
+
 # The reception desk moved one tile over, twice (its own tiles do not count
 # as taken while it is moved).
 moves27 = re.findall(r'UI: moved reception_desk #\d+ .* \(spot valid: true\)', log('kai'))
@@ -842,7 +866,8 @@ fail |= not ok11
 
 if with_referee:
     # (savegame2 is a continued game: the referee waits for the host's save.)
-    rooms = ['ward', 'leave', 'build', 'crowd', 'fax', 'coop', 'events', 'staff', 'edit', 'cardio', 'refer', 'epi', 'savegame2']
+    rooms = ['ward', 'leave', 'build', 'crowd', 'fax', 'coop', 'events', 'staff', 'edit', 'cardio', 'refer', 'epi', 'savegame2',
+             'lang']
     connected = [r for r in rooms if f"room '{r}': referee connected" in server]
     differ = re.findall(r"room '(\w+)': the players differ from the referee", server)
     confirmed = dict(re.findall(r"room '(\w+)': referee confirmed steps through (\d+)", server))
