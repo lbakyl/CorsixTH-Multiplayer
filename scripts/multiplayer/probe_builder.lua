@@ -505,23 +505,47 @@ function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at, by_
       elseif c.wall == "east" then return c.x + 1, c.y else return c.x - 1, c.y end
     end
     local mw, mh = th:size()
+    local hospital = hospital_of(world)
+    -- Open corridor floor in front of a door (3 wide, 3 deep): a door onto
+    -- a one-tile gap between the room and an outer wall is short to walk
+    -- to but cramped (patients queue there, nothing fits), as a person sees.
+    local function open_floor(c, ox, oy)
+      local nx, ny = ox - c.x, oy - c.y -- the way out of the door
+      local n = 0
+      for depth = 0, 2 do
+        for side = -1, 1 do
+          local tx, ty = ox + nx * depth + ny * side, oy + ny * depth + nx * side
+          if tx >= 1 and ty >= 1 and tx <= mw and ty <= mh and th:getCellFlags(tx, ty).passable and
+              hospital:isInHospital(tx, ty) and not world:getRoom(tx, ty) then
+            n = n + 1
+          end
+        end
+      end
+      return n
+    end
     for i, c in ipairs(candidates) do
       local ox, oy = outside(c)
-      local d
+      local d, open = nil, 0
       if ox >= 1 and oy >= 1 and ox <= mw and oy <= mh and th:getCellFlags(ox, oy).passable then
         d = world:getPathDistance(door_toward[1], door_toward[2], ox, oy)
+        open = open_floor(c, ox, oy)
       end
       -- (Equal walks: the middle of a wall, then the order above.)
       local mid = (c.wall == "south" or c.wall == "north") and math.abs(c.x - (x + (w - 1) / 2))
           or math.abs(c.y - (y + (h - 1) / 2))
-      c.cost = (d or 100000) + mid * 0.1 + i * 0.001
+      -- Each tile of floor missing in front counts as 6 tiles more to walk.
+      c.cost = (d or 100000) + (9 - open) * 6 + mid * 0.1 + i * 0.001
     end
     table.sort(candidates, function(a, b) return a.cost < b.cost end)
   end
   local door_wall
   for _, c in ipairs(candidates) do
-    dlg:setDoorBlueprint(c.x, c.y, c.wall)
-    if dlg.blueprint_door.valid then
+    -- (Swing doors: never with the second door on the top corner, which an
+    -- older game still allows and then loses; UIEditRoom:setDoorBlueprint.)
+    local corner = room_type.swing_doors and ((c.wall == "north" and c.x == x + 1) or
+        (c.wall == "west" and c.y == y + 1))
+    if not corner then dlg:setDoorBlueprint(c.x, c.y, c.wall) end
+    if not corner and dlg.blueprint_door.valid then
       dlg:placeDoorBlueprint()
       door_wall = c.wall
       break

@@ -1098,6 +1098,9 @@ function Bot:furnishTick()
         end
       end
     end
+    -- (From now on the extras are those bought: an extra it could not
+    -- afford is no extra of a needed object to sell back.)
+    job.extras = buy
     local parts = {}
     for id, n in pairs(buy) do parts[#parts + 1] = id .. ":" .. n end
     table.sort(parts)
@@ -1169,7 +1172,10 @@ function Bot:furnishTick()
   -- rest of this object is sold again (extras bought of a needed object,
   -- such as more beds, share its line); a needed object stops it all.
   local needed = rm.room_info.objects_needed and rm.room_info.objects_needed[o.object.id]
-  if dlg.confirm_button.enabled or (job.extras[o.object.id] and not needed) then
+  -- (Only extras of a needed object left, as a second desk: the needed one
+  -- is down, so those go back.)
+  local extra = job.extras[o.object.id]
+  if dlg.confirm_button.enabled or (extra and (not needed or o.qty <= extra)) then
     log(string.format("furnishing: no place for %d more %s; selling", o.qty, o.object.id))
     session:issue({kind = "room_buy", room = dlg.mp_room_id, buy = "", sell = o.object.id .. ":" .. o.qty})
     job.extras[o.object.id] = nil

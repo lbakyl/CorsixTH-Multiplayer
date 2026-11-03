@@ -130,10 +130,14 @@ function M:assess()
   local s = {hosp = hosp, day = bot:gameDay(), month = world:date():monthOfGame()}
 
   -- Rooms: built per type, queues, unstaffed.
-  s.rooms, s.queue, s.unstaffed, s.room_count, s.crashed = {}, {}, {}, 0, {}
+  s.rooms, s.queue, s.unstaffed, s.room_count, s.crashed, s.building = {}, {}, {}, 0, {}, {}
   for _, r in pairs(world.rooms) do
     -- (A room destroyed by an exploding machine: out of use, still there.)
     if r.hospital == hosp and r.crashed then s.crashed[#s.crashed + 1] = r end
+    -- (Drawn, being furnished or finished but not open yet: no second one.)
+    if r.hospital == hosp and not r.crashed and not r.is_active then
+      s.building[r.room_info.id] = (s.building[r.room_info.id] or 0) + 1
+    end
     if r.hospital == hosp and r.is_active then
       local id = r.room_info.id
       s.rooms[id] = (s.rooms[id] or 0) + 1
@@ -281,7 +285,7 @@ function M:projects(s)
   for _, rt in ipairs(TheApp.rooms) do rooms_by_id[rt.id] = rt end
   local function room(id, score, size)
     local rt = rooms_by_id[id]
-    if not rt or not self:available(id) then return end
+    if not rt or not self:available(id) or s.building[id] then return end
     -- A room for a specialist (a psychiatrist, surgeons, a researcher) waits
     -- until one is on the staff or on the hiring list: an empty room helps
     -- nobody.
@@ -562,7 +566,9 @@ function M:daily(s)
   self:defend(s)
   if helper then return end
   -- Heating: warmer when patients are cold, cooler when they are hot.
-  if hosp.opened and s.patients >= 4 and (s.objects.radiator or 0) > 0 then
+  -- (Not while the boiler is broken: the heating cannot be set then.)
+  if hosp.opened and s.patients >= 4 and (s.objects.radiator or 0) > 0 and
+      not (hosp.heating and hosp.heating.heating_broke) then
     if s.cold > s.patients / 4 and s.heat < 8 then
       self:issue({kind = "set_heat", level = s.heat + 1})
     elseif s.hot > s.patients / 4 and s.heat > 3 then
@@ -760,9 +766,11 @@ function M:defend(s)
       end
     end
   end
-  -- Rats: noticed after a while, then a few a day, like clicks; a word once
-  -- they are all gone.
-  if #s.rats > 0 then
+  -- Rats: noticed after a while, then a few a day, like clicks (those out of
+  -- their holes); a word once they are all gone. (Counted by the game: on a
+  -- day when all are in their holes they are still there.)
+  local count = self.sabotage and self.sabotage.countRats and self.sabotage.countRats(self.bot.world, s.hosp)
+  if (count or #s.rats) > 0 then
     self.rats_from = self.rats_from or (s.day + self.rand(NOTICE_DAYS[1], NOTICE_DAYS[2]))
     if s.day >= self.rats_from then
       if not self.rats_shooting then
