@@ -184,9 +184,10 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   plot's price, with you in the lead. The players whose side it is on or
   whose land borders it may bid: the tick bids the sum next to it (10%
   of the price more each time), the cross drops out. The others can only
-  watch, and close the screen with the cross. When nobody bids for 10
-  seconds (20 for the first bid) the gavel comes down: "going once",
-  "going twice", sold to the highest bid. Bots bid too, up to a limit.
+  watch, and close the screen with the cross. The gavel sinks while
+  nobody bids and every bid raises it again; when nobody bids for 6
+  seconds (10 for the first bid) it is down: "going once", "going twice",
+  sold to the highest bid. Bots bid too, up to a limit.
   Short of money? Under the bars your balance and loan are shown: **+**
   borrows $5,000 from the bank (up to the bank's limit), **-** pays $5,000
   back, without leaving the auction.

@@ -2880,8 +2880,8 @@ end
 -- Bots bid by a fixed rule, in the game (bots_bid): no command, no waiting.
 --------------------------------------------------------------------------------
 
-MultiplayerSession.AUCTION_SECONDS = 10
-MultiplayerSession.AUCTION_OPEN_SECONDS = 20
+MultiplayerSession.AUCTION_SECONDS = 6 -- (the original game's gavel takes 5-6 s)
+MultiplayerSession.AUCTION_OPEN_SECONDS = 10
 local function auction_frames(seconds) return math.ceil(seconds * 1000 / 18) end -- world ticks
 -- A bot bids up to this much of the price for land it asked for, and up to
 -- the second for land next to its own; and keeps this much money.

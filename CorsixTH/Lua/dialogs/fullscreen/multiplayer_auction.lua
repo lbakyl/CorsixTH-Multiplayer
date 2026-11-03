@@ -51,9 +51,10 @@ local loan_col = {
 local MAP_BG = {44, 96, 52}
 local LOT_COLOUR = {236, 52, 28}
 
--- The gavel: frames 3 (down) to 10 (raised). A blow: up, then down.
-local GAVEL_REST = 3
-local BLOW = {4, 6, 8, 10, 10, 8, 6, 4, 3, 3}
+-- The gavel: frames 10 (raised) to 3 (down). As in the original game it
+-- comes down slowly while nobody bids, is raised again by every bid, and
+-- the plot is sold when it is down (Mantroftt, via Jan).
+local GAVEL_UP, GAVEL_DOWN = 10, 3
 
 function UIMultiplayerAuction:UIMultiplayerAuction(ui)
   self:UIFullscreen(ui)
@@ -91,8 +92,7 @@ function UIMultiplayerAuction:UIMultiplayerAuction(ui)
       :makeButton(0, 0, 32, LOAN_H, nil, self.repayLoan):setTooltip(_S.multiplayer_window.auction_repay_tooltip)
   self.borrow_button = self:addBevelPanel(LOAN_X + LOAN_W + 42, LOAN_Y, 32, LOAN_H, loan_col.button):setLabel("+")
       :makeButton(0, 0, 32, LOAN_H, nil, self.borrow):setTooltip(_S.multiplayer_window.auction_borrow_tooltip)
-  self.gavel_frame = GAVEL_REST
-  self.blow = nil
+  self.gavel_frame = GAVEL_UP
   self.going = 0
   self.timer = 0
   self:makeRuns()
@@ -268,12 +268,13 @@ function UIMultiplayerAuction:dropOut()
   self:close()
 end
 
---! The auction ended (MultiplayerSession:syncAuction): a last blow of the
---! gavel, then the screen closes.
+--! The auction ended (MultiplayerSession:syncAuction): the gavel down with
+--! a knock, then the screen closes.
 function UIMultiplayerAuction:finish()
   if self.closing_in then return end
   self.closing_in = 50 -- ticks (about 2 seconds)
-  self.blow = 1
+  self.gavel_frame = GAVEL_DOWN
+  self.ui:playSound("selectx.wav")
   self:makeRuns() -- the lot in its new owner's colour
 end
 
@@ -282,20 +283,17 @@ function UIMultiplayerAuction:onTick()
   -- The bank: balance and loan.
   local hospital = self.ui.hospital
   self.loan_panel:setLabel(_S.multiplayer_window.auction_loan:format(math.floor(hospital.balance), hospital.loan or 0))
-  if self.blow then
-    self.gavel_frame = BLOW[self.blow]
-    self.blow = self.blow + 1
-    if self.blow > #BLOW then self.blow, self.gavel_frame = nil, GAVEL_REST end
-    if self.blow == 9 then self.ui:playSound("selectx.wav") end
-  end
   if self.closing_in then
     self.closing_in = self.closing_in - 1
     if self.closing_in <= 0 then self:close() end
   else
-    -- Going once, going twice: a blow each.
-    local going = self:going_stage()
-    if going > self.going then self.blow = 1 end
-    self.going = going
+    -- The gavel sinks as the time without a bid runs out.
+    local auction = self.world.mp_auction
+    if auction and auction.id == self.auction_id and auction.limit > 0 then
+      local done = math.min(1, auction.frames / auction.limit)
+      self.gavel_frame = GAVEL_UP - math.floor(done * (GAVEL_UP - GAVEL_DOWN) + 0.5)
+    end
+    self.going = self:going_stage()
   end
   return UIFullscreen.onTick(self)
 end
@@ -305,7 +303,7 @@ function UIMultiplayerAuction:going_stage()
   local auction = self.world.mp_auction
   if not auction or auction.id ~= self.auction_id then return self.going end
   local left = (auction.limit - auction.frames) * 18 / 1000 -- seconds
-  if left <= 3 then return 2 elseif left <= 6 then return 1 end
+  if left <= 2 then return 2 elseif left <= 4 then return 1 end
   return 0
 end
 
