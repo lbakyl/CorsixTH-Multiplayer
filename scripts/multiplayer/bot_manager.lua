@@ -42,10 +42,14 @@ local RESERVE = 3000
 -- Rooms worth a second (third) copy when their queues grow.
 local COPIES = {gp = 5, pharmacy = 2, general_diag = 3, psych = 2, ward = 2, toilets = 3, staff_room = 2,
     cardiogram = 2, scanner = 2, ultrascan = 2, blood_machine = 2, x_ray = 2, inflation = 2,
-    fracture_clinic = 2, hair_restoration = 2, tongue_clinic = 2, electrolysis = 2, dna_fixer = 1,
+    fracture_clinic = 2, hair_restoration = 2, slack_tongue = 2, electrolysis = 2, dna_fixer = 1,
     jelly_vat = 1, decontamination = 1, operating_theatre = 2, research = 1}
 -- Queue per room above which another room of the type helps.
 local BUSY_QUEUE = 5
+-- With this much in the bank, shorter queues are worth another room and one
+-- more copy of a type is allowed (the money is no use in the bank: the bots
+-- of 2026-11-03 ended two years with $100k-150k and a falling reputation).
+local RICH = 40000
 -- A project this urgent may be paid with a loan (a repair, land, a machine).
 local URGENT = 20
 -- Game days before it deals with a dirty trick (an evil handyman, rats): a
@@ -53,9 +57,15 @@ local URGENT = 20
 local NOTICE_DAYS = {10, 18}
 -- Game days between research offers to the same ally.
 local SHARE_DAYS = 21
+-- Waiting areas (Jan, 2026-11-03): by each room's door and the reception
+-- benches for the queue, a plant and a radiator, and a drinks machine by
+-- every third, within WAITING_R tiles. Not by rooms nobody queues for.
+local WAITING = {bench = true, plant = true, radiator = true, drinks_machine = true}
+local WAITING_R = 4
+local NO_WAITING = {staff_room = true, research = true, training = true}
 -- Rooms that earn the most: repaired and looked after first.
 local EARNERS = {operating_theatre = 25, scanner = 10, x_ray = 8, cardiogram = 8, ultrascan = 8,
-    fracture_clinic = 8, inflation = 8, dna_fixer = 8, hair_restoration = 6, tongue_clinic = 6, electrolysis = 6,
+    fracture_clinic = 8, inflation = 8, dna_fixer = 8, hair_restoration = 6, slack_tongue = 6, electrolysis = 6,
     jelly_vat = 6, decontamination = 6, blood_machine = 6}
 -- The score a team mate's wish adds: before the bot's own ideas, after the
 -- basics of an opening hospital (90 and more).
@@ -100,6 +110,7 @@ function M.new(bot, ctx)
   self.noticed = {}        -- saboteur entity id -> day it was noticed
   self.boost = {}          -- project key -> extra score from the model's plan
   self.wishes = {}         -- project key -> {until = last game day, had = how many then} (a team mate's wish)
+  self.sent_to_lab = {}    -- staff mp_id -> game day it was sent into the research room
   self.hands_off = {}      -- project key -> last game day a team mate keeps it for themselves
   self.failed = {}         -- project key -> day it failed (try again later)
   self.history = {}        -- what it did lately (for the model's report and chat)
@@ -131,6 +142,7 @@ function M:assess()
 
   -- Rooms: built per type, queues, unstaffed.
   s.rooms, s.queue, s.unstaffed, s.room_count, s.crashed, s.building = {}, {}, {}, 0, {}, {}
+  s.doors = {} -- where patients wait: {key, x, y, queue, max benches}
   for _, r in pairs(world.rooms) do
     -- (A room destroyed by an exploding machine: out of use, still there.)
     if r.hospital == hosp and r.crashed then s.crashed[#s.crashed + 1] = r end
@@ -144,6 +156,10 @@ function M:assess()
       s.room_count = s.room_count + 1
       local q = r.door and r.door.queue
       s.queue[id] = (s.queue[id] or 0) + (q and q:reportedSize() or 0)
+      if r.door and r.door.tile_x and not NO_WAITING[id] then
+        s.doors[#s.doors + 1] = {key = "room" .. r.id, x = r.door.tile_x, y = r.door.tile_y,
+            queue = q and q:reportedSize() or 0, max = 4}
+      end
       local crit = r.getRequiredStaffCriteria and r:getRequiredStaffCriteria()
       if crit and next(crit) and not r:testStaffCriteria(crit) then
         s.unstaffed[id] = (s.unstaffed[id] or 0) + 1
@@ -207,8 +223,15 @@ function M:assess()
   s.staffed_desks = #hosp:getReceptionDesks(true)
   s.reception_queue = 0
   for _, desk in ipairs(hosp:getReceptionDesks()) do
-    s.reception_queue = s.reception_queue + (desk.queue and desk.queue:reportedSize() or 0)
+    local q = desk.queue and desk.queue:reportedSize() or 0
+    s.reception_queue = s.reception_queue + q
+    if desk.tile_x then
+      s.doors[#s.doors + 1] = {key = "desk" .. desk.tile_x .. "," .. desk.tile_y, x = desk.tile_x, y = desk.tile_y,
+          queue = q, max = 6}
+    end
   end
+  local comfort = {} -- corridor benches, plants, radiators, drinks machines
+
   s.objects, s.litter, s.worn, s.rats, s.saboteurs, s.machines = {}, 0, {}, {}, {}, {}
   local me = world:getHospitalIndex(hosp)
   for _, e in ipairs(world.entities) do
@@ -218,6 +241,7 @@ function M:assess()
         s.litter = s.litter + 1
       elseif t and not world:getRoom(e.tile_x, e.tile_y) then
         s.objects[t] = (s.objects[t] or 0) + 1
+        if WAITING[t] then comfort[#comfort + 1] = {t, e.tile_x, e.tile_y} end
       end
       -- (A machine's second part, like the operating table's, has no strength.)
       if class.is(e, Machine) and e.hospital == hosp and e.strength and e.getRemainingUses then
@@ -234,6 +258,16 @@ function M:assess()
     end
     if e.mp_saboteur and e.mp_saboteur.target == me and not e.mp_in_transit then
       s.saboteurs[#s.saboteurs + 1] = e
+    end
+  end
+
+  -- What already stands by each waiting place.
+  for _, d in ipairs(s.doors) do
+    d.near = {bench = 0, plant = 0, radiator = 0, drinks_machine = 0}
+    for _, c in ipairs(comfort) do
+      if math.abs(c[2] - d.x) <= WAITING_R and math.abs(c[3] - d.y) <= WAITING_R then
+        d.near[c[1]] = d.near[c[1]] + 1
+      end
     end
   end
 
@@ -268,6 +302,7 @@ end
 --! Every project worth doing now with its score (higher is more urgent).
 function M:projects(s)
   local bot, hosp = self.bot, s.hosp
+  local world = bot.world
   local list = {}
   local listed = {}
   local function add(key, score, run, cost)
@@ -338,20 +373,47 @@ function M:projects(s)
     for o in pairs(lab.objects or {}) do
       if o.object_type and o.object_type.id == "desk" then desks = desks + 1 end
     end
-    local researchers = hosp:countStaffOfCategory("Researcher")
-    if researchers < math.min(2, desks) then hire("Researcher", researchers == 0 and 10 or 4) end
+    -- (Researchers elsewhere in the hospital do not count: the game never
+    -- calls staff into a research room, nobody queues at its door. One on
+    -- the staff goes over; else one more is hired straight into it.)
+    local working, spare, spare_rank = 0, nil, 9
+    for _, st in ipairs(hosp.staff) do
+      if not st.fired and st.tile_x and st:fulfillsCriterion("Researcher") then
+        local where = world:getRoom(st.tile_x, st.tile_y)
+        if where == lab then
+          working = working + 1
+        elseif not st.pickup and st.mp_id and s.day - (self.sent_to_lab[st.mp_id] or -99) > 10 then
+          -- (From the corridor first, then a staff room, then another room.)
+          local rank = not where and 1 or where.room_info.id == "staff_room" and 2 or 3
+          if rank < spare_rank then spare, spare_rank = st, rank end
+        end
+      end
+    end
+    local wanted = math.min(2, math.max(1, desks))
+    if working < wanted then
+      if spare then
+        add("staff:research", working == 0 and 14 or 6, function()
+          self.sent_to_lab[spare.mp_id] = s.day
+          return bot:moveStaffInto(spare, lab)
+        end, 0)
+      else
+        hire("Researcher", working == 0 and 12 or 5)
+      end
+    end
   end
   -- Full GP's offices send patients on to diagnosis rooms: more of those.
+  local busy_q, more = BUSY_QUEUE, 0
+  if s.balance > RICH then busy_q, more = BUSY_QUEUE - 2, 1 end
   local gp_per = s.rooms.gp and s.queue.gp / s.rooms.gp or 0
-  if gp_per > BUSY_QUEUE and s.rooms.general_diag and s.rooms.general_diag < COPIES.general_diag then
-    room("general_diag", gp_per - BUSY_QUEUE + 1)
+  if gp_per > busy_q and s.rooms.general_diag and s.rooms.general_diag < COPIES.general_diag + more then
+    room("general_diag", gp_per - busy_q + 1)
   end
   -- Busy rooms: another one of the type. (A room without its doctor at
   -- this moment is no reason not to: the doctor may be on a break.)
   for id, n in pairs(s.rooms) do
     local per = s.queue[id] / n
-    if per > BUSY_QUEUE and n < (COPIES[id] or 1) then
-      room(id, (per - BUSY_QUEUE + 1) * 1.2, id == "ward" and 7 or nil)
+    if per > busy_q and n < (COPIES[id] or 1) + (COPIES[id] and more or 0) then
+      room(id, (per - busy_q + 1) * 1.2, id == "ward" and 7 or nil)
     end
   end
 
@@ -433,8 +495,25 @@ function M:projects(s)
   if hosp.opened and s.room_count >= 3 then
     local waiting = s.reception_queue
     for _, q in pairs(s.queue) do waiting = waiting + q end
+    -- Waiting areas, the busiest first (standing patients get fed up).
+    table.sort(s.doors, function(a, b) return a.queue > b.queue or (a.queue == b.queue and a.key < b.key) end)
+    local function place(id, d, score)
+      local ok, cost = pcall(hosp.getObjectBuildCost, hosp, id)
+      if ok then
+        add("buy:" .. id .. "@" .. d.key, score, function() return bot:buyCorridor(id, d.x, d.y) end, cost or 0)
+      end
+    end
+    for i, d in ipairs(s.doors) do
+      local benches_wanted = math.min(d.max, 1 + math.ceil(d.queue * 0.6))
+      if d.near.bench < benches_wanted then place("bench", d, 3 + (benches_wanted - d.near.bench) * 1.5 + d.queue * 0.3) end
+      if d.near.plant < 1 then place("plant", d, 2 + (1 - s.happiness)) end
+      if d.near.radiator < 1 then place("radiator", d, 2 + s.cold * 0.5) end
+      if i % 3 == 1 and d.near.drinks_machine < 1 and s.patients >= 8 then
+        place("drinks_machine", d, 2 + s.thirst * 4)
+      end
+    end
     local benches = s.objects.bench or 0
-    if benches < waiting * 0.6 and benches < 16 then buy("bench", 1 + (waiting * 0.6 - benches) * 0.5) end
+    if benches < waiting * 0.6 and benches < 40 then buy("bench", 1 + (waiting * 0.6 - benches) * 0.5) end
     local drinks = s.objects.drinks_machine or 0
     if s.patients >= 8 and drinks < 1 + s.patients / 25 then buy("drinks_machine", 1 + s.thirst * 6) end
     local radiators = s.objects.radiator or 0
@@ -471,6 +550,22 @@ function M:projects(s)
           local ok, cost = pcall(hosp.getObjectBuildCost, hosp, obj ~= "" and obj or "radiator")
           add(key, 0, function() return bot:editRoom(rm, steps) end, kind == "add" and ok and cost or 1000)
         end
+      end
+    end
+  end
+  -- What the model's plan named that no rule above listed (one nurse more,
+  -- say): tried with the plan's weight as its score, staff within the caps.
+  -- (Before, such a plan item was dropped without a word.)
+  for key, b in pairs(self.boost) do
+    if b > 0 and not listed[key] then
+      local kind, what = key:match("^(%a+):(.+)$")
+      if kind == "hire" then
+        local base = SPECIALISTS[what] and "Doctor" or what
+        if hosp:countStaffOfCategory(base) < (cap[base] or 99) then hire(what, 0) end
+      elseif kind == "room" then
+        room(what, 0)
+      elseif kind == "buy" then
+        buy(what, 0)
       end
     end
   end
@@ -517,6 +612,7 @@ function M:doProject(s)
         if p.key == "buy:land" then self.no_space = {} end
         self.no_space[p.key] = nil
         self.boost[p.key] = nil
+        if self.wishes[p.key] then self:tellWisher(self.wishes[p.key], "wish_done", p.key) end
         self.wishes[p.key] = nil
         -- Rooms take a few days to build; staff and objects less.
         self.next_project = bot:later(p.key:find("^room:") and self.rand(2, 4) or self.rand(1, 2))
@@ -529,12 +625,21 @@ function M:doProject(s)
       if why == "space" then
         -- Out of floor: buy land, then try again.
         self:note(string.format("day %d: no space for %s", s.day, p.key))
+        local w = self.wishes[p.key]
+        if w and not w.told_space then
+          w.told_space = true
+          self:tellWisher(w, "wish_no_space", p.key)
+        end
         self.no_space[p.key] = s.day
         self.failed[p.key] = s.day + 5
         self.next_project = bot:later(2)
         return
       end
       self.failed[p.key] = s.day + (why == "money" and 3 or 10)
+      self:note(string.format("day %d: %s failed (%s)", s.day, p.key, tostring(why or "?")))
+    elseif self.wishes[p.key] and not self.wishes[p.key].told_money then
+      self.wishes[p.key].told_money = true
+      self:tellWisher(self.wishes[p.key], "wish_no_money", p.key)
     end
   end
   self.next_project = bot:later(1)
@@ -665,7 +770,15 @@ function M:monthly(s)
       if not self:available(room_id) and (not best_v or v > best_v) then best, best_v = room_id, v end
     end
     if best and best_v > 1 and best ~= self.research_room then
-      for id, entry in pairs(hosp.disease_casebook) do
+      -- (A diagnosis room's machine is researched as its "diag_" entry.)
+      local diag = "diag_" .. best
+      if hosp.disease_casebook[diag] and hosp:canConcentrateResearch(diag) then
+        if self:issue({kind = "concentrate_research", disease = diag}) then
+          self.research_room = best
+          self:note(string.format("day %d: research on %s (for a %s)", s.day, diag, best))
+        end
+      end
+      for id, entry in pairs(best ~= self.research_room and hosp.disease_casebook or {}) do
         local d = entry.disease
         local rooms = d and d.treatment_rooms
         if rooms and rooms[#rooms] == best and hosp:canConcentrateResearch(id) then
@@ -712,10 +825,12 @@ function M:answerFaxes(s)
             self.demand[r] = (self.demand[r] or 0) + 1
           end
         end
-        if index.guess_cure then
-          pick, why = index.guess_cure, "a good guess"
-        elseif missing and s.balance > 15000 then
+        -- (A diagnosis room it can build beats a guess: a guessed cure
+        -- kills more often.)
+        if missing and s.balance > 15000 and index.wait then
           pick, why = index.wait, "building a diagnosis room"
+        elseif index.guess_cure then
+          pick, why = index.guess_cure, "a good guess"
         else
           pick, why = index.send_home, "cannot diagnose it"
         end
@@ -1098,16 +1213,44 @@ end
 --! A team mate asked for this project in the chat: it comes next (for 60
 --! game days: a request for every room takes a while; then it lapses, if it could not be done), unless somebody
 --! does it first.
-function M:wish(key)
+function M:wish(key, peer)
   for _, k in ipairs(self:wishMenu()) do
     if k == key then
-      self.wishes[key] = {until_day = self.bot:gameDay() + 60, had = self:howMany(key)}
+      self.wishes[key] = {until_day = self.bot:gameDay() + 60, had = self:howMany(key), peer = peer}
       self.next_project = math.min(self.next_project, self.bot:gameDay())
       self:note("wish: " .. key)
       return true
     end
   end
   return false
+end
+
+--! A wish's project in words ("an inflation room", "a nurse", "a bench").
+local function wish_words(key)
+  local kind, what = key:match("^(%a+):([^:]+)")
+  if kind == "room" then
+    local ok, name = pcall(function() return _S.rooms_short[what] end)
+    return (ok and type(name) == "string" and name or what:gsub("_", " ")) .. " room"
+  elseif kind == "hire" then
+    return "a " .. what:lower()
+  elseif key == "buy:land" then
+    return "more land"
+  end
+  return (what or key):gsub("_", " ")
+end
+
+--! Tell whoever wished for a project how it went (done, no space yet, no
+--! money yet), so a "certainly!" in the chat is not the last word.
+function M:tellWisher(w, kind, key)
+  local bot = self.bot
+  local peers = w.peer and {w.peer} or bot:hospitalMates()
+  for _, peer in ipairs(peers) do
+    local name = bot:playerName(peer)
+    if name then
+      local line = self.pick(self.lines[kind]):format(name, wish_words(key))
+      bot:say(line, self.typing(line), peer)
+    end
+  end
 end
 
 --! A team mate keeps this project for themselves (or took back their
@@ -1152,7 +1295,8 @@ function M:shareResearch(s)
   if not world.mp_coop or not world.mpMayTrade or not MultiplayerSession.shareableResearch then return end
   for index, h in ipairs(world.hospitals) do
     local peer = bot:playerOfHospital(index)
-    if h ~= mine and peer and world:mpMayTrade(mine, h) then
+    -- (Never to a rival: in a race only to team mates.)
+    if h ~= mine and peer and world:mpMayTrade(mine, h) and not world:mpRivals(mine, h) then
       local seen = self.shared[index] or {}
       self.shared[index] = seen
       local items = MultiplayerSession.shareableResearch(mine, h)
@@ -1162,7 +1306,21 @@ function M:shareResearch(s)
         names[#names + 1] = plain(item.name)
         if not seen[item.key] then new = true end
       end
-      if new and s.day - (seen.offered or -999) >= SHARE_DAYS and
+      -- A person sharing this hospital decides: the bot asks them first and
+      -- sends it when they say "share" (Bot:onChat sets bot.share_ok).
+      local person = bot:sharesWithPerson()
+      local allowed = not person or (bot.share_ok and s.day - bot.share_ok <= SHARE_DAYS)
+      if new and person and not allowed and s.day - (seen.asked or -999) >= SHARE_DAYS then
+        seen.asked = s.day
+        local _, people = bot:peopleOfHospital(index)
+        local list = table.concat(names, ", ", 1, math.min(#names, 4)) .. (#names > 4 and ", ..." or "")
+        for _, mate in ipairs(bot:hospitalMates()) do
+          local line = self.pick(self.lines.research_ask):format(bot:playerName(mate),
+              people[1] or world.hospitals[index].name, list)
+          bot:say(line, self.typing(line), mate)
+        end
+      end
+      if new and allowed and s.day - (seen.offered or -999) >= SHARE_DAYS and
           self:issue({kind = "offer_research", to = index, items = table.concat(keys, ";"), price = 0}) then
         seen.offered = s.day
         for _, key in ipairs(keys) do seen[key] = s.day end

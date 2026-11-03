@@ -93,7 +93,8 @@ TEAM_CHAT_EXTRA = """
 
 You can also act on a team mate's request at once. Only if the last message asks YOU to build, hire or buy
 something, put the matching items from the menu, written exactly as there, into "projects" (several if they ask
-for several things, at most 12) and say you will do it; otherwise leave it empty. A team mate asking whether THEY
+for several things, at most 12) and say you will see to it; otherwise leave it empty. Do not say it is done at
+once or where it will go: it may need space or money first, and you tell them in the chat when it is ready. A team mate asking whether THEY
 may do something, or saying they will do it themselves, is not a request to you. If the last message says they
 will do something themselves, or that you should not do it (also taking back what they asked before), put those
 items from the menu into "leave" and say you leave them to them; otherwise leave it empty. If what they ask for is not on the menu, say kindly that

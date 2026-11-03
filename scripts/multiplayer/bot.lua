@@ -105,9 +105,17 @@ local LINES = {
   },
   -- To an ally it sent its research (Manager:shareResearch).
   research_sent = {"I've sent you my research for free, %s: %s.", "Some research for you, %s: %s. On the house."},
+  -- To a person sharing the hospital, before sharing its research.
+  -- To whoever asked for a project in the chat (Manager:tellWisher).
+  wish_done = {"%s, your %s is ready.", "Done, %s: the %s is up and running."},
+  wish_no_space = {"Sorry %s, there is no space for the %s yet. I'll buy more land first."},
+  wish_no_money = {"%s, the %s has to wait a little: not enough money yet."},
+  research_ask = {"%s, shall I send %s our research for free (%s)? Say \"share\" and I will."},
   -- To a person sharing the hospital (Bot:sharesWithPerson).
   mate_away = {"You seem to be away, %s. I'll run the whole hospital until you're back."},
   mate_back = {"Welcome back, %s! Prices, loans and the faxes are yours again."},
+  -- To a person sharing the hospital: what the weekly bonuses cost.
+  bonuses = {"I gave %d unhappy staff a double bonus ($%d), %s."},
   greet = {
     friendly = {
       "Hi everyone! Building my hospital nice and slowly over here.",
@@ -279,6 +287,13 @@ local SKIP_ROOMS = {training = true}
 local SPECIALISTS = {Psychiatrist = "psychiatrist", Surgeon = "surgeon", Researcher = "researcher"}
 -- Kept in the bank when building or buying.
 local RESERVE = 3000
+-- Staff care (Bot:careForStaff): once a game week everybody under half
+-- happiness gets two bonuses (each 10% of their wage and +50% happiness),
+-- while the balance stays above BONUS_FLOOR (Jan, 2026-11-03).
+local BONUS_DAYS, BONUS_BELOW, BONUS_FLOOR = 7, 0.5, 2000
+-- A person sharing the hospital answers pay rises; the bot steps in when
+-- they have not and the member of staff would quit within this many hours.
+local RISE_LAST_HOURS = 5 * 24
 -- Corridor furniture once the hospital is open: id -> how many.
 local EXTRAS = {{"bench", 3}, {"plant", 2}, {"drinks_machine", 1}, {"bench", 5}, {"extinguisher", 1},
     {"plant", 4}}
@@ -584,6 +599,15 @@ function Bot:onChat(f)
   local mine = world and world.ui and world.ui.hospital
   local mate = hosp and mine and world:mpTeam(mine) and not world:mpRivals(world.hospitals[hosp], mine)
   local rival = self.fiery and not mate
+  -- A person sharing the hospital says "share": its research may go to
+  -- the allies (Manager:shareResearch asks first).
+  for _, p in ipairs(self:hospitalMates()) do
+    local low = text:lower()
+    if p == peer and (low:find("share", 1, true) or low:find("sd95{l", 1, true) or low:find("teil", 1, true)) then
+      self.share_ok = self:gameDay()
+      log("a team mate allows sharing the research")
+    end
+  end
   -- What people on its side say goes into its next plan (wishes, worries).
   if not rival and text ~= "" then
     self.mate_lines = self.mate_lines or {}
@@ -623,7 +647,7 @@ function Bot:onChat(f)
       local reply = answer and answer.text or line
       -- (Several at once: "a plant and a radiator in every room".)
       if answer and self.manager then
-        for key in (answer.wish or ""):gmatch("[^,]+") do self.manager:wish(key) end
+        for key in (answer.wish or ""):gmatch("[^,]+") do self.manager:wish(key, peer) end
         for key in (answer.leave or ""):gmatch("[^,]+") do self.manager:leaveTo(key) end
       end
       self:say(reply, typing(reply), to)
@@ -1323,7 +1347,10 @@ end
 
 --! Buy a corridor object and put it on a free tile near the desk (the first
 --! tile, nearest first, where the placement window allows it).
-function Bot:buyCorridor(object_id)
+--! Buy a corridor object and put it down against a wall near the reception
+--! (or near near_x, near_y, a room's door: a waiting area; then only within
+--! a few tiles, else nothing is bought).
+function Bot:buyCorridor(object_id, near_x, near_y)
   local world, ui = self.world, self.world.ui
   local hospital = ui.hospital
   local ok_cost, cost = pcall(hospital.getObjectBuildCost, hospital, object_id)
@@ -1342,6 +1369,8 @@ function Bot:buyCorridor(object_id)
   for name in pairs(place.objects[1].object.orientations) do facings[#facings + 1] = name end
   table.sort(facings)
   local ax, ay = self:anchor()
+  local max_r = 40
+  if near_x then ax, ay, max_r = near_x, near_y, 5 end
   local placed
   -- As a player does: against a wall (of the building or a room), never in
   -- front of a door, an entrance or the reception, so the open floor stays
@@ -1380,7 +1409,7 @@ function Bot:buyCorridor(object_id)
   local x, y
   if object_id ~= "reception_desk" then
     -- Nearest first, in a fixed order.
-    for r = 0, 40 do
+    for r = 0, max_r do
       for dy = -r, r do
         for dx = -r, r do
           local tx, ty = ax + dx, ay + dy
@@ -1394,7 +1423,7 @@ function Bot:buyCorridor(object_id)
       if x then break end
     end
   end
-  if not x then
+  if not x and not near_x then
     -- Tiles with free floor all around (so nothing blocks a corridor).
     x, y = builder.find_free_rect(world, ax, ay, 1, 1, 40, fits)
   end
@@ -1460,6 +1489,29 @@ function Bot:hireCategory(category)
   local ok, err = pcall(builder.ui_hire, self.world, dx, dy, what, log)
   if not ok then log("could not hire a " .. category .. ": " .. tostring(err)) end
   return ok
+end
+
+--! Send a member of staff into a room (the move_staff command, as a player
+--! dragging them there): onto a free tile inside it, nearest the middle.
+function Bot:moveStaffInto(staff, target)
+  local session = TheApp.mp_session
+  if not session or not staff.mp_id then return false end
+  local world = self.world
+  local cx, cy = target.x + math.floor(target.width / 2), target.y + math.floor(target.height / 2)
+  local best, best_d
+  for ty = target.y, target.y + target.height - 1 do
+    for tx = target.x, target.x + target.width - 1 do
+      local d = math.abs(tx - cx) + math.abs(ty - cy)
+      if (not best_d or d < best_d) and world.map.th:getCellFlags(tx, ty).passable and
+          not world:getObject(tx, ty) and not world:anyHumanoidObscuringArea(tx, ty) then
+        best, best_d = {tx, ty}, d
+      end
+    end
+  end
+  if not best then return false end
+  log(string.format("sending %s into the %s at %d,%d", tostring(staff.profile and staff.profile:getFullName()),
+      target.room_info.id, best[1], best[2]))
+  return session:issue({kind = "move_staff", staff = staff.mp_id, x = best[1], y = best[2]}) ~= false
 end
 
 --! Hire one member of staff the hospital lacks (specialists first).
@@ -1621,6 +1673,63 @@ function Bot:answerPayRise(win)
   if accept then win:increaseSalary() else win:fireStaff() end
 end
 
+--! Keep the staff: answer pay rise requests (a request left alone makes
+--! them quit; the request is an icon in the message bar, which a bot never
+--! opens) and, once a game week, give two bonuses to everybody under half
+--! happiness while the balance allows. Both are shared commands.
+function Bot:careForStaff(day)
+  local hospital = self.world.ui.hospital
+  local session = TheApp.mp_session
+  if not session or session.held then return end
+  local person = self:sharesWithPerson()
+  self.rises_answered = self.rises_answered or {}
+  for _, staff in ipairs(hospital.staff) do
+    local amount
+    if staff.quitting_in and not staff.fired then
+      amount = type(staff.message) == "number" and staff.message
+      if not amount and staff.profile then -- (as Staff:requestRaise asks)
+        local wage = staff.profile.wage
+        amount = math.floor(math.max(wage * 1.1, (staff.profile:getFairWage() + wage) / 2) - wage)
+      end
+    elseif staff.mp_id then
+      self.rises_answered[staff.mp_id] = nil -- (a later request is a new one)
+    end
+    if amount and amount > 0 and staff.mp_id and not self.rises_answered[staff.mp_id]
+        and (not person or staff.quitting_in <= RISE_LAST_HOURS) then
+      self.rises_answered[staff.mp_id] = true
+      local max_loan = math.floor((hospital.value or 0) * 0.33 / 5000) * 5000 + 10000
+      local can_spend = hospital.balance + math.max(0, max_loan - (hospital.loan or 0))
+      local accept = can_spend > amount * 12
+      log(string.format("pay rise of $%d for %s: %s", amount,
+          tostring(staff.profile and staff.profile:getFullName()), accept and "paid" or "let go"))
+      if staff.mp_headhunted and self.fiery then
+        self:tellRival(accept and "headhunter_kept" or "headhunter_lost")
+      end
+      session:issue({kind = "pay_rise", staff = staff.mp_id, accept = accept and 1 or 0, amount = amount})
+    end
+  end
+  if day < (self.next_bonus or 0) then return end
+  self.next_bonus = day + BONUS_DAYS
+  local balance, given, spent = hospital.balance, 0, 0
+  for _, staff in ipairs(hospital.staff) do
+    if not staff.fired and staff.mp_id and staff.profile and staff:getAttribute("happiness") < BONUS_BELOW then
+      local bonus = math.floor(staff.profile.wage * 0.1)
+      if balance - 2 * bonus <= BONUS_FLOOR then break end
+      for _ = 1, 2 do session:issue({kind = "staff_bonus", staff = staff.mp_id}) end
+      balance, given, spent = balance - 2 * bonus, given + 1, spent + 2 * bonus
+    end
+  end
+  if given > 0 then
+    log(string.format("day %d: double bonus for %d unhappy staff ($%d)", day, given, spent))
+    if person then
+      for _, peer in ipairs(self:hospitalMates()) do
+        local line = pick(LINES.bonuses):format(given, spent, self:playerName(peer))
+        self:say(line, typing(line), peer)
+      end
+    end
+  end
+end
+
 function Bot:think()
   self:watchCommands()
   local world = self.world
@@ -1628,6 +1737,7 @@ function Bot:think()
   local plan = self.plan
   local day = self:gameDay()
   self:answerOffers()
+  self:careForStaff(day)
   -- (Tests: wishes as if a team mate asked for them.)
   if self.manager and os.getenv("MP_BOT_WISHES") then
     self.test_wishes = self.test_wishes or {}
