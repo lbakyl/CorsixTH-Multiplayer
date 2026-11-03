@@ -173,7 +173,9 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   other player gets a purple icon at the bottom and accepts or declines;
   an accepted person walks over (it takes a few game days). Land: a plot on your side of the map (nearest
   to your hospital) that no other hospital borders, you just buy. One on another player's side, or
-  one that borders another hospital's land, goes to auction (see Land auctions below). Faxes, emergencies and VIP visits come to the hospital they
+  one that borders another hospital's land, goes to auction (see Land auctions below); if nobody else
+  may bid for it (that player is away, say), you just buy it. As in the original game, you can only buy
+  a plot that touches your land or the town's own (roads, parks): the others behind it come later. Faxes, emergencies and VIP visits come to the hospital they
   are for.
 - **Land auctions (every game with more than one hospital):** click a
   plot on the town map as usual. If it is on another player's side, or
@@ -185,6 +187,9 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   watch, and close the screen with the cross. When nobody bids for 10
   seconds (20 for the first bid) the gavel comes down: "going once",
   "going twice", sold to the highest bid. Bots bid too, up to a limit.
+  Short of money? Under the bars your balance and loan are shown: **+**
+  borrows $5,000 from the bank (up to the bank's limit), **-** pays $5,000
+  back, without leaving the auction.
 - **Sharing research (co-op):** **Share research** on the research
   blackboard (left of the total), or **MULTIPLAYER**, **SHARE RESEARCH**
   (no research room needed). Pick what to share (equipment you have found,
