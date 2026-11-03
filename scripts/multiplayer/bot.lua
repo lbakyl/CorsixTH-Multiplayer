@@ -790,6 +790,21 @@ function Bot:reservedTiles()
   return reserved
 end
 
+--! How many tiles of free floor the hospital has (Bot:freeTile).
+function Bot:freeFloor()
+  local world = self.world
+  local hosp = world.ui.hospital
+  local th = world.map.th
+  local mw, mh = th:size()
+  local n = 0
+  for y = 1, mh do
+    for x = 1, mw do
+      if hosp:isInHospital(x, y) and self:freeTile(x, y) then n = n + 1 end
+    end
+  end
+  return n
+end
+
 --! Is this tile free floor of this hospital (no room, no object on it)?
 function Bot:freeTile(x, y)
   local world = self.world
@@ -844,7 +859,7 @@ function Bot:layoutSpot(min, size)
     end
   end
   for _, desk in ipairs(hosp:getReceptionDesks()) do
-    if desk.tile_x then protect(desk.tile_x, desk.tile_y, 3) end
+    if desk.tile_x then protect(desk.tile_x, desk.tile_y, 2) end
   end
   for _, e in ipairs(world.entities) do
     local id = e.object_type and e.object_type.id
@@ -867,10 +882,11 @@ function Bot:layoutSpot(min, size)
     for y = y0, y1 - h do
       for x = x0, x1 - w + 1 do
         local ok = true
-        -- The room, and the row below it (the corridor at its door).
+        -- The room, and the row below it (the corridor at its door; that
+        -- may be floor kept clear, it is corridor anyway).
         for ty = y, y + h do
           for tx = x, x + w - 1 do
-            if not f(tx, ty) then ok = false break end
+            if not f(tx, ty) and not (ty == y + h and keep[ty * 1000 + tx]) then ok = false break end
           end
           if not ok then break end
         end
@@ -896,6 +912,30 @@ function Bot:layoutSpot(min, size)
   end
   -- The best that leaves the corridor in one piece.
   table.sort(spots, function(a, b) return a[1] > b[1] end)
+  if (os.getenv("MP_BOT_DIAG") or "") ~= "" then
+    local top = {}
+    for i = 1, math.min(5, #spots) do
+      local sp = spots[i]
+      top[#top + 1] = string.format("%.1f@%d,%d %dx%d%s", sp[1], sp[2], sp[3], sp[4], sp[5],
+          self:keepsCorridor(sp[2], sp[3], sp[4], sp[5]) and "" or " cuts")
+    end
+    local n_in, n_free, n_res, n_room, n_obj, n_flag = 0, 0, 0, 0, 0, 0
+    for y = y0, y1 do
+      for x = x0, x1 do
+        if hosp:isInHospital(x, y) then
+          n_in = n_in + 1
+          if free[y * 1000 + x] then n_free = n_free + 1 end
+          if self.reserved and self.reserved[y * 1000 + x] then n_res = n_res + 1 end
+          if world:getRoom(x, y) then n_room = n_room + 1 end
+          if world:getObject(x, y) then n_obj = n_obj + 1 end
+          local fl = th:getCellFlags(x, y)
+          if not (fl.buildable and fl.passable) then n_flag = n_flag + 1 end
+        end
+      end
+    end
+    log(string.format("layout diag %d-%d: area %d,%d-%d,%d, %d spots; best %s; tiles in %d free %d reserved %d room %d object %d not buildable %d",
+        min, size, x0, y0, x1, y1, #spots, table.concat(top, ", "), n_in, n_free, n_res, n_room, n_obj, n_flag))
+  end
   for i, spot in ipairs(spots) do
     if self:keepsCorridor(spot[2], spot[3], spot[4], spot[5]) then
       if i > 1 then log(string.format("layout: %d better spots would cut the corridor in two", i - 1)) end
@@ -1244,7 +1284,41 @@ end
 
 --! Where to build from: the reception desk, or the middle of the hospital.
 function Bot:anchor()
-  return builder.anchor(self.world)
+  local world = self.world
+  local hosp = world.ui.hospital
+  if hosp:getReceptionDesks()[1] then return builder.anchor(world) end
+  -- No desk yet: a few tiles inside an entrance, where a player puts the
+  -- reception (in the middle it splits the floor into strips no room fits).
+  local doors = {}
+  for _, e in ipairs(world.entities) do
+    local id = e.object_type and e.object_type.id
+    if (id == "entrance_left_door" or id == "entrance_right_door") and e.tile_x and
+        hosp:isInHospital(e.tile_x, e.tile_y) then
+      doors[#doors + 1] = e
+    end
+  end
+  if #doors == 0 then return builder.anchor(world) end
+  table.sort(doors, function(a, b)
+    if a.tile_y ~= b.tile_y then return a.tile_y < b.tile_y end
+    return a.tile_x < b.tile_x
+  end)
+  local door = doors[1]
+  local th = world.map.th
+  local best, best_cost
+  for y = door.tile_y - 6, door.tile_y + 6 do
+    for x = door.tile_x - 6, door.tile_x + 6 do
+      if hosp:isInHospital(x, y) and not world:getRoom(x, y) then
+        local flags = th:getCellFlags(x, y)
+        if flags.buildable and flags.passable then
+          local d = math.abs(x - door.tile_x) + math.abs(y - door.tile_y)
+          local cost = math.abs(d - 4) + ((x * 7 + y * 13) % 5) * 0.01
+          if d >= 3 and (not best_cost or cost < best_cost) then best, best_cost = {x, y}, cost end
+        end
+      end
+    end
+  end
+  if not best then return builder.anchor(world) end
+  return best[1], best[2]
 end
 
 --! Buy a corridor object and put it on a free tile near the desk (the first

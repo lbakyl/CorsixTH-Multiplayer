@@ -406,11 +406,8 @@ function M:projects(s)
     end
   end
   -- No floor for what it wants: land.
-  local wanted = 0
-  for _, day in pairs(self.no_space) do
-    if s.day - day <= 30 then wanted = wanted + 1 end
-  end
-  if wanted > 0 then
+  local wanted = self:landWanted(s)
+  if wanted then
     local _, price = bot:cheapestPlot()
     if price then add("buy:land", 10 + wanted * 6, function() return bot:buyPlot() end, price) end
   end
@@ -481,6 +478,19 @@ function M:projects(s)
   return list
 end
 
+--! Does it need land: how many kinds of room found no floor in the last 30
+--! days, or nil. Not while plenty of floor is free (then the rooms were
+--! badly placed, more land would not help), unless three kinds failed.
+function M:landWanted(s)
+  local wanted = 0
+  for _, day in pairs(self.no_space) do
+    if s.day - day <= 30 then wanted = wanted + 1 end
+  end
+  if wanted == 0 then return nil end
+  if wanted < 3 and self.bot:freeFloor() >= 120 then return nil end
+  return wanted
+end
+
 --! Do the most urgent project it can afford (one at a time, like a person).
 function M:doProject(s)
   local bot = self.bot
@@ -520,7 +530,6 @@ function M:doProject(s)
         -- Out of floor: buy land, then try again.
         self:note(string.format("day %d: no space for %s", s.day, p.key))
         self.no_space[p.key] = s.day
-        bot:buyPlot()
         self.failed[p.key] = s.day + 5
         self.next_project = bot:later(2)
         return
@@ -950,7 +959,7 @@ function M:problems(s)
     if s.day - day <= 30 then blocked[#blocked + 1] = key end
   end
   table.sort(blocked)
-  if #blocked > 0 then
+  if #blocked > 0 and self:landWanted(s) then
     local _, price = self.bot:cheapestPlot()
     if price then
       add("No floor space left: it could not build %s. Buy land first: buy:land ($%d; a loan pays for it if needed).",
@@ -981,6 +990,9 @@ function M:planMenu()
   local items = M.menu()
   local s = self.state
   if not s then return items end
+  -- Land only once it has found no floor for a room (the model liked to buy
+  -- it from the first day).
+  if self:landWanted(s) then items[#items + 1] = "buy:land" end
   local seen = {}
   for _, r in ipairs(s.crashed) do
     local key = "repair:" .. r.room_info.id
@@ -1001,7 +1013,7 @@ function M.menu()
   end
   local items = {"hire:Doctor", "hire:Nurse", "hire:Handyman", "hire:Receptionist", "hire:Psychiatrist",
       "hire:Surgeon", "hire:Researcher", "buy:bench", "buy:drinks_machine", "buy:radiator", "buy:plant",
-      "buy:bin", "buy:reception_desk", "buy:extinguisher", "buy:land"}
+      "buy:bin", "buy:reception_desk", "buy:extinguisher"}
   for _, r in ipairs(rooms) do items[#items + 1] = r end
   return items
 end
@@ -1015,6 +1027,8 @@ function M:wishMenu()
     local room_id = k:match("^room:(.+)$")
     if not room_id or self:available(room_id) then items[#items + 1] = k end
   end
+  -- (A team mate may always ask for land.)
+  items[#items + 1] = "buy:land"
   local world = self.bot.world
   local seen = {}
   for _, rm in pairs(world.rooms) do
