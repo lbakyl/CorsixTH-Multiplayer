@@ -1544,6 +1544,14 @@ function UIEditRoom:setDoorBlueprint(orig_x, orig_y, orig_wall)
         not validDoorTile(x2 - dx, y2 - dy, player_id, world) then
       invalid_tile = bitOr(invalid_tile, 2)
     end
+    -- The second door never on the top corner: the walls of that tile are
+    -- made apart when the room is finished, and the door would be lost (a
+    -- swing door without its other half). The mouse never puts it there
+    -- (UIEditRoom:screenToWall); a multiplayer build_room command could.
+    local rect = self.blueprint_rect
+    if rect and x - dx == rect.x and y - dy == rect.y then
+      invalid_tile = bitOr(invalid_tile, 2)
+    end
   end
 
   self.blueprint_door.valid = (invalid_tile == 0)

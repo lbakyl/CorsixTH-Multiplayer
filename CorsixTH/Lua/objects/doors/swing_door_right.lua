@@ -134,8 +134,9 @@ end
 !param length (integer) How long the swing animation is for the entering/leaving entity.
 ]]
 function SwingDoor:swingDoors(direction, length)
-  -- First tell the slave door to start swinging
-  self.slave:swingSlave(direction)
+  -- First tell the slave door to start swinging (a room built with the
+  -- second door on its top corner has none: see UIEditRoom:setDoorBlueprint)
+  if self.slave then self.slave:swingSlave(direction) end
   -- Then wait for a while before flapping back this door
   local --[[persistable:swing_door_waiting]] function callback()
     local flags = (self.direction == "east" or self.direction == "west") and 1 or 0

@@ -71,9 +71,10 @@
 #  26. the lobby's room list refreshes itself: a player waiting in the lobby
 #      sees a new room appear without clicking Refresh, and what they typed
 #      (the password) stays -> they join, IN SYNC
-#  28. a room's code fails as a patient enters (test command): the patient
-#      walks out and queues again in both games, the report has the room's
-#      layout -> IN SYNC
+#  28. a room's code fails as a patient enters (test command; five more
+#      patients come just before, so one enters a GP's office in time): the
+#      patient walks out and queues again in both games, the report has the
+#      room's layout -> IN SYNC
 #  27. the reception desk moved one tile over (right, then down) -> both
 #      moves accepted, IN SYNC
 #  29. Load MP game (kai, before creating the room): the file list shows the
@@ -228,9 +229,11 @@ run_probe yuki MP_ROLE=join MP_ROOM=refer MP_STEPS=1100 \
 # command) and offers them for $5,000; the other player accepts in the fax.
 # Then one more, offered free, is declined. Also in-game chat (to all, then
 # Tab to the other player) and money requests from the bank manager ($7,500
-# paid, $2,000 declined).
+# paid, $2,000 declined). Last, an operating theatre is sent (build_room, as
+# a bot does) with its second swing door on the room's top corner: refused
+# in both games (that door was never made, and its pair broke the game).
 run_probe kim MP_ROLE=host MP_ROOM=research MP_COOP=1 MP_LEVEL=5 MP_STEPS=900 \
-  MP_UI_SCRIPT="20:openhospital;100:learn;104:learn;108:learn;112:learn;116:learn;120:learn;124:learn;128:learn;150:shareresearch:5000;190:askmoney:7500;200:chat:0:hello everyone;230:chat:1:just for you;500:learn;540:shareresearch:0;600:askmoney:2000" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;100:learn;104:learn;108:learn;112:learn;116:learn;120:learn;124:learn;128:learn;150:shareresearch:5000;190:askmoney:7500;200:chat:0:hello everyone;230:chat:1:just for you;500:learn;540:shareresearch:0;600:askmoney:2000;800:cornerdoor:operating_theatre" & pids+=($!)
 sleep 1
 run_probe lea MP_ROLE=join MP_ROOM=research MP_STEPS=900 \
   MP_UI_SCRIPT="30:openhospital;250:answermoney:pay;300:answerresearch:accept;650:answermoney:decline;700:answerresearch:decline" & pids+=($!)
@@ -239,7 +242,7 @@ run_probe lea MP_ROLE=join MP_ROOM=research MP_STEPS=900 \
 # rise window, one accepted and one declined; a nurse fired; queues
 # reordered by dragging in the queue window.
 run_probe wade MP_ROLE=host MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
-  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;640:breakroom:gp;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench;860:movestaff:Doctor;870:whereis:Doctor;950:overlay" & pids+=($!)
+  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;620:patients:5;640:breakroom:gp;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench;860:movestaff:Doctor;870:whereis:Doctor;950:overlay" & pids+=($!)
 sleep 1
 run_probe yara MP_ROLE=join MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
   MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront;500:furnishroom:gp:5:5;750:cancelroom:toilets:4:4;870:whereis:Doctor;900:uistate;950:overlay" & pids+=($!)
@@ -564,11 +567,16 @@ okres = (result('kim').startswith('IN SYNC through step 900') and result('lea').
          and 'chat seen: kim: hello everyone | kim (to you): just for you [private]' in ll
          and 'money request of hospital 1 to hospital 2: paid $7500' in kl
          and 'money request of hospital 1 to hospital 2: declined' in kl)
+# The operating theatre with its second door on the top corner: refused in both.
+corner = [x for x in ck if 'build_room' in x]
+corner_ok = (len(corner) == 1 and corner[0].endswith('rejected: invalid door position')
+             and corner == [x for x in applied('lea') if 'build_room' in x])
+okres = okres and corner_ok
 print(f"19. Research sharing:       {result('kim')}; offers {kinds_k.count('offer_research')}, "
       f"accepted {paid.group(1) + ' items for $' + paid.group(2) if paid else 'no'}, one declined; "
       f"same knowledge on both: {know_k == know_l}; hospital 1 knows {len(r1.split(','))}, hospital 2 {len(r2.split(','))}; "
       f"chat to all and private: {'kim (to you): just for you [private]' in ll}; money asked, paid and declined: "
-      f"{'paid $7500' in kl and 'hospital 2: declined' in kl}")
+      f"{'paid $7500' in kl and 'hospital 2: declined' in kl}; second swing door on the corner refused: {corner_ok} {corner}")
 fail |= not okres
 
 el, fl = log('ella'), log('finn')

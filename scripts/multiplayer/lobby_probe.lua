@@ -1261,6 +1261,19 @@ local function run()
           local at = opt == "overmoved" and moved_from and
               {moved_from[1] - math.floor(tonumber(rw) / 2), moved_from[2] - math.floor(tonumber(rh) / 2)}
           builder.ui_room(world, desk_x, desk_y, id, tonumber(rw), tonumber(rh), opt == "window", log, at)
+        elseif a == "cornerdoor" then
+          -- cornerdoor:<room>: a build_room command (as a bot sends) for a
+          -- 7x7 room with swing doors whose second door would be on the top
+          -- corner; every game must refuse it.
+          local rx, ry = builder.find_free_rect(world, desk_x, desk_y, 7, 7, 40)
+          if rx then
+            session:issue({kind = "build_room", room = entry.arg, x = rx, y = ry, w = 7, h = 7,
+                door_x = rx + 1, door_y = ry, door_wall = "north", windows = ""})
+            log(string.format("UI: %s with its second door on the top corner at %d,%d, step %d", entry.arg, rx, ry,
+                session.step))
+          else
+            log("UI: no space for the corner door test")
+          end
         elseif a == "hire" then builder.ui_hire(world, desk_x, desk_y, entry.arg, log)
         elseif a == "pause" or a == "unpause" then
           presses[#presses + 1] = {wait = tonumber(entry.arg) or 0, paused = a == "unpause"}
