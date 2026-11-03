@@ -139,12 +139,24 @@ function Earthquake:tick(hours)
   self.damage_timer = self.damage_timer - hours
   if self.damage_timer > 0 then return end
 
+  -- The machines in a fixed order (multiplayer: by entity number), the same
+  -- on every computer: pairs() over a room's objects follows where they are
+  -- in memory, and a machine that explodes first spares the others in its
+  -- room their random draw, so the games would drift apart.
+  local machines = {}
   for _, room in pairs(self.world.rooms) do
     for object, _ in pairs(room.objects) do
       if object:isMachine() then
-        object:earthquakeImpact(room)
+        machines[#machines + 1] = {machine = object, room = room}
       end
     end
+  end
+  local function order(m)
+    return m.machine.mp_id or (m.room.id * 1000000 + m.machine.tile_x * 1000 + m.machine.tile_y)
+  end
+  table.sort(machines, function(a, b) return order(a) < order(b) end)
+  for _, m in ipairs(machines) do
+    m.machine:earthquakeImpact(m.room)
   end
 
   self.remaining_damage = self.remaining_damage - 1
