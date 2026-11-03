@@ -25,7 +25,9 @@
 # referee also lets the server run bots, for an 8th check in room "mixed":
 # hal (host) plays hospital 1 alone; Bot Agnes and ivy share hospital 2 and
 # both build in it (the bot its desk, receptionist, rooms and staff, ivy a
-# GP's office and a nurse), IN SYNC, and the referee agrees.
+# GP's office and a nurse), IN SYNC, and the referee agrees. ivy asks Agnes
+# on the team line: the bot answers ivy on the team line, and hal (the other
+# team) sees none of it.
 # Also a 9th check, room "clinic" (co-op, a hospital each): kim's patient
 # gets a fax; lou clicking that patient gets the patient window, not kim's
 # fax (another hospital's faxes are its player's); kim gets the fax.
@@ -121,7 +123,7 @@ if [[ "${MP_REFEREE:-0}" == 1 ]]; then
   sleep 1
   run_probe hal MP_ROLE=host MP_ROOM=mixed MP_MODE=teamshared MP_TEAM=1 MP_PLAYERS=3 MP_ADD_BOTS=1 MP_LEVEL=2     MP_STEPS=1200 MP_SCENARIO=none MP_UI_SCRIPT="60:teams;1150:hospitals" & pids+=($!)
   sleep 3
-  run_probe ivy MP_ROLE=join MP_ROOM=mixed MP_TEAM=2 MP_STEPS=1200 MP_SCENARIO=none     MP_UI_SCRIPT="60:teams;120:room:gp:4:4;500:hire:Nurse;1150:hospitals" & pids+=($!)
+  run_probe ivy MP_ROLE=join MP_ROOM=mixed MP_TEAM=2 MP_STEPS=1200 MP_SCENARIO=none     MP_UI_SCRIPT="60:teams;120:room:gp:4:4;500:hire:Nurse;700:chat:1:Agnes, how are we doing?;1150:hospitals" & pids+=($!)
 fi
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
@@ -221,16 +223,19 @@ if with_referee:
               if any('peer 2 ' in x and k in x and x.endswith('-> ok') for x in cmds)}
     ivy_room = any('peer 3 ' in x and 'build_room' in x and x.endswith('-> ok') for x in cmds)
     report = re.findall(r'UI: hospitals at step \d+ .*?: (.*)', log('hal'))
+    # The bot's answer to ivy's team line: on the team line, not to hal.
+    answers = [t for s, t in re.findall(r'CHAT IN at step (\d+): Bot Agnes \(team\): (.*)', log('ivy')) if int(s) >= 700]
+    leaked = [t for t in re.findall(r'CHAT IN at step \d+: Bot Agnes(?: \(\w+\))?: (.*)', log('hal')) if t in answers]
     h1 = re.search(r'\[1 HAL opened=\w+ balance=-?\d+ reputation=\d+ rooms=(\S*) ', report[-1]) if report else None
     h2 = re.search(r'\[2 BOT AGNES \+ IVY opened=\w+ balance=-?\d+ reputation=\d+ rooms=(\S*) staff=(\S*) ', report[-1]) if report else None
     ok8 = (ivy_teams is not None and ivy_teams[0] == '2' and ivy_teams[1] == '1=HAL:1 2=BOT AGNES + IVY:2'
            and bot_ok == {'place_object', 'hire', 'build_room'} and ivy_room
            and h1 is not None and h1.group(1) == '' and h2 is not None and 'gp' in h2.group(1)
-           and 'Receptionist' in h2.group(2)
+           and 'Receptionist' in h2.group(2) and answers and not leaked
            and result('hal').startswith('IN SYNC') and result('ivy').startswith('IN SYNC'))
     print(f"8. Bot shares a hospital:   ivy {ivy_teams[:2] if ivy_teams else '-'}; bot's commands ok: {sorted(bot_ok)}; "
           f"ivy's room: {ivy_room}; hospital 2 rooms {h2.groups() if h2 else '-'}, hospital 1 rooms "
-          f"[{h1.group(1) if h1 else '-'}]; {result('hal')} / {result('ivy')}")
+          f"[{h1.group(1) if h1 else '-'}]; team answer {answers[:1]}, hal saw {leaked}; {result('hal')} / {result('ivy')}")
     fail |= not ok8
     for room, least in (('trio', 1100), ('duo', 800), ('mixed', 1200), ('clinic', 800)):
         confirmed = re.search(rf"room '{room}': referee confirmed steps through (\d+)", server)

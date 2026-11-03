@@ -283,7 +283,9 @@ end
 
 function Bot:now() return socket.gettime() end
 
---! Say something (to everybody, or privately to one peer) after `delay` seconds.
+--! Say something after `delay` seconds: to everybody, privately to one peer,
+--! or to = "team": to its team mates only in a race of teams (to everybody
+--! when there are no teams).
 function Bot:say(text, delay, to, fn)
   self.outbox[#self.outbox + 1] = {at = self:now() + (fast and 0 or (delay or 2)), text = text, to = to, fn = fn}
 end
@@ -300,7 +302,15 @@ function Bot:flushOutbox()
     if now >= entry.at then
       table.remove(self.outbox, i)
       if entry.fn then entry.fn() end
-      if entry.text then
+      if entry.text and entry.to == "team" then
+        local mates = self.lobby:teamMates(self.world, TheApp.mp_session.peer_id)
+        if #mates > 0 then
+          self.lobby:send("CHAT", {text = entry.text, to = table.concat(mates, ","), team = 1})
+        else
+          self.lobby:send("CHAT", {text = entry.text})
+        end
+        log("CHAT" .. (#mates > 0 and " (team): " or ": ") .. entry.text)
+      elseif entry.text then
         self.lobby:send("CHAT", {text = entry.text, to = entry.to})
         log("CHAT: " .. entry.text)
       end
@@ -476,7 +486,7 @@ function Bot:askPlan()
     manager:applyPlan(plan)
     -- A team mate now and then says what it is up to (a rival keeps quiet).
     if f.note and f.note ~= "" and not self.fiery and rand() < 0.3 then
-      self:say(f.note, typing(f.note))
+      self:say(f.note, typing(f.note), "team")
     end
   end)
 end
@@ -528,8 +538,9 @@ function Bot:onChat(f)
   local kind = reply_kind(text)
   local line = pick(REPLIES[kind][rival and "fiery" or "friendly"]):format(name)
   -- Spoken to: the model answers if the server has one (the stock line if
-  -- it does not answer within a few seconds).
-  local to = private and peer or nil
+  -- it does not answer within a few seconds). The answer goes where the line
+  -- came from: the team, that person, or everybody.
+  local to = f.team == "1" and "team" or private and peer or nil
   if (private or named) and self.ai ~= "off" then
     local report = self.manager and self.manager:report() or ""
     local brief = report:match("^[^\n]*\n[^\n]*") or report
@@ -594,7 +605,8 @@ function Bot:answerOffers()
           session:issue({kind = "fax_choice", msg = msg, choice = accept and 1 or 2})
         end
       end)
-      self:say(line, delay + typing(line))
+      -- (A team mate's offer: the thanks go to the team, not to the rivals.)
+      self:say(line, delay + typing(line), not self.world:mpRivals(self.world.hospitals[offer.from], mine) and "team" or nil)
     end
   end
 end
@@ -648,7 +660,7 @@ function Bot:moneyReceived(from_index, amount)
     self:say(line, delay + typing(line))
   else
     local line = pick(LINES.money_thanks):format(name)
-    self:say(line, 2 + typing(line))
+    self:say(line, 2 + typing(line), "team")
   end
 end
 

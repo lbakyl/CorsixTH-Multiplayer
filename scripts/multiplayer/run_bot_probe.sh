@@ -150,7 +150,7 @@ for host, text, idx in (('ann', a, [2, 3]), ('bob', b, [2])):
 fail |= not ok2
 
 def chats_from(text, who):
-    return re.findall(rf'CHAT IN at step (\d+): {re.escape(who)}(?: \(private\))?: (.*)', text, re.I)
+    return re.findall(rf'CHAT IN at step (\d+): {re.escape(who)}(?: \((?:private|team)\))?: (.*)', text, re.I)
 # ann's offers go to hospital 2: whichever bot joined first.
 last = last_hospitals(a)
 first_bot = re.search(r'\[2 (.*?) opened', last[2]).group(1) if last else 'Bot Agnes'
