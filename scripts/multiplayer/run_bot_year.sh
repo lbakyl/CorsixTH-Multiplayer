@@ -16,6 +16,9 @@
 # as they can; every 3000 steps the watcher logs every hospital (rooms,
 # staff, money, reputation, value, cures, deaths, goals). Prints the two
 # bots' hospitals at the end. Exits 0 if both games stayed in sync.
+# MP_YEAR_MATCH=1 plays one race instead: room "match", the watcher (its
+# hospital stays closed) and two bots of the first room's brain against each
+# other (STEPS 36000 for two game years).
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it, or
 # MP_LUA_CPATH/MP_LUA_PATH set) and python3 (MP_PYTHON).
@@ -43,6 +46,8 @@ if [[ -z "${MP_LUA_CPATH:-}" ]]; then
   export MP_LUA_CPATH="$LUASOCKET_TREE/lib/lua/$lua_ver/?.so"
   export MP_LUA_PATH="$LUASOCKET_TREE/share/lua/$lua_ver/?.lua"
 fi
+match=${MP_YEAR_MATCH:-0}
+if [[ "$match" == 1 ]]; then first_room=${rooms%% *}; rooms="match:${first_room#*:}"; fi
 brains="" scenarios=""
 for r in $rooms; do brains="$brains;${r%%:*}=${r#*:}"; scenarios="$scenarios;${r%%:*}=none"; done
 
@@ -67,12 +72,14 @@ for s in $(seq 3000 3000 "$steps"); do script="$script;$((s - 10)):hospitals"; d
 script="$script;$((steps - 5)):map:2"
 run_watcher() { # name room
   local name=$1 room=$2 dir="$out/$1"
+  local mode=coop players=2 bots=1
+  if [[ "$match" == 1 ]]; then mode=competitive players=3 bots=2; fi
   mkdir -p "$dir/config" "$dir/saves"
   printf 'theme_hospital_install = [[%s]]\nsavegames = [[%s]]\nplayer_name = "%s"\nlanguage = [[English]]\naudio = false\nplay_intro = false\nmovies = false\ngrant_wage_increase = false\n' \
     "$game_data" "$dir/saves" "$name" > "$dir/config.txt"
-  env XDG_CONFIG_HOME="$dir/config" MP_NAME="$name" MP_ROLE=host MP_ROOM="$room" MP_MODE=coop MP_LEVEL="$level" \
-    MP_PLAYERS=2 MP_ADD_BOTS=1 MP_SCENARIO=none MP_STEPS="$steps" MP_STALL_LIMIT=300 $watch \
-    MP_UI_SCRIPT="$first${script#;}" timeout 5400 "$binary" \
+  env XDG_CONFIG_HOME="$dir/config" MP_NAME="$name" MP_ROLE=host MP_ROOM="$room" MP_MODE=$mode MP_LEVEL="$level" \
+    MP_PLAYERS=$players MP_ADD_BOTS=$bots MP_SCENARIO=none MP_STEPS="$steps" MP_STALL_LIMIT=300 $watch \
+    MP_UI_SCRIPT="$first${script#;}" timeout $((5400 + steps / 10)) "$binary" \
     "--interpreter=$source_dir/scripts/multiplayer/lobby_probe.lua" \
     "--config-file=$dir/config.txt" > "$dir/log.txt" 2>&1 || true
 }
@@ -92,8 +99,8 @@ for spec in sys.argv[2:]:
     print(f"{room}: {res.group(1) if res else 'no result'}")
     fail |= not (res and res.group(1).startswith('IN SYNC'))
     for step, date, rest in re.findall(r'UI: hospitals at step (\d+) \(([^)]*)\): (.*)', text):
-        bot = re.search(r'\[2 (.*?)\]', rest)
-        print(f"  step {step} ({date}): {bot.group(1) if bot else '-'}")
+        for bot in re.findall(r'\[([23] .*?)\]', rest):
+            print(f"  step {step} ({date}): {bot}")
 server = (out / 'server.log').read_text()
 asks = len(re.findall(r'advice: \d+ in', server))
 spend = out / 'ai-spend.json'
