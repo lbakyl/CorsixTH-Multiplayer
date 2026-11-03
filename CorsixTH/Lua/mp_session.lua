@@ -802,6 +802,19 @@ function MultiplayerSession.stepDetail(world)
           tostring(t.desc))
     end
     out[#out + 1] = string.format("h%d bal=%s tx[%s]", i, tostring(h.balance), table.concat(tx, " | "))
+    -- What its research aims at (a drug or machine picked differently on
+    -- some computers shows only much later, in a price).
+    local policy = h.research and h.research.research_policy
+    if policy then
+      local aims = {}
+      for _, area in ipairs({"cure", "diagnosis", "drugs", "improvements", "specialisation"}) do
+        local cur = policy[area] and policy[area].current
+        local name = cur
+        if type(cur) == "table" then name = cur.id or (cur.disease and cur.disease.id) or "-" end -- (never an address)
+        aims[#aims + 1] = area .. "=" .. tostring(name)
+      end
+      out[#out + 1] = string.format("h%d research %s", i, table.concat(aims, " "))
+    end
   end
   for _, e in ipairs(world.entities) do
     if e.humanoid_class then
@@ -2839,10 +2852,9 @@ function handlers.buy_plot(world, cmd)
     cmd.resolved, cmd.no_sound = "auction " .. auction.id, true
     return true
   end
-  if world.mp_coop then
-    local side = MultiplayerSession.plotSide(world, tonumber(cmd.plot))
-    if side and side ~= world:getHospitalIndex(hospital) then return false, "another player's side" end
-  end
+  -- (A plot on another player's side that nobody else may bid for now, its
+  -- player away or unable to buy it, is simply bought: before, it was
+  -- refused for good, St. Scavengers' plot 16 in a game with an empty seat.)
   local ui = world.ui
   -- purchasePlot gives cost advice through the UI; only to that player.
   local adviser = ui and ui.adviser

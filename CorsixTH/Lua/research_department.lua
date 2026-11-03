@@ -50,8 +50,10 @@ end
 --! pairs(), but in multiplayer in a fixed order: research picks "the first"
 --! or "the last" of several things, and pairs() order over tables keyed by
 --! objects or names differs between computers (single player is unchanged).
+--! Also while a multiplayer level loads (TheApp.mp_loading), before there is
+--! a session: the first drug and specialisation targets are picked then.
 local function research_pairs(t)
-  if not (TheApp and TheApp.mp_session) then return pairs(t) end
+  if not (TheApp and (TheApp.mp_session or TheApp.mp_loading)) then return pairs(t) end
   local keys, names = {}, {}
   for k in pairs(t) do
     keys[#keys + 1] = k

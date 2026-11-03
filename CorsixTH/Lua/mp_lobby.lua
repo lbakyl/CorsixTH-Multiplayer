@@ -1387,8 +1387,13 @@ function MultiplayerLobby:_beginGame(f)
     math.randomseed(tonumber(f.seed))
     local level = tonumber(f.level) or 1
     local level_id = coop and MultiplayerLobby.coopLevelId(app.mp_coop.players, level) or level
+    -- (While the level loads there is no session yet; research picks its
+    -- first targets then, in the same order on every computer only if it
+    -- knows it is a multiplayer game: ResearchDepartment's research_pairs.)
+    app.mp_loading = true
     local loaded = app:loadLevel(level_id, f.difficulty or "full", nil, nil, nil, nil,
         _S.errors.load_level_prefix, nil)
+    app.mp_loading = nil
     if not loaded or not app.world then
       app.mp_coop = nil
       app.mp_starting = nil
