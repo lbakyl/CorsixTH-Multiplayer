@@ -240,7 +240,8 @@ function Strings:load(language, no_restriction, no_inheritance)
       speech_file = ...
     end,
     IsArabicNumerals = function(is_enabled)
-      self.languages_with_arabic_numerals[language] = is_enabled
+      -- (Looked up in lower case: the Options window saves "English".)
+      self.languages_with_arabic_numerals[language:lower()] = is_enabled
     end,
     _G = env,
     type = type,
