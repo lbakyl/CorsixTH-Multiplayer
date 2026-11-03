@@ -97,7 +97,12 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
 5. **Sharing a hospital:** team mates build, hire and answer faxes in the
    same hospital. A bot can share yours too: it builds in your hospital along
    with you (a desk, rooms, staff), and whatever you have already built it
-   leaves alone.
+   leaves alone. Ask it in the chat for a room or staff and it tells you
+   when it is done, or that it needs land or money first. Once a game week
+   it gives every member of staff under half happiness two bonuses (while
+   the balance stays above $2,000) and tells you what that cost; a pay rise
+   you leave unanswered it answers before they quit. Before it gives your
+   research to an ally it asks you: say "share".
 
 **Nobody to play with?** As the host, click an empty place in your room
 ("click: add a bot") and a computer player takes it; click the bot to take it
