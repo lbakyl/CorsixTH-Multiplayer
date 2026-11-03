@@ -316,6 +316,9 @@ function UI:draw(canvas)
   end
   Window.draw(self, canvas, 0, 0)
   self:drawTooltip(canvas)
+  -- Multiplayer: the game is starting (the lobby until its world is there).
+  local lobby = rawget(_G, "MultiplayerLobby")
+  if TheApp.mp_starting and lobby and lobby.isStarting(TheApp) then lobby.drawLoading(canvas, true) end
   if self.simulated_cursor then
     self.simulated_cursor.draw(canvas, self.cursor_x, self.cursor_y)
   end

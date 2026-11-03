@@ -1362,6 +1362,21 @@ local function run()
           local list = {}
           for s in steps:gmatch("[^+]+") do list[#list + 1] = s end
           editing = {room_type = id, steps = list}
+        elseif a == "loadingshot" then
+          -- The game-start loading picture and box (MultiplayerLobby.drawLoading),
+          -- as screenshots to look at (MP_SHOT_DIR).
+          if shot_dir then
+            local video = TheApp.video
+            video:startFrame()
+            MultiplayerLobby.drawLoading(video, true)
+            video:endFrame()
+            video:takeScreenshot(shot_dir .. "/" .. name .. "-loading-full.png")
+            local is_starting = MultiplayerLobby.isStarting
+            MultiplayerLobby.isStarting = function() return true end
+            TheApp.mp_starting = os.time()
+            shot("loading-box")
+            MultiplayerLobby.isStarting, TheApp.mp_starting = is_starting, nil
+          end
         elseif a == "moveinto" then
           -- moveinto:<object>:<room>: pick up a corridor object of this
           -- hospital and put it down inside its room of that kind (a plant

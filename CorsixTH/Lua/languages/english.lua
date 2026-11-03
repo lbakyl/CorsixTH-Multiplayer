@@ -452,6 +452,7 @@ multiplayer_window = {
   trade_sent = "Sent. It arrives in a moment.",
   trade_on_the_way = "- offered",
   trade_offered = "Offered. They join you if the other player accepts.",
+  loading = "LOADING...",
   offer_caption = "Offer from %s",
   offer_staff_line = "%s offers you a member of staff:",
   offer_patient_line = "%s refers a patient to you:",

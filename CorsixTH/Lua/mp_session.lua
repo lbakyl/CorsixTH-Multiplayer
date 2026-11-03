@@ -2192,6 +2192,7 @@ end
 function MultiplayerSession:finishGame()
   local request = self.finish_request
   self.finish_request = nil
+  TheApp.mp_starting = nil
   local back_to_lobby = self.lobby and not self.lobby.is_referee
   local app = TheApp
   app:loadMainMenu(request.message)

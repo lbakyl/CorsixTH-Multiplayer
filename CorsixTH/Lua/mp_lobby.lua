@@ -1224,8 +1224,64 @@ end
 --! Load the agreed level and attach a lockstep session to it. A player
 --! rejoining a running game (f.resume) gets no level: the game comes with the
 --! shared save that everybody loads (see _loadShared).
+-- The game starting (START) until its first step: the level loads in one
+-- go, and a continued game, or a player with another edition's files, waits
+-- for the referee's game; without a sign the screen looks frozen. A picture
+-- only (TheApp.mp_starting, the start time; not game state), at most this
+-- many seconds.
+MultiplayerLobby.LOADING_LIMIT = 120
+local loading_picture
+
+--! Is the game still starting (TheApp.mp_starting set, no step yet)?
+function MultiplayerLobby.isStarting(app)
+  local since = app.mp_starting
+  if not since then return false end
+  local session = app.mp_session
+  if (session and session.step > 0) or os.time() - since > MultiplayerLobby.LOADING_LIMIT then
+    app.mp_starting = nil
+    return false
+  end
+  return true
+end
+
+--! "LOADING..." while the game starts: with `full`, on the original game's
+--! loading picture (no hospital to see yet); else in a box over the map.
+function MultiplayerLobby.drawLoading(canvas, full)
+  local app = TheApp
+  local scr_w, scr_h = canvas:getRenderSize()
+  local s = app.gfx:getUIScale()
+  local box_w, box_h = 240 * s, 36 * s
+  local box_x, box_y = math.floor((scr_w - box_w) / 2), math.floor((scr_h - box_h) / 2)
+  if full then
+    canvas:fillBlack()
+    loading_picture = loading_picture or app.gfx:loadRaw("Load01V", 640, 480)
+    loading_picture:draw(canvas, math.floor((scr_w - 640) / 2), math.floor((scr_h - 480) / 2))
+    box_y = math.floor((scr_h + 480) / 2 - box_h - 24 * s)
+    if box_y + box_h > scr_h then box_y = scr_h - box_h - 8 * s end
+  end
+  canvas:drawRect(canvas:mapRGB(220, 220, 220), box_x - s, box_y - s, box_w + 2 * s, box_h + 2 * s)
+  canvas:drawRect(canvas:mapRGB(40, 24, 64), box_x, box_y, box_w, box_h)
+  local font = app.gfx:loadFontAndSpriteTable("QData", "Font01V", nil, nil, {ttf_shadow = true, apply_ui_scale = true})
+  font:draw(canvas, _S.multiplayer_window.loading, box_x, box_y, box_w, box_h)
+end
+
+--! The loading picture at once (the level then loads without a frame drawn).
+function MultiplayerLobby.showLoadingNow(app)
+  local video = app.video
+  if not video or not app.gfx then return end
+  pcall(function()
+    video:startFrame()
+    MultiplayerLobby.drawLoading(video, true)
+    video:endFrame()
+  end)
+end
+
 function MultiplayerLobby:_beginGame(f)
   local app = TheApp
+  if not self.is_referee then
+    app.mp_starting = os.time()
+    MultiplayerLobby.showLoadingNow(app)
+  end
   local peers = {}
   for p in (f.peers or ""):gmatch("%d+") do peers[#peers + 1] = tonumber(p) end
   local resume = f.resume == "1"
@@ -1324,6 +1380,7 @@ function MultiplayerLobby:_beginGame(f)
         _S.errors.load_level_prefix, nil)
     if not loaded or not app.world then
       app.mp_coop = nil
+      app.mp_starting = nil
       error("level " .. tostring(level_id) .. " could not be loaded")
     end
     world = app.world
