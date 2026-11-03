@@ -1433,6 +1433,17 @@ local function run()
           end
           log(string.format("UI: auction scan: contested %s; plain %s", table.concat(contested, " "),
               table.concat(plain, " ")))
+          -- Every plot: its owner and which players may buy it (the game's
+          -- rule: it touches their land or the town's own, plot 0).
+          local rows = {}
+          for plot = 1, th:getPlotCount() - 1 do
+            local who = {}
+            for player = 1, 4 do
+              if th:isParcelPurchasable(plot, player) then who[#who + 1] = tostring(player) end
+            end
+            rows[#rows + 1] = string.format("%d:o%d:b%s", plot, th:getPlotOwner(plot), table.concat(who))
+          end
+          log("UI: plots " .. table.concat(rows, " "))
         elseif a == "auctionbuy" then
           -- Ask for the cheapest plot that goes to auction.
           local th, hospital = world.map.th, world.ui.hospital
@@ -1471,7 +1482,15 @@ local function run()
               tostring(wait ~= nil)))
           if window and a == "auctionbid" then window:bid()
           elseif window and a == "auctionpass" then window:dropOut()
-          elseif a == "auctionshot" then shot("auction-" .. session.step) end
+          elseif a == "auctionshot" then
+            -- (MP_SHOT_NAME: this hospital's name for the picture only, as a
+            -- shared hospital's "ANA + BOT AGNES"; put back at once.)
+            local rename, hosp = os.getenv("MP_SHOT_NAME"), world.ui.hospital
+            local old_name = hosp.name
+            if rename then hosp.name = rename end
+            shot("auction-" .. session.step)
+            hosp.name = old_name
+          end
         elseif a == "startpause" then
           -- How long after START the first steps ran (the start pause).
           log(string.format("UI: step %d ran %d ms after the start (pause %d ms)", session.step,

@@ -71,7 +71,7 @@ export MP_SERVER="127.0.0.1:$port"
 
 script=""
 for s in $(seq 3000 3000 "$steps"); do script="$script;$((s - 10)):hospitals"; done
-script="$script;$((steps - 5)):map:2"
+script="$script;$((steps - 5)):map:2${MP_YEAR_SCRIPT:+;$MP_YEAR_SCRIPT}"
 run_watcher() { # name room
   local name=$1 room=$2 dir="$out/$1"
   local mode=coop players=2 bots=1
