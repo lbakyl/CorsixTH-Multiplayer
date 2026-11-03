@@ -477,7 +477,7 @@ function Bot:askPlan()
     report = report .. "\nTeam mates said lately (today is day " .. self:gameDay() .. "):\n" .. table.concat(said, "\n")
   end
   self.last_plan = self:now()
-  return self:ask("plan", {text = report, menu = table.concat(Manager.menu(), ",")}, 60, function(f)
+  return self:ask("plan", {text = report, menu = table.concat(manager:planMenu(), ",")}, 60, function(f)
     if not f then return end
     local plan = {priorities = {}, price = tonumber(f.price)}
     for action, weight in (f.actions or ""):gmatch("([%w_:]+):(%d+)") do
@@ -1132,7 +1132,8 @@ end
 
 --! Buy the cheapest plot of land it may buy (on its side of the map) if it
 --! can afford it and still keep money for a room.
-function Bot:buyPlot()
+--! The cheapest plot this hospital may buy and its price, or nil.
+function Bot:cheapestPlot()
   local world = self.world
   local th, hospital = world.map.th, world.ui.hospital
   local me = world:getHospitalIndex(hospital)
@@ -1144,11 +1145,18 @@ function Bot:buyPlot()
       if not best or price < best_price then best, best_price = plot, price end
     end
   end
+  return best, best_price
+end
+
+function Bot:buyPlot()
+  local hospital = self.world.ui.hospital
+  local best, best_price = self:cheapestPlot()
   if not best then
     log("no land left to buy")
     return false
   end
-  if hospital.balance - best_price < 3 * RESERVE then
+  -- (Land is worth more than money in the bank: only the reserve kept.)
+  if hospital.balance - best_price < RESERVE then
     log(string.format("plot %d costs $%d: not enough money yet", best, best_price))
     return false
   end

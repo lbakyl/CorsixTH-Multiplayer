@@ -10,14 +10,19 @@
 --    of staff, a desk, benches, a drinks machine, radiators, land) gets a
 --    score from those needs (Manager:projects); the best one it can afford
 --    is done, one every one to three game days, like a person would.
---  * Smaller things happen on their own: a handyman to a worn machine,
+--  * Smaller things happen on their own: a handyman to a machine half worn,
 --    heating, prices once a month, loans, research aimed at a disease it
 --    cannot treat, the faxes about patients, VIPs and epidemics.
+--  * Machines are looked after: a new machine for one worn down by its
+--    repairs, a room destroyed by an exploding machine built again where it
+--    stands, land bought (borrowing for it) when there is no floor left.
 --  * In a race it throws out evil handymen, shoots attack rats, and aims its
 --    dirty tricks at whoever leads.
 --  * A plan from a language model (Manager:applyPlan, through the server)
 --    can raise the scores of some projects and change prices or the loan;
---    the manager still checks everything and plays on without it.
+--    the manager still checks everything and plays on without it. The
+--    report for it starts with the hospital's problems (Manager:problems),
+--    and its most urgent choices come before the manager's own ideas.
 --
 -- Like the rest of the bot it never uses the game's random numbers.
 
@@ -37,6 +42,12 @@ local COPIES = {gp = 3, pharmacy = 2, general_diag = 2, psych = 2, ward = 2, toi
     jelly_vat = 1, decontamination = 1, operating_theatre = 2, research = 1}
 -- Queue per room above which another room of the type helps.
 local BUSY_QUEUE = 5
+-- A project this urgent may be paid with a loan (a repair, land, a machine).
+local URGENT = 20
+-- Rooms that earn the most: repaired and looked after first.
+local EARNERS = {operating_theatre = 25, scanner = 10, x_ray = 8, cardiogram = 8, ultrascan = 8,
+    fracture_clinic = 8, inflation = 8, dna_fixer = 8, hair_restoration = 6, tongue_clinic = 6, electrolysis = 6,
+    jelly_vat = 6, decontamination = 6, blood_machine = 6}
 -- The score a team mate's wish adds: before the bot's own ideas, after the
 -- basics of an opening hospital (90 and more).
 local WISH = 50
@@ -84,6 +95,7 @@ function M.new(bot, ctx)
   self.history = {}        -- what it did lately (for the model's report and chat)
   self.left = {}           -- why patients left: cured, kicked, fed_up, over_priced
   self.lost = {}           -- disease id -> patients who left uncured
+  self.no_space = {}       -- project key -> last game day it found no floor for it
   return self
 end
 
@@ -106,8 +118,10 @@ function M:assess()
   local s = {hosp = hosp, day = bot:gameDay(), month = world:date():monthOfGame()}
 
   -- Rooms: built per type, queues, unstaffed.
-  s.rooms, s.queue, s.unstaffed, s.room_count = {}, {}, {}, 0
+  s.rooms, s.queue, s.unstaffed, s.room_count, s.crashed = {}, {}, {}, 0, {}
   for _, r in pairs(world.rooms) do
+    -- (A room destroyed by an exploding machine: out of use, still there.)
+    if r.hospital == hosp and r.crashed then s.crashed[#s.crashed + 1] = r end
     if r.hospital == hosp and r.is_active then
       local id = r.room_info.id
       s.rooms[id] = (s.rooms[id] or 0) + 1
@@ -179,7 +193,7 @@ function M:assess()
   for _, desk in ipairs(hosp:getReceptionDesks()) do
     s.reception_queue = s.reception_queue + (desk.queue and desk.queue:reportedSize() or 0)
   end
-  s.objects, s.litter, s.worn, s.rats, s.saboteurs = {}, 0, {}, {}, {}
+  s.objects, s.litter, s.worn, s.rats, s.saboteurs, s.machines = {}, 0, {}, {}, {}, {}
   local me = world:getHospitalIndex(hosp)
   for _, e in ipairs(world.entities) do
     if e.tile_x and hosp:isInHospital(e.tile_x, e.tile_y) then
@@ -193,6 +207,12 @@ function M:assess()
       if class.is(e, Machine) and e.hospital == hosp and e.strength and e.getRemainingUses then
         local left = e:getRemainingUses()
         if left <= 3 then s.worn[#s.worn + 1] = e end
+        local rm = world:getRoom(e.tile_x, e.tile_y)
+        local progress = hosp.research.research_progress[e.object_type]
+        if rm and rm.is_active and progress then
+          s.machines[#s.machines + 1] = {e = e, room = rm.room_info.id, left = left, strength = e.strength,
+              new = progress.start_strength or e.strength, cost = progress.cost or 0}
+        end
       end
       if class.is(e, Rat) and e.mp_attack_rat and not e.shot then s.rats[#s.rats + 1] = e end
     end
@@ -237,10 +257,13 @@ function M:projects(s)
   local function add(key, score, run, cost)
     -- (Not what a team mate said they would do themselves.)
     if self.hands_off[key] and s.day <= self.hands_off[key] then return end
+    -- (Only the basics of an opening hospital are done without the money
+    -- for them; not what a plan or a wish lifted that high.)
+    local basic = score >= 90
     score = score + (self.boost[key] or 0) + (self.wishes[key] and WISH or 0)
     listed[key] = true
     if self.failed[key] and s.day < self.failed[key] then return end
-    if score > 0.5 then list[#list + 1] = {key = key, score = score, run = run, cost = cost or 0} end
+    if score > 0.5 then list[#list + 1] = {key = key, score = score, run = run, cost = cost or 0, basic = basic} end
   end
   local rooms_by_id = {}
   for _, rt in ipairs(TheApp.rooms) do rooms_by_id[rt.id] = rt end
@@ -271,8 +294,11 @@ function M:projects(s)
 
   -- Rooms the patients need (treatment first), by the decaying demand; a
   -- pharmacy and a general diagnosis are always worth it.
+  -- (Not one more of a type that stands destroyed: that one is repaired.)
+  local destroyed = {}
+  for _, r in ipairs(s.crashed) do destroyed[r.room_info.id] = true end
   for id, v in pairs(self.demand) do
-    if not s.rooms[id] then room(id, 1 + v * 1.5) end
+    if not s.rooms[id] and not destroyed[id] then room(id, 1 + v * 1.5) end
   end
   if not s.rooms.pharmacy then room("pharmacy", 6) end
   if not s.rooms.general_diag then room("general_diag", 5) end
@@ -331,6 +357,38 @@ function M:projects(s)
       end
     end
   end
+  -- A room destroyed by an exploding machine: built again where it stands
+  -- (it still takes up the floor), or cleared away if it cannot be.
+  local builder = corsixth.require("mp_room_builder")
+  for _, r in ipairs(s.crashed) do
+    local id = r.room_info.id
+    local repair = builder.repairCommand(bot.world, r) ~= nil
+    local progress = hosp.research.research_progress[r.room_info]
+    local cost = repair and (progress and progress.build_cost or 0) or r:calculateRemovalCost()
+    add("repair:" .. id, 30 + (EARNERS[id] or 0) + (self.demand[id] or 0) * 1.5, function()
+      return self:issue({kind = "remove_crashed_room", room = r.id, repair = repair and 1 or nil,
+          hospital = bot.world:getHospitalIndex(hosp)})
+    end, cost)
+  end
+  -- A machine worn down by its repairs (each takes some strength): a new
+  -- one before it explodes; urgent once it is nearly done for.
+  for _, m in ipairs(s.machines) do
+    if m.new > m.strength + 1 and m.strength <= math.max(3, math.floor(m.new / 2)) then
+      add("replace:" .. m.room, (m.strength <= 3 and 25 or 6) + (EARNERS[m.room] or 0) * 0.5, function()
+        return self:issue({kind = "replace_machine", machine = m.e.mp_id})
+      end, m.cost)
+    end
+  end
+  -- No floor for what it wants: land.
+  local wanted = 0
+  for _, day in pairs(self.no_space) do
+    if s.day - day <= 30 then wanted = wanted + 1 end
+  end
+  if wanted > 0 then
+    local _, price = bot:cheapestPlot()
+    if price then add("buy:land", 10 + wanted * 6, function() return bot:buyPlot() end, price) end
+  end
+
   -- Reception: another desk and receptionist when the queue grows.
   if s.desks < 2 and s.reception_queue > 10 then buy("reception_desk", (s.reception_queue - 8) * 0.6) end
   if (s.staff.Receptionist or 0) < s.desks then hire("Receptionist", 12) end
@@ -369,7 +427,10 @@ function M:projects(s)
       self:note("wish over: " .. key)
     elseif not listed[key] then
       local kind, what = key:match("^(%a+):(.+)$")
-      if kind == "room" then
+      if key == "buy:land" then
+        local _, price = bot:cheapestPlot()
+        if price then add(key, 0, function() return bot:buyPlot() end, price) end
+      elseif kind == "room" then
         room(what, 0)
       elseif kind == "hire" then
         hire(what, 0)
@@ -399,10 +460,24 @@ function M:doProject(s)
   local list = self:projects(s)
   for i = 1, math.min(#list, 6) do
     local p = list[i]
-    if s.balance - p.cost >= RESERVE or p.score >= 90 then
+    -- (Something urgent it cannot pay: a loan, then it is done.)
+    local short = p.cost + RESERVE - s.balance
+    -- (Once in a few days: the bank may say no.)
+    if short > 0 and p.score >= URGENT and not p.basic and s.day - (self.loan_day or -99) > 5 then
+      local amount = math.ceil(short / 5000) * 5000
+      if s.loan + amount <= s.max_loan and s.hosp.opened and self:issue({kind = "loan", amount = amount}) then
+        self.loan_day = s.day
+        self:note(string.format("day %d: loan of $%d for %s", s.day, amount, p.key))
+        self.next_project = bot:later(1)
+        return
+      end
+    end
+    if s.balance - p.cost >= RESERVE or p.basic then
       local ok, why = p.run()
       if ok then
         self:note(string.format("day %d: %s (score %.1f, $%d)", s.day, p.key, p.score, math.floor(s.balance)))
+        if p.key == "buy:land" then self.no_space = {} end
+        self.no_space[p.key] = nil
         self.boost[p.key] = nil
         self.wishes[p.key] = nil
         -- Rooms take a few days to build; staff and objects less.
@@ -416,6 +491,7 @@ function M:doProject(s)
       if why == "space" then
         -- Out of floor: buy land, then try again.
         self:note(string.format("day %d: no space for %s", s.day, p.key))
+        self.no_space[p.key] = s.day
         bot:buyPlot()
         self.failed[p.key] = s.day + 5
         self.next_project = bot:later(2)
@@ -444,11 +520,14 @@ function M:daily(s)
   local bot = self.bot
   local hosp = s.hosp
   local helper = bot:sharesWithPerson()
-  -- Worn machines: a handyman to each (once in a while per machine).
+  -- Machines half worn: a handyman to each (once in a while per machine).
+  -- Repaired early, a machine seldom loses strength (the game takes it
+  -- with the share used up) and does not explode while the handyman walks.
   if (s.staff.Handyman or 0) > 0 then
-    for _, m in ipairs(s.worn) do
-      local id = m.mp_id
-      if id and (not self.called[id] or s.day - self.called[id] > 3) then
+    for _, m in ipairs(s.machines) do
+      local id, used = m.e.mp_id, m.strength - m.left
+      if id and used >= math.max(2, math.ceil(m.strength / 2)) and
+          (not self.called[id] or s.day - self.called[id] > 3) then
         self.called[id] = s.day
         self:issue({kind = "call_handyman", machine = id})
       end
@@ -677,6 +756,11 @@ function M:report()
   add("Month %d of the game, day %d. Mode: %s.", s.month, s.day, self.bot.mode)
   add("Money $%d, loan $%d (up to $%d), reputation %d, patients in the hospital %d, open: %s.",
       math.floor(s.balance), s.loan, s.max_loan, s.reputation, s.patients, tostring(s.hosp.opened or false))
+  local problems = self:problems(s)
+  if #problems > 0 then
+    add("PROBLEMS TO FIX FIRST (found from its numbers):")
+    for _, p in ipairs(problems) do add("- %s", p) end
+  end
   local goals = {}
   for name, g in pairs(s.goals) do goals[#goals + 1] = string.format("%s %d of %d", name, math.floor(g.now), g.want) end
   table.sort(goals)
@@ -697,8 +781,13 @@ function M:report()
   for c, n in pairs(s.staff) do staff[#staff + 1] = c .. " " .. n end
   table.sort(staff)
   add("Staff: %s; tiredness %.0f%%, staff happiness %.0f%%.", table.concat(staff, ", "), s.fatigue * 100, s.staff_happy * 100)
-  add("Reception: %d desks (%d staffed), queue %d. Litter %d, worn machines %d.", s.desks, s.staffed_desks,
-      s.reception_queue, s.litter, #s.worn)
+  local machines = {}
+  for _, m in ipairs(s.machines) do
+    machines[#machines + 1] = string.format("%s strength %d of %d, %d uses left", m.room, m.strength, m.new, m.left)
+  end
+  table.sort(machines)
+  add("Reception: %d desks (%d staffed), queue %d. Litter %d. Machines: %s.", s.desks, s.staffed_desks,
+      s.reception_queue, s.litter, #machines > 0 and table.concat(machines, "; ") or "none")
   add("Patients: thirst %.0f%%, warmth %.0f%% (%d cold, %d hot), toilet need %.0f%%, happiness %.0f%%. Heating %d/10.",
       s.thirst * 100, s.warmth * 100, s.cold, s.hot, s.toilet * 100, s.happiness * 100, s.heat)
   add("Prices at %d%% of normal.", self.price_target or 100)
@@ -727,6 +816,72 @@ function M:report()
   return table.concat(lines, "\n")
 end
 
+--! What is going wrong, as a good player would see it, each with the
+--! project that fixes it (for the top of the model's report).
+function M:problems(s)
+  local out = {}
+  local function add(fmt, ...) out[#out + 1] = string.format(fmt, ...) end
+  local hosp = s.hosp
+  for _, r in ipairs(s.crashed) do
+    local id = r.room_info.id
+    local progress = hosp.research.research_progress[r.room_info]
+    add("The %s was destroyed by an exploding machine: no patient can use it and it still takes up the floor."
+        .. " Repair it: repair:%s ($%d).", id, id, progress and progress.build_cost or 0)
+  end
+  for _, m in ipairs(s.machines) do
+    if m.new > m.strength + 1 and m.strength <= math.max(3, math.floor(m.new / 2)) then
+      add("The machine in the %s is worn down (strength %d, a new one has %d) and will soon explode: replace:%s ($%d).",
+          m.room, m.strength, m.new, m.room, m.cost)
+    end
+  end
+  local blocked = {}
+  for key, day in pairs(self.no_space) do
+    if s.day - day <= 30 then blocked[#blocked + 1] = key end
+  end
+  table.sort(blocked)
+  if #blocked > 0 then
+    local _, price = self.bot:cheapestPlot()
+    if price then
+      add("No floor space left: it could not build %s. Buy land first: buy:land ($%d; a loan pays for it if needed).",
+          table.concat(blocked, ", "), price)
+    else
+      add("No floor space left (and no land to buy): it could not build %s.", table.concat(blocked, ", "))
+    end
+  end
+  for id, n in pairs(s.rooms) do
+    local per = s.queue[id] / n
+    if per > 2 * BUSY_QUEUE then
+      add("Long queue at the %s: %d patients for %d room(s)%s. Another room:%s or more staff for it.", id,
+          s.queue[id], n, s.unstaffed[id] and ", one without its staff" or "", id)
+    end
+  end
+  if s.balance < 2 * RESERVE and s.loan < s.max_loan then
+    add("Money is short ($%d); a loan of up to $%d more is possible.", math.floor(s.balance), s.max_loan - s.loan)
+  end
+  if s.reputation < 300 then
+    add("Reputation is low (%d): cure patients (enough rooms and staff, short queues), lower prices.", s.reputation)
+  end
+  return out
+end
+
+--! The menu for a plan: every project (M.menu) and, for its rooms now, a
+--! repair or a new machine.
+function M:planMenu()
+  local items = M.menu()
+  local s = self.state
+  if not s then return items end
+  local seen = {}
+  for _, r in ipairs(s.crashed) do
+    local key = "repair:" .. r.room_info.id
+    if not seen[key] then seen[key] = true items[#items + 1] = key end
+  end
+  for _, m in ipairs(s.machines) do
+    local key = "replace:" .. m.room
+    if not seen[key] then seen[key] = true items[#items + 1] = key end
+  end
+  return items
+end
+
 --! The projects a plan may name (for the model's menu).
 function M.menu()
   local rooms = {}
@@ -735,7 +890,7 @@ function M.menu()
   end
   local items = {"hire:Doctor", "hire:Nurse", "hire:Handyman", "hire:Receptionist", "hire:Psychiatrist",
       "hire:Surgeon", "hire:Researcher", "buy:bench", "buy:drinks_machine", "buy:radiator", "buy:plant",
-      "buy:bin", "buy:reception_desk", "buy:extinguisher"}
+      "buy:bin", "buy:reception_desk", "buy:extinguisher", "buy:land"}
   for _, r in ipairs(rooms) do items[#items + 1] = r end
   return items
 end
@@ -839,17 +994,19 @@ function M:leaveTo(key)
 end
 
 --! A plan from the model: {priorities = {{action, weight}}, price = percent,
---! loan = amount, say = text}. Raises those projects' scores until done.
+--! loan = amount, say = text}. Raises those projects' scores until done: a
+--! weight of 10 comes before the manager's own ideas (as a team mate's
+--! wish), a weight of 3 only tips the balance.
 function M:applyPlan(plan)
   if type(plan) ~= "table" then return end
   self.boost = {}
   local valid = {}
-  for _, k in ipairs(M.menu()) do valid[k] = true end
+  for _, k in ipairs(self:planMenu()) do valid[k] = true end
   local taken = {}
   for i, p in ipairs(type(plan.priorities) == "table" and plan.priorities or {}) do
     if type(p) == "table" and valid[p.action] and i <= 6 then
       local w = math.max(0, math.min(10, tonumber(p.weight) or 3))
-      self.boost[p.action] = w
+      self.boost[p.action] = w * w / 2
       taken[#taken + 1] = p.action
     end
   end
@@ -882,6 +1039,7 @@ function M:think()
     self.last_month = s.month
     -- (Prices, the loan and research belong to a person sharing the hospital.)
     if bot:sharesWithPerson() then self.log(self:monthLine(s)) else self:monthly(s) end
+    for _, p in ipairs(self:problems(s)) do self.log("problem: " .. p) end
     self.next_plan = s.day
   end
   -- A fresh plan once a game week (and at each month's start).
