@@ -304,9 +304,10 @@ sleep 1
 run_probe quin MP_ROLE=join MP_ROOM=slowest MP_STEPS=400 MP_FAST=0 MP_REALTIME=1 MP_UI_SCRIPT="80:hire:Nurse" & pids+=($!)
 # The room list refreshes itself (check 26): lina is in the lobby before
 # kai creates the room, types the password and never clicks Refresh.
-run_probe lina MP_ROLE=join MP_ROOM=autolist MP_STEPS=100 MP_AUTO_ROOMS=1 & pids+=($!)
+run_probe lina MP_ROLE=join MP_ROOM=autolist MP_STEPS=160 MP_AUTO_ROOMS=1 & pids+=($!)
 sleep 6
-run_probe kai MP_ROLE=host MP_ROOM=autolist MP_STEPS=100 MP_SHOW_LOAD=1 MP_SHOW_LEVELS=1 MP_UI_SCRIPT="40:moveobject:reception_desk:1:0;70:moveobject:reception_desk:0:1" & pids+=($!)
+# (160 steps: a move waits while somebody stands on the spot.)
+run_probe kai MP_ROLE=host MP_ROOM=autolist MP_STEPS=160 MP_SHOW_LOAD=1 MP_SHOW_LEVELS=1 MP_UI_SCRIPT="40:moveobject:reception_desk:1:0;70:moveobject:reception_desk:0:1" & pids+=($!)
 # Speed votes with three players (check 25).
 run_probe vic MP_ROLE=host MP_ROOM=vote MP_PLAYERS=3 MP_STEPS=1400 \
   MP_UI_SCRIPT="50:speedother;300:speedother;450:speedother" & pids+=($!)

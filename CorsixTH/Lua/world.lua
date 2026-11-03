@@ -1708,11 +1708,11 @@ function World:onEndMonth()
   -- Multiplayer: a hospital only bots play gets a hidden bonus every month
   -- (no line on its bank statement); not one a person plays too.
   local paid = {}
-  for index in pairs(self.mp_coop and self.mp_coop.bot_hospitals or {}) do
-    local hospital = self.hospitals[index]
+  for bot_index in pairs(self.mp_coop and self.mp_coop.bot_hospitals or {}) do
+    local hospital = self.hospitals[bot_index]
     if hospital then
       hospital.balance = hospital.balance + World.MP_BOT_BONUS
-      paid[#paid + 1] = index
+      paid[#paid + 1] = bot_index
     end
   end
   local session = self.app.mp_session
