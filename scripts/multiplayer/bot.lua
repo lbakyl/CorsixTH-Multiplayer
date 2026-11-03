@@ -28,6 +28,10 @@
 --   MP_BOT_SEED          seed for its choices (default: from the clock)
 --   MP_BOT_AWAY_SECONDS  tests: seconds without a command before a team mate sharing the
 --                        hospital counts as away (default 30; and 7 game days)
+--   MP_BOT_TESTS         tests: 1 registers the probes' test commands (as every peer
+--                        of a test game must)
+--   MP_BOT_LEARN         tests: on this game day the bot discovers something
+--                        (test command probe_learn), research to share
 --   MP_BOT_WISHES        tests: "<day>:<project>;..." a team mate's wishes on those game
 --                        days, as if asked in the chat (add:psych:skeleton, bigger:gp)
 --   MP_BOT_PACE          game days between its building steps are divided
@@ -77,6 +81,30 @@ local function pick(list) return list[rand(1, #list)] end
 --------------------------------------------------------------------------------
 
 local LINES = {
+  -- A dirty trick dealt with, to whoever sent it (Bot:tellRival): with their
+  -- name when it is known or there is only one rival, else to everybody.
+  tricked = {
+    handyman = {"Nice try, %s. Your handyman is on his way back to you.",
+        "Caught your handyman, %s. He's all yours again."},
+    rats = {"Pest control is done, %s. Were those your rats?", "All the rats are shot, %s. Very funny."},
+    boiler = {"Somebody broke my boiler. Very funny, %s. My handymen are on it.",
+        "A broken boiler, %s? We have blankets."},
+    smear = {"Bad press, %s? My patients will be back.", "Nice smear campaign, %s. Mine will be better."},
+    espionage = {"Enjoy my research files, %s.", "A spy in my research department, %s? Cheeky."},
+    headhunter_kept = {"You wanted my doctor, %s? They're staying with me.",
+        "Hands off my staff, %s. They got their pay rise."},
+    headhunter_lost = {"Take them, %s. I'll find somebody better.", "Fine, %s, keep them. Good luck with that one."},
+  },
+  tricked_unknown = {
+    rats = {"The rats are gone. Whoever sent them: nice try.", "All rats shot. Next time send cheese."},
+    boiler = {"Somebody broke my boiler. Whoever it was: we have blankets."},
+    smear = {"Somebody is spreading lies about my hospital. Patients will see the truth."},
+    espionage = {"Somebody copied my research. I hope you can read my handwriting."},
+    headhunter_kept = {"Somebody tried to poach my doctor. They're staying."},
+    headhunter_lost = {"Somebody poached my doctor. Fine, I'll train another."},
+  },
+  -- To an ally it sent its research (Manager:shareResearch).
+  research_sent = {"I've sent you my research for free, %s: %s.", "Some research for you, %s: %s. On the house."},
   -- To a person sharing the hospital (Bot:sharesWithPerson).
   mate_away = {"You seem to be away, %s. I'll run the whole hospital until you're back."},
   mate_back = {"Welcome back, %s! Prices, loans and the faxes are yours again."},
@@ -335,6 +363,49 @@ function Bot:playerOfHospital(index)
       local name, is_bot = self:playerName(peer)
       return peer, name, is_bot
     end
+  end
+end
+
+--! The people (not bots) playing hospital `index`: peers and names, in peer
+--! order.
+function Bot:peopleOfHospital(index)
+  local peers, names = {}, {}
+  for peer, h in pairs(self.lobby.peer_hospital or {}) do
+    local name, is_bot = self:playerName(peer)
+    if h == index and name and not is_bot and peer ~= TheApp.mp_session.peer_id then
+      peers[#peers + 1] = peer
+    end
+  end
+  table.sort(peers)
+  for i, peer in ipairs(peers) do names[i] = self:playerName(peer) end
+  return peers, names
+end
+
+--! A dirty trick dealt with (`kind`, a key of LINES.tricked): a word to the
+--! people who sent it. `from` is the sender's hospital when the game said
+--! who it was (a caught handyman); else, as a person would, it can only
+--! guess: one rival hospital is named, with several it speaks to everybody.
+function Bot:tellRival(kind, from)
+  local world = self.world
+  local mine = world.ui.hospital
+  local hospitals = {}
+  if from then
+    hospitals[1] = from
+  else
+    for index, h in ipairs(world.hospitals) do
+      if h ~= mine and world:mpRivals(mine, h) and self:playerOfHospital(index) ~= nil then
+        hospitals[#hospitals + 1] = index
+      end
+    end
+  end
+  if #hospitals == 1 then
+    local peers, names = self:peopleOfHospital(hospitals[1])
+    if #peers == 0 then return end -- a bot: bots do not chat with each other
+    local line = pick(LINES.tricked[kind]):format(table.concat(names, " and "))
+    self:say(line, typing(line), table.concat(peers, ","))
+  elseif #hospitals > 1 and LINES.tricked_unknown[kind] then
+    local line = pick(LINES.tricked_unknown[kind])
+    self:say(line, typing(line))
   end
 end
 
@@ -1302,7 +1373,11 @@ function Bot:hireCategory(category)
   local class, skill = category, SPECIALISTS[category]
   if skill then class = "Doctor" end
   local dx, dy = self:anchor()
-  local ok, err = pcall(builder.ui_hire, self.world, dx, dy, skill and (class .. ":" .. skill) or class, log)
+  local what = skill and (class .. ":" .. skill) or class
+  -- A researcher goes straight into the research room (else the room may
+  -- wait a long time for a doctor to be called over).
+  if category == "Researcher" and self.manager and self.manager:roomOf("research") then what = what .. "@research" end
+  local ok, err = pcall(builder.ui_hire, self.world, dx, dy, what, log)
   if not ok then log("could not hire a " .. category .. ": " .. tostring(err)) end
   return ok
 end
@@ -1459,6 +1534,10 @@ function Bot:answerPayRise(win)
   local accept = can_spend > (win.rise_amount or 0) * 12
   log(string.format("pay rise of $%d for %s: %s", win.rise_amount or 0,
       tostring(win.staff.profile and win.staff.profile:getFullName()), accept and "paid" or "let go"))
+  -- (A headhunter's offer: a word to the rivals; the game does not say whose.)
+  if win.staff.mp_headhunted and self.fiery then
+    self:tellRival(accept and "headhunter_kept" or "headhunter_lost")
+  end
   if accept then win:increaseSalary() else win:fireStaff() end
 end
 
@@ -1479,6 +1558,12 @@ function Bot:think()
             tostring(self.manager:wish(key))))
       end
     end
+  end
+  -- (Tests: research of its own to share.)
+  local learn = tonumber(os.getenv("MP_BOT_LEARN") or "")
+  if learn and day >= learn and not self.learned then
+    self.learned = TheApp.mp_session:issue({kind = "probe_learn"}) ~= false
+    log(string.format("test: learning something on day %d", day))
   end
   -- (A person sharing the hospital answers its emergencies.)
   if not (self.manager and self:sharesWithPerson()) then self:answerEmergencies() end
@@ -1660,6 +1745,7 @@ local function run()
   corsixth.require("mp_lobby")
   corsixth.require("mp_session")
   builder = assert(loadfile(source_dir .. "/scripts/multiplayer/probe_builder.lua"))()
+  if os.getenv("MP_BOT_TESTS") == "1" then builder.register_handlers() end
   sabotage = MultiplayerSession.sabotage
   Manager = assert(loadfile(source_dir .. "/scripts/multiplayer/bot_manager.lua"))()
 
@@ -1695,6 +1781,14 @@ local function run()
     return go_home(patient, reason, ...)
   end
   local counting = Patient.goHome
+  -- What the game tells its player (the adviser): dirty tricks it noticed.
+  local tell = MultiplayerSession.tellPlayer
+  MultiplayerSession.tellPlayer = function(world, hospital, text)
+    if bot and bot.manager and world.ui and hospital == world.ui.hospital then
+      keepRandom("notice", bot.manager.notice, bot.manager, text)
+    end
+    return tell(world, hospital, text)
+  end
   -- (A saved game must not hold this function: the class gets its own back
   -- while the game is saved, and the counting one again afterwards.)
   local save_game = SaveGameFile

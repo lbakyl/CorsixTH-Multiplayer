@@ -16,8 +16,12 @@
 --  * Machines are looked after: a new machine for one worn down by its
 --    repairs, a room destroyed by an exploding machine built again where it
 --    stands, land bought (borrowing for it) when there is no floor left.
---  * In a race it throws out evil handymen, shoots attack rats, and aims its
---    dirty tricks at whoever leads.
+--  * In a race it throws out evil handymen and shoots attack rats (after
+--    a week or two, as a busy player would), more handymen for a broken
+--    boiler, no dearer prices during a smear campaign, a word to whoever
+--    played the trick; it aims its own dirty tricks at whoever leads.
+--  * A research room with two desks, a researcher placed in it, and its
+--    research shared for free with its allies when they lack it.
 --  * A plan from a language model (Manager:applyPlan, through the server)
 --    can raise the scores of some projects and change prices or the loan;
 --    the manager still checks everything and plays on without it. The
@@ -44,6 +48,11 @@ local COPIES = {gp = 5, pharmacy = 2, general_diag = 3, psych = 2, ward = 2, toi
 local BUSY_QUEUE = 5
 -- A project this urgent may be paid with a loan (a repair, land, a machine).
 local URGENT = 20
+-- Game days before it deals with a dirty trick (an evil handyman, rats): a
+-- player notices them only after a while.
+local NOTICE_DAYS = {10, 18}
+-- Game days between research offers to the same ally.
+local SHARE_DAYS = 21
 -- Rooms that earn the most: repaired and looked after first.
 local EARNERS = {operating_theatre = 25, scanner = 10, x_ray = 8, cardiogram = 8, ultrascan = 8,
     fracture_clinic = 8, inflation = 8, dna_fixer = 8, hair_restoration = 6, tongue_clinic = 6, electrolysis = 6,
@@ -62,7 +71,8 @@ local EXTRAS = {
   toilets = {loo = 1, sink = 1, radiator = 1},
   ward = {bed = 2, radiator = 1, plant = 1},
   psych = {radiator = 1, plant = 1, bookcase = 1},
-  research = {},
+  -- (A second desk: room for a second researcher.)
+  research = {desk = 1, radiator = 1, plant = 1},
 }
 local DEFAULT_EXTRAS = {radiator = 1, plant = 1, bin = 1}
 
@@ -96,6 +106,8 @@ function M.new(bot, ctx)
   self.left = {}           -- why patients left: cured, kicked, fed_up, over_priced
   self.lost = {}           -- disease id -> patients who left uncured
   self.no_space = {}       -- project key -> last game day it found no floor for it
+  self.tricks = {}         -- kind of dirty trick -> game day noticed (from the adviser)
+  self.shared = {}         -- ally hospital index -> {item key -> game day offered}
   return self
 end
 
@@ -314,7 +326,17 @@ function M:projects(s)
   for id, v in pairs(self.demand) do
     if not self:available(id) then undiscovered = undiscovered + v end
   end
-  if not s.rooms.research and s.room_count >= 5 then room("research", 1 + undiscovered * 0.4) end
+  if not s.rooms.research and s.room_count >= 4 then room("research", 6 + undiscovered * 0.4) end
+  -- A researcher for each desk in it (two at most).
+  local lab = s.rooms.research and self:roomOf("research")
+  if lab then
+    local desks = 0
+    for o in pairs(lab.objects or {}) do
+      if o.object_type and o.object_type.id == "desk" then desks = desks + 1 end
+    end
+    local researchers = hosp:countStaffOfCategory("Researcher")
+    if researchers < math.min(2, desks) then hire("Researcher", researchers == 0 and 10 or 4) end
+  end
   -- Full GP's offices send patients on to diagnosis rooms: more of those.
   local gp_per = s.rooms.gp and s.queue.gp / s.rooms.gp or 0
   if gp_per > BUSY_QUEUE and s.rooms.general_diag and s.rooms.general_diag < COPIES.general_diag then
@@ -402,6 +424,8 @@ function M:projects(s)
     end
   end
   local handymen = math.min(5, (s.room_count >= 3 and 1 or 0) + math.floor(s.litter / 12) + math.floor(machines / 4))
+  -- A broken boiler: the more handymen, the sooner it is repaired.
+  if hosp.heating and hosp.heating.heating_broke then handymen = math.max(handymen, 3) end
   if (s.staff.Handyman or 0) < handymen then hire("Handyman", 3 + (handymen - (s.staff.Handyman or 0)) * 2) end
 
   -- Corridor comfort, once the hospital is open and has a few rooms.
@@ -533,6 +557,9 @@ function M:daily(s)
       end
     end
   end
+  -- Dirty tricks (in a race), also when a person shares the hospital: they
+  -- have had the time to deal with them first.
+  self:defend(s)
   if helper then return end
   -- Heating: warmer when patients are cold, cooler when they are hot.
   if hosp.opened and s.patients >= 4 and (s.objects.radiator or 0) > 0 then
@@ -547,7 +574,6 @@ function M:daily(s)
     if self:issue({kind = "loan", amount = 5000}) then self:note(string.format("day %d: loan of $5,000", s.day)) end
   end
   self:answerFaxes(s)
-  if bot.fiery then self:defend(s) end
 end
 
 --! The month in one line for the log: why patients left, which diseases
@@ -590,6 +616,9 @@ function M:monthly(s)
     -- The model's price, unless the reputation is already suffering.
     target = s.reputation < 300 and math.min(100, self.model_price) or self.model_price
     self.model_price = nil
+  elseif hosp.mp_smear then
+    -- A smear campaign keeps patients away: not dearer now.
+    target = math.min(target, 100)
   elseif s.reputation >= 600 and waiting > s.room_count * 2 then
     target = math.min(150, target + 10)
   elseif s.reputation < 350 or s.happiness < 0.35 then
@@ -720,19 +749,70 @@ function M:defend(s)
   for _, e in ipairs(s.saboteurs) do
     local id = e.mp_id
     if id then
-      self.noticed[id] = self.noticed[id] or (s.day + self.rand(1, 3))
+      self.noticed[id] = self.noticed[id] or (s.day + self.rand(NOTICE_DAYS[1], NOTICE_DAYS[2]))
       if s.day >= self.noticed[id] and not self.noticed[-id] then
         self.noticed[-id] = true
         self:issue({kind = "fire_staff", staff = id})
         self:note(string.format("day %d: threw out an evil handyman", s.day))
+        -- (Throwing him out tells who sent him, as it tells a person.)
+        local owner = e.mp_saboteur and e.mp_saboteur.owner
+        if self.bot.fiery then self.bot:tellRival("handyman", owner) end
       end
     end
   end
-  -- A few rats a day, like clicks.
-  for i = 1, math.min(#s.rats, 3) do
-    local rat = s.rats[i]
-    if rat.mp_id then self:issue({kind = "shoot_rat", rat = rat.mp_id}) end
+  -- Rats: noticed after a while, then a few a day, like clicks; a word once
+  -- they are all gone.
+  if #s.rats > 0 then
+    self.rats_from = self.rats_from or (s.day + self.rand(NOTICE_DAYS[1], NOTICE_DAYS[2]))
+    if s.day >= self.rats_from then
+      if not self.rats_shooting then
+        self.rats_shooting = true
+        self:note(string.format("day %d: shooting %d rats", s.day, #s.rats))
+      end
+      for i = 1, math.min(#s.rats, 4) do
+        local rat = s.rats[i]
+        if rat.mp_id then self:issue({kind = "shoot_rat", rat = rat.mp_id}) end
+      end
+    end
+  elseif self.rats_from then
+    if self.rats_shooting and self.bot.fiery then self.bot:tellRival("rats") end
+    self.rats_from, self.rats_shooting = nil, nil
   end
+end
+
+-- The text of a game string (translatable strings are wrapped objects).
+local function plain(text)
+  if type(text) ~= "userdata" then return tostring(text) end
+  return (require("TH").stringProxy._unwrap(text))
+end
+
+--! Does `text` read as the game string `format` (its %s and %d any text)?
+local function says(format, text)
+  if not format then return false end
+  local pattern = plain(format):gsub("%%[sd]", ""):gsub("[%%%^%$%(%)%.%[%]%*%+%-%?]", "%%%0")
+  pattern = "^" .. pattern:gsub("", ".-") .. "$"
+  return plain(text):find(pattern) ~= nil
+end
+
+--! The adviser told the bot's player something: dirty tricks it can see
+--! (a broken boiler, a smear campaign, a spy) get a word to the rivals. (An
+--! epidemic or an emergency sent by a rival looks like any other; evil
+--! handymen and rats are found in the hospital itself, M:defend.)
+function M:notice(text)
+  local S = _S.multiplayer_window
+  local kind
+  if says(S.sabotage_boiler_notice, text) then
+    kind = "boiler"
+  elseif says(S.sabotage_smear_notice, text) then
+    kind = "smear"
+  elseif says(S.sabotage_espionage_notice, text) or says(S.sabotage_espionage_notice_3, text) then
+    kind = "espionage"
+  end
+  if not kind then return end
+  local day = self.bot:gameDay()
+  self.tricks[kind] = day
+  self:note(string.format("day %d: dirty trick noticed: %s", day, kind))
+  if self.bot.fiery then self.bot:tellRival(kind) end
 end
 
 --! The rival to play a dirty trick on: the one closest to winning (its
@@ -1041,6 +1121,41 @@ function M:applyPlan(plan)
   self:note(string.format("plan: %s%s", table.concat(taken, ", "), price and (", prices " .. price .. "%") or ""))
 end
 
+--! Its research (discoveries, better drugs and machines) to every ally, a
+--! hospital on its side that another player plays, who lacks it: for free,
+--! once in SHARE_DAYS per ally, again only when there is something new.
+function M:shareResearch(s)
+  local bot, world = self.bot, self.bot.world
+  local mine = s.hosp
+  if not world.mp_coop or not world.mpMayTrade or not MultiplayerSession.shareableResearch then return end
+  for index, h in ipairs(world.hospitals) do
+    local peer = bot:playerOfHospital(index)
+    if h ~= mine and peer and world:mpMayTrade(mine, h) then
+      local seen = self.shared[index] or {}
+      self.shared[index] = seen
+      local items = MultiplayerSession.shareableResearch(mine, h)
+      local keys, names, new = {}, {}, false
+      for _, item in ipairs(items) do
+        keys[#keys + 1] = item.key
+        names[#names + 1] = plain(item.name)
+        if not seen[item.key] then new = true end
+      end
+      if new and s.day - (seen.offered or -999) >= SHARE_DAYS and
+          self:issue({kind = "offer_research", to = index, items = table.concat(keys, ";"), price = 0}) then
+        seen.offered = s.day
+        for _, key in ipairs(keys) do seen[key] = s.day end
+        self:note(string.format("day %d: research for hospital %d: %s", s.day, index, table.concat(keys, ",")))
+        local peers, people = bot:peopleOfHospital(index)
+        if #peers > 0 then
+          local list = table.concat(names, ", ", 1, math.min(#names, 4)) .. (#names > 4 and ", ..." or "")
+          local line = self.pick(self.lines.research_sent):format(table.concat(people, " and "), list)
+          bot:say(line, self.typing(line), table.concat(peers, ","))
+        end
+      end
+    end
+  end
+end
+
 --! (MP_BOT_DIAG) Where the GP's offices, their doctors, the patients and
 --! the doctors are, in the log once a month.
 function M:diagnose(s)
@@ -1131,6 +1246,11 @@ function M:think()
     for _, p in ipairs(self:problems(s)) do self.log("problem: " .. p) end
     if (os.getenv("MP_BOT_DIAG") or "") ~= "" then self:diagnose(s) end
     self.next_plan = s.day
+  end
+  -- Research its allies lack, for free, once in a while.
+  if s.day >= (self.next_share or 0) then
+    self.next_share = s.day + 7
+    self:shareResearch(s)
   end
   -- A fresh plan once a game week (and at each month's start).
   if s.day >= (self.next_plan or 0) and bot:askPlan() then self.next_plan = s.day + 7 end

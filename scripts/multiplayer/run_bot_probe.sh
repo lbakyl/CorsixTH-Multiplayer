@@ -23,6 +23,15 @@
 #   8. speed changes: bots do not vote. ann, alone with bots, changes the
 #      speed at once (no vote); in "trio" cid asks for a new speed and it
 #      changes only once dee has agreed in the fax
+#   9. research ("lab", co-op on level 2, which has research: frank and one
+#      bot): the bot (it discovers something on day 20, a test command)
+#      offers it to frank for free and tells him; a research room it builds
+#      has a second desk
+#  10. tricks on a bot ("duel", competitive: eve and one bot): eve sends
+#      rats, an evil handyman (level 3), a smear campaign and a broken
+#      boiler. The bot shoots the rats and throws the handyman out, each at
+#      least 10 game days after the trick (as a busy player), notices the
+#      smear campaign and the boiler, and tells eve privately
 # Exits 0 only if all checks behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
@@ -51,8 +60,8 @@ port=$((47000 + RANDOM % 900))
 export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
 export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/headless"
 export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
-export MP_REFEREE_PROBE_SCENARIO="team=none;race=none;trio=none"
-MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 PYTHONPATH="$source_dir/mp_server" \
+export MP_REFEREE_PROBE_SCENARIO="team=none;race=none;trio=none;duel=none;lab=none"
+MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 PYTHONPATH="$source_dir/mp_server" \
   python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
 server_pid=$!
@@ -94,6 +103,11 @@ run_probe ann MP_ROLE=host MP_ROOM=team MP_MODE=coop MP_PLAYERS=3 MP_ADD_BOTS=2 
 run_probe bob MP_ROLE=host MP_ROOM=race MP_MODE=competitive MP_PLAYERS=2 MP_ADD_BOTS=1 MP_SCENARIO=none \
   MP_STEPS=3000 MP_STALL_LIMIT=120 \
   MP_UI_SCRIPT="20:openhospital;40:hire:Doctor;60:hire:Doctor;500:chat:0:I will crush you;700:sendstaff:Doctor;900:givemoney:2000;1000:hospitals;2000:hospitals;2990:hospitals" & pids+=($!)
+run_probe eve MP_ROLE=host MP_ROOM=duel MP_MODE=competitive MP_PLAYERS=2 MP_ADD_BOTS=1 MP_SCENARIO=none \
+  MP_STEPS=3000 MP_STALL_LIMIT=120 \
+  MP_UI_SCRIPT="20:openhospital;320:sabotage:handyman:3:2;340:sabotage:smear:1:2;900:sabotage:rats:1:2;1500:sabotage:boiler:1:2;2990:hospitals" & pids+=($!)
+run_probe frank MP_ROLE=host MP_ROOM=lab MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_LEVEL=2 MP_SCENARIO=none \
+  MP_STEPS=3000 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital;2990:hospitals" & pids+=($!)
 run_probe cid MP_ROLE=host MP_ROOM=trio MP_MODE=coop MP_PLAYERS=3 MP_ADD_BOTS=1 MP_SCENARIO=none \
   MP_STEPS=600 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital;300:speedother" & pids+=($!)
 sleep 1
@@ -181,7 +195,7 @@ distinct = len(set(g[0] for g in greets.values() if g)) > 1
 # The bots' lines in ann's chat are grey.
 colours = set(re.findall(r'CHAT COLOUR: (Bot [^ ]+) (\S+)', a + b))
 grey = bool(colours) and all(c == '75,75,75' for _, c in colours)
-ok5 = len(bots) == 4 and all(greets.values()) and bool(answer) and distinct and grey
+ok5 = len(bots) == 6 and all(greets.values()) and bool(answer) and distinct and grey
 print(f"5. Chat:                    first lines: {greets}; Bot Agnes's answer to ann: {answer[:1]}; bots grey: {grey} {sorted(colours)}")
 fail |= not ok5
 
@@ -194,7 +208,8 @@ differ = re.findall(r"room '(\w+)': the players differ from the referee", server
 repaired = re.findall(r"room '(\w+)': repaired", server)
 confirmed = dict(re.findall(r"room '(\w+)': referee confirmed steps through (\d+)", server))
 ok7 = (result('ann').startswith('IN SYNC') and result('bob').startswith('IN SYNC') and not differ and not repaired
-       and int(confirmed.get('team', 0)) > 2500 and int(confirmed.get('race', 0)) > 2500)
+       and int(confirmed.get('team', 0)) > 2500 and int(confirmed.get('race', 0)) > 2500
+       and int(confirmed.get('duel', 0)) > 2500 and int(confirmed.get('lab', 0)) > 2500)
 print(f"7. In sync:                 ann {result('ann')}; bob {result('bob')}; referee differs {differ}, repairs {repaired}, confirmed {confirmed}")
 fail |= not ok7
 c, d = log('cid'), log('dee')
@@ -210,6 +225,41 @@ print(f"8. Speed and bots:          ann alone with bots: votes {alone_votes}, sp
       f"trio: dee answered the fax before the vote ended: {answered >= 0 and agreed > answered}; votes {trio_votes}; "
       f"cid {result('cid')}; dee {result('dee')}")
 fail |= not ok8
+# 9. Research: the co-op bot offers what it learnt to frank, for free.
+f = log('frank')
+lab_bot = next((n.split('/', 1)[1] for n in bots if n.startswith('lab/')), None)
+lb = bots.get('lab/' + lab_bot, '') if lab_bot else ''
+offers9 = applied(f, 2, 'offer_research')
+offer_text = re.findall(r'research offer[^\n]*', f)
+research_lines = [t for _, t in chats_from(f, lab_bot) if 'research' in t] if lab_bot else []
+lab_rooms = re.findall(r'furnishing research #\d+: buying ([^\n]*)', lb)
+desks = all('desk:1' in r for r in lab_rooms)
+ok9 = (any(r == 'ok' for _, r in offers9) and bool(research_lines) and desks
+       and result('frank').startswith('IN SYNC'))
+print(f"9. Research shared:         offers to frank {offers9}; told: {research_lines[:1]}; "
+      f"research room furnished with {lab_rooms or 'none built'}; frank {result('frank')}")
+fail |= not ok9
+
+# 10. Tricks on a bot: dealt with after a while, and a word to eve.
+e = log('eve')
+duel_bot = next((n.split('/', 1)[1] for n in bots if n.startswith('duel/')), None)
+db = bots.get('duel/' + duel_bot, '') if duel_bot else ''
+played = {m.group(1): int(m.group(2)) for m in re.finditer(r'UI: dirty trick (\w+) level \d+ against hospital 2 at step (\d+)', e)}
+tricks10 = [(s, r) for s, r in applied(e, 1, 'sabotage')]
+shots = [int(s) for s, r in applied(e, 2, 'shoot_rat') if r == 'ok']
+fired = [int(s) for s, r in applied(e, 2, 'fire_staff') if r == 'ok']
+noticed = re.findall(r'dirty trick noticed: (\w+)', db)
+to_eve = [t for _, t in chats_from(e, duel_bot)] if duel_bot else []
+DAY = 50  # lockstep steps in a game day
+late_rats = bool(shots) and 'rats' in played and min(shots) >= played['rats'] + 10 * DAY
+late_handyman = bool(fired) and 'handyman' in played and min(fired) >= played['handyman'] + 10 * DAY
+ok10 = (late_rats and late_handyman and 'smear' in noticed and 'boiler' in noticed
+        and any('eve' in t and ('rat' in t.lower() or 'pest' in t.lower()) for t in to_eve)
+        and any('eve' in t and 'handyman' in t.lower() for t in to_eve)
+        and result('eve').startswith('IN SYNC'))
+print(f"10. Tricks on a bot:        played {played} {tricks10}; rats shot from step {min(shots) if shots else '-'} "
+      f"({len(shots)} shots), handyman out at {fired}; noticed {noticed}; to eve: {to_eve}; eve {result('eve')}")
+fail |= not ok10
 for name, text in sorted(bots.items()):
     errors = [l for l in text.splitlines() if 'ERROR' in l or 'could not' in l]
     if errors: print(f"   {name} problems: {errors[:5]}")
