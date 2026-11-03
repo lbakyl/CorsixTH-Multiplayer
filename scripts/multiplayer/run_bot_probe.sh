@@ -29,6 +29,10 @@
 #      has a second desk
 #  11. the hidden monthly bonus: in "team" hospitals 2 and 3 (bots), never
 #      ann's; in "duel" hospital 2 (the bot)
+#  12. land auctions with a bot ("auc", co-op on level 2: gus and one bot):
+#      gus asks for a plot on the bot's side, the bot bids, gus outbids it
+#      and gets it (the bot stops at its limit); a second one gus drops out
+#      of and the bot gets
 #  10. tricks on a bot ("duel", competitive: eve and one bot): eve sends
 #      rats, an evil handyman (level 3), a smear campaign and a broken
 #      boiler. The bot shoots the rats and throws the handyman out, each at
@@ -62,7 +66,8 @@ port=$((47000 + RANDOM % 900))
 export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
 export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/headless"
 export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
-export MP_REFEREE_PROBE_SCENARIO="team=none;race=none;trio=none;duel=none;lab=none"
+export MP_REFEREE_PROBE_SCENARIO="team=none;race=none;trio=none;duel=none;lab=none;auc=none"
+export CORSIXTH_MP_MAX_BOTS=8 # (seven bots in all the rooms)
 MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 PYTHONPATH="$source_dir/mp_server" \
   python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
@@ -110,6 +115,7 @@ run_probe eve MP_ROLE=host MP_ROOM=duel MP_MODE=competitive MP_PLAYERS=2 MP_ADD_
   MP_UI_SCRIPT="20:openhospital;320:sabotage:handyman:3:2;340:sabotage:smear:1:2;900:sabotage:rats:1:2;1500:sabotage:boiler:1:2;2990:hospitals" & pids+=($!)
 run_probe frank MP_ROLE=host MP_ROOM=lab MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_LEVEL=2 MP_SCENARIO=none \
   MP_STEPS=3000 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital;2990:hospitals" & pids+=($!)
+run_probe gus MP_ROLE=host MP_ROOM=auc MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_LEVEL=2 MP_SCENARIO=none   MP_STEPS=1100 MP_STALL_LIMIT=120   MP_UI_SCRIPT="20:openhospital;200:auctionbuy;260:auctionbid;700:auctionbuy;760:auctionpass" & pids+=($!)
 run_probe cid MP_ROLE=host MP_ROOM=trio MP_MODE=coop MP_PLAYERS=3 MP_ADD_BOTS=1 MP_SCENARIO=none \
   MP_STEPS=600 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital;300:speedother" & pids+=($!)
 sleep 1
@@ -197,7 +203,7 @@ distinct = len(set(g[0] for g in greets.values() if g)) > 1
 # The bots' lines in ann's chat are grey.
 colours = set(re.findall(r'CHAT COLOUR: (Bot [^ ]+) (\S+)', a + b))
 grey = bool(colours) and all(c == '75,75,75' for _, c in colours)
-ok5 = len(bots) == 6 and all(greets.values()) and bool(answer) and distinct and grey
+ok5 = len(bots) == 7 and all(greets.values()) and bool(answer) and distinct and grey
 print(f"5. Chat:                    first lines: {greets}; Bot Agnes's answer to ann: {answer[:1]}; bots grey: {grey} {sorted(colours)}")
 fail |= not ok5
 
@@ -268,6 +274,14 @@ bonus_duel = re.findall(r'bot bonus for hospital\(s\) ([\d,]+)', e)
 ok11 = bool(bonus_team) and set(bonus_team) == {'2,3'} and bool(bonus_duel) and set(bonus_duel) == {'2'}
 print(f"11. Bot bonus:              team {bonus_team}; duel {bonus_duel}")
 fail |= not ok11
+# 12. Land auctions with a bot.
+g = log('gus')
+bot_bids12 = re.findall(r'auction (\d): hospital 2 bids', g)
+sold12 = re.findall(r'auction (\d): plot \d+ sold to hospital (\d)', g)
+ok12 = (sold12 == [('1', '1'), ('2', '2')] and '1' in bot_bids12 and '2' in bot_bids12
+        and 'auction 2: hospital 1 drops out' in g and result('gus').startswith('IN SYNC'))
+print(f"12. Auctions with a bot:    bot bid in {sorted(set(bot_bids12))}; sold {sold12}; gus {result('gus')}")
+fail |= not ok12
 for name, text in sorted(bots.items()):
     errors = [l for l in text.splitlines() if 'ERROR' in l or 'could not' in l]
     if errors: print(f"   {name} problems: {errors[:5]}")

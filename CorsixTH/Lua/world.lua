@@ -1143,6 +1143,8 @@ function World:_mpHoursForStep()
   local speed = self.mp_speed or "Normal"
   local timing = tick_rates[speed] or tick_rates.Normal
   if speed == "Pause" or speed == "Speed Up" then return 0 end
+  -- The game stands still during a land auction (MultiplayerSession.startAuction).
+  if self.mp_auction then return 0 end
   local rate = timing[2]
   self.mp_frames = (self.mp_frames or 0) + math.min(rate, MP_STEP_FRAMES)
   local hours = 0

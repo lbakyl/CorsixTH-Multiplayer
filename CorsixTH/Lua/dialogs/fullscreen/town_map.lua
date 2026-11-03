@@ -134,7 +134,9 @@ function UITownMap:onMouseUp(button, x, y)
       local world = self.ui.hospital.world
       local side = plot ~= 0 and world.mp_coop and not world.mp_coop.competitive and
           MultiplayerSession.plotSide(world, plot, self)
-      if side and world.hospitals[side] ~= self.ui.hospital then
+      -- (Unless its player may bid for it: then it goes to auction.)
+      local bidders = side and MultiplayerSession.auctionBidders(world, plot, self.ui.hospital, self)
+      if side and world.hospitals[side] ~= self.ui.hospital and not (bidders and #bidders > 1) then
         -- Another player's side: theirs to buy (the command would be refused).
         self.ui:playSound("Wrong2.wav")
         if self.ui.adviser then

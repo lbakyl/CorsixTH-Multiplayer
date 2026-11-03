@@ -171,9 +171,20 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   are offered with the purple **Refer** icon in
   the patient window or the "refer" answer on a "no treatment" fax. The
   other player gets a purple icon at the bottom and accepts or declines;
-  an accepted person walks over (it takes a few game days). Land: you can buy the plots on your side of the map (nearest
-  to your hospital), not the other players'. Faxes, emergencies and VIP visits come to the hospital they
+  an accepted person walks over (it takes a few game days). Land: a plot on your side of the map (nearest
+  to your hospital) that no other hospital borders, you just buy. One on another player's side, or
+  one that borders another hospital's land, goes to auction (see Land auctions below). Faxes, emergencies and VIP visits come to the hospital they
   are for.
+- **Land auctions (every game with more than one hospital):** click a
+  plot on the town map as usual. If it is on another player's side, or
+  borders another hospital's land, the auction room opens for everybody
+  and the game stands still until the auction ends. It starts at the
+  plot's price, with you in the lead. The players whose side it is on or
+  whose land borders it may bid: the tick bids the sum next to it (10%
+  of the price more each time), the cross drops out. The others can only
+  watch, and close the screen with the cross. When nobody bids for 10
+  seconds (20 for the first bid) the gavel comes down: "going once",
+  "going twice", sold to the highest bid. Bots bid too, up to a limit.
 - **Sharing research (co-op):** **Share research** on the research
   blackboard (left of the total), or **MULTIPLAYER**, **SHARE RESEARCH**
   (no research room needed). Pick what to share (equipment you have found,

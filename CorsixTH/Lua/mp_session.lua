@@ -557,7 +557,7 @@ function MultiplayerSession:beforeStep()
       self.stats.applied = self.stats.applied + 1
       local sound = MultiplayerSession.success_sounds[cmd.kind]
       local ui = self.world and self.world.ui
-      if sound and cmd.peer == self.peer_id and ui then ui:playSound(sound) end
+      if sound and cmd.peer == self.peer_id and ui and not cmd.no_sound then ui:playSound(sound) end
     else
       self.stats.rejected = self.stats.rejected + 1
       if cmd.peer == self.peer_id and not tostring(why):find("^retry ") then
@@ -576,6 +576,7 @@ function MultiplayerSession:beforeStep()
     end
   end
   self:tickVote()
+  self:tickAuction()
   self:_dropStaleOutline()
 end
 
@@ -619,7 +620,12 @@ MultiplayerSession.rejection_texts = {
                    ["infected patients stay"] = "Infected patients cannot be referred."},
   offer_research = {["nothing to share"] = "They have all of that research by now: nothing was offered."},
   buy_plot = {["another player's side"] = "That land is on another player's side of the map.",
-              ["cannot buy this plot"] = "That land cannot be bought now."},
+              ["cannot buy this plot"] = "That land cannot be bought now.",
+              ["an auction is on"] = "Wait until the auction is over.",
+              ["not enough money"] = "You cannot afford that land."},
+  auction_bid = {["outbid"] = "Somebody bid first. Try again.",
+                 ["not enough money"] = "You cannot afford that bid.",
+                 ["the auction is over"] = "The auction is over."},
   move_staff = {["invalid position"] = "They cannot be placed there.",
                 ["cannot move them now"] = "That member of staff cannot be moved now."},
   room_edit = {["room cannot be edited now"] = "That room cannot be edited now.",
@@ -2817,10 +2823,22 @@ function handlers.player_away(world, cmd)
   return true
 end
 
---! Buy a plot of land: {plot}. In co-op only plots on the buyer's side.
+--! Buy a plot of land: {plot}. A plot that borders another hospital's land
+--! goes to auction (see below). Otherwise, in co-op, only plots on the
+--! buyer's side.
 function handlers.buy_plot(world, cmd)
   local hospital = hospital_of(world, cmd)
   if not hospital then return false, "no such hospital" end
+  if world.mp_auction then return false, "an auction is on" end
+  local plot = tonumber(cmd.plot)
+  local bidders = plot and MultiplayerSession.auctionBidders(world, plot, hospital)
+  if bidders and #bidders > 1 then
+    local price = world.map:getParcelPrice(plot)
+    if price > hospital.balance then return false, "not enough money" end
+    local auction = MultiplayerSession.startAuction(world, plot, bidders, price)
+    cmd.resolved, cmd.no_sound = "auction " .. auction.id, true
+    return true
+  end
   if world.mp_coop then
     local side = MultiplayerSession.plotSide(world, tonumber(cmd.plot))
     if side and side ~= world:getHospitalIndex(hospital) then return false, "another player's side" end
@@ -2832,6 +2850,259 @@ function handlers.buy_plot(world, cmd)
   local ok = hospital:purchasePlot(tonumber(cmd.plot))
   if ui then ui.adviser = adviser end
   return ok, not ok and "cannot buy this plot" or nil
+end
+
+--------------------------------------------------------------------------------
+-- Land auctions. A plot on another player's side of the map (plotSide), or
+-- one that borders another hospital's land, is not simply bought: it is
+-- auctioned among the one who asked, the player whose side it is on and the
+-- hospitals whose land borders it (those of them that may buy it). A plot
+-- on the asker's own side that no other hospital borders is bought straight
+-- away. The game stands still during the auction (no game hours,
+-- World:_mpHoursForStep); every player sees it (UIMultiplayerAuction).
+-- The auction (world.mp_auction) is game state, the same on every peer. It
+-- opens at the plot's price, the one who asked leading. Each bid is one step
+-- up (auction.step). It is sold when nobody bids for AUCTION_SECONDS (the
+-- first bid may take AUCTION_OPEN_SECONDS), or when all the others dropped
+-- out. Time is counted in steps on every peer alike, like a speed vote.
+-- Bots bid by a fixed rule, in the game (bots_bid): no command, no waiting.
+--------------------------------------------------------------------------------
+
+MultiplayerSession.AUCTION_SECONDS = 10
+MultiplayerSession.AUCTION_OPEN_SECONDS = 20
+local function auction_frames(seconds) return math.ceil(seconds * 1000 / 18) end -- world ticks
+-- A bot bids up to this much of the price for land it asked for, and up to
+-- the second for land next to its own; and keeps this much money.
+local BOT_AUCTION_OWN, BOT_AUCTION_OTHER, BOT_AUCTION_RESERVE = 1.6, 1.25, 5000
+
+-- Which plots touch which (along a tile edge), from the map: the same on
+-- every peer, so worked out once per map (not saved).
+local plots_touching_cache = setmetatable({}, {__mode = "k"})
+
+--! The plots that touch `plot` (a set).
+function MultiplayerSession.plotsTouching(world, plot)
+  local th = world.map.th
+  local touch = plots_touching_cache[th]
+  if not touch then
+    touch = {}
+    local function link(a, b)
+      if a ~= b and a ~= 0 and b ~= 0 then
+        touch[a] = touch[a] or {}
+        touch[a][b] = true
+        touch[b] = touch[b] or {}
+        touch[b][a] = true
+      end
+    end
+    local w, h = th:size()
+    local flags, above = {}, {}
+    for y = 1, h do
+      local left
+      for x = 1, w do
+        local p = th:getCellFlags(x, y, flags).parcelId or 0
+        if left then link(left, p) end
+        if above[x] then link(above[x], p) end
+        above[x], left = p, p
+      end
+    end
+    plots_touching_cache[th] = touch
+  end
+  return touch[plot] or {}
+end
+
+--! Who would bid for `plot` if `hospital` asked to buy it: hospital indices,
+--! the asker first, then (by index) every other hospital in the game that
+--! may buy it and whose side it is on or whose land borders it. Nil: no
+--! auction for that plot (one that cannot be bought, a single-player game,
+--! free build mode).
+--!param peek (table) optional; a screen's question (see plotSide)
+function MultiplayerSession.auctionBidders(world, plot, hospital, peek)
+  local th = world.map.th
+  if not world.mp_coop or world.free_build_mode or plot < 1 or plot >= th:getPlotCount() or
+      not th:isParcelPurchasable(plot, hospital:getPlayerIndex()) then
+    return nil
+  end
+  local me = world:getHospitalIndex(hospital)
+  local list = {me}
+  local touching = MultiplayerSession.plotsTouching(world, plot)
+  local side = MultiplayerSession.plotSide(world, plot, peek)
+  for i, other in ipairs(world.hospitals) do
+    local player = other:getPlayerIndex()
+    if i ~= me and not other.mp_player_away and th:isParcelPurchasable(plot, player) then
+      local near = i == side
+      if not near then
+        for q in pairs(touching) do
+          if th:getPlotOwner(q) == player then
+            near = true
+            break
+          end
+        end
+      end
+      if near then list[#list + 1] = i end
+    end
+  end
+  return list
+end
+
+local function auction_log(text)
+  local session = TheApp.mp_session
+  if session then session.log(text) end
+end
+
+--! `index` bids `amount` (checked by the caller).
+local function place_bid(auction, index, amount)
+  auction.bid, auction.leader = amount, index
+  auction.bids[index] = amount
+  auction.frames, auction.limit = 0, auction_frames(MultiplayerSession.AUCTION_SECONDS)
+  auction_log(string.format("auction %d: hospital %d bids $%d", auction.id, index, amount))
+end
+
+--! Bots' bids: a bot outbid bids again while the next bid is within its
+--! limit and it keeps its reserve; otherwise it drops out.
+local function bots_bid(world, auction)
+  local bots = world.mp_coop.bot_hospitals or {}
+  local again = true
+  while again do
+    again = false
+    for _, i in ipairs(auction.bidders) do
+      if bots[i] and auction.leader ~= i and not auction.out[i] then
+        local amount = auction.bid + auction.step
+        local limit = auction.price * (i == auction.by and BOT_AUCTION_OWN or BOT_AUCTION_OTHER)
+        if amount <= limit and world.hospitals[i].balance - amount >= BOT_AUCTION_RESERVE then
+          place_bid(auction, i, amount)
+          again = true
+        else
+          auction.out[i] = true
+        end
+      end
+    end
+  end
+end
+
+--! Has everybody but the leader dropped out?
+local function auction_decided(auction)
+  for _, i in ipairs(auction.bidders) do
+    if i ~= auction.leader and not auction.out[i] then return false end
+  end
+  return true
+end
+
+--! The auction ends: the leader buys the plot for the bid (if they still
+--! may and can pay).
+local function end_auction(world)
+  local auction = world.mp_auction
+  world.mp_auction = nil
+  local winner = world.hospitals[auction.leader]
+  local S = _S.multiplayer_window
+  local ui = world.ui
+  -- (purchasePlot gives cost advice through the UI; only to that player.)
+  local adviser = ui and ui.adviser
+  if ui and ui.hospital ~= winner then ui.adviser = nil end
+  local ok = winner and winner:purchasePlot(auction.plot, auction.bid)
+  if ui then ui.adviser = adviser end
+  -- (Kept for the auction screen's last moment: who got it.)
+  auction.sold, auction.name = ok or false, winner and winner.name
+  world.mp_auction_last = auction
+  auction_log(string.format("auction %d: plot %d %s", auction.id, auction.plot,
+      ok and string.format("sold to hospital %d for $%d", auction.leader, auction.bid) or "not sold"))
+  local session = TheApp.mp_session
+  if session then
+    session.notify(ok and S.auction_sold:format(auction.plot, winner.name, auction.bid) or
+        S.auction_not_sold:format(auction.plot))
+  end
+  if ok and ui and ui.hospital == winner then ui:playSound("cashreg.wav") end
+end
+
+--! Open an auction for `plot` (MultiplayerSession.auctionBidders: the
+--! asker first). Returns it; if nobody bids against the asker it is sold at
+--! once (world.mp_auction is nil again).
+function MultiplayerSession.startAuction(world, plot, bidders, price)
+  world.mp_auction_seq = (world.mp_auction_seq or 0) + 1
+  local step = math.max(100, math.floor(price / 1000 + 0.5) * 100) -- 10%, in hundreds
+  local auction = {id = world.mp_auction_seq, plot = plot, price = price, step = step,
+      by = bidders[1], bidders = bidders, bids = {}, out = {}, frames = 0,
+      limit = auction_frames(MultiplayerSession.AUCTION_OPEN_SECONDS)}
+  world.mp_auction = auction
+  place_bid(auction, bidders[1], price)
+  auction.limit = auction_frames(MultiplayerSession.AUCTION_OPEN_SECONDS)
+  auction_log(string.format("auction %d: plot %d for $%d, bidders %s", auction.id, plot, price,
+      table.concat(bidders, ",")))
+  local asker = world.hospitals[bidders[1]]
+  local session = TheApp.mp_session
+  if session then session.notify(_S.multiplayer_window.auction_started:format(asker.name, plot)) end
+  bots_bid(world, auction)
+  if auction_decided(auction) then end_auction(world) end
+  return auction
+end
+
+--! A bid: {auction, amount} (the current bid and one step: two players
+--! bidding at once, the second is turned down).
+function handlers.auction_bid(world, cmd)
+  local auction = world.mp_auction
+  local hospital = hospital_of(world, cmd)
+  if not auction or auction.id ~= tonumber(cmd.auction) or not hospital then return false, "the auction is over" end
+  local index = world:getHospitalIndex(hospital)
+  local bidder = false
+  for _, i in ipairs(auction.bidders) do bidder = bidder or i == index end
+  if not bidder or auction.out[index] then return false, "not a bidder" end
+  if auction.leader == index then return false, "already leading" end
+  local amount = tonumber(cmd.amount)
+  if amount ~= auction.bid + auction.step then return false, "outbid" end
+  if amount > hospital.balance then return false, "not enough money" end
+  place_bid(auction, index, amount)
+  bots_bid(world, auction)
+  if auction_decided(auction) then end_auction(world) end
+  return true
+end
+
+--! Drop out of the auction: {auction}.
+function handlers.auction_pass(world, cmd)
+  local auction = world.mp_auction
+  local hospital = hospital_of(world, cmd)
+  if not auction or auction.id ~= tonumber(cmd.auction) or not hospital then return false, "the auction is over" end
+  local index = world:getHospitalIndex(hospital)
+  if auction.leader == index or auction.out[index] then return false, "cannot drop out" end
+  auction.out[index] = true
+  auction_log(string.format("auction %d: hospital %d drops out", auction.id, index))
+  if auction_decided(auction) then end_auction(world) end
+  return true
+end
+
+--! Count the auction's time (after every step's commands, on every peer).
+--! A bidder whose player left drops out.
+function MultiplayerSession:tickAuction()
+  local world = self.world
+  local auction = world and world.mp_auction
+  if auction then
+    for _, i in ipairs(auction.bidders) do
+      local hospital = world.hospitals[i]
+      if i ~= auction.leader and hospital and hospital.mp_player_away then auction.out[i] = true end
+    end
+    auction.frames = auction.frames + world:_mpStepFrames(world.mp_speed or "Normal")
+    if auction.frames >= auction.limit or auction_decided(auction) then
+      end_auction(world)
+      self.applied_this_step = true
+    end
+  end
+  self:syncAuction(world)
+end
+
+--! Show the auction window while there is an auction (again after a load
+--! or a repair), unless this player closed it; close it after.
+function MultiplayerSession:syncAuction(world)
+  local ui = world and world.ui
+  local class_ = rawget(_G, "UIMultiplayerAuction")
+  if self.observer or self.abstains or not ui or not class_ then return end -- (not for bots)
+  local auction = world.mp_auction
+  local window = ui:getWindow(class_)
+  if window and auction and window.auction_id ~= auction.id then
+    window:close()
+    window = nil
+  end
+  if auction and not window and self.auction_closed ~= auction.id then
+    ui:addWindow(class_(ui))
+  elseif window and not auction then
+    window:finish() -- the gavel, then it closes
+  end
 end
 
 --! Radiator heat: {level} (1..10, tenths).

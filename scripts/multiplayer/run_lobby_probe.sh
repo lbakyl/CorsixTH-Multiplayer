@@ -29,7 +29,7 @@
 #      left to time out (accepted), shown at different moments on the two
 #      screens -> IN SYNC, same decisions on both
 #   8. co-op on an original two-player map: a hospital each, both opened
-#      early, purchases and hires in each player's own hospital, money and a
+#      early, a plot on the other's side asked for (an auction), purchases and hires in each player's own hospital, money and a
 #      nurse sent between them, loans, a price, research and heating changed
 #      in their windows, the send icon in a staff window -> IN SYNC, every
 #      command accepted; both hire the first doctor on their list: the same
@@ -87,6 +87,10 @@
 #  32. the start pause ("pause", MP_START_PAUSE=1500, off in the other
 #      rooms): both players' first step runs 1.5 s after the start at the
 #      earliest (the loading picture stays up meanwhile) -> IN SYNC
+#  33. a land auction ("auction", co-op level 2): ana asks for a plot on
+#      ben's side, so it is auctioned; both see the auction screen, ben bids
+#      in it, then ana, who gets it for her bid; no game hours pass during
+#      the auction -> IN SYNC, the same sale in both games
 #  31. two languages in one game ("lang"): otis plays in English, greta in
 #      German (the build id no longer has the language); a busy hospital,
 #      staff hired by both, past the first month's new hiring lists -> IN
@@ -253,6 +257,11 @@ run_probe lea MP_ROLE=join MP_ROOM=research MP_STEPS=900 \
 MP_START_PAUSE=1500 run_probe rex MP_ROLE=host MP_ROOM=pause MP_STEPS=200 MP_UI_SCRIPT="1:startpause" & pids+=($!)
 sleep 1
 MP_START_PAUSE=1500 run_probe ida1 MP_ROLE=join MP_ROOM=pause MP_STEPS=200 MP_UI_SCRIPT="1:startpause" & pids+=($!)
+# A land auction: ana asks for a plot on ben's side; ben outbids her, she
+# outbids him.
+run_probe ana MP_ROLE=host MP_ROOM=auction MP_COOP=1 MP_LEVEL=2 MP_STEPS=600   MP_UI_SCRIPT="20:openhospital;100:auctionbuy;104:auctionshot;140:auctionshot;200:auctionbid;204:auctionshot" & pids+=($!)
+sleep 1
+run_probe ben MP_ROLE=join MP_ROOM=auction MP_STEPS=600   MP_UI_SCRIPT="30:openhospital;110:auctionshot;150:auctionbid" & pids+=($!)
 # Two languages in one game: otis in English, greta in German.
 run_probe otis MP_ROLE=host MP_ROOM=lang MP_STEPS=2000 MP_SCENARIO=busy \
   MP_UI_SCRIPT="1600:hire:Doctor;1700:hire:Handyman" & pids+=($!)
@@ -505,11 +514,13 @@ fail |= not ok7
 m, n = log('mira'), log('nico')
 cm = applied('mira')
 kinds = [re.search(r'#\d+ (\w+) ->', x).group(1) for x in cm]
-# nico's try to buy a plot on mira's side is refused; everything else is ok.
+# nico's try to buy a plot on mira's side goes to auction (mira does not
+# bid: he gets it); everything else is ok.
 # (nico plays with transparent walls: mira's new plot gets its walls in his
 # game too, so the games stay in sync.)
-other8 = [x for x in cm if "buy_plot -> rejected: another player's side" in x]
-ok_all = len(other8) == 1 and all(is_ok(x) for x in cm if x not in other8)
+other8 = [x for x in cm if re.search(r'peer 2 #\d+ buy_plot -> ok \(auction \d+\)$', x)]
+ok_all = (len(other8) == 1 and all(is_ok(x) for x in cm)
+          and re.search(r'auction \d+: plot \d+ sold to hospital 2 for', m) is not None)
 # mira buys a plot with entrance doors on it: they are made in the same
 # order on both machines (pairs order once differed).
 plot8 = re.search(r'UI: buying plot (\d+) \(\$\d+, (\d+) objects', m)
@@ -738,6 +749,20 @@ ok32 = (None not in pause32 and all(p >= 1500 for p in pause32)
         and result('rex').startswith('IN SYNC through step 200') and result('ida1').startswith('IN SYNC'))
 print(f"32. Start pause:            first step after {pause32} ms; {result('rex')} / {result('ida1')}")
 fail |= not ok32
+
+# The land auction.
+sold33 = [re.findall(r'auction 1: plot \d+ sold to hospital \d+ for \$\d+', log(n)) for n in ('ana', 'ben')]
+screens33 = [re.findall(r'UI: auction\w+ at step \d+: screen (\w+), auction (\w+), bid (\S+), (\w+), game hours (\d+)', log(n))
+             for n in ('ana', 'ben')]
+hours33 = [int(x[4]) for x in screens33[0] if x[1] == '1']
+ok33 = (len(sold33[0]) == 1 and sold33 == [sold33[0], sold33[0]] and sold33[0][0].startswith('auction 1: plot')
+        and 'sold to hospital 1 for' in sold33[0][0]
+        and all(x[0] == 'true' and x[1] == '1' for s in screens33 for x in s)
+        and ('true', '1', '3850', 'bid', ) == screens33[1][0][:4]
+        and len(hours33) >= 2 and len(set(hours33)) == 1
+        and result('ana').startswith('IN SYNC') and result('ben').startswith('IN SYNC'))
+print(f"33. Land auction:           {sold33[0]}; screens {screens33}; {result('ana')} / {result('ben')}")
+fail |= not ok33
 
 # Two languages in one game.
 builds31 = [re.search(r'connected as (\S+)', log(n)) for n in ('otis', 'greta')]

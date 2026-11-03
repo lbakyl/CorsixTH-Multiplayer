@@ -597,10 +597,11 @@ function Hospital:tick()
   end
 end
 
-function Hospital:purchasePlot(plot_number)
+--!param price (int) optional; what it costs (multiplayer: an auction's bid)
+function Hospital:purchasePlot(plot_number, price)
   local map = self.world.map
   if map.th:isParcelPurchasable(plot_number, self:getPlayerIndex()) then
-    local cost = not self.world.free_build_mode and map:getParcelPrice(plot_number) or 0
+    local cost = price or (not self.world.free_build_mode and map:getParcelPrice(plot_number) or 0)
     if cost <= self.balance then
       self.world:setPlotOwner(plot_number, self:getPlayerIndex())
       table.insert(self.ownedPlots, plot_number)

@@ -1367,6 +1367,44 @@ local function run()
           local list = {}
           for s in steps:gmatch("[^+]+") do list[#list + 1] = s end
           editing = {room_type = id, steps = list}
+        elseif a == "auctionscan" then
+          -- Which plots this hospital would have to bid for (they border
+          -- another hospital's land), and which it buys outright.
+          local th, hospital = world.map.th, world.ui.hospital
+          local contested, plain, peek = {}, {}, {}
+          for plot = 1, th:getPlotCount() - 1 do
+            local bidders = MultiplayerSession.auctionBidders(world, plot, hospital, peek)
+            if bidders then
+              local t = #bidders > 1 and contested or plain
+              t[#t + 1] = plot .. "(" .. table.concat(bidders, ",") .. ")"
+            end
+          end
+          log(string.format("UI: auction scan: contested %s; plain %s", table.concat(contested, " "),
+              table.concat(plain, " ")))
+        elseif a == "auctionbuy" then
+          -- Ask for the cheapest plot that goes to auction.
+          local th, hospital = world.map.th, world.ui.hospital
+          local best, peek = nil, {}
+          for plot = 1, th:getPlotCount() - 1 do
+            local bidders = MultiplayerSession.auctionBidders(world, plot, hospital, peek)
+            if bidders and #bidders > 1 and (not best or
+                world.map:getParcelPrice(plot) < world.map:getParcelPrice(best)) then
+              best = plot
+            end
+          end
+          log(string.format("UI: asking for plot %s at step %d", tostring(best), session.step))
+          if best then session:issue({kind = "buy_plot", plot = best}) end
+        elseif a == "auctionbid" or a == "auctionpass" or a == "auctionshot" then
+          -- The auction screen: press the tick (bid), the cross (drop out),
+          -- or take a picture of it.
+          local window = world.ui:getWindow(rawget(_G, "UIMultiplayerAuction"))
+          local auction = world.mp_auction
+          log(string.format("UI: %s at step %d: screen %s, auction %s, bid %s, %s, game hours %d", a, session.step,
+              tostring(window ~= nil), auction and tostring(auction.id) or "none",
+              auction and tostring(auction.bid) or "-", window and window:standing() or "-", world.mp_hours or 0))
+          if window and a == "auctionbid" then window:bid()
+          elseif window and a == "auctionpass" then window:dropOut()
+          elseif a == "auctionshot" then shot("auction-" .. session.step) end
         elseif a == "startpause" then
           -- How long after START the first steps ran (the start pause).
           log(string.format("UI: step %d ran %d ms after the start (pause %d ms)", session.step,
@@ -1928,7 +1966,7 @@ local function run()
         elseif a == "buyplot" then
           -- Town map: buy the plot this hospital can buy that has the most
           -- objects waiting on it (entrance doors), as a click there does.
-          -- buyplot:other tries one on another player's side (refused).
+          -- buyplot:other tries one on another player's side (an auction).
           local th, hospital = world.map.th, world.ui.hospital
           local me = world:getHospitalIndex(hospital)
           local best, best_n
