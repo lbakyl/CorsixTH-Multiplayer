@@ -34,9 +34,8 @@ local col = {
   title   = {red = 70, green = 30, blue = 108},
   caption = {red = 120, green = 74, blue = 168},
   button  = {red = 140, green = 90, blue = 190},
-  -- The price, hard to miss: gold, or green when it is free.
+  -- The price, hard to miss: gold (free: the usual purple).
   price   = {red = 196, green = 136, blue = 16},
-  free    = {red = 40, green = 140, blue = 60},
 }
 
 local WIDTH = 380
@@ -125,7 +124,7 @@ function UIMultiplayerOffer:UIMultiplayerOffer(ui, icon)
 
   local y = height - 45
   if price then
-    self:addBevelPanel(20, y - 30, WIDTH - 40, 24, price > 0 and col.price or col.free)
+    self:addBevelPanel(20, y - 30, WIDTH - 40, 24, price > 0 and col.price or col.caption)
         :setLabel(price > 0 and S.offer_price_banner:format(price) or S.offer_free_banner).lowered = true
   end
   local w = math.floor((WIDTH - 40 - 30) / 4)
