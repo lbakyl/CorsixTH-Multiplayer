@@ -405,7 +405,8 @@ function builder.ui_hire(world, desk_x, desk_y, class, log)
   class, at_room = class:match("^([^@]+)@?([%w_]*)$")
   class, skill = class:match("^(%a+):?(%a*)$")
   dlg:setCategory(class)
-  local pool = world:staffPool()[class]
+  -- (Its hospital's own list; a game without World:staffPool has one list.)
+  local pool = (world.staffPool and world:staffPool() or world.available_staff)[class]
   assert(pool and #pool > 0, "nobody to hire in " .. class)
   if skill ~= "" then
     for i, profile in ipairs(pool) do
