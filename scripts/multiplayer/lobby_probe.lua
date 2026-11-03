@@ -1439,7 +1439,7 @@ local function run()
             parts[#parts + 1] = string.format("%s=%d/%d%s", kind, sabotage.price(world, mine, kind, 1),
                 sabotage.price(world, mine, kind, 3), why and ("(" .. why .. ")") or "")
           end
-          local pool = world.available_staff.Doctor or {}
+          local pool = world:staffPool().Doctor or {}
           local cons, spec = 0, 0
           for _, profile in ipairs(pool) do
             if profile.is_consultant then cons = cons + 1 end

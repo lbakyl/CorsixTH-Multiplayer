@@ -45,7 +45,7 @@ function UIHireStaff:UIHireStaff(ui)
 
   -- Left hand side tabs
   local --[[persistable:hire_staff_category]] function category(name, state, btn)
-    if #self.world.available_staff[name] == 0 then
+    if #self.world:staffPool(self.ui.hospital)[name] == 0 then
       self.ui:playSound("wrong2.wav")
       if state then
         btn:toggle()
@@ -111,7 +111,7 @@ function UIHireStaff:updateTooltips()
   cond = cond and self.category == "Doctor"
   self.tooltip_regions[2].enabled = cond
   self.tooltip_regions[3].enabled = cond
-  cond = cond and self.current_index and self.world.available_staff[self.category]
+  cond = cond and self.current_index and self.world:staffPool(self.ui.hospital)[self.category]
   cond = cond and cond[self.current_index]
   self.tooltip_regions[4].enabled = cond and cond.is_surgeon >= 1.0
   self.tooltip_regions[5].enabled = cond and cond.is_psychiatrist >= 1.0
@@ -137,7 +137,7 @@ function UIHireStaff:hire()
   end
   local profile
   if self.category and self.current_index then
-    profile = self.world.available_staff[self.category]
+    profile = self.world:staffPool(self.ui.hospital)[self.category]
     profile = profile and profile[self.current_index]
   end
   if not profile then
@@ -156,19 +156,19 @@ function UIHireStaff:hire()
     self.mp_hiring = self.mp_hiring or {}
     self.mp_hiring[MultiplayerSession.staffProfileKey(profile)] = true
   else
-    table.remove(self.world.available_staff[self.category], self.current_index)
+    table.remove(self.world:staffPool(self.ui.hospital)[self.category], self.current_index)
   end
   local place_window = UIPlaceStaff(self.ui, profile, self.mouse_up_x, self.mouse_up_y)
   place_window.mp_pool_index = self.current_index -- used in multiplayer
   self.ui:addWindow(place_window)
 end
 
---! Multiplayer: every hospital hires from the one list, so it changes under
---! this window. Keep showing the same person; when another hospital hired
+--! Multiplayer: the players sharing a hospital hire from its one list, so it changes under
+--! this window. Keep showing the same person; when a team mate hired
 --! them, show the next one in the list instead (and say so).
 function UIHireStaff:_mpFollow()
   if not (TheApp.mp_session and self.category and self.current_index) then return end
-  local pool = self.world.available_staff[self.category] or {}
+  local pool = self.world:staffPool(self.ui.hospital)[self.category] or {}
   local key = MultiplayerSession.staffProfileKey
   local shown = pool[self.current_index]
   if self.mp_shown and not (shown and key(shown) == self.mp_shown) then
@@ -182,7 +182,7 @@ function UIHireStaff:_mpFollow()
       self.current_index = math.max(1, math.min(self.current_index, #pool))
       local was_ours = self.mp_hiring and self.mp_hiring[self.mp_shown]
       if not was_ours and pool[self.current_index] and self.ui.adviser then
-        self.ui.adviser:say({text = "That candidate was hired by another hospital. Here is the next one.",
+        self.ui.adviser:say({text = "Your team mate just hired that candidate. Here is the next one.",
             priority = 5})
       end
     end
@@ -210,7 +210,7 @@ function UIHireStaff:draw(canvas, x, y)
 
   self:_mpFollow()
   local font = self.white_font
-  local staff = self.world.available_staff
+  local staff = self.world:staffPool(self.ui.hospital)
   local staff_label_x = x + 16 * s
   local staff_label_w = 26 * s
   font:draw(canvas, #staff.Doctor      , staff_label_x, y +  58 * s, staff_label_w, 0)
@@ -279,7 +279,7 @@ end
 function UIHireStaff:moveBy(n)
   if self.category then
     self.current_index = self.current_index + n
-    local category = self.world.available_staff[self.category]
+    local category = self.world:staffPool(self.ui.hospital)[self.category]
     if self.current_index < 1 then
       self.current_index = 1
     elseif self.current_index > #category then

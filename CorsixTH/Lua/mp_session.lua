@@ -591,7 +591,7 @@ MultiplayerSession.success_sounds = {buy_plot = "cashreg.wav"}
 --! What the player is told when one of their own actions is turned down
 --! (by command kind, then by reason); the reason is shown otherwise.
 MultiplayerSession.rejection_texts = {
-  hire = {["no longer available"] = "Another hospital hired that candidate first. Here are the others.",
+  hire = {["no longer available"] = "Your team mate hired that candidate first. Here are the others.",
           ["invalid position"] = "Could not place the new member of staff there."},
   place_object = {["tile not free"] = "Could not place the object there: the spot was taken.",
                   ["someone is in the way"] = "Could not place the object there: someone was in the way.",
@@ -683,7 +683,7 @@ end
 --! again, on the same kind of staff, to pick another.
 function MultiplayerSession:_reopenHire(category)
   local ui = self.world and self.world.ui
-  if not ui or not self.world.available_staff[category] then return end
+  if not ui or not self.world:staffPool()[category] then return end
   local window = ui:getWindow(UIHireStaff)
   if not window then
     window = UIHireStaff(ui)
@@ -3211,12 +3211,13 @@ function MultiplayerSession.staffProfileKey(profile)
   return string.format("%d/%.6f", profile.wage, profile.skill)
 end
 
---! Hire a member of staff from the shared pool: {category, index, key, x, y}.
---! `index` is the position the issuing player saw; if the pool changed since
---! (someone else hired), the first profile with the same key is used.
+--! Hire a member of staff from the hospital's hiring list (World:staffPool):
+--! {category, index, key, x, y}. `index` is the position the issuing player
+--! saw; if the list changed since (a player sharing the hospital hired), the
+--! first profile with the same key is used.
 function handlers.hire(world, cmd)
   local hospital = world.hospitals[cmd.hospital or 1]
-  local pool = world.available_staff[cmd.category] or {}
+  local pool = world:staffPool(hospital)[cmd.category] or {}
   local key = MultiplayerSession.staffProfileKey
   local index
   if pool[cmd.index] and key(pool[cmd.index]) == cmd.key then

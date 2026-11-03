@@ -622,6 +622,60 @@ function World:makeAvailableStaff(month)
     end
     self.available_staff[info.class] = group
   end
+  -- (Multiplayer with a hospital each: every hospital's own list is made
+  -- from this one, World:staffPool.)
+  self.available_staff_made = (self.available_staff_made or 0) + 1
+end
+
+--! A hospital's copy of a person on the month's hiring list: the same
+--! skills, abilities, wage and looks under another name, chosen from their
+--! name seed and the hospital (no random numbers, so any peer may make the
+--! copy at any time and gets the same). Hospital 1 keeps the names.
+local function copyProfile(profile, index)
+  local copy = setmetatable({}, getmetatable(profile))
+  for k, v in pairs(profile) do copy[k] = v end
+  if index > 1 and profile.name_seed then
+    local seed = (profile.name_seed + 211 * (index - 1)) % 1009 + 1
+    local starts, ends = {}, {}
+    for _, s in ipairs(_S.humanoid_name_starts) do starts[#starts + 1] = s end
+    for _, s in ipairs(_S.humanoid_name_ends) do ends[#ends + 1] = s end
+    if #starts > 0 and #ends > 0 then
+      local a, b = seed * 7 % #starts + 1, seed * 13 % #ends + 1
+      -- (Translated strings: joined as StaffProfile does, compared as text.)
+      local name = starts[a] .. ends[b]
+      -- (Never the original's name: two of them in one hospital after a trade.)
+      if tostring(name) == tostring(profile.name) then name = starts[a % #starts + 1] .. ends[b] end
+      copy.name = name
+    end
+    copy.name_seed = seed
+    local initials = staff_initials_cache.initials
+    if initials and #initials > 0 then copy.initial = initials[seed % #initials] end
+  end
+  return copy
+end
+
+--! The hiring list of `hospital` (default: this machine's player's,
+--! getUIHospital; simulation code passes the hospital), {class =
+--! {profile, ...}}. In multiplayer with a hospital each, every hospital has
+--! its own: each month the same people as the others' (copyProfile), so
+--! hiring takes nobody from another hospital. The players of one hospital
+--! share its list. Otherwise (single player, one shared hospital): the
+--! world's list.
+function World:staffPool(hospital)
+  hospital = hospital or self:getUIHospital()
+  if not self.mp_coop or not hospital then return self.available_staff end
+  if hospital.available_staff_made ~= self.available_staff_made or not hospital.available_staff then
+    local index = self:getHospitalIndex(hospital) or 1
+    local pool = {}
+    for class, group in pairs(self.available_staff) do
+      local copies = {}
+      for i, profile in ipairs(group) do copies[i] = copyProfile(profile, index) end
+      pool[class] = copies
+    end
+    hospital.available_staff = pool
+    hospital.available_staff_made = self.available_staff_made
+  end
+  return hospital.available_staff
 end
 
 --[[ Register a callback for when `Humanoid`s enter or leave a given tile.
@@ -3940,6 +3994,14 @@ function World:afterLoad(old, new)
   for _, staff_category in pairs(self.available_staff) do
     for _, staff in pairs(staff_category) do
       self:localiseInitial(staff)
+    end
+  end
+  -- (Multiplayer: every hospital's own hiring list, World:staffPool.)
+  for _, hospital in ipairs(self.hospitals) do
+    for _, staff_category in pairs(hospital.available_staff or {}) do
+      for _, staff in pairs(staff_category) do
+        self:localiseInitial(staff)
+      end
     end
   end
   for _, staff in ipairs(self:getLocalPlayerHospital().staff) do

@@ -672,15 +672,17 @@ function sabotage.poached(staff)
   staff:unregisterCallbacks()
   local window = world.ui and world.ui:getWindow(UIStaffManagement)
   if window then window:updateStaffList(staff) end
-  -- On the hiring list again, at the top.
+  -- On the hiring list again, at the top: the list of the hospital that sent
+  -- the headhunter (each hospital has its own, World:staffPool).
   local profile = staff.profile
-  local pool = world.available_staff[profile.humanoid_class]
+  local to = world.hospitals[by] or hospital
+  local pool = world:staffPool(to)[profile.humanoid_class]
   if pool then
     profile.mp_reserved = by and {hospital = by, days = HEADHUNT_RESERVED_DAYS} or nil
     table.insert(pool, 1, profile)
   end
-  log(string.format("%s #%s left hospital %d for the hiring list", profile.humanoid_class,
-      tostring(staff.mp_id), world:getHospitalIndex(hospital)))
+  log(string.format("%s #%s left hospital %d for the hiring list of hospital %d", profile.humanoid_class,
+      tostring(staff.mp_id), world:getHospitalIndex(hospital), world:getHospitalIndex(to)))
   MultiplayerSession.tellPlayer(world, hospital, S().sabotage_headhunter_left:format(profile:getFullName()))
   local buyer = by and world.hospitals[by]
   if buyer then
@@ -711,12 +713,18 @@ function sabotage.daily(world)
       MultiplayerSession.tellPlayer(world, hospital, S().sabotage_smear_over)
     end
   end
-  for _, pool in pairs(world.available_staff) do
-    for _, profile in ipairs(pool) do
-      local reserved = profile.mp_reserved
-      if reserved then
-        reserved.days = reserved.days - 1
-        if reserved.days <= 0 then profile.mp_reserved = nil end
+  -- (A poached doctor is on the list of a hospital that has made its list,
+  -- the same on every peer; a list made later has none.)
+  local pools = {world.available_staff}
+  for _, h in ipairs(world.hospitals) do pools[#pools + 1] = h.available_staff end
+  for _, lists in ipairs(pools) do
+    for _, pool in pairs(lists) do
+      for _, profile in ipairs(pool) do
+        local reserved = profile.mp_reserved
+        if reserved then
+          reserved.days = reserved.days - 1
+          if reserved.days <= 0 then profile.mp_reserved = nil end
+        end
       end
     end
   end

@@ -323,21 +323,21 @@ local EPIDEMIC_PATIENTS = {2, 3}     -- per hospital and wave
 local RAT_SWARM_DAYS = {45, 75}      -- between swarms, each to the next hospital
 local RAT_SWARM_SIZE = {3, 5}
 
---! A doctor pool with many consultants first, then only juniors, for
---! `players` hospitals sharing it; nurses, handymen and receptionists vary.
---! (An entry with Month = m is used for the list from month m + 1 on.)
-local function staffLevels(players)
+--! A hiring list with many consultants first, then only juniors (every
+--! hospital has its own, World:staffPool); nurses, handymen and
+--! receptionists vary. (An entry with Month = m is used for the list from
+--! month m + 1 on.)
+local function staffLevels()
   local result = {}
   local months = {0, 3, 5, 8, 11, 14, 17, 20, 23}
   for i, month in ipairs(months) do
     local juniors_only = month >= 8
     result[i - 1] = {
       Month = month,
-      Doctors = 4 * players + 2,
-      Nurses = 3 * players + math.random(0, players),
-      -- (The list is shared: at least one receptionist and handyman each.)
-      Handymen = players + math.random(0, players),
-      Receptionists = players + math.random(0, players),
+      Doctors = 6,
+      Nurses = 3 + math.random(0, 1),
+      Handymen = 1 + math.random(0, 1),
+      Receptionists = 1 + math.random(0, 1),
       ShrkRate = 3, SurgRate = 3, RschRate = 4,
       -- One in two doctors a consultant at first (none junior); then all junior.
       ConsRate = juniors_only and 0 or 2,
@@ -365,7 +365,7 @@ levels.SCENARIOS = {
         {Month = 30, Change = 1},
         {Month = 32, Change = 0},
       }
-      config.staff_levels = staffLevels(players)
+      config.staff_levels = staffLevels()
       -- More rats (Hospital:onEndDay; the defaults are 0.05, 0.5 and 200).
       config.mp_rats = {chance = 0.15, litter = 1.0, tiles_per_rat = 100}
       -- Refusing (or not answering) an emergency fax.

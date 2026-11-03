@@ -21,8 +21,9 @@
 #      the player's own and the evil handyman in it; nobody sees a rival's
 #      room outline, nor the blue floor of a room lou furnishes by hand
 #   6. the newer tricks, in room "tricks" (nia against oz): a headhunter
-#      (level 1) after oz's nurse, who leaves for the hiring list when oz does
-#      not pay; oz cannot hire them back while they are kept for nia, nia can;
+#      (level 1) after oz's nurse, who leaves for nia's hiring list (every
+#      hospital has its own) when oz does not pay; nia hires them, and oz
+#      hires a nurse from oz's own list;
 #      a broken boiler (level 1), repaired; a smear campaign (level 1) that
 #      runs out at the month's end; espionage (level 3) copies two of oz's
 #      results. In room "tricks2" (pia against quin) quin pays the
@@ -195,8 +196,9 @@ ok3 = ok3 and ok_v and outlines == 0
 fail |= not ok3
 
 o, q = log('oz'), log('quin')
-poached = 'headhunter after Nurse' in o and re.search(r'Nurse #\d+ left hospital 2 for the hiring list', o)
-kept_for_nia = 'hire -> rejected: promised to another hospital' in o and re.search(r'step 110\d: peer 1 #\d+ hire -> ok', o)
+poached = 'headhunter after Nurse' in o and re.search(r'Nurse #\d+ left hospital 2 for the hiring list of hospital 1', o)
+kept_for_nia = (re.search(r'step 10\d\d: peer 2 #\d+ hire -> ok', o) and re.search(r'step 110\d: peer 1 #\d+ hire -> ok', o)
+                and 'promised to another hospital' not in o)
 boiler = 'boiler of hospital 2 broken' in o and 'working properly again' in o
 smear = re.search(r'smear campaign against hospital 2 over: (\d+) patients', o)
 spied = re.search(r'hospital 1 spied on hospital 2: ([^\n]+)', o)

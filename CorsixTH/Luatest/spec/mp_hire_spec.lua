@@ -24,8 +24,8 @@ require("mp_session")
 if not Window then class "Window" end
 require("dialogs.hire_staff")
 
--- The hire window in multiplayer: every hospital hires from one list, so it
--- changes while a player looks at it.
+-- The hire window in multiplayer: the players sharing a hospital hire from its
+-- one list, so it changes while a player looks at it.
 describe("Multiplayer hire window", function()
   local function doctor(wage, skill) return {wage = wage, skill = skill} end
   local said
@@ -33,7 +33,7 @@ describe("Multiplayer hire window", function()
     said = {}
     return setmetatable({
       category = "Doctor", current_index = index,
-      world = {available_staff = {Doctor = pool}},
+      world = {staffPool = function() return {Doctor = pool} end},
       ui = {adviser = {say = function(_, msg) said[#said + 1] = msg.text end}},
       updateTooltips = function() end,
     }, {__index = UIHireStaff})
@@ -50,19 +50,19 @@ describe("Multiplayer hire window", function()
     local pool = {a, b, c}
     local w = window(pool, 2)
     w:_mpFollow()
-    table.remove(pool, 1) -- another hospital hires a
+    table.remove(pool, 1) -- a team mate hires a
     w:_mpFollow()
     assert.equal(1, w.current_index)
     assert.equal(b, pool[w.current_index])
     assert.same({}, said)
   end)
 
-  it("shows the next one when another hospital hires the one shown", function()
+  it("shows the next one when a team mate hires the one shown", function()
     local a, b, c = doctor(50, 0.5), doctor(60, 0.6), doctor(70, 0.7)
     local pool = {a, b, c}
     local w = window(pool, 3)
     w:_mpFollow()
-    table.remove(pool, 3) -- c, the last one, is hired elsewhere
+    table.remove(pool, 3) -- c, the last one, is hired by a team mate
     w:_mpFollow()
     assert.equal(2, w.current_index)
     assert.equal(1, #said)
@@ -80,7 +80,7 @@ describe("Multiplayer hire window", function()
     w.ui.playSound = function(_, name) sounds[#sounds + 1] = name end
     w.ui.tutorialStep = function() end
     w:_mpFollow() -- (drawn, showing a)
-    table.remove(pool, 1) -- a hired elsewhere before the click
+    table.remove(pool, 1) -- a hired by a team mate before the click
     w:hire()
     assert.same({"wrong2.wav"}, sounds)
     assert.equal(b, pool[w.current_index]) -- now showing b; a second click hires b

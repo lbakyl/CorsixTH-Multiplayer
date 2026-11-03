@@ -1278,7 +1278,8 @@ end
 function Bot:canHire(category)
   local class, skill = category, SPECIALISTS[category]
   if skill then class = "Doctor" end
-  local pool = self.world.available_staff[class]
+  -- (Its hospital's own list; a game without World:staffPool has one list.)
+  local pool = (self.world.staffPool and self.world:staffPool() or self.world.available_staff)[class]
   if not pool or #pool == 0 then return false end
   if not skill then return true end
   for _, profile in ipairs(pool) do

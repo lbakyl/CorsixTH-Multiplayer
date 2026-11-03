@@ -186,15 +186,15 @@ describe("Multiplayer levels", function()
     assert.equal(0, staff[0].Month)
     assert.equal(2, staff[0].ConsRate)
     assert.equal(0, staff[0].JrRate)
-    assert.equal(14, staff[0].Doctors) -- 4 per hospital and 2
+    assert.equal(6, staff[0].Doctors) -- (in every hospital's own list)
     for i = 0, #staff do
       if staff[i].Month >= 8 then
         assert.equal(1, staff[i].JrRate)
         assert.equal(0, staff[i].ConsRate)
       end
-      assert.truthy(staff[i].Nurses >= 9)
+      assert.truthy(staff[i].Nurses >= 3)
       -- Every hospital can hire a receptionist and a handyman each month.
-      assert.truthy(staff[i].Receptionists >= 3 and staff[i].Handymen >= 3)
+      assert.truthy(staff[i].Receptionists >= 1 and staff[i].Handymen >= 1)
     end
     -- Patients: few in the first year, more from month 13.
     assert.equal(2, config.popn[0].Change)

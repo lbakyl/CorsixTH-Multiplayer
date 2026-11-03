@@ -405,7 +405,7 @@ function builder.ui_hire(world, desk_x, desk_y, class, log)
   class, at_room = class:match("^([^@]+)@?([%w_]*)$")
   class, skill = class:match("^(%a+):?(%a*)$")
   dlg:setCategory(class)
-  local pool = world.available_staff[class]
+  local pool = world:staffPool()[class]
   assert(pool and #pool > 0, "nobody to hire in " .. class)
   if skill ~= "" then
     for i, profile in ipairs(pool) do
@@ -416,7 +416,8 @@ function builder.ui_hire(world, desk_x, desk_y, class, log)
     end
     class = class .. " (" .. skill .. (pool[dlg.current_index]["is_" .. skill] == 1 and "" or ": none, so any") .. ")"
   end
-  local name = tostring(pool[dlg.current_index]:getFullName()):gsub("^.*:", "")
+  local hired = pool[dlg.current_index]
+  local name = tostring(hired:getFullName()):gsub("^.*:", "")
   dlg.mouse_up_x, dlg.mouse_up_y = 0, 0 -- where the click happened
   dlg:hire() -- opens UIPlaceStaff
   local place = ui:getWindow(UIPlaceStaff)
@@ -456,8 +457,8 @@ function builder.ui_hire(world, desk_x, desk_y, class, log)
   tx, ty = place.tile_x, place.tile_y
   place.onMouseMove = function() end -- keep the tile we set (no real cursor)
   place:onMouseUp("left", 0, 0)
-  log(string.format("UI: hired %s %s at %d,%d (pool size still %d)", class, name,
-      tx, ty, #pool))
+  log(string.format("UI: hired %s %s at %d,%d (pool size still %d) key %s", class, name,
+      tx, ty, #pool, MultiplayerSession and MultiplayerSession.staffProfileKey(hired) or "-"))
   if ui:getWindow(UIHireStaff) then ui:getWindow(UIHireStaff):close() end
 end
 

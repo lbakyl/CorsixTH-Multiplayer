@@ -231,7 +231,10 @@ player. **A hospital each** (co-op and the race) has eight levels of its own,
 on Theme Hospital's multiplayer maps (levels 6 and 7 are scenarios, below; level 8 is Matroftt's Team Town). Each takes its diseases, rooms and
 research from a campaign level, so level 1 is the smallest. From level 2 on
 the training room is there from the start (there are few staff to hire, so
-training should begin early):
+training should begin early). Every hospital hires from its own list: each
+month the same people for everybody (skills, abilities, wages), under other
+names, so nobody hires away the doctor another hospital wanted. Players who
+share a hospital share its list.
 
 | Level | Money | Diseases | Rooms (research or later in brackets) |
 |---|---|---|---|
@@ -274,8 +277,8 @@ emergency, or leaving its fax unanswered, costs 15 reputation; bots accept
 the ones they can cure and refuse the others. Fewer patients walk in during
 that year; more come from month 13. From month 14 an epidemic starts in every
 hospital every two to three months. Rats are more frequent, and every month
-or two a swarm moves into one of the hospitals. Staff for hire: 4 doctors per
-player and 2 more each month, many of them consultants at first; from month 9
+or two a swarm moves into one of the hospitals. Staff for hire: 6 doctors
+each month, many of them consultants at first; from month 9
 every doctor for hire is a junior. A hospital fails a year end only when more
 than 70% of its patients died (the other levels: half).
 
