@@ -633,8 +633,8 @@ local function run()
         if class.is(win, UIInformation) then popups = popups + 1 end
       end
       local vx, vy = world.ui:getScreenOffset()
-      log(string.format("REPAIRED: loaded the shared save at step %d (repair %d); popups %d; view kept %s; walls %s, warmth %s; messages shown: %s; watches: %s",
-          session.step, repairs, popups, tostring(vx == view_before[1] and vy == view_before[2]),
+      log(string.format("REPAIRED: loaded the shared save at step %d (repair %d); hospital %s; popups %d; view kept %s; walls %s, warmth %s; messages shown: %s; watches: %s",
+          session.step, repairs, tostring(world.ui.hospital.name), popups, tostring(vx == view_before[1] and vy == view_before[2]),
           world.ui.transparent_walls and "transparent" or "solid", tostring(world.map.temperature_display_method),
           table.concat(shown, ","), table.concat(watches, ",")))
     end

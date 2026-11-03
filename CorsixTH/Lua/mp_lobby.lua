@@ -1062,6 +1062,11 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
         end
       end
     end
+  elseif not self.is_referee and world.hospitals[1] then
+    -- One shared hospital: every computer names it after its own player (as
+    -- World does at the start, not game state); the save has the referee's
+    -- name, "Referee".
+    world.hospitals[1].name = app.config.player_name
   end
   -- A continued or rejoined game's first game UI (no-op for the same menu bar).
   self:_addMultiplayerMenu(app.ui, MultiplayerLobby.worldMode(world))

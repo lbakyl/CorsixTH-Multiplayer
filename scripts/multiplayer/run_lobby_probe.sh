@@ -91,7 +91,8 @@
 # room, and four more checks: 13. the referee agrees with the players in every
 # room except 'cheat' (that one desyncs before the referee is there); 14, 15.
 # desync repair in a shared and a co-op game (in the shared one rosa has
-# transparent walls and other warmth colours, kept through the repair); 16.
+# transparent walls and other warmth colours, kept through the repair, and
+# each player still sees the hospital under their own name); 16.
 # rejoin after a quit.
 # Exits 0 only if all checks behave as expected.
 #
@@ -863,8 +864,13 @@ if with_referee:
             # through the repair (and her walls never differ from the game's).
             kept = (re.search(r'REPAIRED: .*walls transparent, warmth 3;', jl) is not None
                     and re.search(r'REPAIRED: .*walls solid, warmth 1;', hl) is not None)
-            own = f"; rosa's transparent walls and warmth colours kept: {kept}"
-            ok = ok and kept
+            # The one shared hospital keeps each player's own name for it
+            # (the referee's save has "Referee").
+            names = [re.search(r'REPAIRED: .*?; hospital ([^;]*);', x) for x in (hl, jl)]
+            names = [m.group(1) if m else '?' for m in names]
+            named = names == [host, join]
+            own = f"; rosa's transparent walls and warmth colours kept: {kept}; hospital names {names}"
+            ok = ok and kept and named
         if room == 'fixcoop':
             # After the repair each player's bar shows their own VIP fax only.
             shown = [re.search(r'REPAIRED: .*messages shown: ([^;]*)', x) for x in (hl, jl)]
