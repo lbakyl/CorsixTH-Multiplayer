@@ -32,14 +32,14 @@ local UIMultiplayerAuction = _G["UIMultiplayerAuction"] ---@type UIMultiplayerAu
 -- Places on the picture (640 x 480; the tick, the cross and "Lot 01" are
 -- part of it).
 local ROW_Y, ROW_H = {88, 151, 214, 277}, 32 -- the four bidder bars
-local NAME_X, NAME_W = 22, 160
+local NAME_X, NAME_W = 30, 146
 local VALUE_X, VALUE_W = 188, 78 -- (left of the colour)
 local SWATCH_X, SWATCH_W = 269, 12
 local MAP_X, MAP_Y, MAP_W, MAP_H = 330, 70, 262, 268 -- the frame's inside
 local GAVEL_X, GAVEL_Y = 14, 452 -- bottom left of the gavel frames
 local TICK_X, TICK_Y = 158, 392
 local BID_X, BID_W, BID_Y = 190, 96, 383
-local LEAD_X, LEAD_W, LEAD_VALUE_X, LEAD_VALUE_W = 322, 178, 508, 96
+local LEAD_X, LEAD_W, LEAD_VALUE_X, LEAD_VALUE_W = 330, 170, 508, 96
 local CROSS_X, CROSS_Y = 608, 448
 local STATUS_X, STATUS_Y, STATUS_W = 16, 6, 608
 local MAP_BG = {44, 96, 52}
@@ -283,7 +283,7 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
     if name_font:sizeOf(text) > w then
       local n = #text
       while n > 1 and name_font:sizeOf(text:sub(1, n) .. "...") > w do n = n - 1 end
-      text = text:sub(1, n) .. "..."
+      text = text:sub(1, n):gsub("[%s_]+$", "") .. "..." -- (this font draws _ as a blank)
     end
     name_font:draw(canvas, text, tx, ty + 5 * s, w, h, "left")
   end
