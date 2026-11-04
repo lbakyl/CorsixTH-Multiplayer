@@ -227,12 +227,16 @@ function Map:load(level, difficulty, level_name, map_file, level_intro, map_edit
     self.difficulty = "full"
     local data
     -- (A level may have a map of its own for this number of players, shipped
-    -- in CorsixTH's Levels folder; its settings still come from NET<digits>.SAM.)
-    local own_map = def.map_files and def.map_files[players]
+    -- in CorsixTH's Levels folder; its settings still come from NET<digits>.SAM,
+    -- for 5 to 8 players NET4<map>.SAM. A map for more players than play:
+    -- the others' plots are for sale.)
+    local own_map = mp_levels.ownMap(def, players)
     data, errors = self:getRawData(own_map and (self.app.level_dir .. own_map) or ("LEVEL.L" .. digits))
     if not data then return nil, errors end
     _, objects = self.th:load(data)
-    errors, result = self:_loadNetLevelConfig(digits, base_config)
+    if self.th:getPlayerCount() > players then self.th:setPlayerCount(players) end
+    local sam_digits = math.min(players, 4) .. digits:sub(2)
+    errors, result = self:_loadNetLevelConfig(sam_digits, base_config)
     if errors then return nil, errors end
     local campaign
     errors, campaign = self:_loadOriginalCampaignLevel("full",
@@ -240,7 +244,7 @@ function Map:load(level, difficulty, level_name, map_file, level_intro, map_edit
     if errors then return nil, errors end
     mp_levels.apply(result, campaign, mp_level, players)
     self.level_config = result
-    self.level_name = level_name or def.name or self:_netLevelName(digits) or level:upper()
+    self.level_name = level_name or def.name or self:_netLevelName(sam_digits) or level:upper()
     local intro = def.intro
     self.level_intro = intro and _S.multiplayer_window[intro]
   elseif map_editor then

@@ -367,6 +367,7 @@ def test_health_check_answers_without_hello(run):
 def test_connections_per_address_are_limited():
     async def main():
         server = srv.Server(max_per_address=2)
+        server.own_addresses = ()  # (the test connects from this machine)
         port = await server.start("127.0.0.1", 0)
         try:
             a = await Client.connect(port, "a")
@@ -727,10 +728,10 @@ def test_colours_and_teams(run):
         a.send(encode("SEAT", team=3, peer=2))
         await a.expect("PLAYER", peer="2", team="3")
         await a.expect("PLAYER", peer="3", team="3")
-        # Only the owner changes somebody else; colours and teams are 1 to 4.
+        # Only the owner changes somebody else; colours and teams are 1 to 8.
         b.send(encode("SEAT", colour=4, peer=3))
         assert (await b.expect("ERROR"))["code"] == "not_owner"
-        b.send(encode("SEAT", team=5))
+        b.send(encode("SEAT", team=9))
         assert (await b.expect("ERROR"))["code"] == "bad_seat"
         # One colour for all: one shared hospital.
         a.send(encode("SEAT", colour=2))
@@ -752,6 +753,39 @@ def test_colours_and_teams(run):
         e.send(encode("JOIN", room="race", password=""))
         eve = await e.expect("PLAYER", peer="2")
         assert (eve["colour"], eve["team"]) == ("2", "2")
+    run(body)
+
+
+def test_eight_places_and_the_levels_hospitals(run):
+    """A room has up to 8 places. Newcomers get colours up to the level's
+    hospitals (4 unless the client says more); after that they share the
+    hospital with the fewest players."""
+    async def body(server, port):
+        for room, hospitals, want in (("four", None, "1234" "1234"), ("eight", 8, "12345678")):
+            fields = dict(room=room, password="", max=9, level=8)
+            if hospitals:
+                fields["hospitals"] = hospitals
+            names = [n + room[0].upper() for n in ("Ann", "Ben", "Cleo", "Dan", "Eve", "Fay", "Gus", "Hal", "Ida")]
+            clients = [await Client.connect(port, names[0])]
+            clients[0].send(encode("CREATE", **fields))
+            joined = await clients[0].expect("JOINED")
+            assert joined["max"] == "8"
+            colours = [(await clients[0].expect("PLAYER"))["colour"]]
+            for i in range(1, 8):
+                c = await Client.connect(port, names[i])
+                c.send(encode("JOIN", room=room, password=""))
+                await c.expect("JOINED")
+                colours.append((await c.expect("PLAYER", peer=str(i + 1)))["colour"])
+                clients.append(c)
+            assert "".join(colours) == want
+            extra = await Client.connect(port, names[8])
+            extra.send(encode("JOIN", room=room, password=""))
+            assert (await extra.expect("ERROR"))["code"] == "room_full"
+            # Colour 8 is a colour.
+            clients[1].send(encode("SEAT", colour=8))
+            await clients[1].expect("PLAYER", peer="2", colour="8")
+            for c in clients:
+                await c.close()
     run(body)
 
 

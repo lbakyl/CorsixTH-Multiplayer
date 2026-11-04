@@ -49,8 +49,13 @@ MAX_ROOMS = 64
 MODES = ("free", "shared", "coop", "competitive", "teams", "teamshared", "mixed")
 # Modes with several hospitals.
 HOSPITAL_EACH = ("coop", "competitive", "teams", "teamshared", "mixed")
-COLOURS = (1, 2, 3, 4)
-TEAMS = (1, 2, 3, 4)
+# A room has places for 2 to MAX_PLACES players (people and bots). Up to
+# MAX_PLACES colours, so as many hospitals: how many a level's map has room
+# for, the room's `hospitals` (4 on most levels, 8 on a few); more players
+# than that share hospitals.
+MAX_PLACES = 8
+COLOURS = tuple(range(1, MAX_PLACES + 1))
+TEAMS = tuple(range(1, MAX_PLACES + 1))
 # How a hospital name lists the players who share it ("ANN + BEN").
 TEAM_NAME_JOIN = " + "
 SPEED_CONTROL = ("any", "owner")
@@ -147,8 +152,8 @@ class Player:
     is_bot: bool = False
     bot_proc: object = None
     last_ask: dict[str, float] = field(default_factory=dict)
-    colour: int = 0  # the hospital's colour (1-4), a free room
-    team: int = 0  # the team (1-4), a free room
+    colour: int = 0  # the hospital's colour (1-8), a free room
+    team: int = 0  # the team (1-8), a free room
     # Theme Hospital data of another edition (its identity; "" = the server's):
     # this player's game never loads a level, it gets the referee's game.
     other_data: str = ""
@@ -204,6 +209,9 @@ class Room:
     # A free room's first seats for newcomers, as a mode ("teamshared": the
     # smaller team's hospital); anybody may change them after.
     preset: str = "coop"
+    # How many hospitals the level's map has room for (the client knows the
+    # maps): newcomers get colours up to this many.
+    hospitals: int = 4
     players: dict[int, Player] = field(default_factory=dict)
     state: str = "lobby"  # lobby | running
     seed: int = 0
@@ -301,7 +309,10 @@ class Room:
             return
         others = [p for p in self.players.values() if p is not player]
         used = {p.colour for p in others}
-        player.colour = next((c for c in COLOURS if c not in used), COLOURS[-1])
+        # (All the hospitals taken: the newcomer shares the one with the
+        # fewest players, the first of those.)
+        usable = COLOURS[:self.hospitals]
+        player.colour = next((c for c in usable if c not in used), None) or             min(usable, key=lambda c: sum(1 for p in others if p.colour == c))
         player.team = self.owner.team if self.owner is not player and self.owner.team else 1
         if self.preset == "shared":
             player.colour = player.team = 1
@@ -343,6 +354,8 @@ class Server:
         self.max_connections = max_connections
         self.max_per_address = max_per_address
         self.connections_by_address: dict[str, int] = {}
+        # Addresses without the limit per address: this machine's.
+        self.own_addresses: tuple[str, ...] = ("127.0.0.1", "::1")
         self.rooms: dict[str, Room] = {}
         self.players: dict[int, Player] = {}
         self.next_pid = 1
@@ -378,8 +391,12 @@ class Server:
         peername = writer.get_extra_info("peername")
         address = str(peername[0]) if peername else "?"
         total = sum(self.connections_by_address.values())
+        # (The server's own referees and bots connect from this machine: a room
+        # of eight bots and the referees of other rooms are more than one
+        # address may have.)
+        own = address in self.own_addresses
         if (total >= self.max_connections or
-                self.connections_by_address.get(address, 0) >= self.max_per_address):
+                (not own and self.connections_by_address.get(address, 0) >= self.max_per_address)):
             log.warning("refusing connection from %s: too many connections", address)
             writer.write(encode("ERROR", code="busy", text="Too many connections").encode() + b"\n")
             await self._close_writer(writer)
@@ -631,8 +648,9 @@ class Server:
             self._error(player, "server_full", "Too many rooms")
             return
         try:
-            max_players = min(4, max(2, int(f.get("max", "2"))))
+            max_players = min(MAX_PLACES, max(2, int(f.get("max", "2"))))
             level = min(12, max(1, int(f.get("level", "1"))))
+            hospitals = min(MAX_PLACES, max(1, int(f.get("hospitals", "4"))))
         except ValueError:
             self._error(player, "bad_room", "max and level must be numbers")
             return
@@ -652,12 +670,12 @@ class Server:
             except ValueError:
                 self._error(player, "bad_room", "step must be a number")
                 return
-            seat_names = [n.strip()[:MAX_NAME * 4] for n in f.get("seats", "").split(",") if n.strip()][:4]
+            seat_names = [n.strip()[:MAX_NAME * 4] for n in f.get("seats", "").split(",") if n.strip()][:MAX_PLACES]
             if mode in HOSPITAL_EACH and seat_names:
                 # (A shared hospital is saved under all its players' names.)
-                max_players = min(4, max(2, len(_team_players(seat_names))))
-            seat_colours = [int(c) for c in f.get("seat_colours", "").split(",") if c.isdigit()][:4]
-            seat_teams = [int(t) for t in f.get("seat_teams", "").split(",") if t.isdigit()][:4]
+                max_players = min(MAX_PLACES, max(2, len(_team_players(seat_names))))
+            seat_colours = [int(c) for c in f.get("seat_colours", "").split(",") if c.isdigit()][:MAX_PLACES]
+            seat_teams = [int(t) for t in f.get("seat_teams", "").split(",") if t.isdigit()][:MAX_PLACES]
         password = f.get("password", "")
         salt = secrets.token_bytes(16)
         preset = "coop"
@@ -666,7 +684,7 @@ class Server:
         room = Room(name=name, salt=salt,
                     password_hash=_hash_password(password, salt) if password else None,
                     build=player.build, max_players=max_players, mode=mode, preset=preset, level=level,
-                    difficulty=difficulty, speed_control=speed_control, owner=player,
+                    difficulty=difficulty, speed_control=speed_control, owner=player, hospitals=hospitals,
                     continue_step=continue_step, continue_date=f.get("date", "")[:20],
                     seat_names=seat_names, seat_colours=seat_colours, seat_teams=seat_teams)
         self.rooms[name] = room
@@ -773,8 +791,8 @@ class Server:
             self._send_lobby(player.room)
 
     def _on_seat(self, player: Player, f: dict[str, str]) -> None:
-        """A free room in the lobby: a player picks their colour (colour=1-4)
-        and/or team (team=1-4); the owner may change anybody's, bots' too
+        """A free room in the lobby: a player picks their colour (colour=1-8)
+        and/or team (team=1-8); the owner may change anybody's, bots' too
         (peer=<peer>). A hospital never holds rivals: a colour somebody has
         brings their team, and a new team moves everybody of that colour."""
         room = player.room
@@ -793,7 +811,7 @@ class Server:
         team = int(f["team"]) if f.get("team", "").isdigit() else None
         if (colour is not None and colour not in COLOURS) or (team is not None and team not in TEAMS) or \
                 (colour is None and team is None):
-            self._error(player, "bad_seat", "colour and team must be 1 to 4")
+            self._error(player, "bad_seat", "colour and team must be 1 to %d" % MAX_PLACES)
             return
         if colour is not None and colour != who.colour:
             who.colour = colour

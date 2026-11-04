@@ -1132,11 +1132,14 @@ MultiplayerSession.markers = "others" -- (a new sight: own people plain at first
 -- original game's four shirt colours, layer 1 of a patient's animation:
 -- 0 mustard, 2 white, 4 lavender, 6 salmon), its staff have a bar of it at
 -- their feet, and its player's chat lines a darker version of it
--- (UIMultiplayerChat.colourOf).
-MultiplayerSession.CLOTHES = {0, 6, 4, 2}
-local MARKER_COLOURS = {{232, 186, 52}, {236, 130, 118}, {160, 146, 232}, {236, 236, 236}}
+-- (UIMultiplayerChat.colourOf). Colours 5 to 8 (green, blue, teal, pink:
+-- a game for more than 4 hospitals) have no shirts of their own; their
+-- patients wear those of colours 1 to 4 and have the bars too.
+MultiplayerSession.CLOTHES = {0, 6, 4, 2, 0, 6, 4, 2}
+local MARKER_COLOURS = {{232, 186, 52}, {236, 130, 118}, {160, 146, 232}, {236, 236, 236},
+    {100, 200, 80}, {70, 120, 235}, {60, 200, 200}, {225, 95, 200}}
 
---! The colour (1-4) of a hospital: the one its players picked in the room
+--! The colour (1-8) of a hospital: the one its players picked in the room
 --! (world.mp_coop.colours), else its index (a game from before colours).
 function MultiplayerSession.hospitalColour(world, hospital)
   local index = world:getHospitalIndex(hospital)
@@ -1151,7 +1154,7 @@ function MultiplayerSession.markerColour(world, hospital)
   return colour and MARKER_COLOURS[colour]
 end
 
---! A colour's {r, g, b} (1-4: the lobby's colour buttons).
+--! A colour's {r, g, b} (1-8: the lobby's colour buttons).
 function MultiplayerSession.colourRGB(colour)
   return MARKER_COLOURS[(colour - 1) % #MARKER_COLOURS + 1]
 end
@@ -2816,7 +2819,7 @@ function MultiplayerSession.plotSide(world, plot, peek)
     for p, c in pairs(plots) do
       local px, py = c[1] / c[3], c[2] / c[3]
       local best, best_d
-      for player = 1, 4 do
+      for player = 1, #world.hospitals do
         local o = own[player]
         if o then
           local dx, dy = o[1] / o[3] - px, o[2] / o[3] - py
@@ -2976,6 +2979,36 @@ end
 --! auction for that plot (one that cannot be bought, a single-player game,
 --! free build mode).
 --!param peek (table) optional; a screen's question (see plotSide)
+--! At most this many bidders (the auction room's picture has four bars): in
+--! a game of more hospitals, the one that asks and the others whose
+--! hospitals (their starting camera tiles) are nearest the plot.
+MultiplayerSession.AUCTION_MAX_BIDDERS = 4
+
+-- Each plot's middle {x, y}, per map (the plots never change).
+local plot_middles = setmetatable({}, {__mode = "k"})
+
+local function plotMiddle(th, plot)
+  local middles = plot_middles[th]
+  if not middles then
+    local sums = {}
+    local w, h = th:size()
+    for y = 1, h do
+      for x = 1, w do
+        local p = th:getCellFlags(x, y).parcelId
+        if p and p ~= 0 then
+          local c = sums[p] or {0, 0, 0}
+          c[1], c[2], c[3] = c[1] + x, c[2] + y, c[3] + 1
+          sums[p] = c
+        end
+      end
+    end
+    middles = {}
+    for p, c in pairs(sums) do middles[p] = {c[1] / c[3], c[2] / c[3]} end
+    plot_middles[th] = middles
+  end
+  return middles[plot]
+end
+
 function MultiplayerSession.auctionBidders(world, plot, hospital, peek)
   local th = world.map.th
   if not world.mp_coop or world.free_build_mode or plot < 1 or plot >= th:getPlotCount() or
@@ -3002,6 +3035,23 @@ function MultiplayerSession.auctionBidders(world, plot, hospital, peek)
       end
       if near then list[#list + 1] = i end
     end
+  end
+  local most = MultiplayerSession.AUCTION_MAX_BIDDERS
+  local middle = #list > most and plotMiddle(th, plot)
+  if middle then
+    local function distance(i)
+      local cx, cy = th:getCameraTile(world.hospitals[i]:getPlayerIndex())
+      return (cx - middle[1]) ^ 2 + (cy - middle[2]) ^ 2
+    end
+    local others = {}
+    for k = 2, #list do others[k - 1] = list[k] end
+    table.sort(others, function(a, b)
+      local da, db = distance(a), distance(b)
+      if da ~= db then return da < db end
+      return a < b
+    end)
+    list = {me}
+    for k = 1, most - 1 do list[k + 1] = others[k] end
   end
   return list
 end

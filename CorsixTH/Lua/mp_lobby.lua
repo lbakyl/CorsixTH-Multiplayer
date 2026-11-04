@@ -44,8 +44,11 @@ MultiplayerLobby.DEFAULT_PORT = 47800
 --! each (teams); a race of two teams, a hospital per team (teamshared); or
 --! any other race of teams (mixed: 2 against 1 against 1, ...).
 MultiplayerLobby.MODES = {"shared", "coop", "competitive", "teams", "teamshared", "mixed"}
-MultiplayerLobby.COLOURS = 4
-MultiplayerLobby.TEAMS = 4
+--! (Up to 8 players in a room, so as many colours and teams; a level's map
+--! has room for 4 hospitals, a few for 8: mp_levels.maxHospitals.)
+MultiplayerLobby.PLACES = 8
+MultiplayerLobby.COLOURS = 8
+MultiplayerLobby.TEAMS = 8
 
 --! Does a game of this mode have several hospitals (the co-op machinery:
 --! world.mp_coop)?
@@ -461,6 +464,9 @@ function MultiplayerLobby:createRoom(opts)
     opts.seat_colours = info.colours
     opts.seat_teams = info.teams
     opts.max = math.max(2, tonumber(info.players) or 2)
+  else
+    -- (The server gives newcomers colours up to this many.)
+    opts.hospitals = corsixth.require("mp_levels").maxHospitals(opts.level)
   end
   self:send("CREATE", opts)
 end
@@ -574,10 +580,34 @@ function MultiplayerLobby:setReady(ready)
   self:send("READY", {ready = ready})
 end
 
-function MultiplayerLobby:startGame() self.error = nil; self:send("START") end
+--! The host starts the game: unless the room has more colours (hospitals)
+--! than the level's map has room for (then an error says so).
+function MultiplayerLobby:startGame()
+  self.error = nil
+  local most = self:hospitalsOver()
+  if most then
+    self.error = {code = "too_many_hospitals",
+        text = _S.multiplayer_window.too_many_hospitals:format(most)}
+    return
+  end
+  self:send("START")
+end
 
---! Give this player (or, the owner only, the player `peer`) a colour (1-4,
---! the hospital) and/or a team (1-4); nil leaves it as it is. (A colour
+--! A new game whose players have more colours than the level has room for
+--! hospitals: that many (mp_levels.maxHospitals); else nil.
+function MultiplayerLobby:hospitalsOver()
+  if not self.room or not self:isFreeRoom() then return nil end
+  local colours, n = {}, 0
+  for _, p in pairs(self.players) do
+    local c = tonumber(p.colour)
+    if c and not colours[c] then colours[c], n = true, n + 1 end
+  end
+  local most = corsixth.require("mp_levels").maxHospitals(tonumber(self.room.level) or 1)
+  return n > most and most or nil
+end
+
+--! Give this player (or, the owner only, the player `peer`) a colour (1-8,
+--! the hospital) and/or a team (1-8); nil leaves it as it is. (A colour
 --! somebody has brings their team; a team moves the whole colour.)
 function MultiplayerLobby:setSeat(colour, team, peer)
   self.error = nil

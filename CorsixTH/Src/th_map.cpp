@@ -45,7 +45,10 @@ SOFTWARE.
 #include "th_lua.h"
 #include "th_map_overlays.h"
 
-constexpr int max_player_count = 4;
+constexpr int max_player_count = level_map::max_players;
+//! Players in the original map format; the tiles of players 5 to 8 (a map
+//! for more players) come after those of the first four.
+constexpr int th_file_player_count = 4;
 constexpr int default_width = 128;
 constexpr int default_height = 128;
 
@@ -392,6 +395,10 @@ bool level_map::load_from_th_file(const uint8_t* pData, size_t iDataLength,
                                   void* pCallbackToken) {
   const size_t camera_offset = 163876;
   const size_t heliport_offset = 163884;
+  // Players 5 to 8 (in 56 bytes the original maps leave empty): camera tiles,
+  // then heliport tiles.
+  const size_t extra_camera_offset = 163892;
+  const size_t extra_heliport_offset = 163900;
   const size_t parcel_offset = 131106;
 
   if (iDataLength < 163948 || !set_size(default_width, default_height)) {
@@ -403,10 +410,14 @@ bool level_map::load_from_th_file(const uint8_t* pData, size_t iDataLength,
   if (player_count > max_player_count) player_count = max_player_count;
 
   for (int i = 0; i < player_count; ++i) {
-    read_tile_index(pData + camera_offset + (i * 2), initial_camera_x[i],
-                    initial_camera_y[i]);
-    read_tile_index(pData + heliport_offset + (i * 2), heliport_x[i],
-                    heliport_y[i]);
+    const bool extra = i >= th_file_player_count;
+    const size_t j = (extra ? i - th_file_player_count : i) * 2;
+    read_tile_index(
+        pData + (extra ? extra_camera_offset : camera_offset) + j,
+        initial_camera_x[i], initial_camera_y[i]);
+    read_tile_index(
+        pData + (extra ? extra_heliport_offset : heliport_offset) + j,
+        heliport_x[i], heliport_y[i]);
   }
   parcel_count = 0;
   delete[] plot_owner;
@@ -619,17 +630,18 @@ void level_map::save(const std::string& filename) {
   os.write(reinterpret_cast<char*>(aBuffer), iBufferNext);
   iBufferNext = 0;
 
-  std::memset(aBuffer, 0, 56);
+  // Cameras and heliports of players 1 to 4, then those of players 5 to 8 in
+  // the first 16 of the 56 bytes after them (empty in the original maps).
+  std::memset(aBuffer, 0, 72);
   for (int i = 0; i < player_count; ++i) {
-    write_tile_index(aBuffer + iBufferNext, initial_camera_x[i],
+    const int base = i < th_file_player_count ? 0 : 16;
+    const int j = (i % th_file_player_count) * 2;
+    write_tile_index(aBuffer + base + j, initial_camera_x[i],
                      initial_camera_y[i]);
-    write_tile_index(aBuffer + iBufferNext + 8, heliport_x[i], heliport_y[i]);
-    iBufferNext += 2;
+    write_tile_index(aBuffer + base + j + 8, heliport_x[i], heliport_y[i]);
   }
-  os.write(reinterpret_cast<char*>(aBuffer), 16);
-  std::memset(aBuffer, 0, 16);
-  // TODO: What are these 56 bytes?
-  os.write(reinterpret_cast<char*>(aBuffer), 56);
+  // TODO: What are the other 40 bytes?
+  os.write(reinterpret_cast<char*>(aBuffer), 72);
   os.close();
 }
 
@@ -824,7 +836,7 @@ bool level_map::is_parcel_purchasable(int iParcelId, int iPlayer) {
 
 void level_map::set_player_count(int count) {
   if (count < 1 || count > max_player_count) {
-    throw std::out_of_range("Player count must be between 1 and 4");
+    throw std::out_of_range("Player count must be between 1 and 8");
   }
 
   player_count = count;
@@ -1585,6 +1597,10 @@ void level_map::depersist(lua_persist_reader* pReader) {
     luaL_error(L, "Cannot load savegame from a newer version.");
   }
   if (!pReader->read_uint(player_count)) return;
+  if (player_count < 1 || player_count > max_player_count) {
+    pReader->set_error("Bad player count in the map");
+    return;
+  }
   for (int i = 0; i < player_count; ++i) {
     if (!pReader->read_uint(initial_camera_x[i])) return;
     if (!pReader->read_uint(initial_camera_y[i])) return;

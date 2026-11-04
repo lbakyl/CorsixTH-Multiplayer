@@ -209,7 +209,7 @@ end
 --! The room's colours and teams, for the log ("peer=colour/team ...").
 local function seats_text(lobby)
   local parts = {}
-  for peer = 1, 4 do
+  for peer = 1, MultiplayerLobby.PLACES do
     local p = lobby.players[peer]
     if p then parts[#parts + 1] = string.format("%s=%s/%s", p.name, tostring(p.colour), tostring(p.team)) end
   end
@@ -369,9 +369,9 @@ local function run_lobby()
     w.password_box:setText(password)
     w.new_mode = room_mode -- (the newcomers' first colours and teams)
     w:setLevel(tonumber(os.getenv("MP_LEVEL") or 1))
-    -- Room size: MP_PLAYERS (2 to 4).
-    for _ = 1, 3 do
-      if (w.new_max or 2) ~= math.max(2, math.min(4, want_players)) then w:buttonMax() end
+    -- Room size: MP_PLAYERS (2 to 8).
+    for _ = 1, 7 do
+      if (w.new_max or 2) ~= math.max(2, math.min(8, want_players)) then w:buttonMax() end
     end
     if os.getenv("MP_CONTINUE") then
       local save = w:selectContinue(os.getenv("MP_CONTINUE"))
@@ -387,7 +387,9 @@ local function run_lobby()
     for k = 1, add_bots do
       local win = lobby_window()
       local labels = {}
-      for i = 1, 4 do labels[i] = (tostring(win.player_panels[i].label or ""):gsub("^<LocalisedString> Current value:%s*", "")) end
+      for i = 1, #win.player_panels do
+        labels[i] = (tostring(win.player_panels[i].label or ""):gsub("^<LocalisedString> Current value:%s*", ""))
+      end
       local empty
       for i = 1, tonumber(lobby.room.max) or 2 do
         if not empty and not lobby.players[i] and labels[i]:find("add a bot", 1, true) then empty = i end
@@ -408,7 +410,9 @@ local function run_lobby()
         return bots >= add_bots
       end, 60)
       local win, labels = lobby_window(), {}
-      for i = 1, 4 do labels[i] = (tostring(win.player_panels[i].label or ""):gsub("^<LocalisedString> Current value:%s*", "")) end
+      for i = 1, #win.player_panels do
+        labels[i] = (tostring(win.player_panels[i].label or ""):gsub("^<LocalisedString> Current value:%s*", ""))
+      end
       log("UI: room places with the bots: " .. table.concat(labels, " | "))
     end
     wait_for("players", function()
@@ -424,7 +428,7 @@ local function run_lobby()
       -- teams as they are now; the host may change anybody's).
       local team_of = {}
       for peer, p in pairs(lobby.players) do team_of[peer] = tonumber(p.team) end
-      for peer = 1, 4 do
+      for peer = 1, MultiplayerLobby.PLACES do
         if team_of[peer] then lobby:setSeat(team_of[peer], team_of[peer], peer) end
       end
       wait_for("a colour per team", function()
@@ -1518,7 +1522,7 @@ local function run()
           local rows = {}
           for plot = 1, th:getPlotCount() - 1 do
             local who = {}
-            for player = 1, 4 do
+            for player = 1, th:getPlayerCount() do
               if th:isParcelPurchasable(plot, player) then who[#who + 1] = tostring(player) end
             end
             rows[#rows + 1] = string.format("%d:o%d:b%s", plot, th:getPlotOwner(plot), table.concat(who))

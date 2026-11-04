@@ -82,7 +82,9 @@ function UIMultiplayerLevels:UIMultiplayerLevels(ui, level, players)
   self.font = ui.app.gfx:loadFontAndSpriteTable("QData", "Font01V", nil, nil, {apply_ui_scale = true})
   self.levels = corsixth.require("mp_levels")
   self.level = level or 1
-  self.players = math.max(2, math.min(4, players or 2))
+  -- (The map for this many players, or as many as a level has room for.)
+  self.wanted_players = math.max(2, math.min(8, players or 2))
+  self.players = self.wanted_players
   -- A level above the multiplayer ones is a campaign level for one shared
   -- hospital.
   self.shared = self.level > self.levels.COUNT
@@ -143,6 +145,7 @@ end
 function UIMultiplayerLevels:select(i)
   self.level = i
   self.skip = 0
+  self.players = math.min(self.wanted_players, self.levels.maxHospitals(i))
   -- The scrollbar: one step a row of the briefing.
   local s = TheApp.gfx:getUIScale()
   local _, text = self:details()
@@ -153,10 +156,12 @@ function UIMultiplayerLevels:select(i)
   self.players_button.panel_for_sprite:setLabel(_S.multiplayer_window.levels_map_players:format(self.players))
 end
 
---! The map shown: for 2, 3 or 4 players (the next one).
+--! The map shown: for 2, 3, 4 players or (a level with room for more) up to 8:
+--! the next one.
 function UIMultiplayerLevels:buttonPlayers()
-  self.players = self.players % 4 + 1
+  self.players = self.players % self.levels.maxHospitals(self.level) + 1
   if self.players < 2 then self.players = 2 end
+  self.wanted_players = self.players
   self:select(self.level)
 end
 
@@ -223,7 +228,8 @@ function UIMultiplayerLevels:preview()
     self.previews[key] = false
     return false
   end
-  local owners = th:getPlayerCount()
+  -- (A map for more players than shown: the others' plots are for sale.)
+  local owners = math.min(th:getPlayerCount(), players)
   local w, h = th:size()
   local rows = {}
   for y = 1, h do
@@ -271,7 +277,7 @@ function UIMultiplayerLevels:details()
     S.levels_goal_cure_rate:format(g.cure_rate),
   }
   -- (A map a player made: who.)
-  if def.map_author and def.map_files and def.map_files[self.players] then
+  if def.map_author and self.levels.ownMap(def, self.players) then
     table.insert(lines, 1, S.levels_map_by:format(def.map_author))
   end
   local text = plain(S.levels_from_campaign):format(plain(_S.level_names[def.campaign] or def.campaign):upper(),

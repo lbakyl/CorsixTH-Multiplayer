@@ -144,6 +144,16 @@ describe("Multiplayer levels", function()
     -- (level 8 with four players on a player's map for two against two)
     assert.equal("level40teams.map", levels.LEVELS[8].map_files[4])
     assert.equal("net40_8", levels.levelId(4, 8))
+    -- (up to 8 hospitals on a level with a map for 8; 4 on the others)
+    assert.equal(8, levels.maxHospitals(8))
+    assert.equal(4, levels.maxHospitals(1))
+    assert.equal("net60_8", levels.levelId(6, 8))
+    assert.equal("net80_8", levels.levelId(9, 8))
+    assert.equal("net43", levels.levelId(8, 4))
+    assert.equal("teamtown8.map", levels.ownMap(levels.LEVELS[8], 5))
+    assert.equal("teamtown8.map", levels.ownMap(levels.LEVELS[8], 8))
+    assert.is_nil(levels.ownMap(levels.LEVELS[8], 3))
+    assert.is_nil(levels.ownMap(levels.LEVELS[7], 6))
     local players, digits, level = levels.parseLevelId("net42_6")
     assert.equal(4, players)
     assert.equal("42", digits)
@@ -614,6 +624,16 @@ describe("Multiplayer levels", function()
       -- Level 7 with four players: its own map.
       levels.hospitalTiles(app, 4, 7)
       assert.equal("Levels:/levels/cutthroat4.map", read)
+      -- Players 5 to 8 (a map for 8): their camera tiles after the heliports.
+      for _ = 1, 8 do data[#data + 1] = " " end
+      local extra = {{39, 39}, {82, 35}, {48, 98}, {78, 98}}
+      for _, tile in ipairs(extra) do
+        local index = tile[2] * 128 + tile[1]
+        data[#data + 1] = string.char(index % 256, math.floor(index / 256))
+      end
+      local tiles = levels.hospitalTiles(app, 7, 8)
+      assert.equal("Levels:/levels/teamtown8.map", read)
+      assert.same({MAP41[1], MAP41[2], MAP41[3], MAP41[4], extra[1], extra[2], extra[3]}, tiles)
       -- (A file that cannot be read: none.)
       function app:readDataFile() error("missing") end
       assert.is_nil(levels.hospitalTiles(app, 4, 2))

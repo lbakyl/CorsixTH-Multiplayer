@@ -495,4 +495,25 @@ describe("MultiplayerSession game options", function()
     -- Owned land is not for sale.
     assert.is_nil(MultiplayerSession.auctionBidders(world, 4, world.hospitals[1]))
   end)
+
+  it("lets at most four bid: the asker and the hospitals nearest the plot", function()
+    -- A row of twelve plots: hospital i owns plot i (its camera there), 9 to
+    -- 12 are for sale.
+    local th = {
+      size = function() return 12, 1 end,
+      getPlotCount = function() return 13 end,
+      getCellFlags = function(_, x, _, t) t = t or {}; t.parcelId = x; return t end,
+      getPlotOwner = function(_, plot) return plot <= 8 and plot or 0 end,
+      isParcelPurchasable = function(_, plot) return plot > 8 end,
+      getCameraTile = function(_, player) return player, 1 end,
+    }
+    local hospitals = {}
+    for i = 1, 8 do hospitals[i] = {getPlayerIndex = function() return i end} end
+    local world = {map = {th = th}, hospitals = hospitals, mp_coop = {auctions_all = true},
+        getHospitalIndex = function(_, h)
+          for i, x in ipairs(hospitals) do if x == h then return i end end
+        end}
+    assert.same({1, 8, 7, 6}, MultiplayerSession.auctionBidders(world, 12, hospitals[1]))
+    assert.same({7, 8, 6, 5}, MultiplayerSession.auctionBidders(world, 9, hospitals[7]))
+  end)
 end)

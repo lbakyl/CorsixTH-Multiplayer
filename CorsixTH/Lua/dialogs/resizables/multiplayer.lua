@@ -51,6 +51,20 @@ local function view_of(lobby)
 end
 
 local heights = {connect = 225, rooms = 435, room = 295}
+-- The room view has a line per place: 4 in that height, 27 pixels more for
+-- each more (a room for up to 8).
+local PLACE_H = 27
+
+--! How many places the room view shows: the room's, at least 4.
+local function placesOf(lobby)
+  local max = lobby and lobby.room and tonumber(lobby.room.max) or 2
+  return math.max(4, math.min(MultiplayerLobby.PLACES, max))
+end
+
+--! The height of a view of the window.
+local function viewHeight(view, lobby)
+  return heights[view] + (view == "room" and (placesOf(lobby) - 4) * PLACE_H or 0)
+end
 
 -- The new room's settings as last sent with Create: shown again when the
 -- player leaves the room or a game ends, forgotten on Disconnect.
@@ -62,7 +76,7 @@ function UIMultiplayer:UIMultiplayer(ui, status)
   -- A server that turned this game version away says where to get its own.
   self.download = self.view == "connect" and lobby and MultiplayerLobby.downloadOffer(lobby.error)
       or nil
-  self:UIResizable(ui, WIDTH, heights[self.view] + (self.download and 35 or 0), col.bg)
+  self:UIResizable(ui, WIDTH, viewHeight(self.view, lobby) + (self.download and 35 or 0), col.bg)
   self.esc_closes = true
   self.resizable = false
   self.modal_class = "main menu"
@@ -346,7 +360,7 @@ function UIMultiplayer:setLevel(level)
 end
 
 function UIMultiplayer:buttonMax()
-  self.new_max = self.new_max % 4 + 1
+  self.new_max = self.new_max % MultiplayerLobby.PLACES + 1
   if self.new_max < 2 then self.new_max = 2 end
   self.max_button.panel_for_sprite:setLabel(_S.multiplayer_window.players:format(self.new_max))
 end
@@ -440,8 +454,9 @@ function UIMultiplayer:_buildRoom()
   local colour_w, team_w = 30, 70
   local line_w = WIDTH - 40 - colour_w - team_w - 10
   self.colour_buttons, self.team_buttons = {}, {}
-  for i = 1, 4 do
-    local y = 40 + (i - 1) * 27
+  local places = placesOf(self.lobby)
+  for i = 1, places do
+    local y = 40 + (i - 1) * PLACE_H
     self.player_panels[i] = label(self, 20, y, line_w, "")
     -- The host clicks an empty place to add a bot there, or a bot to take
     -- it away again.
@@ -456,10 +471,10 @@ function UIMultiplayer:_buildRoom()
         :setLabel(""):makeButton(0, 0, team_w, 25, nil, function() self:clickTeam(i) end)
         :setTooltip(T.team)
   end
-  self.summary_panel = label(self, 20, 40 + 4 * 27 + 5, WIDTH - 40, "")
-  self.mode_panel = label(self, 20, 40 + 5 * 27 + 5, WIDTH - 40, "")
-  self.hint_panel = label(self, 20, 40 + 6 * 27 + 5, WIDTH - 40, S.room_hint)
-  local y = heights.room - 50
+  self.summary_panel = label(self, 20, 40 + places * PLACE_H + 5, WIDTH - 40, "")
+  self.mode_panel = label(self, 20, 40 + (places + 1) * PLACE_H + 5, WIDTH - 40, "")
+  self.hint_panel = label(self, 20, 40 + (places + 2) * PLACE_H + 5, WIDTH - 40, S.room_hint)
+  local y = viewHeight("room", self.lobby) - 50
   -- The game's options (UIMultiplayerRoomOptions): the host sets them,
   -- everybody may look.
   button(self, 150, y, 120, S.game_options, self.buttonOptions, _S.tooltip.multiplayer_window.game_options)
@@ -479,7 +494,7 @@ function UIMultiplayer:_updateRoom()
   local bots = lobby:canAddBots()
   -- Bots the server is still starting take the first empty places.
   local starting = tonumber(lobby.summary and lobby.summary.starting) or 0
-  for i = 1, 4 do
+  for i = 1, #self.player_panels do
     local p = lobby.players[i]
     local text = ""
     if p and p.bot == "1" then

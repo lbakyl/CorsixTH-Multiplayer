@@ -40,8 +40,9 @@ local REPUTATION, BALANCE, PERCENTAGE_CURED, NUM_CURED, PERCENTAGE_KILLED, VALUE
 --! level with events of its own (levels.SCENARIOS); intro: its briefing
 --! (a string of _S.multiplayer_window); name: the level's name; map_files:
 --! a map of our own (in CorsixTH's Levels folder) by number of players,
---! instead of the original one; map_author: who made those maps (shown in
---! the lobby's level browser).
+--! instead of the original one (a map for 8 also serves 5 to 7: the plots
+--! of the missing players are for sale; levels.ownMap); map_author: who
+--! made those maps (shown in the lobby's level browser).
 levels.LEVELS = {
   {campaign = 1, cash = 40000,
     goals = {reputation = 550, balance = 20000, value = 40000, cured = 40, cure_rate = 40}},
@@ -64,9 +65,13 @@ levels.LEVELS = {
   -- Made for two against two (Matroftt's map, Levels/level40teams.map,
   -- 2026-11-02): the four hospitals in pairs in the middle of town, team
   -- mates side by side, land for sale all around; level 3's rooms and
-  -- goals. With two or three players the original map 0.
+  -- goals. With two or three players the original map 0. With five to
+  -- eight the same town with four more hospitals, two north and two south
+  -- of the middle (Levels/teamtown8.map, made from Matroftt's by
+  -- scripts/multiplayer/make_teamtown8.py).
   {campaign = 5, map = 0, cash = 50000, intro = "level_intro_8",
-    name = "TEAM TOWN", map_files = {[4] = "level40teams.map"}, map_author = "Matroftt",
+    name = "TEAM TOWN", map_files = {[4] = "level40teams.map", [8] = "teamtown8.map"},
+    map_author = "Matroftt",
     goals = {reputation = 650, balance = 100000, value = 110000, cured = 200, cure_rate = 50}},
 }
 levels.COUNT = #levels.LEVELS
@@ -75,18 +80,46 @@ levels.COUNT = #levels.LEVELS
 local FROM_CAMPAIGN = {"visuals", "non_visuals", "visuals_available", "non_visuals_available",
     "expertise", "objects", "rooms", "emergency_control", "popn"}
 
+--! The most hospitals a game may have: Theme Hospital's maps have room for
+--! 4, a few of our own for 8 (levels.maxHospitals).
+levels.MAX_HOSPITALS = 8
+
 --! The level (1 .. COUNT) a room's level number stands for.
 function levels.clamp(level)
   level = math.floor(tonumber(level) or 1)
   return math.max(1, math.min(levels.COUNT, level))
 end
 
+--! How many hospitals a level has room for: 4 (the original maps), or as
+--! many as its biggest map of our own.
+function levels.maxHospitals(level)
+  local most = 4
+  for players in pairs(levels.LEVELS[levels.clamp(level)].map_files or {}) do
+    most = math.max(most, players)
+  end
+  return most
+end
+
+--! A level's map of our own for `players` (a file in the Levels folder), or
+--! nil (the original map): the one for that many, else (more than 4) the
+--! smallest one for more.
+function levels.ownMap(def, players)
+  local files = def.map_files
+  if not files then return nil end
+  if files[players] or players <= 4 then return files[players] end
+  for n = players + 1, levels.MAX_HOSPITALS do
+    if files[n] then return files[n] end
+  end
+  return nil
+end
+
 --! The level id Map:load knows for a room with a hospital each: the original
 --! multiplayer map "net<players><map>", plus "_<level>" when the level is not
---! the map's own (level 6 plays on level 3's map).
+--! the map's own (level 6 plays on level 3's map). (5 to 8 players: a map of
+--! our own; its settings come from the 4 player map's NET4<map>.SAM.)
 function levels.levelId(players, level)
   level = levels.clamp(level)
-  players = math.max(2, math.min(4, players))
+  players = math.max(2, math.min(levels.maxHospitals(level), players))
   local map = levels.LEVELS[level].map or level - 1
   local id = string.format("net%d%d", players, map)
   if map ~= level - 1 then id = id .. "_" .. level end
@@ -106,7 +139,7 @@ end
 function levels.mapFile(app, players, level)
   local _, digits, mp_level = levels.parseLevelId(levels.levelId(players, level))
   local def = levels.LEVELS[levels.clamp(mp_level)]
-  local own_map = def.map_files and def.map_files[players]
+  local own_map = levels.ownMap(def, tonumber(digits:sub(1, 1)))
   return own_map and (app.level_dir .. own_map) or ("LEVEL.L" .. digits)
 end
 
@@ -115,7 +148,7 @@ end
 function levels.levelName(app, players, level)
   local def = levels.LEVELS[levels.clamp(level)]
   if def.name then return def.name end
-  local _, digits = levels.parseLevelId(levels.levelId(players, level))
+  local _, digits = levels.parseLevelId(levels.levelId(math.min(players, 4), level))
   local ok, index = pcall(app.fs.readContents, app.fs, "Levels", "NET" .. digits:sub(1, 1) .. ".DAT")
   if not ok or not index then return nil end
   local block = index:match("#" .. digits .. "[^#]*")
@@ -129,11 +162,12 @@ end
 function levels.hospitalTiles(app, players, level)
   local ok, data = pcall(app.readDataFile, app, "Levels", levels.mapFile(app, players, level))
   -- (th_map.cpp: the player count is the first byte; camera tiles at 163876,
-  -- two bytes each, y * 128 + x)
-  if not ok or type(data) ~= "string" or #data < 163876 + 2 * players then return nil end
+  -- two bytes each, y * 128 + x; those of players 5 to 8 at 163892)
+  local function at(i) return i <= 4 and 163876 + 2 * i - 1 or 163892 + 2 * (i - 4) - 1 end
+  if not ok or type(data) ~= "string" or #data < at(players) + 1 then return nil end
   local tiles = {}
   for i = 1, players do
-    local lo, hi = data:byte(163876 + 2 * i - 1, 163876 + 2 * i)
+    local lo, hi = data:byte(at(i), at(i) + 1)
     local index = hi * 256 + lo
     tiles[i] = {index % 128, math.floor(index / 128)}
   end
