@@ -1075,6 +1075,7 @@ function Bot:drawRoom(room_type, size, extras)
   self.reserved = nil
   if not x then
     log(string.format("no space for a %s (%dx%d)", room_type.id, min, min))
+    self.no_space_day = self:gameDay() -- (then it looks for land anywhere, cheapestPlot)
     return nil, "space"
   end
   local by_hand = extras and next(extras) ~= nil
@@ -1274,8 +1275,9 @@ end
 --! Buy the cheapest plot of land it may buy (on its side of the map) if it
 --! can afford it and still keep money for a room.
 --! The cheapest plot this hospital may buy and its price, or nil. On its own
---! side of the map; with none left there and its land filling up, on
---! another's side too (that goes to auction).
+--! side of the map; with none left there and its land filling up (or a room
+--! that did not fit in the last month), on another's side too (that goes to
+--! auction).
 function Bot:cheapestPlot()
   local world = self.world
   local th, hospital = world.map.th, world.ui.hospital
@@ -1292,7 +1294,8 @@ function Bot:cheapestPlot()
     return best, best_price
   end
   local best, best_price = cheapest(false)
-  if not best and world.mp_coop and MultiplayerSession.landNeed(world, hospital) >= 0.5 then
+  local cramped = self.no_space_day and self:gameDay() - self.no_space_day < 30
+  if not best and world.mp_coop and (cramped or MultiplayerSession.landNeed(world, hospital) >= 0.5) then
     best, best_price = cheapest(true)
   end
   return best, best_price
@@ -1611,7 +1614,9 @@ function Bot:playTrick()
     local targets = {}
     for index, hospital in ipairs(world.hospitals) do
       local peer, name, is_bot = self:playerOfHospital(index)
-      if world:mpRivals(mine, hospital) and peer and not is_bot then targets[#targets + 1] = {hospital, name} end
+      if world:mpRivals(mine, hospital) and peer and not is_bot and hospital.opened then
+        targets[#targets + 1] = {hospital, name}
+      end
     end
     if #targets == 0 then return false end
     target = pick(targets)
