@@ -594,19 +594,22 @@ end
 --! like a player, ready at once) or takes one away by its peer number.
 function MultiplayerLobby:addBot() self.error = nil; self:send("BOT", {add = 1}) end
 function MultiplayerLobby:removeBot(peer) self.error = nil; self:send("BOT", {remove = peer}) end
---! The room owner sets a game option: auctions (true or false).
-function MultiplayerLobby:setAuctions(on) self.error = nil; self:send("OPTION", {auctions = on and 1 or 0}) end
---! Land auctions on in this room (LOBBY says auctions=0 when the owner turned them off)?
-function MultiplayerLobby:auctionsOn() return not (self.summary and self.summary.auctions == "0") end
+--! The room owner switches a game option (auctions, tricks, sharing) on or off.
+function MultiplayerLobby:setOption(name, on) self.error = nil; self:send("OPTION", {[name] = on and 1 or 0}) end
+--! Is this game option on in this room (LOBBY says <name>=0 when the owner turned it off)?
+function MultiplayerLobby:optionOn(name) return not (self.summary and self.summary[name] == "0") end
+function MultiplayerLobby:setAuctions(on) self:setOption("auctions", on) end
+function MultiplayerLobby:auctionsOn() return self:optionOn("auctions") end
 
 --! The room's game options (UIMultiplayerRoomOptions shows a switch for
---! each): the strings for on and off and the tooltip
---! (_S.multiplayer_window, _S.tooltip.multiplayer_window), and how to read
---! and set it. More to come (bots in auctions, dirty tricks, sharing).
+--! each; on by default): its name (OPTION, START: <name>=0 when off, the game
+--! keeps world.mp_coop.<name>_off), the strings for on and off, the short
+--! text in the room's mode line when off, and the tooltip
+--! (_S.multiplayer_window, _S.tooltip.multiplayer_window).
 MultiplayerLobby.OPTIONS = {
-  {on = "auctions_on", off = "auctions_off", tooltip = "auctions",
-    get = function(lobby) return lobby:auctionsOn() end,
-    set = function(lobby, on) lobby:setAuctions(on) end},
+  {name = "auctions", on = "auctions_on", off = "auctions_off", short = "no_auctions", tooltip = "auctions"},
+  {name = "tricks", on = "tricks_on", off = "tricks_off", short = "no_tricks", tooltip = "tricks"},
+  {name = "sharing", on = "sharing_on", off = "sharing_off", short = "no_sharing", tooltip = "sharing"},
 }
 
 --! The room owner removes a player from the room (the server answers KICKED to them).
@@ -1209,10 +1212,13 @@ function MultiplayerLobby:_addMultiplayerMenu(ui, mode)
       local current = TheApp.ui
       current:addWindow(UIMultiplayerTrade(current))
     end)
-    -- (Also on the research blackboard; this way needs no research room.)
-    menu:appendItem(_S.multiplayer_window.menu_research, function()
-      UIMultiplayerResearch.open(TheApp.ui)
-    end)
+    -- (Also on the research blackboard; this way needs no research room.
+    -- Not when the room's owner switched research sharing off.)
+    if not (world and world.mp_coop and world.mp_coop.sharing_off) then
+      menu:appendItem(_S.multiplayer_window.menu_research, function()
+        UIMultiplayerResearch.open(TheApp.ui)
+      end)
+    end
   end
   if coop then
     -- Player colours under the patients and staff (MultiplayerSession.drawMarkers).
@@ -1224,7 +1230,7 @@ function MultiplayerLobby:_addMultiplayerMenu(ui, mode)
     end
     menu:appendMenu(_S.multiplayer_window.menu_colours, colours)
   end
-  if MultiplayerLobby.isRace(mode) then
+  if MultiplayerLobby.isRace(mode) and not (world and world.mp_coop and world.mp_coop.tricks_off) then
     menu:appendItem(_S.multiplayer_window.menu_sabotage, function()
       local current = TheApp.ui
       current:addWindow(UIMultiplayerSabotage(current))
@@ -1404,7 +1410,8 @@ function MultiplayerLobby:_beginGame(f)
     app.mp_coop = {players = count, local_index = my_index, names = names,
         competitive = MultiplayerLobby.isRace(mode), teams = layout and layout.teams,
         team_hospitals = mode == "teamshared" or nil, colours = layout and layout.colours,
-        mode = mode, bot_hospitals = bot_hospitals, auctions_off = f.auctions == "0" or nil}
+        mode = mode, bot_hospitals = bot_hospitals, auctions_off = f.auctions == "0" or nil,
+        tricks_off = f.tricks == "0" or nil, sharing_off = f.sharing == "0" or nil}
   end
   f.mode = mode -- (the menu, the bots)
 

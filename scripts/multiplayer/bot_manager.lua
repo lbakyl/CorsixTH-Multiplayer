@@ -1295,6 +1295,7 @@ function M:shareResearch(s)
   local bot, world = self.bot, self.bot.world
   local mine = s.hosp
   if not world.mp_coop or not world.mpMayTrade or not MultiplayerSession.shareableResearch then return end
+  if world.mp_coop.sharing_off then return end -- (the room's owner switched it off)
   for index, h in ipairs(world.hospitals) do
     local peer = bot:playerOfHospital(index)
     -- (Never to a rival: in a race only to team mates.)

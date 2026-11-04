@@ -2520,6 +2520,7 @@ function handlers.offer_research(world, cmd)
   local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
   if not from or not to or from == to then return false, "no such hospital" end
   if not world:mpMayTrade(from, to) then return false, "not on your team" end
+  if world.mp_coop and world.mp_coop.sharing_off then return false, "research sharing is off in this game" end
   local price = math.floor(tonumber(cmd.price) or -1)
   if price < 0 or price > MultiplayerSession.RESEARCH_MAX_PRICE then return false, "invalid price" end
   local items = research_items_of(from, to, cmd.items)

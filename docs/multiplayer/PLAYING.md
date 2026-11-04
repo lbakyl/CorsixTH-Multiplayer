@@ -106,8 +106,12 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
 
 **The host's room settings:** before the start the host may remove a person
 from the room (double-click or right-click their line, then "Remove <name>
-from the room"; they cannot come back to that room for 5 minutes) and switch
-**Land auctions** on or off (off: whoever asks for a plot first buys it).
+from the room"; they cannot come back to that room for 5 minutes). **Game
+options** (everybody may look, the host switches them) bring the game closer
+to the original if you like: **Land auctions** (off: whoever asks for a plot
+first buys it), **Dirty tricks** in a race (off: no tricks for anybody, bots
+included) and **Research sharing** (off: nobody gives or sells research).
+What is switched off shows in the room.
 
 **Nobody to play with?** As the host, click an empty place in your room
 ("click: add a bot") and a computer player takes it; click the bot to take it

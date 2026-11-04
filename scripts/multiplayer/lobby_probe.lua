@@ -437,13 +437,17 @@ local function run_lobby()
     end
     log("UI: room seats " .. seats_text(lobby) .. " (" .. tostring(lobby.summary.mode) .. ")")
     shot("lobby-room-host")
-    -- MP_SHOT_OPTIONS=1: the game options window, auctions on, then off.
+    -- MP_SHOT_OPTIONS=1: the game options window, all on, then dirty tricks
+    -- and research sharing off.
     if os.getenv("MP_SHOT_OPTIONS") then
       local win = lobby_window()
       win:buttonOptions()
       shot("room-options")
-      win.options_window:toggle(1)
-      wait_for("auctions off", function() return not lobby:auctionsOn() end, 10)
+      win.options_window:toggle(2)
+      win.options_window:toggle(3)
+      wait_for("tricks and sharing off", function()
+        return not lobby:optionOn("tricks") and not lobby:optionOn("sharing")
+      end, 10)
       tick()
       shot("room-options-off")
       win.options_window:close()

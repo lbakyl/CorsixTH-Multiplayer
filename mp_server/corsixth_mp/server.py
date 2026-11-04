@@ -81,6 +81,10 @@ RECOVERY_TIMEOUT = 60.0
 BOT_NAMES = ("Bot Agnes", "Bot Bertie", "Bot Clive", "Bot Dora", "Bot Edna", "Bot Fergus",
              "Bot Gwen", "Bot Hector")
 BOT_START_TIMEOUT = 60.0
+# The game options the room owner may switch off (OPTION <name>=0|1): land
+# auctions, dirty tricks (in a race), research sharing. On by default; sent
+# as <name>=0 in LOBBY and START when off.
+GAME_OPTIONS = ("auctions", "tricks", "sharing")
 # A player the room owner removed (KICK) may not come back to that room for
 # this many seconds.
 KICK_BLOCK_SECONDS = 300.0
@@ -240,9 +244,9 @@ class Room:
     bots_pending: dict[str, list] = field(default_factory=dict)
     # Players the owner removed: name (lower case) -> time they may return.
     kicked: dict[str, float] = field(default_factory=dict)
-    # The owner's game options (OPTION), sent in LOBBY and START: land
-    # auctions on (the default) or off.
-    auctions: bool = True
+    # The owner's game options switched off (OPTION, GAME_OPTIONS), sent in
+    # LOBBY and START.
+    options_off: set[str] = field(default_factory=set)
     # For the daily report (stats.py): when the game started (Unix time) and
     # everybody who played in it.
     started_at: float | None = None
@@ -1017,19 +1021,24 @@ class Server:
                               free=1 if room.mode == "free" else None, level=room.level,
                               delay=p.delay, speed=p.max_speed, one_way=p.one_way_ms,
                               latency=p.command_latency_ms.get(pacing.TARGET_SPEED),
-                              auctions=None if room.auctions else 0))
+                              **{name: 0 for name in sorted(room.options_off)}))
 
     def _on_option(self, player: Player, f: dict[str, str]) -> None:
-        """The room owner sets a game option in the lobby: auctions=0|1."""
+        """The room owner switches game options in the lobby: <name>=0|1
+        (GAME_OPTIONS)."""
         room = player.room
         if room is None or room.owner is not player:
             self._error(player, "not_owner", "Only the room owner sets the options")
             return
         if room.state != "lobby":
             return
-        if f.get("auctions") in ("0", "1"):
-            room.auctions = f["auctions"] == "1"
-            log.info("room %r: auctions %s", room.name, "on" if room.auctions else "off")
+        for name in GAME_OPTIONS:
+            if f.get(name) in ("0", "1"):
+                if f[name] == "1":
+                    room.options_off.discard(name)
+                else:
+                    room.options_off.add(name)
+                log.info("room %r: %s %s", room.name, name, "on" if f[name] == "1" else "off")
         self._send_lobby(room)
 
     def _on_start(self, player: Player, f: dict[str, str]) -> None:
@@ -1073,8 +1082,8 @@ class Server:
         bots = [str(n) for n in sorted(room.players) if room.players[n].is_bot]
         if bots:
             room.start_fields["bots"] = ",".join(bots)
-        if not room.auctions:
-            room.start_fields["auctions"] = 0
+        for name in sorted(room.options_off):
+            room.start_fields[name] = 0
         if free:
             # Every peer works out the hospitals and teams from these
             # (MultiplayerLobby:_beginGame).

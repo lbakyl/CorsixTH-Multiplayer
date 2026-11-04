@@ -124,6 +124,7 @@ end
 --! Why the buyer's hospital cannot play this trick on `target` now (nil: it can).
 function sabotage.refusal(world, buyer, target, kind, level)
   if not (world.mp_coop and world.mp_coop.competitive) then return "only in a competitive game" end
+  if world.mp_coop.tricks_off then return "dirty tricks are off in this game" end
   local prices = sabotage.PRICES[kind]
   if not prices or not prices[level] then return "no such trick" end
   if not target or target == buyer then return "no such hospital" end

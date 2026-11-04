@@ -1553,6 +1553,7 @@ end
 
 function Bot:playTrick()
   local world = self.world
+  if world.mp_coop and world.mp_coop.tricks_off then return false end -- (switched off in this game)
   local mine = world.ui.hospital
   local target, choice
   if self.manager then

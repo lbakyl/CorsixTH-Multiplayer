@@ -441,3 +441,28 @@ describe("MultiplayerSession speed votes", function()
     assert.equal("Max speed", w[1].mp_speed)
   end)
 end)
+
+describe("MultiplayerSession game options", function()
+  it("refuses dirty tricks when the room's owner switched them off", function()
+    local a, b = {}, {}
+    local world = {mp_coop = {competitive = true, tricks_off = true},
+        mpRivals = function() return true end}
+    local why = MultiplayerSession.sabotage.refusal(world, a, b, "handyman", 1)
+    assert.equal("dirty tricks are off in this game", why)
+    world.mp_coop.tricks_off = nil
+    assert.are_not.equal("dirty tricks are off in this game",
+        MultiplayerSession.sabotage.refusal(world, a, b, "handyman", 1))
+  end)
+
+  it("refuses research offers when research sharing is off", function()
+    local world = {hospitals = {{}, {}}, mp_coop = {sharing_off = true},
+        mpMayTrade = function() return true end}
+    local old_S = rawget(_G, "_S")
+    rawset(_G, "_S", {multiplayer_window = {}})
+    local ok, why = MultiplayerSession.default_handlers.offer_research(world,
+        {hospital = 1, to = 2, items = "e:x", price = 0})
+    rawset(_G, "_S", old_S)
+    assert.is_false(ok)
+    assert.equal("research sharing is off in this game", why)
+  end)
+end)

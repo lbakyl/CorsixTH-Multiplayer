@@ -513,10 +513,14 @@ function UIMultiplayer:_updateRoom()
   if MultiplayerLobby.hospitalEach(mode) and level > mp_count then
     level_text = S.mp_level:format(level_text, mp_count)
   end
-  -- (An option changed from its default shows here too, for everybody.)
   self.mode_panel:setLabel(MultiplayerLobby.modeLabel(mode) .. ", " .. level_text ..
-      (lobby.room["continue"] == "1" and (", " .. S.continuing:format((lobby.room.date or ""):gsub("T.*", ""))) or "") ..
-      (lobby:auctionsOn() and "" or (", " .. S.no_auctions)))
+      (lobby.room["continue"] == "1" and (", " .. S.continuing:format((lobby.room.date or ""):gsub("T.*", ""))) or ""))
+  -- The options switched off show for everybody, on the hint's line.
+  local off -- (strings of the language: joined with .., not table.concat)
+  for _, option in ipairs(MultiplayerLobby.OPTIONS) do
+    if not lobby:optionOn(option.name) then off = off and (off .. ", " .. S[option.short]) or S[option.short] end
+  end
+  self.hint_panel:setLabel(off and S.options_off_line:format(off) or S.room_hint)
   local owner = lobby:isOwner()
   local options = self.options_window
   if options and options.lobby == lobby then options:update() end
@@ -715,7 +719,7 @@ function UIMultiplayerRoomOptions:update()
   local lobby, S = self.lobby, _S.multiplayer_window
   local may = lobby:isOwner() and lobby.room and lobby.room["continue"] ~= "1"
   for i, option in ipairs(MultiplayerLobby.OPTIONS) do
-    local on = option.get(lobby)
+    local on = lobby:optionOn(option.name)
     self.option_buttons[i]:setLabel(on and S[option.on] or S[option.off])
     self.option_buttons[i]:enable(may)
   end
@@ -726,5 +730,5 @@ function UIMultiplayerRoomOptions:toggle(i)
   local lobby = self.lobby
   local option = MultiplayerLobby.OPTIONS[i]
   if not (option and lobby:isOwner()) then return end
-  option.set(lobby, not option.get(lobby))
+  lobby:setOption(option.name, not lobby:optionOn(option.name))
 end

@@ -65,7 +65,7 @@ function UIResearch:UIResearch(ui)
   self:updateCategories()
 
   -- Multiplayer co-op: "Share research", left of the total on the blackboard.
-  if TheApp.mp_session and ui.app.world.mp_coop then
+  if TheApp.mp_session and ui.app.world.mp_coop and not ui.app.world.mp_coop.sharing_off then
     self.share_button = self:addPanel(0, 165, 282)
         :makeButton(0, 0, 175, 28, nil, self.shareResearch)
         :setTooltip(_S.tooltip.multiplayer_window.share_research)
