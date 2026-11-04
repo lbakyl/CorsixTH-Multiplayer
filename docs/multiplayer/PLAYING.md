@@ -104,6 +104,11 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
    you leave unanswered it answers before they quit. Before it gives your
    research to an ally it asks you: say "share".
 
+**The host's room settings:** before the start the host may remove a person
+from the room (double-click or right-click their line, then "Remove <name>
+from the room"; they cannot come back to that room for 5 minutes) and switch
+**Land auctions** on or off (off: whoever asks for a plot first buys it).
+
 **Nobody to play with?** As the host, click an empty place in your room
 ("click: add a bot") and a computer player takes it; click the bot to take it
 away again. A room for four can have up to three bots. A bot builds its
@@ -125,6 +130,11 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 - **Everything is shared:** every action happens on every player's game a
   moment after the click. If one player is slower or pauses, the others wait
   ("Waiting for the other player...").
+- **The year end and winning:** the game stands still for everybody while
+  the annual report is open: it goes on once every hospital's player has
+  closed theirs (at most 3 minutes); who is still reading is shown
+  meanwhile. The same when a win fax comes: the game waits until it is
+  answered (at most 5 minutes).
 - **Speed and pause** are shared too; the room's connection limits the top
   speed. Any player can pause or unpause, at once (the chat works while
   paused). A different speed is a vote: the other players get a purple fax
