@@ -417,8 +417,10 @@ end
 
 -- Default checkpoint interrupt handler
 -- Reset the assigned status, and find an replacement staff
+-- (A checkpoint may have no call: one queued after its call was dropped, e.g.
+-- a nurse's vaccination whose patient left during her short wait.)
 function CallsDispatcher.actionInterruptHandler(action, humanoid)
-  if action.call.assigned == humanoid then
+  if action.call and action.call.assigned == humanoid then
     action.call.assigned = nil
     humanoid.on_call = nil
     humanoid.world.dispatcher:findSuitableStaff(action.call)
@@ -427,7 +429,7 @@ end
 
 --! Called when a call is completed successfully.
 function CallsDispatcher.onCheckpointCompleted(call)
-  if not call.dropped and call.assigned then
+  if call and not call.dropped and call.assigned then
     if debug_enabled then CallsDispatcher.dumpCall(call, "completed") end
     call.assigned.on_call = nil
     call.assigned = nil
@@ -553,7 +555,7 @@ function CallsDispatcher.sendStaffToRoom(room, staff)
 end
 
 function CallsDispatcher.staffActionInterruptHandler(action, humanoid)
-  if action.call.assigned == humanoid then
+  if action.call and action.call.assigned == humanoid then
     action.call.assigned = nil
     humanoid.on_call = nil
     if not action.call.dropped then
