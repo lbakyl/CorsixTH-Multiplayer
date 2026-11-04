@@ -959,8 +959,10 @@ function M:trickTarget()
   local best, best_score, best_name
   for index, hospital in ipairs(world.hospitals) do
     local peer, name, is_bot = bot:playerOfHospital(index)
-    -- (Not a hospital that is not open: no patients to lose, money wasted.)
-    if peer and world:mpRivals(mine, hospital) and not hospital.mp_place and hospital.opened then
+    -- (Not a hospital that is closed or has nobody working in it: no
+    -- patients to lose, money wasted.)
+    if peer and world:mpRivals(mine, hospital) and not hospital.mp_place and hospital.opened and
+        #hospital.staff > 0 then
       local score = (hospital.reputation or 0) + (hospital.balance or 0) / 500 + (is_bot and -200 or 0)
       if not best or score > best_score then best, best_score, best_name = hospital, score, name end
     end

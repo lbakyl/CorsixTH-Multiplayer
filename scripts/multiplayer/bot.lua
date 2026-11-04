@@ -1614,7 +1614,7 @@ function Bot:playTrick()
     local targets = {}
     for index, hospital in ipairs(world.hospitals) do
       local peer, name, is_bot = self:playerOfHospital(index)
-      if world:mpRivals(mine, hospital) and peer and not is_bot and hospital.opened then
+      if world:mpRivals(mine, hospital) and peer and not is_bot and hospital.opened and #hospital.staff > 0 then
         targets[#targets + 1] = {hospital, name}
       end
     end
