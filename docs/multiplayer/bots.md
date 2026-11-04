@@ -57,7 +57,22 @@ best project it can afford is done, one every one to four game days.
   and every object is put down like a click. Extras (`EXTRAS`): a radiator, a
   plant and a bin in most rooms; a sofa, a TV and a pool table in the staff
   room; more loos and sinks; two more beds in a ward. Extras without a place
-  are sold again. Out of floor: it buys land.
+  are sold again. Out of floor: first a room bigger than it needs is taken in
+  by a row or column (the room editor, walls down, drawn again one tile
+  smaller on a side with nothing on it, its things put back: `Bot:shrinkRoom`,
+  the `shrink:<side>` edit step); with no land left to buy, rooms go down to
+  their smallest size. Then it buys land. Up to 6 GP's offices, each only
+  for a queue.
+- **Hiring**: the most skilled person on the list (of those with the skill a
+  room needs).
+- **Training**: a training room (5x5, three lecture chairs) once it has two
+  juniors, five doctors and $30,000, and a consultant to teach. Every 6 months
+  it picks the teacher again: the consultant with the most special skills
+  (surgeon, psychiatrist, researcher: each one the students can learn), then
+  skill, from its staff, or hired from the list straight into the room when a
+  consultant there has a special skill more. Juniors go in as students while
+  the other rooms keep their doctors; a student who is no longer a junior goes
+  back to a room short of a doctor.
 - **Every day**: a handyman to each machine with three uses or fewer, the
   heating up or down for cold or hot patients, a $5,000 loan before the money
   runs out, the faxes (a patient it cannot treat yet: wait if the room is
@@ -67,8 +82,9 @@ best project it can afford is done, one every one to four game days.
   attack rats.
 - **Every month**: prices (down 10% when patients walked out over them, else
   up with a good reputation and full queues, down when it suffers), repaying
-  the loan when money allows, research aimed at the disease whose treatment
-  room it lacks most.
+  the loan once money flows in again (the balance up since last month, over
+  $17,000, keeping $12,000; or anything over $25,000), research aimed at the
+  disease whose treatment room it lacks most.
 - **Sharing a hospital with a person** (one shared hospital, or a team
   hospital): the bot only helps. It builds, furnishes, hires, sends handymen
   and buys corridor items, and leaves prices, loans, heating, research, opening

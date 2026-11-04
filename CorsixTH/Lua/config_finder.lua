@@ -269,6 +269,7 @@ local function new_hotkeys_defaults()
     ingame_rotateobject = "space",
     ingame_patient_gohome = "h",
     ingame_mp_chat = "y",
+    ingame_mp_next_hospital = "n",
     ingame_storePosition_1 = {"alt", "1"},
     ingame_storePosition_2 = {"alt", "2"},
     ingame_storePosition_3 = {"alt", "3"},
@@ -998,6 +999,10 @@ param(hotkeys_values, 'ingame_patient_gohome') .. [=[
 -- This opens the chat line in a multiplayer game.
 --]=] .. '\n' ..
 param(hotkeys_values, 'ingame_mp_chat') .. [=[
+-- This shows the next hospital's starting place (each press the next one,
+-- your own among them) in a multiplayer game with several hospitals.
+--]=] .. '\n' ..
+param(hotkeys_values, 'ingame_mp_next_hospital') .. [=[
 ]=]
 
   return table.concat(parts)

@@ -822,6 +822,8 @@ function MultiplayerLobby:_attachChat(ui)
     -- chat key is bound again here.
     chat:removeKeyHandler("ingame_mp_chat")
     chat:addKeyHandler("ingame_mp_chat", chat.openInput)
+    chat:removeKeyHandler("ingame_mp_next_hospital")
+    chat:addKeyHandler("ingame_mp_next_hospital", chat.nextHospital)
     return
   end
   ui:addWindow(UIMultiplayerChat(ui))

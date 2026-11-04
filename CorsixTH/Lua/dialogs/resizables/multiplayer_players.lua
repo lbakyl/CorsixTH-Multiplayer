@@ -81,6 +81,11 @@ function UIMultiplayerPlayers:UIMultiplayerPlayers(ui)
       panel:setLabel(row == 0 and S["players_" .. c[1]] or "")
       panel.lowered = row > 0
       self.cells[row][c[1]] = panel
+      if row > 0 and (c[1] == "name" or c[1] == "hospital") then
+        -- A click on a player or their hospital: the view goes there.
+        panel:makeButton(0, 0, c[2], 23, nil, function() self:lookAt(row) end)
+            :setTooltip(_S.tooltip.multiplayer_window.player_row)
+      end
       x = x + c[2] + 4
     end
   end
@@ -159,6 +164,15 @@ function UIMultiplayerPlayers:refresh()
   self.shown_list = TheApp.mp_lobby and TheApp.mp_lobby.game_players
   self.row_hospitals = {}
   for row = 1, self.max_rows do self.row_hospitals[row] = rows[row] and rows[row].hospital_entity end
+end
+
+--! A row's player or hospital was clicked: show their hospital's starting
+--! place and close the window.
+function UIMultiplayerPlayers:lookAt(row)
+  local hospital = self.row_hospitals and self.row_hospitals[row]
+  if not hospital then return end
+  MultiplayerSession.lookAtHospital(self.ui, hospital)
+  self:close()
 end
 
 --! Each player's colour (a game with a hospital each) in a tab before the row.

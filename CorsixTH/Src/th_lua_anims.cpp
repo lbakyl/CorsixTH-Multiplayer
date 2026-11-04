@@ -177,6 +177,31 @@ int l_anims_set_alt_pal(lua_State* L) {
   return 1;
 }
 
+// anims:setLayerAltPalette(layer, layer_id, map, alt32): the recolour map
+// (256 bytes) of every sprite of that layer variant; returns how many
+// elements it set. The map string is kept in the object's environment.
+int l_anims_set_layer_alt_pal(lua_State* L) {
+  animation_manager* pAnims = luaT_testuserdata<animation_manager>(L);
+  int iLayer = static_cast<int>(luaL_checkinteger(L, 2));
+  int iLayerId = static_cast<int>(luaL_checkinteger(L, 3));
+  size_t iPalLen;
+  const uint8_t* pPal = luaT_checkfile(L, 4, &iPalLen);
+  if (iPalLen != 256) {
+    return luaL_argerror(L, 4, "Palette map is not 256 bytes");
+  }
+  uint32_t iAlt32 = static_cast<uint32_t>(luaL_optinteger(L, 5, 0));
+  int iChanged =
+      pAnims->set_layer_alt_palette_map(iLayer, iLayerId, pPal, iAlt32);
+  // Keep the map alive: env["layer:<layer>:<id>"] = map.
+  lua_getfenv(L, 1);
+  lua_pushfstring(L, "layer:%d:%d", iLayer, iLayerId);
+  lua_pushvalue(L, 4);
+  lua_settable(L, -3);
+  lua_pop(L, 1);
+  lua_pushinteger(L, iChanged);
+  return 1;
+}
+
 int l_anims_set_primary_marker(lua_State* L) {
   animation_manager* pAnims = luaT_testuserdata<animation_manager>(L);
   lua_pushboolean(
@@ -703,6 +728,7 @@ void lua_register_anims(const lua_register_state* pState) {
     lcb.add_function(l_anims_getfirst, "getFirstFrame");
     lcb.add_function(l_anims_getnext, "getNextFrame");
     lcb.add_function(l_anims_set_alt_pal, "setAnimationGhostPalette");
+    lcb.add_function(l_anims_set_layer_alt_pal, "setLayerAltPalette");
     lcb.add_function(l_anims_set_primary_marker, "setFramePrimaryMarker");
     lcb.add_function(l_anims_set_secondary_marker, "setFrameSecondaryMarker");
     lcb.add_function(l_anims_draw, "draw", lua_metatable::surface,

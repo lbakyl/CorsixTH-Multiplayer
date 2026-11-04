@@ -74,6 +74,22 @@ function UIMultiplayerChat:UIMultiplayerChat(ui)
   self.lines = {}
   self.font = ui.app.gfx:loadFontAndSpriteTable("QData", "Font01V", nil, nil, { apply_ui_scale = true })
   self:addKeyHandler("ingame_mp_chat", self.openInput)
+  self:addKeyHandler("ingame_mp_next_hospital", self.nextHospital)
+end
+
+--! The next hospital key (ingame_mp_next_hospital, N by default): the view
+--! goes to the next hospital's starting place, each press the next one.
+function UIMultiplayerChat:nextHospital()
+  local world = self.ui.app.world
+  if not world or not world.mp_coop then return end
+  local last = self.looked_at or world:getHospitalIndex(self.ui.hospital)
+  local index = MultiplayerSession.nextHospital(world, last)
+  local hospital = index and world.hospitals[index]
+  if not hospital then return end
+  self.looked_at = index
+  MultiplayerSession.lookAtHospital(self.ui, hospital)
+  self:add(_S.multiplayer_window.looking_at:format(hospital.name), true,
+      UIMultiplayerChat.colourOf(MultiplayerSession.hospitalColour(world, hospital)))
 end
 
 --! Never in the way of clicks on the map.

@@ -1133,8 +1133,8 @@ MultiplayerSession.markers = "others" -- (a new sight: own people plain at first
 -- 0 mustard, 2 white, 4 lavender, 6 salmon), its staff have a bar of it at
 -- their feet, and its player's chat lines a darker version of it
 -- (UIMultiplayerChat.colourOf). Colours 5 to 8 (green, blue, teal, pink:
--- a game for more than 4 hospitals) have no shirts of their own; their
--- patients wear those of colours 1 to 4 and have the bars too.
+-- a game for more than 4 hospitals) wear the shirts of colours 1 to 4, those
+-- of 6 to 8 redrawn in their own colour (setupShirtColours).
 MultiplayerSession.CLOTHES = {0, 6, 4, 2, 0, 6, 4, 2}
 local MARKER_COLOURS = {{232, 186, 52}, {236, 130, 118}, {160, 146, 232}, {236, 236, 236},
     {100, 200, 80}, {70, 120, 235}, {60, 200, 200}, {225, 95, 200}}
@@ -1157,6 +1157,23 @@ end
 --! A colour's {r, g, b} (1-8: the lobby's colour buttons).
 function MultiplayerSession.colourRGB(colour)
   return MARKER_COLOURS[(colour - 1) % #MARKER_COLOURS + 1]
+end
+
+--! Show `hospital`'s starting place on this screen (its map camera tile, as
+--! at the start of the game): only the view moves, nothing in the game.
+--!param ui (GameUI)
+function MultiplayerSession.lookAtHospital(ui, hospital)
+  local map = ui.app.map
+  local cx, cy = map.th:getCameraTile(hospital:getPlayerIndex())
+  ui:scrollMapTo(map:WorldToScreen(cx, cy))
+end
+
+--! The next hospital to look at after `index` (the game's hospitals in
+--! turn, this player's own among them), or nil with only one.
+function MultiplayerSession.nextHospital(world, index)
+  local n = world.mp_coop and world.mp_coop.players or 1
+  if n < 2 then return nil end
+  return (index or 0) % n + 1
 end
 
 --! A tab in a hospital's colour (a game with a hospital each), so a window
@@ -1220,6 +1237,62 @@ function MultiplayerSession.dressPatient(patient)
   patient:setLayer(1, MultiplayerSession.CLOTHES[colour])
 end
 
+--! Shirts of colours 6 to 8: the game has four shirt colours (CLOTHES), so a
+--! patient of colour 6 wears colour 2's shirt drawn through a palette map
+--! that turns it blue (7 teal, 8 pink): every sprite of that clothes
+--! variant gets the map (TH.anims:setLayerAltPalette), and those patients
+--! are drawn with DrawFlags.AltPalette (setFloorMarkers, on this screen
+--! only). Each entry keeps its brightness in the new colour, the nearest
+--! the game's palette has; near black stays (the outlines). Colour 5 keeps
+--! colour 1's mustard shirt: that one is part of the patient's body sprite,
+--! not a clothes layer of its own, so it cannot be redrawn alone (its bar
+--! tells it apart).
+--!return true if the maps are set
+local shirt_colours_set = setmetatable({}, {__mode = "k"}) -- anims -> done (true/false)
+function MultiplayerSession.setupShirtColours(app, anims)
+  if not anims or not anims.setLayerAltPalette then return false end
+  if shirt_colours_set[anims] ~= nil then return shirt_colours_set[anims] end
+  local ok, data = pcall(app.readDataFile, app, "Data", "MPalette.dat")
+  if not ok or type(data) ~= "string" or #data ~= 768 then
+    shirt_colours_set[anims] = false
+    return false
+  end
+  local pal = {}
+  for i = 0, 255 do
+    local r, g, b = data:byte(i * 3 + 1, i * 3 + 3)
+    pal[i] = {r * 4, g * 4, b * 4}
+  end
+  local function lum(c) return 0.3 * c[1] + 0.59 * c[2] + 0.11 * c[3] end
+  local function nearest(r, g, b)
+    local best, best_d
+    for i = 0, 254 do
+      local c = pal[i]
+      local d = (c[1] - r) ^ 2 + (c[2] - g) ^ 2 + (c[3] - b) ^ 2
+      if not best_d or d < best_d then best, best_d = i, d end
+    end
+    return best
+  end
+  for colour = 6, 8 do
+    local target = MARKER_COLOURS[colour]
+    local t_lum = lum(target)
+    local bytes = {}
+    for i = 0, 255 do
+      local src = pal[i]
+      local l = lum(src)
+      local to = i
+      if i < 255 and l >= 24 then
+        local k = l / t_lum
+        to = nearest(math.min(255, target[1] * k), math.min(255, target[2] * k), math.min(255, target[3] * k))
+      end
+      bytes[i + 1] = string.char(to)
+    end
+    local n = anims:setLayerAltPalette(1, MultiplayerSession.CLOTHES[colour], table.concat(bytes))
+    print(string.format("multiplayer: shirts of colour %d: %d sprites recoloured", colour, n))
+  end
+  shirt_colours_set[anims] = true
+  return true
+end
+
 --! Before the map is drawn (GameUI:draw): give every person the bar of
 --! their hospital's colour (or none), drawn by the engine just before them,
 --! so that whoever stands in front covers it (TH.animation:setFloorMarker).
@@ -1231,7 +1304,20 @@ function MultiplayerSession.setFloorMarkers(ui)
   local mode = MultiplayerSession.markers
   local on = mode ~= "off" and TheApp.mp_session and world.mp_coop and world.mp_coop.players > 1
   local cache = {}
+  -- (Shirts of colours 5 to 8: setupShirtColours.)
+  local shirts = world.mp_coop and world.mp_coop.players > 5 and
+      MultiplayerSession.setupShirtColours(ui.app, world.anims)
+  local recolour = {}
   for _, e in ipairs(world.entities) do
+    if shirts and e.th and e.hospital and class.is(e, Patient) then
+      local r = recolour[e.hospital]
+      if r == nil then
+        r = (MultiplayerSession.hospitalColour(world, e.hospital) or 1) > 5
+        recolour[e.hospital] = r
+      end
+      e.th:setPartialFlag(DrawFlags.AltPalette, r and e.humanoid_class ~= "Elvis Patient" and
+          e.humanoid_class ~= "Invisible Patient")
+    end
     if e.humanoid_class and e.th then
       local hospital = on and e.hospital
       local c

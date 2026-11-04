@@ -33,14 +33,14 @@
 local M = {}
 M.__index = M
 
--- Rooms a beginner leaves alone (a consultant to teach in it).
-local SKIP_ROOMS = {training = true}
+-- Rooms it leaves alone (none: the training room is run by M:training).
+local SKIP_ROOMS = {}
 -- Doctors with a skill a room needs.
 local SPECIALISTS = {Psychiatrist = true, Surgeon = true, Researcher = true}
 -- Kept in the bank for wages and repairs.
 local RESERVE = 3000
 -- Rooms worth a second (third) copy when their queues grow.
-local COPIES = {gp = 5, pharmacy = 2, general_diag = 3, psych = 2, ward = 2, toilets = 3, staff_room = 2,
+local COPIES = {gp = 6, pharmacy = 2, general_diag = 3, psych = 2, ward = 2, toilets = 3, staff_room = 2,
     cardiogram = 2, scanner = 2, ultrascan = 2, blood_machine = 2, x_ray = 2, inflation = 2,
     fracture_clinic = 2, hair_restoration = 2, slack_tongue = 2, electrolysis = 2, dna_fixer = 1,
     jelly_vat = 1, decontamination = 1, operating_theatre = 2, research = 1}
@@ -87,8 +87,20 @@ local EXTRAS = {
   psych = {radiator = 1, plant = 1, bookcase = 1},
   -- (A second desk: room for a second researcher.)
   research = {desk = 1, radiator = 1, plant = 1},
+  -- (Three students at a time.)
+  training = {lecture_chair = 2, radiator = 1},
 }
 local DEFAULT_EXTRAS = {radiator = 1, plant = 1, bin = 1}
+
+--! The planned size of a room type (nil: the smallest plus one).
+local function SIZES_OF(id) return SIZES[id] end
+
+--! The smallest size of a room type (the game's minimum, the staff room's 5).
+local function smallest_size(id)
+  for _, rt in ipairs(TheApp.rooms) do
+    if rt.id == id then return math.max(rt.minimum_size or 4, id == "staff_room" and 5 or 0) end
+  end
+end
 
 --! The size and extras for a new room of this type.
 function M.roomPlan(id)
@@ -370,6 +382,15 @@ function M:projects(s)
     if not self:available(id) then undiscovered = undiscovered + v end
   end
   if not s.rooms.research and s.room_count >= 4 then room("research", 6 + undiscovered * 0.4) end
+  -- Training: a lecture room once doctors want teaching (juniors, or doctors
+  -- not yet consultants) and a consultant can teach them (on the staff or
+  -- the hiring list), when money allows.
+  local learners = self:doctorsWhere(function(p) return not bot.flag(p, "is_consultant") end)
+  local consultants = self:doctorsWhere(function(p) return bot.flag(p, "is_consultant") end)
+  if not s.rooms.training and #learners >= 2 and (#consultants > 0 or bot:canHire("Consultant")) and
+      (s.staff.Doctor or 0) >= 5 and s.balance > 20000 then
+    room("training", 4 + #learners)
+  end
   -- A researcher for each desk in it (two at most).
   local lab = s.rooms.research and self:roomOf("research")
   if lab then
@@ -387,8 +408,10 @@ function M:projects(s)
         if where == lab then
           working = working + 1
         elseif not st.pickup and st.mp_id and s.day - (self.sent_to_lab[st.mp_id] or -99) > 10 then
-          -- (From the corridor first, then a staff room, then another room.)
-          local rank = not where and 1 or where.room_info.id == "staff_room" and 2 or 3
+          -- (From the corridor first, then a staff room, then another room;
+          -- never the training room's teacher or students.)
+          local rank = not where and 1 or where.room_info.id == "staff_room" and 2 or
+              where.room_info.id == "training" and 9 or 3
           if rank < spare_rank then spare, spare_rank = st, rank end
         end
       end
@@ -416,7 +439,7 @@ function M:projects(s)
   -- this moment is no reason not to: the doctor may be on a break.)
   for id, n in pairs(s.rooms) do
     local per = s.queue[id] / n
-    -- (GP's offices: at most COPIES.gp, rich or not.)
+    -- (GP's offices: at most COPIES.gp (6), rich or not, and only for a queue.)
     if per > busy_q and n < (COPIES[id] or 1) + (COPIES[id] and id ~= "gp" and more or 0) then
       room(id, (per - busy_q + 1) * 1.2)
     end
@@ -472,11 +495,24 @@ function M:projects(s)
       end, m.cost)
     end
   end
-  -- No floor for what it wants: land.
+  -- No floor for what it wants: first a room that is bigger than it needs
+  -- taken in by a row (no cost, and the land may be gone), then land.
+  -- With no land left to buy, rooms go down to their smallest size (the
+  -- plant and radiator may not fit any more).
   local wanted = self:landWanted(s)
-  if wanted then
-    local _, price = bot:cheapestPlot()
-    if price then add("buy:land", 10 + wanted * 6, function() return bot:buyPlot() end, price) end
+  local _, land_price
+  if wanted then _, land_price = bot:cheapestPlot() end
+  local size_of = land_price and SIZES_OF or smallest_size
+  -- (One room at a time, a month apart: each edit closes the room a while.)
+  if wanted and s.day - (self.shrink_day or -99) > 30 and bot:oversizedRoom(size_of) then
+    add("edit:shrink", 12 + wanted * 6, function()
+      local ok, why = bot:shrinkRoom(size_of)
+      if ok then self.shrink_day = s.day end
+      return ok, why
+    end, 0)
+  end
+  if wanted and land_price then
+    add("buy:land", 10 + wanted * 6, function() return bot:buyPlot() end, land_price)
   end
 
   -- Reception: another desk and receptionist when the queue grows.
@@ -580,6 +616,133 @@ function M:projects(s)
   return list
 end
 
+--! The doctors on the staff whose profile passes `test`.
+function M:doctorsWhere(test)
+  local out = {}
+  for _, st in ipairs(self.bot.world.ui.hospital.staff) do
+    if not st.fired and st.humanoid_class == "Doctor" and st.profile and test(st.profile) then out[#out + 1] = st end
+  end
+  return out
+end
+
+--! The training room: its teacher and students. Every 6 months the teacher
+--! is chosen again: the consultant with the most special skills (then the
+--! most skill), from the staff or, if one there is better, from the hiring
+--! list (hired straight into the room). Students: juniors first, then other
+--! doctors not yet consultants, while the other rooms keep their doctors
+--! and there are chairs. A student goes back to work once a consultant, or
+--! when a room is short of a doctor.
+function M:training(s)
+  local bot = self.bot
+  local room = self:roomOf("training")
+  if not room or not room.is_active then return end
+  local world = bot.world
+  local function inside(st)
+    return st.tile_x and world:getRoom(st.tile_x, st.tile_y) == room
+  end
+  local teacher = room.staff_member
+  -- The teacher.
+  if s.day >= (self.teacher_review or 0) or (not teacher and s.day - (self.teacher_sent or -99) > 10) then
+    self.teacher_review = s.day + 180
+    local best, best_v
+    for _, st in ipairs(self:doctorsWhere(function(p) return bot.flag(p, "is_consultant") end)) do
+      local v = bot.teacherScore(st.profile)
+      if not st.pickup and st.mp_id and (not best_v or v > best_v) then best, best_v = st, v end
+    end
+    local pool = (world.staffPool and world:staffPool() or world.available_staff).Doctor or {}
+    local hire_v
+    for _, p in ipairs(pool) do
+      if bot.flag(p, "is_consultant") then
+        local v = bot.teacherScore(p)
+        if not hire_v or v > hire_v then hire_v = v end
+      end
+    end
+    -- (One more special skill than the best on the staff is worth a wage.)
+    if hire_v and hire_v >= (best_v or -1) + 1 and s.balance > 20000 then
+      if bot:hireTeacher() then
+        self.teacher_sent = s.day
+        self:note(string.format("day %d: hired a teacher (%d special skills) for the training room",
+            s.day, math.floor(hire_v)))
+        return
+      end
+    end
+    if best and best ~= teacher then
+      if bot:moveStaffInto(best, room) then
+        self.teacher_sent = s.day
+        self:note(string.format("day %d: %s teaches (%d special skills)", s.day,
+            tostring(best.profile:getFullName()), bot.specialisms(best.profile)))
+        return
+      end
+    end
+  end
+  -- Students: juniors, while the other rooms keep their doctors.
+  if s.day - (self.student_day or -99) < 3 then return end
+  local chairs, students = 0, {}
+  for o in pairs(room.objects or {}) do
+    if o.object_type and o.object_type.id == "lecture_chair" then chairs = chairs + 1 end
+  end
+  for _, st in ipairs(self:doctorsWhere(function() return true end)) do
+    if st ~= teacher and inside(st) then students[#students + 1] = st end
+  end
+  -- Back to work: a student now a consultant, or (one at a time, the most
+  -- skilled) when a room is short of a doctor.
+  local short = self:roomShortOf("Doctor")
+  local leaving, leaving_skill
+  for _, st in ipairs(students) do
+    if not st.pickup and st.mp_id then
+      if bot.flag(st.profile, "is_consultant") then
+        leaving, leaving_skill = st, 99
+      elseif short and (st.profile.skill or 0) > (leaving_skill or -1) then
+        leaving, leaving_skill = st, st.profile.skill or 0
+      end
+    end
+  end
+  if leaving then
+    local target = short or self:roomShortOf("Consultant")
+    if target and bot:moveStaffInto(leaving, target) then
+      self.student_day = s.day
+      self:note(string.format("day %d: %s trained, back to the %s", s.day,
+          tostring(leaving.profile:getFullName()), target.room_info.id))
+      return
+    end
+  end
+  local doctors = #self:doctorsWhere(function() return true end)
+  local needed = bot:staffWanted().Doctor
+  if #students < chairs and not short and doctors - #students - (teacher and 1 or 0) - 1 >= needed then
+    -- Juniors first, then the least skilled doctor not yet a consultant.
+    local pick, pick_v
+    for _, st in ipairs(self:doctorsWhere(function(p) return not bot.flag(p, "is_consultant") end)) do
+      if not inside(st) and not st.pickup and st.mp_id then
+        local v = (bot.flag(st.profile, "is_junior") and 0 or 1) + (st.profile.skill or 0)
+        if not pick_v or v < pick_v then pick, pick_v = st, v end
+      end
+    end
+    if pick and bot:moveStaffInto(pick, room) then
+      self.student_day = s.day
+      self:note(string.format("day %d: %s to the training room", s.day, tostring(pick.profile:getFullName())))
+    end
+  end
+end
+
+--! A room of this hospital with fewer staff of `category` than it needs
+--! (the first by id), or nil.
+function M:roomShortOf(category)
+  local world, hosp = self.bot.world, self.bot.world.ui.hospital
+  local best
+  for _, rm in pairs(world.rooms) do
+    local need = rm.hospital == hosp and rm.is_active and rm.room_info.id ~= "training" and
+        (rm.room_info.required_staff or {})[category]
+    if need and not best or (need and rm.id < best.id) then
+      local have = 0
+      for h in pairs(rm.humanoids or {}) do
+        if h.humanoid_class == "Doctor" and h:fulfillsCriterion(category) then have = have + 1 end
+      end
+      if have < need then best = rm end
+    end
+  end
+  return best
+end
+
 --! Does it need land: how many kinds of room found no floor in the last 30
 --! days, or nil. Not while plenty of floor is free (then the rooms were
 --! badly placed, more land would not help), unless three kinds failed.
@@ -616,7 +779,7 @@ function M:doProject(s)
       local ok, why = p.run()
       if ok then
         self:note(string.format("day %d: %s (score %.1f, $%d)", s.day, p.key, p.score, math.floor(s.balance)))
-        if p.key == "buy:land" then self.no_space = {} end
+        if p.key == "buy:land" or p.key == "edit:shrink" then self.no_space = {} end
         self.no_space[p.key] = nil
         self.boost[p.key] = nil
         if self.wishes[p.key] then self:tellWisher(self.wishes[p.key], "wish_done", p.key) end
@@ -686,6 +849,7 @@ function M:daily(s)
   -- have had the time to deal with them first.
   self:defend(s)
   if helper then return end
+  self:training(s)
   -- Heating: warmer when patients are cold, cooler when they are hot.
   -- (Not while the boiler is broken: the heating cannot be set then.)
   if hosp.opened and s.patients >= 4 and (s.objects.radiator or 0) > 0 and
@@ -718,10 +882,18 @@ function M:monthLine(s)
   local queues = {}
   for id, n in pairs(s.rooms) do queues[#queues + 1] = string.format("%s:%d/%d", id, s.queue[id] or 0, n) end
   table.sort(queues)
+  local staff, n = {}, 0
+  for c, k in pairs(s.staff) do staff[#staff + 1] = c .. "=" .. k; n = n + k end
+  table.sort(staff)
+  local juniors = #self:doctorsWhere(function(p) return self.bot.flag(p, "is_junior") end)
+  local consultants = #self:doctorsWhere(function(p) return self.bot.flag(p, "is_consultant") end)
   return string.format("month %d: left %s; lost most: %s; in hospital %d; queues %s, reception %d; psychiatrists %d,"
-      .. " surgeons %d; prices %d%%; reputation %d, $%d", s.month, table.concat(left, " "), table.concat(top, " "),
+      .. " surgeons %d; prices %d%%; reputation %d, $%d; loan $%d; staff %d (%s), juniors %d, consultants %d;"
+      .. " staff happy %d%%, tired %d%%; patients happy %d%%", s.month, table.concat(left, " "), table.concat(top, " "),
       s.patients, table.concat(queues, " "), s.reception_queue, hosp:countStaffOfCategory("Psychiatrist"),
-      hosp:countStaffOfCategory("Surgeon"), self.price_target or 100, s.reputation, math.floor(s.balance))
+      hosp:countStaffOfCategory("Surgeon"), self.price_target or 100, s.reputation, math.floor(s.balance),
+      math.floor(s.loan or 0), n, table.concat(staff, ","), juniors, consultants, math.floor(s.staff_happy * 100 + 0.5),
+      math.floor(s.fatigue * 100 + 0.5), math.floor((s.happiness or 0) * 100 + 0.5))
 end
 
 --! Once a month: prices, repaying the loan, research.
@@ -763,11 +935,15 @@ function M:monthly(s)
     end
     self:note(string.format("day %d: prices to %d%%", s.day, target))
   end
-  -- Loan: repay what it can spare.
-  if s.loan > 0 and s.balance > 25000 then
-    local amount = math.min(s.loan, math.floor((s.balance - 20000) / 1000) * 1000)
+  -- Loan: repay it once the money flows in again (the balance up since a
+  -- month ago), keeping $12,000; or what it can spare above $25,000.
+  local flowing = self.last_balance and s.balance > self.last_balance
+  self.last_balance = s.balance
+  if s.loan > 0 and (s.balance > 25000 or (flowing and s.balance > 17000)) then
+    local keep = s.balance > 25000 and 20000 or 12000
+    local amount = math.min(s.loan, math.floor((s.balance - keep) / 1000) * 1000)
     if amount > 0 and self:issue({kind = "loan", amount = -amount}) then
-      self:note(string.format("day %d: repaid $%d of the loan", s.day, amount))
+      self:note(string.format("day %d: repaid $%d of the loan ($%d left)", s.day, amount, s.loan - amount))
     end
   end
   -- Research: aim it at the disease whose treatment room it lacks most.

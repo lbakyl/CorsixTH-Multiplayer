@@ -2285,7 +2285,28 @@ local function run()
           end
           log(string.format("UI: players at step %d: %s", session.step, table.concat(parts, "; ")))
           if entry.arg == "shot" then shot("players") end
-          win:close()
+          if entry.arg == "click" then
+            -- A click on the second row's name: the view goes to that
+            -- hospital's camera tile and the window closes.
+            local click_from = {world.ui.screen_offset_x, world.ui.screen_offset_y}
+            win:lookAt(2)
+            local h2 = win.row_hospitals[2]
+            log(string.format("UI: players click at step %d: %s, view moved %s, window closed %s",
+                session.step, h2 and h2.name or "-",
+                tostring(click_from[1] ~= world.ui.screen_offset_x or click_from[2] ~= world.ui.screen_offset_y),
+                tostring(not world.ui:getWindow(UIMultiplayerPlayers))))
+          else
+            win:close()
+          end
+        elseif a == "nexthospital" then
+          -- The next hospital key, as many times as the argument says.
+          local chat = assert(world.ui:getWindow(UIMultiplayerChat), "no chat window")
+          local seen = {}
+          for _ = 1, tonumber(entry.arg) or 1 do
+            chat:nextHospital()
+            seen[#seen + 1] = tostring(chat.looked_at)
+          end
+          log(string.format("UI: next hospital at step %d: %s", session.step, table.concat(seen, ",")))
         elseif a == "overlay" then
           -- Blue marks left on the map's overlay layer (4) outside any room
           -- being edited: value, tile, room id there.

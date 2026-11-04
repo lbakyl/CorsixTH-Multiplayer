@@ -257,6 +257,10 @@ menu_player_count = {
   players_2 = "  2 PLAYERS  ",
   players_3 = "  3 PLAYERS  ",
   players_4 = "  4 PLAYERS  ",
+  players_5 = "  5 PLAYERS  ",
+  players_6 = "  6 PLAYERS  ",
+  players_7 = "  7 PLAYERS  ",
+  players_8 = "  8 PLAYERS  ",
 }
 
 tooltip.toolbar = {
@@ -849,6 +853,7 @@ multiplayer_window = {
   players_behind = "%d hours behind",
   players_waiting = "Waiting for the server's list...",
   players_note = "Ping: average of the last 10 seconds. Value: the hospital value (a level goal).",
+  looking_at = "Looking at %s",
   -- Progress Report tooltips for another player's hospital: name, current
   -- value, goal_target or goal_limit, the goal's value
   goal_other = {
@@ -864,6 +869,7 @@ multiplayer_window = {
 }
 
 tooltip.multiplayer_window = {
+  player_row = "Click: look at this player's hospital (N: the next hospital)",
   auctions = "The host decides which plots of land go to auction when a player asks to buy one",
   auctions_near = "Plots on another player's side or next to another hospital's land go to auction; the others are simply bought",
   auctions_all = "Every plot goes to auction among all the hospitals that may buy it",
@@ -1264,6 +1270,7 @@ hotkey_window = {
   ingame_poopStrings = "Dump Strings",
   ingame_patient_gohome = "Send Home",
   ingame_mp_chat = "Multiplayer Chat",
+  ingame_mp_next_hospital = "Next Hospital (MP)",
   ingame_sellPickedUpItem = "Sell Picked-up Item",
   ingame_storePosition_1 = "1",
   ingame_storePosition_2 = "2",
@@ -1651,6 +1658,9 @@ map_editor_window = {
     heliport_2 = "Heliport 2",
     heliport_3 = "Heliport 3",
     heliport_4 = "Heliport 4",
+    camera_n = "Camera %d",
+    heliport_n = "Heliport %d",
+    player = "Player %d",
     paste = "Paste area",
   },
   checks = {

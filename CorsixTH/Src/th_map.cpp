@@ -1439,13 +1439,13 @@ void level_map::update_pathfinding() {
 
       if (iX == 0) {
         pNode->flags.can_travel_w = false;
-      } else if (iX == 127) {
+      } else if (iX == width - 1) {
         pNode->flags.can_travel_e = false;
       }
 
       if (iY == 0) {
         pNode->flags.can_travel_n = false;
-      } else if (iY == 127) {
+      } else if (iY == height - 1) {
         pNode->flags.can_travel_s = false;
       }
 

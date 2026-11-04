@@ -299,6 +299,17 @@ class animation_manager {
   void set_animation_alt_palette_map(size_t iAnimation, const uint8_t* pMap,
                                      uint32_t iAlt32);
 
+  //! Set the palette remap data for the sprites of one layer variant
+  /*!
+      Like set_animation_alt_palette_map, for every sprite of every animation
+      whose element is of layer class iLayer with value iLayerId (a
+      multiplayer hospital's colour: a patient's clothes drawn in another
+      colour when drawn with thdf_alt_palette).
+      @return The number of elements changed.
+  */
+  int set_layer_alt_palette_map(int iLayer, int iLayerId, const uint8_t* pMap,
+                                uint32_t iAlt32);
+
   //! Draw an animation frame
   /*!
       @param pCanvas The render target to draw onto.

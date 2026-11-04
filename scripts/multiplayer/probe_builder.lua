@@ -394,13 +394,15 @@ function builder.ui_buy_under_person(world, object_id, log)
   place:close()
 end
 
-function builder.ui_hire(world, desk_x, desk_y, class, log)
+function builder.ui_hire(world, desk_x, desk_y, class, log, score)
   local ui = world.ui
   local dlg = UIHireStaff(ui)
   ui:addWindow(dlg)
   -- "Doctor:surgeon": the first doctor with that skill (surgeon,
   -- psychiatrist, researcher, junior, consultant), else the first one;
   -- "...@research": placed straight into this hospital's room of that kind.
+  -- With `score` (profile -> number, or nil for not this one): the one of
+  -- those with the highest score (the first of equals).
   local skill, at_room
   class, at_room = class:match("^([^@]+)@?([%w_]*)$")
   class, skill = class:match("^(%a+):?(%a*)$")
@@ -408,14 +410,26 @@ function builder.ui_hire(world, desk_x, desk_y, class, log)
   -- (Its hospital's own list; a game without World:staffPool has one list.)
   local pool = (world.staffPool and world:staffPool() or world.available_staff)[class]
   assert(pool and #pool > 0, "nobody to hire in " .. class)
+  local function has(profile)
+    local v = profile["is_" .. skill]
+    return v ~= nil and v ~= 0 and v ~= false
+  end
   if skill ~= "" then
     for i, profile in ipairs(pool) do
-      if profile["is_" .. skill] == 1 then
+      if has(profile) then
         dlg.current_index = i
         break
       end
     end
-    class = class .. " (" .. skill .. (pool[dlg.current_index]["is_" .. skill] == 1 and "" or ": none, so any") .. ")"
+    class = class .. " (" .. skill .. (has(pool[dlg.current_index]) and "" or ": none, so any") .. ")"
+  end
+  if score then
+    local any_with_skill = skill ~= "" and has(pool[dlg.current_index])
+    local best
+    for i, profile in ipairs(pool) do
+      local v = (not any_with_skill or has(profile)) and score(profile)
+      if v and (not best or v > best) then best, dlg.current_index = v, i end
+    end
   end
   local hired = pool[dlg.current_index]
   local name = tostring(hired:getFullName()):gsub("^.*:", "")
@@ -733,7 +747,9 @@ function builder.furnish_tick(world, state, log)
     end
   end
   log("UI: furnishing: no place left for " .. o.object.id)
-  dlg:cancel()
+  -- (An edited room keeps its walls: the edit decides; a new one is
+  -- given up.)
+  if not state.edit then dlg:cancel() end
   return true
 end
 
@@ -746,6 +762,8 @@ end
 --!   resize:<dw>:<dh>  cancel (walls down), draw the room again that much
 --!                     bigger (growing left or up where right or down is
 --!                     taken); without space it goes back as it was (FAILED)
+--!   shrink:<side>     cancel (walls down), draw the room again one tile
+--!                     smaller on that side (left, right, top or bottom)
 --!   done              confirm (the room opens again)
 --!   delete            cancel twice (walls down, then remove the room)
 --! Returns true when finished. Logs "UI: edit <step> ok" or "... FAILED".
@@ -827,8 +845,10 @@ function builder.edit_tick(world, state, log)
       shop:purchaseItem(index, 1)
       shop:confirm()
     elseif name == "place" then
-      state.placing = {no_confirm = true, clicks = true}
-    elseif name == "move" or name == "resize" then
+      -- (In an edited room an extra with no place left stays in the list:
+      -- the room is confirmed without it.)
+      state.placing = {no_confirm = true, clicks = true, edit = true}
+    elseif name == "move" or name == "resize" or name == "shrink" then
       state.old = {x = dlg.room.x, y = dlg.room.y, w = dlg.room.width, h = dlg.room.height}
       dlg:cancel()
     elseif name == "done" then
@@ -842,7 +862,7 @@ function builder.edit_tick(world, state, log)
     return false
   end
   local name = state.name
-  if step - state.since > 400 then finish_step(false, "timed out") return false end
+  if step - state.since > 800 then finish_step(false, "timed out") return false end
   if name == "pickup" then
     if shown and count() > state.before then finish_step(true) end
   elseif name == "buy" then
@@ -852,9 +872,24 @@ function builder.edit_tick(world, state, log)
     end
   elseif name == "place" then
     if shown and dlg.phase == "objects" and builder.furnish_tick(world, state.placing, log) then
-      finish_step(#dlg.objects == 0, "objects left")
+      -- (Extras left over: fine as long as the room has what it needs.)
+      if #dlg.objects > 0 and dlg.confirm_button.enabled then
+        log(string.format("UI: edit: %d extra(s) left out at step %d", #dlg.objects, step))
+        finish_step(true)
+      elseif #dlg.objects > 0 and state.shrunk then
+        -- What the room needs did not fit into the smaller room: walls down
+        -- again, back to its old size, its things put back.
+        log(string.format("UI: edit: the smaller room cannot take what it needs; back to its size at step %d", step))
+        local back = state.shrunk
+        state.shrunk = nil
+        table.insert(state.steps, state.i + 1, string.format("resize:%d:%d", back[1], back[2]))
+        table.insert(state.steps, state.i + 2, "place")
+        finish_step(true)
+      else
+        finish_step(#dlg.objects == 0, "objects left")
+      end
     end
-  elseif name == "move" or name == "resize" then
+  elseif name == "move" or name == "resize" or name == "shrink" then
     if shown and entry.unbuilt and dlg.phase == "walls" and not state.drawn then
       -- Draw it again a little further (the first offset that works), or
       -- bigger ({dx, dy, extra w, extra h}); the old place last.
@@ -863,6 +898,9 @@ function builder.edit_tick(world, state, log)
       if name == "resize" then
         tries = {{0, 0, a, b}, {-a, 0, a, b}, {0, -b, a, b}, {-a, -b, a, b}, {0, 0, a, 0}, {-a, 0, a, 0},
             {0, 0, 0, b}, {0, -b, 0, b}, {0, 0, 0, 0}}
+      elseif name == "shrink" then
+        local by_side = {left = {1, 0, -1, 0}, right = {0, 0, -1, 0}, top = {0, 1, 0, -1}, bottom = {0, 0, 0, -1}}
+        tries = {by_side[state.a1] or by_side.right, {0, 0, 0, 0}}
       end
       for _, d in ipairs(tries) do
         if not state.drawn then
@@ -871,9 +909,16 @@ function builder.edit_tick(world, state, log)
             dlg:confirm()
             if dlg.phase == "door" then
               local r = dlg.blueprint_rect
-              for tx = r.x + 1, r.x + r.w - 2 do
+              -- The door on the south wall if it can go there, else the
+              -- north, west or east one (a room against a wall below).
+              local spots = {}
+              for tx = r.x + 1, r.x + r.w - 2 do spots[#spots + 1] = {tx, r.y + r.h - 1, "south"} end
+              for tx = r.x + 1, r.x + r.w - 2 do spots[#spots + 1] = {tx, r.y, "north"} end
+              for ty = r.y + 1, r.y + r.h - 2 do spots[#spots + 1] = {r.x, ty, "west"} end
+              for ty = r.y + 1, r.y + r.h - 2 do spots[#spots + 1] = {r.x + r.w - 1, ty, "east"} end
+              for _, spot in ipairs(spots) do
                 if dlg.phase == "door" then
-                  dlg:setDoorBlueprint(tx, r.y + r.h - 1, "south")
+                  dlg:setDoorBlueprint(spot[1], spot[2], spot[3])
                   if dlg.blueprint_door.valid then dlg:placeDoorBlueprint() end
                 end
               end
@@ -888,7 +933,13 @@ function builder.edit_tick(world, state, log)
           end
         end
       end
-      if not state.drawn then finish_step(false, "no place to move to") end
+      -- (Right after the walls come down the old floor may not take a room
+      -- yet: try again every step for a while before giving up.)
+      state.walls_since = state.walls_since or step
+      if not state.drawn and step - state.walls_since > 300 then
+        state.walls_since = nil
+        finish_step(false, "no place to move to")
+      end
     elseif shown and state.drawn and not entry.unbuilt and dlg.phase == "objects" then
       log(string.format("UI: edit: room now at %d,%d size %dx%d (was %d,%d size %dx%d)", dlg.room.x, dlg.room.y,
           dlg.room.width, dlg.room.height, state.old.x, state.old.y, state.old.w, state.old.h))
@@ -896,6 +947,15 @@ function builder.edit_tick(world, state, log)
       -- (A room that could not grow is back as it was: say so, then
       -- put its things back and confirm as usual.)
       local grown = dlg.room.width * dlg.room.height > state.old.w * state.old.h
+      if name == "shrink" and dlg.room.width * dlg.room.height >= state.old.w * state.old.h then
+        log("UI: edit shrink FAILED: drawn as it was at step " .. step)
+        state.current, state.wait = nil, nil
+        state.i = state.i + 1
+        return false
+      end
+      if name == "shrink" then
+        state.shrunk = {state.old.w - dlg.room.width, state.old.h - dlg.room.height}
+      end
       if name == "resize" and not grown then
         log("UI: edit resize FAILED: no space to grow at step " .. step)
         state.grew = false

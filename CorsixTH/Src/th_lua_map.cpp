@@ -49,7 +49,7 @@ class sprite_sheet;
 
 namespace {
 
-constexpr int player_max = 4;
+constexpr int player_max = level_map::max_players;
 
 int l_map_new(lua_State* L) {
   luaT_stdnew<level_map>(L, luaT_environindex, true);
@@ -456,7 +456,7 @@ int l_map_set_player_camera(lua_State* L) {
   int iPlayer = static_cast<int>(luaL_optinteger(L, 4, 1));
 
   if (iPlayer < 1 || iPlayer > player_max) {
-    return luaL_error(L, "Player index out of range: %i", iPlayer);
+    return luaL_error(L, "Player index out of range: %d", iPlayer);
   }
 
   pMap->set_player_camera_tile(iPlayer - 1, iX, iY);
@@ -483,7 +483,7 @@ int l_map_set_player_heliport(lua_State* L) {
   int iPlayer = static_cast<int>(luaL_optinteger(L, 4, 1));
 
   if (iPlayer < 1 || iPlayer > player_max) {
-    return luaL_error(L, "Player index out of range: %i", iPlayer);
+    return luaL_error(L, "Player index out of range: %d", iPlayer);
   }
 
   pMap->set_player_heliport_tile(iPlayer - 1, iX, iY);

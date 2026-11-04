@@ -801,6 +801,22 @@ void animation_manager::set_animation_alt_palette_map(size_t iAnimation,
   } while (iFrame != iFirstFrame);
 }
 
+int animation_manager::set_layer_alt_palette_map(int iLayer, int iLayerId,
+                                                  const uint8_t* pMap,
+                                                  uint32_t iAlt32) {
+  int iChanged = 0;
+  for (size_t i = 0; i < element_count && i < elements.size(); ++i) {
+    element& oElement = elements[i];
+    if (oElement.layer == iLayer && oElement.layer_id == iLayerId &&
+        oElement.element_sprite_sheet != nullptr) {
+      oElement.element_sprite_sheet->set_sprite_alt_palette_map(
+          oElement.sprite, pMap, iAlt32);
+      ++iChanged;
+    }
+  }
+  return iChanged;
+}
+
 bool animation_manager::set_frame_primary_marker(size_t iFrame, int iX,
                                                  int iY) {
   if (iFrame >= frame_count) {

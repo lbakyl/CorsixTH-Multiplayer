@@ -282,9 +282,34 @@ Bot.__index = Bot
 local FIRST_ROOMS = {gp = 1, pharmacy = 2, general_diag = 3, ward = 4, psych = 5, staff_room = 6,
     toilets = 7, cardiogram = 8, scanner = 9, ultrascan = 10, blood_machine = 11, x_ray = 12}
 -- Rooms a beginner leaves alone (a consultant to teach in it).
-local SKIP_ROOMS = {training = true}
+local SKIP_ROOMS = {}
 -- Doctors with a skill a room needs: how they are hired.
-local SPECIALISTS = {Psychiatrist = "psychiatrist", Surgeon = "surgeon", Researcher = "researcher"}
+local SPECIALISTS = {Psychiatrist = "psychiatrist", Surgeon = "surgeon", Researcher = "researcher",
+    Consultant = "consultant"}
+
+--! Is this staff profile flag set (1, true; not 0 or nil)?
+local function flag(profile, name)
+  local v = profile[name]
+  return v ~= nil and v ~= 0 and v ~= false
+end
+
+--! How many of the three special skills (surgeon, psychiatrist, researcher)
+--! a doctor has.
+local function specialisms(profile)
+  local n = 0
+  for _, k in ipairs({"is_surgeon", "is_psychiatrist", "is_researcher"}) do
+    if flag(profile, k) then n = n + 1 end
+  end
+  return n
+end
+Bot.specialisms = specialisms
+Bot.flag = flag
+
+--! A teacher's worth: special skills first (each one the students can
+--! learn), then skill.
+function Bot.teacherScore(profile)
+  return specialisms(profile) + (profile.skill or 0)
+end
 -- Kept in the bank when building or buying.
 local RESERVE = 3000
 -- Staff care (Bot:careForStaff): once a game week everybody under half
@@ -1122,6 +1147,57 @@ function Bot:editRoom(rm, steps)
   return true
 end
 
+--! A room of its own bigger than it needs, and the side of it to take in:
+--! the room with the most floor over `size_of(room id)` (its planned size,
+--! the smallest plus one); the side whose last row or column has the fewest
+--! things in it (they are put back elsewhere in the room). Returns room,
+--! side or nil.
+function Bot:oversizedRoom(size_of)
+  local world, hospital = self.world, self.world.ui.hospital
+  local best, best_side, best_excess
+  for _, rm in pairs(world.rooms) do
+    local id = rm.room_info.id
+    local want = size_of(id) or (rm.room_info.minimum_size or 4) + 1
+    if rm.hospital == hospital and rm.built and rm.is_active and not rm.crashed and
+        (rm.width > want or rm.height > want) then
+      local function things(x0, y0, x1, y1)
+        local n = 0
+        for ty = y0, y1 do
+          for tx = x0, x1 do
+            if world:getObject(tx, ty) then n = n + 1 end
+          end
+        end
+        return n
+      end
+      local x0, y0, x1, y1 = rm.x, rm.y, rm.x + rm.width - 1, rm.y + rm.height - 1
+      local side, fewest
+      local function consider(name, n)
+        if not fewest or n < fewest then side, fewest = name, n end
+      end
+      if rm.width > want then
+        consider("right", things(x1, y0, x1, y1))
+        consider("left", things(x0, y0, x0, y1))
+      end
+      if rm.height > want then consider("top", things(x0, y0, x1, y0)) end
+      local excess = rm.width * rm.height - want * want
+      if side and (not best or excess > best_excess or (excess == best_excess and rm.id < best.id)) then
+        best, best_side, best_excess = rm, side, excess
+      end
+    end
+  end
+  return best, best_side
+end
+
+--! Take in a room that is bigger than it needs by a row or column, to free
+--! floor for another (out of floor and no cheaper way). Like a person: the
+--! room editor, walls down, the room drawn again one tile smaller, its
+--! things put back.
+function Bot:shrinkRoom(size_of)
+  local rm, side = self:oversizedRoom(size_of)
+  if not rm then return nil, "nothing to shrink" end
+  return self:editRoom(rm, {"shrink:" .. side, "place", "done"})
+end
+
 --! A room being edited (Bot:editRoom): one step at a time. True while busy.
 function Bot:editTick()
   if not self.editing then return false end
@@ -1522,7 +1598,7 @@ function Bot:canHire(category)
   if not pool or #pool == 0 then return false end
   if not skill then return true end
   for _, profile in ipairs(pool) do
-    if profile["is_" .. skill] == 1 then return true end
+    if flag(profile, "is_" .. skill) then return true end
   end
   return false
 end
@@ -1537,8 +1613,19 @@ function Bot:hireCategory(category)
   -- A researcher goes straight into the research room (else the room may
   -- wait a long time for a doctor to be called over).
   if category == "Researcher" and self.manager and self.manager:roomOf("research") then what = what .. "@research" end
-  local ok, err = pcall(builder.ui_hire, self.world, dx, dy, what, log)
+  -- The most skilled on the list (of those with the skill wanted).
+  local ok, err = pcall(builder.ui_hire, self.world, dx, dy, what, log, function(p) return p.skill or 0 end)
   if not ok then log("could not hire a " .. category .. ": " .. tostring(err)) end
+  return ok
+end
+
+--! Hire the consultant on the list who would teach best (Bot.teacherScore)
+--! straight into the training room.
+function Bot:hireTeacher()
+  if self.world.ui.hospital.balance < RESERVE or not self:canHire("Consultant") then return false end
+  local dx, dy = self:anchor()
+  local ok, err = pcall(builder.ui_hire, self.world, dx, dy, "Doctor:consultant@training", log, Bot.teacherScore)
+  if not ok then log("could not hire a teacher: " .. tostring(err)) end
   return ok
 end
 

@@ -33,8 +33,15 @@ Status: on `mp/team-hospitals`; first released in mp-test-d5a471a7 (eu2).
   - its helicopter lands on the nearest of the four original heliports.
 - 12 plots stay for sale, instead of 16.
 - With 5 to 7 players, the starting plots of the missing ones are for sale.
-- The map editor still offers 1 to 4 players (its menu and its camera and
-  heliport buttons). Making real 8-player maps in it is a follow-up.
+- The map editor makes maps for up to 8 players: its player count menu goes
+  to 8, and one Camera and one Heliport button set the tiles of the player
+  the Player button shows (a click: the next one). It saves players 5 to 8
+  in the same spare bytes. (`scripts/multiplayer/editor_probe.lua` tests it.)
+- Larger maps (192 x 192, up to 256 x 256) are possible but not built: the
+  map format would need a header with the size, the town map and the level
+  preview draw at a fixed 3 and 2 pixels a tile, and every map would have to
+  be made new. The pathfinder's edge at tile 127 is already fixed to the
+  map's size.
 
 ## Other parts that changed
 
@@ -48,9 +55,12 @@ Status: on `mp/team-hospitals`; first released in mp-test-d5a471a7 (eu2).
 - **Room window:** a line per place. It grows by 27 pixels per place above 4,
   so a room of 8 is 403 pixels high.
 - **Level browser:** a map for 2 up to 8 players, as many as the level has.
-- **Patients:** the original game has 4 shirt colours. Patients of colours 5
-  to 8 wear those of 1 to 4. The colour bars at their feet, and at their
-  staff's feet, tell the hospitals apart.
+- **Patients:** the original game has 4 shirt colours. Colours 6, 7 and 8
+  wear the white, lavender and salmon shirts redrawn blue, teal and pink (a
+  palette map on every sprite of that clothes layer, drawn only for their
+  patients: `TH.anims:setLayerAltPalette`, `MultiplayerSession.setupShirtColours`).
+  Colour 5 keeps colour 1's mustard shirt: it is part of the body sprite, not
+  a layer of its own. The colour bars at the feet tell all of them apart.
 - **Auctions:** the auction room's picture has 4 bidder bars. With more
   hospitals, the bidders are the one that asks and the 3 others whose
   hospitals are nearest the plot. Each bot wants each plot a little
