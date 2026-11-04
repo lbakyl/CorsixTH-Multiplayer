@@ -81,6 +81,9 @@ RECOVERY_TIMEOUT = 60.0
 BOT_NAMES = ("Bot Agnes", "Bot Bertie", "Bot Clive", "Bot Dora", "Bot Edna", "Bot Fergus",
              "Bot Gwen", "Bot Hector")
 BOT_START_TIMEOUT = 60.0
+# A player the room owner removed (KICK) may not come back to that room for
+# this many seconds.
+KICK_BLOCK_SECONDS = 300.0
 # Each bot is a whole game running on this server: at most this many at once
 # (all rooms together; CORSIXTH_MP_MAX_BOTS).
 MAX_BOTS = 6
@@ -235,6 +238,8 @@ class Room:
     recoveries: int = 0
     # Bots started but not joined yet: token -> (name, process or None).
     bots_pending: dict[str, list] = field(default_factory=dict)
+    # Players the owner removed: name (lower case) -> time they may return.
+    kicked: dict[str, float] = field(default_factory=dict)
 
     def humans(self) -> list[Player]:
         return [p for p in self.players.values() if not p.is_bot]
@@ -668,6 +673,8 @@ class Server:
         elif room.build != player.build:
             self._error(player, "build_mismatch",
                         f"The room runs build {room.build}; you run {player.build}")
+        elif room.kicked.get(player.name.lower(), 0.0) > time.monotonic():
+            self._error(player, "kicked", "The room's owner removed you from this room a moment ago")
         elif room.state != "lobby":
             self._rejoin(player, room)
         elif room.is_full():
@@ -722,6 +729,28 @@ class Server:
 
     def _on_leave(self, player: Player, f: dict[str, str]) -> None:
         self._leave_room(player)
+
+    def _on_kick(self, player: Player, f: dict[str, str]) -> None:
+        """The room owner removes a player (peer=<n>) while the room waits in
+        the lobby: they are told (KICKED), back in the room list, and may not
+        join this room again for KICK_BLOCK_SECONDS. (Bots: BOT remove=.)"""
+        room = player.room
+        if room is None or room.owner is not player:
+            self._error(player, "not_owner", "Only the room owner removes players")
+            return
+        if room.state != "lobby":
+            return
+        peer = f.get("peer", "")
+        target = room.players.get(int(peer)) if peer.isdigit() else None
+        if target is None or target is player or target.is_bot or target.is_referee:
+            self._error(player, "no_player", "No such player")
+            return
+        log.info("room %r: %r removes %r", room.name, player.name, target.name)
+        room.kicked[target.name.lower()] = time.monotonic() + KICK_BLOCK_SECONDS
+        target.send(encode("KICKED", room=room.name, by=player.name))
+        self._leave_room(target)
+        room.broadcast(encode("CHAT", peer=0, name="server",
+                              text=f"{target.name} was removed by {player.name}"))
 
     def _on_ready(self, player: Player, f: dict[str, str]) -> None:
         if player.room and player.room.state == "lobby":

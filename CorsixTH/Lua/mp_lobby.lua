@@ -594,6 +594,8 @@ end
 --! like a player, ready at once) or takes one away by its peer number.
 function MultiplayerLobby:addBot() self.error = nil; self:send("BOT", {add = 1}) end
 function MultiplayerLobby:removeBot(peer) self.error = nil; self:send("BOT", {remove = peer}) end
+--! The room owner removes a player from the room (the server answers KICKED to them).
+function MultiplayerLobby:kickPlayer(peer) self.error = nil; self:send("KICK", {peer = peer}) end
 
 --! Can this room have bots (the server runs them, and this player owns it)?
 function MultiplayerLobby:canAddBots()
@@ -681,6 +683,16 @@ function MultiplayerLobby:_onJOINED(f)
   self.players, self.players_pending = {}, {}
   self.ready = false
   self:_changed("joined", f)
+end
+
+--! The room's owner removed this player: back in the room list, told why.
+function MultiplayerLobby:_onKICKED(f)
+  self.log("multiplayer server: removed from room " .. tostring(f.room) .. " by " .. tostring(f.by))
+  self.room, self.players, self.summary, self.ready = nil, {}, nil, false
+  self.state = "connected"
+  self.error = {code = "kicked", text = _S.multiplayer_window.kicked:format(tostring(f.by or "?"))}
+  self:_changed("kicked", f)
+  self:refreshRooms()
 end
 
 function MultiplayerLobby:_onOWNER()

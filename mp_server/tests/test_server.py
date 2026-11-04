@@ -281,6 +281,27 @@ def test_owner_handover_in_lobby(run):
     run(body)
 
 
+def test_owner_removes_a_player_from_the_lobby(run):
+    async def body(server, port):
+        a, b = await two_players_in_room(port)
+        b.send(encode("KICK", peer=1))  # not the owner
+        assert (await b.expect("ERROR"))["code"] == "not_owner"
+        a.send(encode("KICK", peer=2))
+        kicked = await b.expect("KICKED")
+        assert kicked["room"] == "r1" and kicked["by"] == "Alice"
+        await a.expect("CHAT", text="Bob was removed by Alice")
+        assert [p.name for p in server.rooms["r1"].players.values()] == ["Alice"]
+        # Not back in that room for a while.
+        b.send(encode("JOIN", room="r1", password="pw"))
+        assert (await b.expect("ERROR"))["code"] == "kicked"
+        server.rooms["r1"].kicked["bob"] = 0.0
+        b.send(encode("JOIN", room="r1", password="pw"))
+        await b.expect("JOINED")
+        await a.close()
+        await b.close()
+    run(body)
+
+
 def test_cosmetic_show_is_relayed_with_sender(run):
     async def body(server, port):
         a, b = await two_players_in_room(port)

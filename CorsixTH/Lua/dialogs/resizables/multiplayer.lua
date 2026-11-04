@@ -424,7 +424,7 @@ end
 
 function UIMultiplayer:_buildRoom()
   local S, T = _S.multiplayer_window, _S.tooltip.multiplayer_window
-  self.player_panels = {}
+  self.player_panels, self.place_buttons = {}, {}
   -- Each player's colour (the hospital: the same colour, the same hospital)
   -- and team (the same team wins together) on buttons at the end of their
   -- line. (A continued game shows its saved ones, fixed.)
@@ -436,7 +436,10 @@ function UIMultiplayer:_buildRoom()
     self.player_panels[i] = label(self, 20, y, line_w, "")
     -- The host clicks an empty place to add a bot there, or a bot to take
     -- it away again.
-    self.player_panels[i]:makeButton(0, 0, line_w, 25, nil, function() self:clickPlace(i) end)
+    -- A person: a double click or a right click opens a small menu to
+    -- remove them from the room (the host only).
+    self.place_buttons[i] = self.player_panels[i]:makeButton(0, 0, line_w, 25, nil,
+        function() self:clickPlace(i) end, nil, function() self:playerMenu(i) end)
     self.colour_buttons[i] = self:addBevelPanel(WIDTH - 20 - team_w - 5 - colour_w, y, colour_w, 25, col.button)
         :makeButton(0, 0, colour_w, 25, nil, function() self:clickColour(i) end)
         :setTooltip(T.colour)
@@ -520,13 +523,42 @@ end
 --! empty place or takes a bot away.
 function UIMultiplayer:clickPlace(i)
   local lobby = self.lobby
-  if not lobby:canAddBots() then return end
   local p = lobby.players[i]
+  -- (A second click on a person within half a second: the menu.)
+  local now = MultiplayerSession.defaultClock()()
+  if p and p.bot ~= "1" then
+    local last = self.last_place_click
+    self.last_place_click = {i = i, at = now}
+    if last and last.i == i and now - last.at < 500 then
+      self.last_place_click = nil
+      self:playerMenu(i)
+    end
+    return
+  end
+  if not lobby:canAddBots() then return end
   if p and p.bot == "1" then
     lobby:removeBot(i)
   elseif not p and i <= (tonumber(lobby.room.max) or 2) then
     lobby:addBot()
   end
+end
+
+--! The host's menu on another person's line: remove them from the room.
+function UIMultiplayer:playerMenu(i)
+  local lobby = self.lobby
+  local p = lobby.players[i]
+  if not (p and p.bot ~= "1" and lobby:isOwner() and tonumber(p.peer) ~= tonumber(lobby.room.peer)) then
+    return
+  end
+  for _, w in ipairs(self.windows or {}) do -- (one menu at a time)
+    if w == self.player_dropdown then w:close() break end
+  end
+  local peer, name = p.peer, p.name
+  local button = self.place_buttons[i]
+  self.player_dropdown = UIDropdown(self.ui, self, button,
+      {{text = _S.multiplayer_window.kick_player:format(name)}},
+      function() lobby:kickPlayer(peer) end, col.setting_active, col.scrollbar)
+  self:addWindow(self.player_dropdown)
 end
 
 --! A player's colour button: the next colour (a colour somebody has means

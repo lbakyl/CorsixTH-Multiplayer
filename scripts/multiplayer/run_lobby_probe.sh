@@ -93,6 +93,9 @@
 #      the auction; ben closes the screen meanwhile and gets the "please
 #      wait" box, and goes back to the auction from it -> IN SYNC, the same
 #      sale in both games
+#  34. the host removes a player ("kick"): uma double-clicks vic's line,
+#      the menu's "remove" -> vic is back in the room list, told why, and
+#      joining that room again is refused ("kicked")
 #  31. two languages in one game ("lang"): otis plays in English, greta in
 #      German (the build id no longer has the language); a busy hospital,
 #      staff hired by both, past the first month's new hiring lists -> IN
@@ -264,6 +267,10 @@ MP_START_PAUSE=1500 run_probe ida1 MP_ROLE=join MP_ROOM=pause MP_STEPS=200 MP_UI
 run_probe ana MP_ROLE=host MP_ROOM=auction MP_COOP=1 MP_LEVEL=2 MP_STEPS=600   MP_UI_SCRIPT="20:openhospital;100:auctionbuy;104:auctionshot;140:auctionshot;200:auctionbid;204:auctionshot" & pids+=($!)
 sleep 1
 run_probe ben MP_ROLE=join MP_ROOM=auction MP_STEPS=600   MP_UI_SCRIPT="30:openhospital;110:auctionshot;150:auctionbid;170:auctionhide;176:auctionshot;190:auctionback;196:auctionshot" & pids+=($!)
+# The host removes a player from the room.
+run_probe uma MP_ROLE=host MP_ROOM=kick MP_KICK=2 & pids+=($!)
+sleep 1
+run_probe vic MP_ROLE=join MP_ROOM=kick MP_EXPECT_KICK=1 & pids+=($!)
 # Two languages in one game: otis in English, greta in German.
 run_probe otis MP_ROLE=host MP_ROOM=lang MP_STEPS=2000 MP_SCENARIO=busy \
   MP_UI_SCRIPT="1600:hire:Doctor;1700:hire:Handyman" & pids+=($!)
@@ -769,6 +776,18 @@ ok33 = (len(sold33[0]) == 1 and sold33 == [sold33[0], sold33[0]] and sold33[0][0
         and result('ana').startswith('IN SYNC') and result('ben').startswith('IN SYNC'))
 print(f"33. Land auction:           {sold33[0]}; screens {screens33}; closed by ben {hidden33}; {result('ana')} / {result('ben')}")
 fail |= not ok33
+
+# The host removes a player.
+menu34 = re.search(r'UI: kick menu open: (\w+)', log('uma'))
+after34 = re.search(r'UI: after the kick: (.*)', log('uma'))
+told34 = re.search(r'UI: kicked: (.*); view (\w+)', log('vic'))
+again34 = re.search(r'UI: joining again: (\w+)', log('vic'))
+ok34 = (bool(menu34) and menu34.group(1) == 'true' and bool(after34) and 'vic' not in after34.group(1)
+        and bool(told34) and told34.group(2) == 'rooms' and 'removed you' in told34.group(1)
+        and bool(again34) and again34.group(1) == 'kicked')
+print(f"34. Kick from the room:     menu {menu34 and menu34.group(1)}; after {after34 and after34.group(1)}; "
+      f"vic told {told34 and told34.groups()}; joining again {again34 and again34.group(1)}")
+fail |= not ok34
 
 # Two languages in one game.
 builds31 = [re.search(r'connected as (\S+)', log(n)) for n in ('otis', 'greta')]

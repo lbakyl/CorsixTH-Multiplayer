@@ -436,6 +436,23 @@ local function run_lobby()
     end
     log("UI: room seats " .. seats_text(lobby) .. " (" .. tostring(lobby.summary.mode) .. ")")
     shot("lobby-room-host")
+    -- MP_KICK=<place>: the host double-clicks that player's line and picks
+    -- the menu's "remove" (UIMultiplayer:playerMenu), then stops.
+    local kick = tonumber(os.getenv("MP_KICK") or "")
+    if kick then
+      local win = lobby_window()
+      win:clickPlace(kick)
+      win:clickPlace(kick)
+      log("UI: kick menu open: " .. tostring(win.player_dropdown ~= nil))
+      shot("kick-menu")
+      win.player_dropdown:selectItem(1)
+      wait_for("the player removed", function() return lobby.players[kick] == nil end, 10)
+      log("UI: after the kick: " .. seats_text(lobby))
+      local until_t = socket.gettime() + 4
+      wait_for("the kicked player's try", function() return socket.gettime() > until_t end, 10)
+      log("RESULT: KICK DONE")
+      os.exit(0)
+    end
     log(string.format("lobby: %d players, recommended speed %s, delay %s, one way %s ms",
         want_players, lobby.summary.speed, lobby.summary.delay, lobby.summary.one_way))
     for peer, p in pairs(lobby.players) do log(string.format("  player %d %s rtt %s ms", peer, p.name, p.rtt)) end
@@ -490,6 +507,20 @@ local function run_lobby()
     lobby_window():buttonReady(true)
     wait_for("lobby update", function() return lobby.summary ~= nil end, 10)
     shot("lobby-room-joined")
+    if os.getenv("MP_EXPECT_KICK") then
+      -- Removed by the host: back in the room list, told why; joining that
+      -- room again is refused for a while.
+      wait_for("the kick", function() return lobby.error and lobby.error.code == "kicked" end, 30)
+      wait_for("the room list", function() return lobby_window() and lobby_window().view == "rooms" end, 10)
+      log("UI: kicked: " .. tostring(lobby.error.text) .. "; view " .. lobby_window().view)
+      shot("kicked")
+      lobby.error = nil
+      lobby:joinRoom(room, join_password)
+      wait_for("the answer", function() return lobby.error ~= nil end, 10)
+      log("UI: joining again: " .. tostring(lobby.error.code) .. ": " .. tostring(lobby.error.text))
+      log("RESULT: KICK DONE")
+      os.exit(0)
+    end
     wait_for("game start", function() return lobby.state == "in_game" end, 60)
   end
   return lobby
