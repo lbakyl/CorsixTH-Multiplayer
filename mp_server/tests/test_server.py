@@ -316,6 +316,23 @@ def test_owner_turns_auctions_off(run):
     run(body)
 
 
+def test_a_finished_game_is_recorded_for_the_daily_report(run, tmp_path, monkeypatch):
+    monkeypatch.setenv("CORSIXTH_MP_STATS_DIR", str(tmp_path))
+
+    async def body(server, port):
+        a, b = await two_players_in_room(port)
+        await start(a, b)
+        await a.close()
+        await b.close()
+        await asyncio.sleep(0.2)
+    run(body)
+    lines = (tmp_path / "games.jsonl").read_text().splitlines()
+    assert len(lines) == 1
+    game = __import__("json").loads(lines[0])
+    assert game["room"] == "r1" and game["humans"] == ["Alice", "Bob"] and game["bots"] == []
+    assert game["ended"] >= game["started"]
+
+
 def test_cosmetic_show_is_relayed_with_sender(run):
     async def body(server, port):
         a, b = await two_players_in_room(port)

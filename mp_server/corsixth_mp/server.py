@@ -30,7 +30,7 @@ import signal
 import time
 from dataclasses import dataclass, field
 
-from . import pacing
+from . import pacing, stats
 from .advisor import Advisor
 from .builds import BuildCheck, DataCheck
 from .referee import RefereeConfig, start_bot, start_referee
@@ -243,6 +243,11 @@ class Room:
     # The owner's game options (OPTION), sent in LOBBY and START: land
     # auctions on (the default) or off.
     auctions: bool = True
+    # For the daily report (stats.py): when the game started (Unix time) and
+    # everybody who played in it.
+    started_at: float | None = None
+    humans_seen: list[str] = field(default_factory=list)
+    bots_seen: list[str] = field(default_factory=list)
 
     def humans(self) -> list[Player]:
         return [p for p in self.players.values() if not p.is_bot]
@@ -698,6 +703,8 @@ class Server:
             return
         del room.left_names[peer]
         room.left.pop(peer, None)
+        if player.name not in room.humans_seen:
+            room.humans_seen.append(player.name)
         player.room, player.peer, player.ready = room, peer, True
         room.players[peer] = player
         log.info("room %r: %r rejoins as player %d", room.name, player.name, peer)
@@ -1050,6 +1057,9 @@ class Server:
         peers = ",".join(str(n) for n in sorted(room.players))
         log.info("room %r starts: seed %d, delay %d, max speed %s, peers %s", room.name,
                  room.seed, room.pace.delay, room.pace.max_speed, peers)
+        room.started_at = time.time()
+        room.humans_seen = [p.name for _, p in sorted(room.players.items()) if not p.is_bot]
+        room.bots_seen = [p.name for _, p in sorted(room.players.items()) if p.is_bot]
         room.start_fields = dict(peers=peers, seed=room.seed, level=room.level,
                                  difficulty=room.difficulty, mode=room.mode,
                                  delay=room.pace.delay, max_speed=room.pace.max_speed,
@@ -1437,6 +1447,7 @@ class Server:
         if not room.players:
             del self.rooms[room.name]
             self._stop_referee(room)
+            self._record_game(room)
             if room.referee_token:
                 log.info("room %r: referee confirmed steps through %d", room.name,
                          room.verified_step)
@@ -1446,6 +1457,17 @@ class Server:
             room.owner = min(room.humans(), key=lambda p: p.peer)
             room.owner.send(encode("OWNER"))
         self._send_lobby(room)
+
+    @staticmethod
+    def _record_game(room: Room) -> None:
+        """A game that ran (not a room that only waited in the lobby): one
+        line for the daily report."""
+        if room.started_at is None:
+            return
+        stats.record_game({"room": room.name, "mode": room.current_mode(), "level": room.level,
+                           "started": round(room.started_at), "ended": round(time.time()),
+                           "humans": room.humans_seen, "bots": room.bots_seen,
+                           "repairs": room.recoveries})
 
     @staticmethod
     def _stop_referee(room: Room) -> None:

@@ -29,6 +29,9 @@ import json
 import logging
 import os
 import pathlib
+import time
+
+from . import stats
 
 log = logging.getLogger("corsixth_mp.advisor")
 
@@ -187,6 +190,7 @@ class Advisor:
         self.budget_left()
         self.spent += cost
         self._save()
+        stats.record_advice(cost, time.time())
         return cost
 
     # ------------------------------------------------------------ requests

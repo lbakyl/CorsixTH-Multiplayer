@@ -4,6 +4,7 @@
 # (docs/multiplayer/referee.md). Ubuntu or Debian; run as root (sudo).
 #
 #   sudo bash setup-referee-host.sh --release mp-test-c364e17a [--data DIR] [--port 47800] [--motd TEXT]
+#        [--name eu2]
 #   (a stable release is named mp-stable-<commit>)
 #
 # --release  a test release of lbakyl/CorsixTH-Multiplayer: its Linux package
@@ -24,6 +25,13 @@
 # and without it the bots play on their own rules. Optional settings there
 # too: CORSIXTH_MP_AI_MODEL, CORSIXTH_MP_AI_DAILY_USD (default 3).
 #
+# A daily report to Discord at 7:00 (Europe/Prague): yesterday's games, how
+# long, people and bots, and what the advice cost (corsixth_mp/daily_report.py).
+# Put the webhook into the same secrets file yourself, as
+#   DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+# Without it nothing is posted. --name names this server in the report
+# (default: the host's name; kept from the last run).
+#
 # Safe to run again, e.g. with the next release. Restarting the service drops
 # every connected player: check that nobody is playing first.
 set -euo pipefail
@@ -33,6 +41,7 @@ CODE=""
 DATA=""
 PORT=47800
 MOTD="CorsixTH multiplayer server (with referee)"
+NAME=""
 REPO=lbakyl/CorsixTH-Multiplayer
 BASE=/opt/corsixth-mp
 
@@ -43,6 +52,7 @@ while [[ $# -gt 0 ]]; do
     --data) DATA=$2; shift 2 ;;
     --port) PORT=$2; shift 2 ;;
     --motd) MOTD=$2; shift 2 ;;
+    --name) NAME=$2; shift 2 ;;
     -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
     *) echo "Unknown option $1 (see --help)" >&2; exit 2 ;;
   esac
@@ -110,6 +120,10 @@ missing=$(LD_LIBRARY_PATH="$R/game/lib" ldd "$R/game/corsix-th" | grep "not foun
 [[ -z "$missing" ]] || die "the game binary misses libraries: $missing"
 
 say "Settings (/etc/corsixth-mp.env) and the service"
+if [[ -z "$NAME" && -f /etc/corsixth-mp.env ]]; then
+  NAME=$(sed -n 's/^CORSIXTH_MP_SERVER_NAME=//p' /etc/corsixth-mp.env)
+fi
+NAME=${NAME:-$(hostname)}
 cat > /etc/corsixth-mp.env <<EOF
 # Written by setup-referee-host.sh for $RELEASE. The referee build must match
 # the players' build: players of other builds are told to get this release.
@@ -122,6 +136,7 @@ CORSIXTH_MP_REFEREE_LUA_CPATH=$R/game/lua/?.so
 CORSIXTH_MP_REFEREE_LUA_PATH=$R/game/lua/?.lua;$R/game/lua/?/init.lua
 CORSIXTH_MP_REFEREE_WORKDIR=/var/lib/corsixth/referee-work
 LD_LIBRARY_PATH=$R/game/lib
+CORSIXTH_MP_SERVER_NAME=$NAME
 EOF
 chmod 644 /etc/corsixth-mp.env
 cat > /etc/systemd/system/corsixth-mp.service <<EOF
@@ -162,7 +177,37 @@ if command -v docker >/dev/null && docker ps --format '{{.Names}}' | grep -qx co
   say "Stopping the Docker server (kept for going back: docker compose up -d in $BASE)"
   docker stop corsixth-mp-server >/dev/null
 fi
+# The daily report (posted only if DISCORD_WEBHOOK_URL is in the secrets).
+cat > /etc/systemd/system/corsixth-mp-report.service <<EOF
+[Unit]
+Description=CorsixTH multiplayer: yesterday's games to Discord
+
+[Service]
+Type=oneshot
+User=corsixth
+Group=corsixth
+WorkingDirectory=$BASE/src/mp_server
+EnvironmentFile=/etc/corsixth-mp.env
+EnvironmentFile=-/etc/corsixth-mp-secrets.env
+ExecStart=$BASE/venv/bin/python -m corsixth_mp.daily_report
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+EOF
+cat > /etc/systemd/system/corsixth-mp-report.timer <<EOF
+[Unit]
+Description=CorsixTH multiplayer: the daily report at 7:00 Prague time
+
+[Timer]
+OnCalendar=*-*-* 07:00:00 Europe/Prague
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
 systemctl daemon-reload
+systemctl enable --now corsixth-mp-report.timer >/dev/null 2>&1
 systemctl enable corsixth-mp.service >/dev/null 2>&1
 systemctl restart corsixth-mp.service
 sleep 2
