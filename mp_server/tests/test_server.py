@@ -302,6 +302,20 @@ def test_owner_removes_a_player_from_the_lobby(run):
     run(body)
 
 
+def test_owner_turns_auctions_off(run):
+    async def body(server, port):
+        a, b = await two_players_in_room(port)
+        b.send(encode("OPTION", auctions=0))  # not the owner
+        assert (await b.expect("ERROR"))["code"] == "not_owner"
+        a.send(encode("OPTION", auctions=0))
+        assert (await b.expect("LOBBY", auctions=0))["room"] == "r1"
+        _, sb = await start(a, b)
+        assert sb["auctions"] == "0"
+        await a.close()
+        await b.close()
+    run(body)
+
+
 def test_cosmetic_show_is_relayed_with_sender(run):
     async def body(server, port):
         a, b = await two_players_in_room(port)

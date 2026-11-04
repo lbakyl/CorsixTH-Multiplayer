@@ -240,6 +240,9 @@ class Room:
     bots_pending: dict[str, list] = field(default_factory=dict)
     # Players the owner removed: name (lower case) -> time they may return.
     kicked: dict[str, float] = field(default_factory=dict)
+    # The owner's game options (OPTION), sent in LOBBY and START: land
+    # auctions on (the default) or off.
+    auctions: bool = True
 
     def humans(self) -> list[Player]:
         return [p for p in self.players.values() if not p.is_bot]
@@ -1006,7 +1009,21 @@ class Server:
                               max=room.max_players, mode=room.current_mode(),
                               free=1 if room.mode == "free" else None, level=room.level,
                               delay=p.delay, speed=p.max_speed, one_way=p.one_way_ms,
-                              latency=p.command_latency_ms.get(pacing.TARGET_SPEED)))
+                              latency=p.command_latency_ms.get(pacing.TARGET_SPEED),
+                              auctions=None if room.auctions else 0))
+
+    def _on_option(self, player: Player, f: dict[str, str]) -> None:
+        """The room owner sets a game option in the lobby: auctions=0|1."""
+        room = player.room
+        if room is None or room.owner is not player:
+            self._error(player, "not_owner", "Only the room owner sets the options")
+            return
+        if room.state != "lobby":
+            return
+        if f.get("auctions") in ("0", "1"):
+            room.auctions = f["auctions"] == "1"
+            log.info("room %r: auctions %s", room.name, "on" if room.auctions else "off")
+        self._send_lobby(room)
 
     def _on_start(self, player: Player, f: dict[str, str]) -> None:
         room = player.room
@@ -1046,6 +1063,8 @@ class Server:
         bots = [str(n) for n in sorted(room.players) if room.players[n].is_bot]
         if bots:
             room.start_fields["bots"] = ",".join(bots)
+        if not room.auctions:
+            room.start_fields["auctions"] = 0
         if free:
             # Every peer works out the hospitals and teams from these
             # (MultiplayerLobby:_beginGame).

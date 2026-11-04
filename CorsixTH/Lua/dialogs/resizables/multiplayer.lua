@@ -450,6 +450,10 @@ function UIMultiplayer:_buildRoom()
   self.summary_panel = label(self, 20, 40 + 4 * 27 + 5, WIDTH - 40, "")
   self.mode_panel = label(self, 20, 40 + 5 * 27 + 5, WIDTH - 40, "")
   self.hint_panel = label(self, 20, 40 + 6 * 27 + 5, WIDTH - 40, S.room_hint)
+  -- The game's options, the host's to set: land auctions on or off.
+  self.auctions_button = self:addBevelPanel(20, 40 + 7 * 27 + 5, WIDTH - 40, 25, col.button)
+      :setLabel(""):makeButton(0, 0, WIDTH - 40, 25, nil, self.buttonAuctions)
+      :setTooltip(_S.tooltip.multiplayer_window.auctions)
   local y = heights.room - 50
   -- The host starts the game; the others say they are ready. Both buttons
   -- sit in the same place, and only the one for this player is shown.
@@ -513,6 +517,9 @@ function UIMultiplayer:_updateRoom()
   self.mode_panel:setLabel(MultiplayerLobby.modeLabel(mode) .. ", " .. level_text ..
       (lobby.room["continue"] == "1" and (", " .. S.continuing:format((lobby.room.date or ""):gsub("T.*", ""))) or ""))
   local owner = lobby:isOwner()
+  self.auctions_button:setLabel(lobby:auctionsOn() and S.auctions_on or S.auctions_off)
+  -- (A continued game keeps what it was started with.)
+  self.auctions_button:enable(owner and lobby.room["continue"] ~= "1")
   self.start_button:setVisible(owner)
   self.start_button:enable(owner)
   self.ready_button:setVisible(not owner)
@@ -543,6 +550,13 @@ function UIMultiplayer:clickPlace(i)
   end
 end
 
+--! The host switches land auctions on or off for this game.
+function UIMultiplayer:buttonAuctions()
+  local lobby = self.lobby
+  if not lobby:isOwner() then return end
+  lobby:setAuctions(not lobby:auctionsOn())
+end
+
 --! The host's menu on another person's line: remove them from the room.
 function UIMultiplayer:playerMenu(i)
   local lobby = self.lobby
@@ -554,8 +568,8 @@ function UIMultiplayer:playerMenu(i)
     if w == self.player_dropdown then w:close() break end
   end
   local peer, name = p.peer, p.name
-  local button = self.place_buttons[i]
-  self.player_dropdown = UIDropdown(self.ui, self, button,
+  local place_button = self.place_buttons[i]
+  self.player_dropdown = UIDropdown(self.ui, self, place_button,
       {{text = _S.multiplayer_window.kick_player:format(name)}},
       function() lobby:kickPlayer(peer) end, col.setting_active, col.scrollbar)
   self:addWindow(self.player_dropdown)

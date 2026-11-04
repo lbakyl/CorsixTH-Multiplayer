@@ -594,6 +594,11 @@ end
 --! like a player, ready at once) or takes one away by its peer number.
 function MultiplayerLobby:addBot() self.error = nil; self:send("BOT", {add = 1}) end
 function MultiplayerLobby:removeBot(peer) self.error = nil; self:send("BOT", {remove = peer}) end
+--! The room owner sets a game option: auctions (true or false).
+function MultiplayerLobby:setAuctions(on) self.error = nil; self:send("OPTION", {auctions = on and 1 or 0}) end
+--! Land auctions on in this room (LOBBY says auctions=0 when the owner turned them off)?
+function MultiplayerLobby:auctionsOn() return not (self.summary and self.summary.auctions == "0") end
+
 --! The room owner removes a player from the room (the server answers KICKED to them).
 function MultiplayerLobby:kickPlayer(peer) self.error = nil; self:send("KICK", {peer = peer}) end
 
@@ -1389,7 +1394,7 @@ function MultiplayerLobby:_beginGame(f)
     app.mp_coop = {players = count, local_index = my_index, names = names,
         competitive = MultiplayerLobby.isRace(mode), teams = layout and layout.teams,
         team_hospitals = mode == "teamshared" or nil, colours = layout and layout.colours,
-        mode = mode, bot_hospitals = bot_hospitals}
+        mode = mode, bot_hospitals = bot_hospitals, auctions_off = f.auctions == "0" or nil}
   end
   f.mode = mode -- (the menu, the bots)
 
