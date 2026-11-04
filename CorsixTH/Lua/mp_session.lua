@@ -2052,6 +2052,14 @@ function handlers.fax_choice(world, cmd)
   local queued = icon.parent == nil
   icon:removeMessage(cmd.choice)
   if queued then panel:forgetQueuedIcon(icon) end
+  -- A win fax the game stood still for: answered (MultiplayerSession.startHold).
+  local hold = world.mp_hold
+  if hold then
+    for i = #hold.msgs, 1, -1 do
+      if hold.msgs[i] == tonumber(cmd.msg) then table.remove(hold.msgs, i) end
+    end
+    if #hold.msgs == 0 and hold.kind == "win" then hold.waiting = {} end
+  end
   return true
 end
 
@@ -3143,7 +3151,8 @@ MultiplayerSession.HOLD_SECONDS = {year = 180, win = 300}
 
 --! Start (or widen) a hold. kind "year" (it ends when each waiting
 --! hospital's player closed the report: hold_done) or "win" (it ends when
---! the fax message msg_id is answered); only: just that hospital's player.
+--! the fax message msg_id is answered: a fax_choice command, so at the same
+--! step everywhere); only: just that hospital's player.
 function MultiplayerSession.startHold(world, kind, msg_id, only)
   local count = world.mp_coop and world.mp_coop.players or 1
   local bots = world.mp_coop and world.mp_coop.bot_hospitals or {}
@@ -3183,20 +3192,8 @@ function MultiplayerSession:tickHold()
       local h = world.hospitals[i]
       if not h or h.mp_player_away then hold.waiting[i] = nil end
     end
-    -- A win fax: over once it is answered (no longer in the message bar).
-    if #hold.msgs > 0 then
-      local open = {}
-      local panel = world.ui and world.ui.bottom_panel
-      for _, info in ipairs(panel and panel.message_queue or {}) do
-        if info.mp_id then open[info.mp_id] = true end
-      end
-      local left = {}
-      for _, id in ipairs(hold.msgs) do
-        if open[id] then left[#left + 1] = id end
-      end
-      hold.msgs = left
-      if #left == 0 and hold.kind == "win" then hold.waiting = {} end
-    end
+    -- (A win fax: over once it is answered, handlers.fax_choice; not from
+    -- the message bar, which is each player's own screen.)
     hold.frames = hold.frames + world:_mpStepFrames(world.mp_speed or "Normal")
     if not next(hold.waiting) or hold.frames >= hold.limit then
       world.mp_hold = nil

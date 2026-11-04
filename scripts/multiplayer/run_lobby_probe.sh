@@ -93,8 +93,8 @@
 #      the auction; ben closes the screen meanwhile and gets the "please
 #      wait" box, and goes back to the auction from it -> IN SYNC, the same
 #      sale in both games
-#  34. the host removes a player ("kick"): uma double-clicks vic's line,
-#      the menu's "remove" -> vic is back in the room list, told why, and
+#  34. the host removes a player ("kick"): kip double-clicks lev's line,
+#      the menu's "remove" -> lev is back in the room list, told why, and
 #      joining that room again is refused ("kicked")
 #  35. the year end waits ("yearhold", co-op): wes keeps the annual
 #      report open for 80 steps; xan closes it at once and gets the box
@@ -154,7 +154,7 @@ else
     export MP_REFEREE_PROBE_SCENARIO="crowd=busy;staff=busy;edit=busy;cardio=none;epi=busy;wreck=none;lang=busy" # the probes' own start, see below
   fi
   PYTHONPATH="$source_dir/mp_server" python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
-    --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
+    --log-level INFO --max-per-address 96 --max-connections 128 > "$out/server.log" 2>&1 &
   server_pid=$!
   trap 'kill $server_pid 2>/dev/null || true' EXIT
   for _ in $(seq 50); do grep -q listening "$out/server.log" 2>/dev/null && break; sleep 0.1; done
@@ -272,9 +272,9 @@ run_probe ana MP_ROLE=host MP_ROOM=auction MP_COOP=1 MP_LEVEL=2 MP_STEPS=600   M
 sleep 1
 run_probe ben MP_ROLE=join MP_ROOM=auction MP_STEPS=600   MP_UI_SCRIPT="30:openhospital;110:auctionshot;150:auctionbid;170:auctionhide;176:auctionshot;190:auctionback;196:auctionshot" & pids+=($!)
 # The host removes a player from the room.
-run_probe uma MP_ROLE=host MP_ROOM=kick MP_KICK=2 & pids+=($!)
+run_probe kip MP_ROLE=host MP_ROOM=kick MP_KICK=2 & pids+=($!)
 sleep 1
-run_probe vic MP_ROLE=join MP_ROOM=kick MP_EXPECT_KICK=1 & pids+=($!)
+run_probe lev MP_ROLE=join MP_ROOM=kick MP_EXPECT_KICK=1 & pids+=($!)
 # The year end waits for everybody's annual report.
 run_probe wes MP_ROLE=host MP_ROOM=yearhold MP_COOP=1 MP_STEPS=400 MP_KEEP_REPORT=80   MP_UI_SCRIPT="20:openhospital;100:yearend" & pids+=($!)
 sleep 1
@@ -800,15 +800,15 @@ print(f"35. Year end waits:         closed {closed35}; xan's box {box35} gone {g
 fail |= not ok35
 
 # The host removes a player.
-menu34 = re.search(r'UI: kick menu open: (\w+)', log('uma'))
-after34 = re.search(r'UI: after the kick: (.*)', log('uma'))
-told34 = re.search(r'UI: kicked: (.*); view (\w+)', log('vic'))
-again34 = re.search(r'UI: joining again: (\w+)', log('vic'))
-ok34 = (bool(menu34) and menu34.group(1) == 'true' and bool(after34) and 'vic' not in after34.group(1)
+menu34 = re.search(r'UI: kick menu open: (\w+)', log('kip'))
+after34 = re.search(r'UI: after the kick: (.*)', log('kip'))
+told34 = re.search(r'UI: kicked: (.*); view (\w+)', log('lev'))
+again34 = re.search(r'UI: joining again: (\w+)', log('lev'))
+ok34 = (bool(menu34) and menu34.group(1) == 'true' and bool(after34) and 'lev' not in after34.group(1)
         and bool(told34) and told34.group(2) == 'rooms' and 'removed you' in told34.group(1)
         and bool(again34) and again34.group(1) == 'kicked')
 print(f"34. Kick from the room:     menu {menu34 and menu34.group(1)}; after {after34 and after34.group(1)}; "
-      f"vic told {told34 and told34.groups()}; joining again {again34 and again34.group(1)}")
+      f"lev told {told34 and told34.groups()}; joining again {again34 and again34.group(1)}")
 fail |= not ok34
 
 # Two languages in one game.
