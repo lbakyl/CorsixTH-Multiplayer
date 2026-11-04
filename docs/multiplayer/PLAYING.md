@@ -1,6 +1,6 @@
 # Playing CorsixTH multiplayer (test version)
 
-This fork adds network multiplayer to CorsixTH: two to four players run one
+This fork adds network multiplayer to CorsixTH: two to eight players run one
 game together over the internet, either in **one shared hospital**, in
 **a hospital each** as a team (co-op), or in a **competitive race** with a
 hospital each, on Theme Hospital's original multiplayer maps.
@@ -94,6 +94,11 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
    One shared hospital plays the campaign's levels (1 to 12); several
    hospitals play the multiplayer levels (1 to 8; a higher number plays
    level 8, as the room says). A saved game keeps its colours and teams.
+   **How many hospitals:** Theme Hospital's maps have room for 4; with more
+   players, some share a hospital (the same colour). TEAM TOWN (level 8)
+   also has a map for 5 to 8 hospitals: four more hospitals north and south
+   of the middle (the empty ones' plots are for sale). The host cannot start
+   with more colours than the level fits.
 5. **Sharing a hospital:** team mates build, hire and answer faxes in the
    same hospital. A bot can share yours too: it builds in your hospital along
    with you (a desk, rooms, staff), and whatever you have already built it
@@ -176,8 +181,10 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 - **A hospital each (co-op):** each player runs their own hospital and can
   look at, but not act on, the others' patients, staff and machines.
   **Player colours:** every hospital has a colour (hospital 1 mustard, 2
-  salmon, 3 lavender, 4 white): its patients wear shirts of it (as in the
-  original game's multiplayer; a patient sent to another hospital changes
+  salmon, 3 lavender, 4 white; in a game of more, 5 green, 6 blue, 7 teal,
+  8 pink): its patients wear shirts of it (as in the original game's
+  multiplayer; colours 5 to 8 wear the shirts of 1 to 4, their bars tell
+  them apart; a patient sent to another hospital changes
   to that one's), its patients and staff have a small bar of it at their
   feet, and its player's chat lines are a darker shade of it. The
   **PLAYERS** window has a tab of each player's colour before their row,
