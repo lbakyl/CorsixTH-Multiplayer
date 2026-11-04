@@ -2890,15 +2890,50 @@ end
 -- up (auction.step). It is sold when nobody bids for AUCTION_SECONDS (the
 -- first bid may take AUCTION_OPEN_SECONDS), or when all the others dropped
 -- out. Time is counted in steps on every peer alike, like a speed vote.
--- Bots bid by a fixed rule, in the game (bots_bid): no command, no waiting.
+-- Bots bid in the game (bots_bid): no command, no waiting. Each bids up to
+-- what the plot is worth to it (botPlotWorth): more, the fuller its land.
+-- (A bot sharing a person's hospital bids by command while they are away:
+-- scripts/multiplayer/bot.lua, Bot:bidAtAuction.)
 --------------------------------------------------------------------------------
 
 MultiplayerSession.AUCTION_SECONDS = 6 -- (the original game's gavel takes 5-6 s)
 MultiplayerSession.AUCTION_OPEN_SECONDS = 10
 local function auction_frames(seconds) return math.ceil(seconds * 1000 / 18) end -- world ticks
--- A bot bids up to this much of the price for land it asked for, and up to
--- the second for land next to its own; and keeps this much money.
-local BOT_AUCTION_OWN, BOT_AUCTION_OTHER, BOT_AUCTION_RESERVE = 1.6, 1.25, 5000
+-- A bot bids up to this much of the price: the first with plenty of room,
+-- the second with its land full (MultiplayerSession.landNeed), at least the
+-- third for land it asked for; and keeps this much money.
+local BOT_AUCTION_LOW, BOT_AUCTION_HIGH, BOT_AUCTION_OWN = 1.15, 2.5, 1.6
+MultiplayerSession.BOT_AUCTION_RESERVE = 5000
+
+--! How badly `hospital` needs more land: 0 (plenty of room) to 1 (full).
+--! From the share of its indoor floor that rooms take: up to 45% is
+--! plenty, 75% or more is full. (Game state only: the same on every peer.)
+function MultiplayerSession.landNeed(world, hospital)
+  local th = world.map.th
+  local player = hospital:getPlayerIndex()
+  local w, h = th:size()
+  local flags = {}
+  local inside, rooms = 0, 0
+  for y = 1, h do
+    for x = 1, w do
+      th:getCellFlags(x, y, flags)
+      if flags.hospital and flags.owner == player then
+        inside = inside + 1
+        if (flags.roomId or 0) ~= 0 then rooms = rooms + 1 end
+      end
+    end
+  end
+  if inside == 0 then return 1 end
+  return math.max(0, math.min(1, (rooms / inside - 0.45) / 0.3))
+end
+
+--! The most a bot running hospital `i` would pay for the auction's plot.
+function MultiplayerSession.botPlotWorth(world, i, auction)
+  local need = MultiplayerSession.landNeed(world, world.hospitals[i])
+  local factor = BOT_AUCTION_LOW + (BOT_AUCTION_HIGH - BOT_AUCTION_LOW) * need
+  if i == auction.by then factor = math.max(factor, BOT_AUCTION_OWN) end
+  return math.floor(auction.price * factor), need
+end
 
 -- Which plots touch which (along a tile edge), from the map: the same on
 -- every peer, so worked out once per map (not saved).
@@ -2984,8 +3019,9 @@ local function place_bid(auction, index, amount)
   auction_log(string.format("auction %d: hospital %d bids $%d", auction.id, index, amount))
 end
 
---! Bots' bids: a bot outbid bids again while the next bid is within its
---! limit and it keeps its reserve; otherwise it drops out.
+--! Bots' bids: a bot outbid bids again while the next bid is within what
+--! the plot is worth to it (worked out once an auction, kept in it) and it
+--! keeps its reserve; otherwise it drops out.
 local function bots_bid(world, auction)
   local bots = world.mp_coop.bot_hospitals or {}
   local again = true
@@ -2993,9 +3029,16 @@ local function bots_bid(world, auction)
     again = false
     for _, i in ipairs(auction.bidders) do
       if bots[i] and auction.leader ~= i and not auction.out[i] then
+        auction.worth = auction.worth or {}
+        if not auction.worth[i] then
+          local worth, need = MultiplayerSession.botPlotWorth(world, i, auction)
+          auction.worth[i] = worth
+          auction_log(string.format("auction %d: plot worth $%d to bot hospital %d (land need %d%%)",
+              auction.id, worth, i, math.floor(need * 100 + 0.5)))
+        end
         local amount = auction.bid + auction.step
-        local limit = auction.price * (i == auction.by and BOT_AUCTION_OWN or BOT_AUCTION_OTHER)
-        if amount <= limit and world.hospitals[i].balance - amount >= BOT_AUCTION_RESERVE then
+        if amount <= auction.worth[i] and
+            world.hospitals[i].balance - amount >= MultiplayerSession.BOT_AUCTION_RESERVE then
           place_bid(auction, i, amount)
           again = true
         else

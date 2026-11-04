@@ -33,6 +33,11 @@
 #      gus asks for a plot on the bot's side, the bot bids, gus outbids it
 #      and gets it (the bot stops at its limit); a second one gus drops out
 #      of and the bot gets
+#  13. a bot bids for the hospital it shares while its person is away
+#      ("afk", a race of team hospitals on level 2: jon alone; kay and one
+#      bot share hospital 2, kay gives no commands): jon asks for a plot
+#      on their side, the bot bids for hospital 2 (worth to it: the more
+#      its land is full, the more) and gets it
 #  10. tricks on a bot ("duel", competitive: eve and one bot): eve sends
 #      rats, an evil handyman (level 3), a smear campaign and a broken
 #      boiler. The bot shoots the rats and throws the handyman out, each at
@@ -66,9 +71,11 @@ port=$((47000 + RANDOM % 900))
 export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
 export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/headless"
 export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
-export MP_REFEREE_PROBE_SCENARIO="team=none;race=none;trio=none;duel=none;lab=none;auc=none"
-export CORSIXTH_MP_MAX_BOTS=8 # (seven bots in all the rooms)
-MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 PYTHONPATH="$source_dir/mp_server" \
+export MP_REFEREE_PROBE_SCENARIO="team=none;race=none;trio=none;duel=none;lab=none;auc=none;afk=none"
+export CORSIXTH_MP_MAX_BOTS=8 # (eight bots in all the rooms)
+# (MP_BOT_AWAY_SECONDS: kay in "afk" counts as away after a game week; the
+# bots' games run faster than real time.)
+MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 MP_BOT_AWAY_SECONDS=3 PYTHONPATH="$source_dir/mp_server" \
   python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
 server_pid=$!
@@ -118,7 +125,9 @@ run_probe frank MP_ROLE=host MP_ROOM=lab MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1
 run_probe gus MP_ROLE=host MP_ROOM=auc MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_LEVEL=2 MP_SCENARIO=none   MP_STEPS=1100 MP_STALL_LIMIT=120   MP_UI_SCRIPT="20:openhospital;200:auctionbuy;260:auctionbid;700:auctionbuy;760:auctionpass" & pids+=($!)
 run_probe cid MP_ROLE=host MP_ROOM=trio MP_MODE=coop MP_PLAYERS=3 MP_ADD_BOTS=1 MP_SCENARIO=none \
   MP_STEPS=600 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital;300:speedother" & pids+=($!)
-sleep 1
+run_probe jon MP_ROLE=host MP_ROOM=afk MP_MODE=teamshared MP_TEAM=1 MP_PLAYERS=3 MP_ADD_BOTS=1 MP_LEVEL=2   MP_SCENARIO=none MP_STEPS=1300 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital;900:auctionbuy" & pids+=($!)
+sleep 3
+run_probe kay MP_ROLE=join MP_ROOM=afk MP_TEAM=2 MP_SCENARIO=none MP_STEPS=1300 MP_STALL_LIMIT=120   MP_UI_SCRIPT="60:teams" & pids+=($!)
 run_probe dee MP_ROLE=join MP_ROOM=trio MP_SCENARIO=none MP_STEPS=600 MP_STALL_LIMIT=120 MP_VOTE=ask \
   MP_UI_SCRIPT="30:openhospital;310:votefax:1" & pids+=($!)
 for pid in "${pids[@]}"; do wait "$pid" || true; done
@@ -203,7 +212,7 @@ distinct = len(set(g[0] for g in greets.values() if g)) > 1
 # The bots' lines in ann's chat are grey.
 colours = set(re.findall(r'CHAT COLOUR: (Bot [^ ]+) (\S+)', a + b))
 grey = bool(colours) and all(c == '75,75,75' for _, c in colours)
-ok5 = len(bots) == 7 and all(greets.values()) and bool(answer) and distinct and grey
+ok5 = len(bots) == 8 and all(greets.values()) and bool(answer) and distinct and grey
 print(f"5. Chat:                    first lines: {greets}; Bot Agnes's answer to ann: {answer[:1]}; bots grey: {grey} {sorted(colours)}")
 fail |= not ok5
 
@@ -282,6 +291,15 @@ ok12 = (sold12 == [('1', '1'), ('2', '2')] and '1' in bot_bids12 and '2' in bot_
         and 'auction 2: hospital 1 drops out' in g and result('gus').startswith('IN SYNC'))
 print(f"12. Auctions with a bot:    bot bid in {sorted(set(bot_bids12))}; sold {sold12}; gus {result('gus')}")
 fail |= not ok12
+# 13. A bot bids for its shared hospital while its person is away.
+j = log('jon')
+bids13 = re.findall(r'auction \d+: hospital 2 bids \$(\d+)', j)
+sold13 = re.findall(r'auction \d+: plot \d+ sold to hospital (\d)', j)
+away13 = [l for k, t in bots.items() if k.startswith('afk/') for l in t.splitlines() if 'the person is away' in l]
+ok13 = (bool(bids13) and sold13 == ['2'] and bool(away13)
+        and result('jon').startswith('IN SYNC') and result('kay').startswith('IN SYNC'))
+print(f"13. Bot bids for away mate: bids {bids13}; sold to {sold13}; bot: {away13[:1]}; {result('jon')} / {result('kay')}")
+fail |= not ok13
 for name, text in sorted(bots.items()):
     errors = [l for l in text.splitlines() if 'ERROR' in l or 'could not' in l]
     if errors: print(f"   {name} problems: {errors[:5]}")

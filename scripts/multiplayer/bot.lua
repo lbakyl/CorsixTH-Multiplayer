@@ -1273,20 +1273,66 @@ end
 
 --! Buy the cheapest plot of land it may buy (on its side of the map) if it
 --! can afford it and still keep money for a room.
---! The cheapest plot this hospital may buy and its price, or nil.
+--! The cheapest plot this hospital may buy and its price, or nil. On its own
+--! side of the map; with none left there and its land filling up, on
+--! another's side too (that goes to auction).
 function Bot:cheapestPlot()
   local world = self.world
   local th, hospital = world.map.th, world.ui.hospital
   local me = world:getHospitalIndex(hospital)
-  local best, best_price
-  for plot = 1, th:getPlotCount() do
-    local side = world.mp_coop and MultiplayerSession.plotSide(world, plot)
-    if (not side or side == me) and th:isParcelPurchasable(plot, hospital:getPlayerIndex()) then
-      local price = world.map:getParcelPrice(plot)
-      if not best or price < best_price then best, best_price = plot, price end
+  local function cheapest(anywhere)
+    local best, best_price
+    for plot = 1, th:getPlotCount() do
+      local side = world.mp_coop and MultiplayerSession.plotSide(world, plot)
+      if (anywhere or not side or side == me) and th:isParcelPurchasable(plot, hospital:getPlayerIndex()) then
+        local price = world.map:getParcelPrice(plot)
+        if not best or price < best_price then best, best_price = plot, price end
+      end
     end
+    return best, best_price
+  end
+  local best, best_price = cheapest(false)
+  if not best and world.mp_coop and MultiplayerSession.landNeed(world, hospital) >= 0.5 then
+    best, best_price = cheapest(true)
   end
   return best, best_price
+end
+
+--! An auction this hospital bids in, while a person sharing it is away (or
+--! nobody does: then the game bids, MultiplayerSession's bots_bid): bid
+--! once a step up to what the plot is worth to it, then drop out. True
+--! while there is an auction (the bot does nothing else meanwhile).
+function Bot:bidAtAuction()
+  local world = self.world
+  local auction = world.mp_auction
+  if not auction then return false end
+  local me = self:hospitalIndex()
+  local bidder = false
+  for _, i in ipairs(auction.bidders) do bidder = bidder or i == me end
+  if not bidder or auction.out[me] or auction.leader == me then return true end
+  if (world.mp_coop.bot_hospitals or {})[me] or #self:hospitalMates() == 0 or self:sharesWithPerson() then
+    return true
+  end
+  local key = auction.id .. ":" .. auction.bid
+  if self.auction_tried == key then return true end -- (once for each bid; it comes back as the new bid)
+  self.auction_tried = key
+  if not (self.auction_worth and self.auction_worth.id == auction.id) then
+    local worth, need = MultiplayerSession.botPlotWorth(world, me, auction)
+    self.auction_worth = {id = auction.id, worth = worth}
+    log(string.format("auction %d for plot %d: worth $%d to us (land need %d%%), the person is away",
+        auction.id, auction.plot, worth, math.floor(need * 100 + 0.5)))
+  end
+  local amount = auction.bid + auction.step
+  local session = TheApp.mp_session
+  if amount <= self.auction_worth.worth and
+      world.ui.hospital.balance - amount >= MultiplayerSession.BOT_AUCTION_RESERVE then
+    log(string.format("auction %d: bidding $%d", auction.id, amount))
+    session:issue({kind = "auction_bid", auction = auction.id, amount = amount})
+  else
+    log(string.format("auction %d: dropping out at $%d", auction.id, auction.bid))
+    session:issue({kind = "auction_pass", auction = auction.id})
+  end
+  return true
 end
 
 function Bot:buyPlot()
@@ -1737,6 +1783,7 @@ function Bot:think()
   local hospital = world.ui.hospital
   local plan = self.plan
   local day = self:gameDay()
+  if self:bidAtAuction() then return end
   self:answerOffers()
   self:careForStaff(day)
   -- (Tests: wishes as if a team mate asked for them.)

@@ -771,7 +771,9 @@ function M:monthly(s)
     for room_id, v in pairs(self.demand) do
       if not self:available(room_id) and (not best_v or v > best_v) then best, best_v = room_id, v end
     end
-    if best and best_v > 1 and best ~= self.research_room then
+    -- (Not a room this level does not have at all: canConcentrateResearch
+    -- fails on it.)
+    if best and best_v > 1 and best ~= self.research_room and hosp.world.available_rooms[best] then
       -- (A diagnosis room's machine is researched as its "diag_" entry.)
       local diag = "diag_" .. best
       if hosp.disease_casebook[diag] and hosp:canConcentrateResearch(diag) then
