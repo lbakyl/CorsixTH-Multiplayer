@@ -101,9 +101,11 @@
 #      "the game waits while WES read...", and no game hours pass until wes
 #      closes it -> IN SYNC
 #  31. two languages in one game ("lang"): otis plays in English, greta in
-#      German (the build id no longer has the language); a busy hospital,
-#      staff hired by both, past the first month's new hiring lists -> IN
-#      SYNC, and with MP_REFEREE=1 the (English) referee agrees
+#      Russian (German without a system TrueType font; the build id has no
+#      language); a busy hospital, staff hired by both, past the first
+#      month's new hiring lists -> IN SYNC without a desync (Russian staff
+#      descriptions once drew other random numbers at the start), and with
+#      MP_REFEREE=1 the (English) referee agrees
 #  25. speed votes with three players: a new speed declined (one player by
 #      clicking in the vote fax, one by itself), one agreed in the fax (2 of
 #      3 is a majority), one nobody answers lapses after 30 s of play; the
@@ -176,6 +178,7 @@ fullscreen = false
 width = 800
 height = 600
 language = [[${PROBE_LANG:-English}]]
+unicode_font = [[${PROBE_FONT:-}]]
 audio = $audio
 play_music = false
 play_sounds = false
@@ -279,11 +282,15 @@ run_probe lev MP_ROLE=join MP_ROOM=kick MP_EXPECT_KICK=1 & pids+=($!)
 run_probe wes MP_ROLE=host MP_ROOM=yearhold MP_COOP=1 MP_STEPS=400 MP_KEEP_REPORT=80   MP_UI_SCRIPT="20:openhospital;100:yearend" & pids+=($!)
 sleep 1
 run_probe xan MP_ROLE=join MP_ROOM=yearhold MP_STEPS=400 MP_UI_SCRIPT="30:openhospital" & pids+=($!)
-# Two languages in one game: otis in English, greta in German.
+# Two languages in one game: otis in English, greta in Russian (with a
+# TrueType font from the system, as Russian needs; German if there is none).
+lang_font=$(fc-match -f '%{file}' 'DejaVu Sans' 2>/dev/null || true)
+greta_lang=Russian
+[[ -f "$lang_font" ]] || greta_lang=German
 run_probe otis MP_ROLE=host MP_ROOM=lang MP_STEPS=2000 MP_SCENARIO=busy \
   MP_UI_SCRIPT="1600:hire:Doctor;1700:hire:Handyman" & pids+=($!)
 sleep 1
-PROBE_LANG=German run_probe greta MP_ROLE=join MP_ROOM=lang MP_STEPS=2000 MP_SCENARIO=busy \
+PROBE_LANG=$greta_lang PROBE_FONT="$lang_font" run_probe greta MP_ROLE=join MP_ROOM=lang MP_STEPS=2000 MP_SCENARIO=busy \
   MP_UI_SCRIPT="1650:hire:Nurse;1750:hire:Doctor" & pids+=($!)
 run_probe wade MP_ROLE=host MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
   MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;620:patients:5;640:breakroom:gp;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench;820:buy:plant;840:moveinto:plant:gp;920:objectroom:plant;860:movestaff:Doctor;870:whereis:Doctor;950:overlay" & pids+=($!)
@@ -819,8 +826,10 @@ hired31 = sorted(set(re.search(r'step \d+: peer \d+ #\d+', x).group(0) for n in 
                      for x in applied(n) if ' hire -> ok' in x))
 ok31 = (result('otis').startswith('IN SYNC through step 2000') and result('greta').startswith('IN SYNC through step 2000')
         and applied('otis') == applied('greta') and len(hired31) >= 3
-        and None not in builds31 and builds31[0] == builds31[1] and 'german' not in builds31[1])
-print(f"31. Two languages:          otis (English) {result('otis')}, greta (German) {result('greta')}; same build id: "
+        and None not in builds31 and builds31[0] == builds31[1] and 'german' not in builds31[1]
+        and 'russian' not in builds31[1] and not any('DESYNC' in log(n) for n in ('otis', 'greta')))
+lang31 = re.search(r'language = \[\[(\w+)', (out / 'greta' / 'config.txt').read_text())
+print(f"31. Two languages:          otis (English) {result('otis')}, greta ({lang31.group(1) if lang31 else '?'}) {result('greta')}; same build id: "
       f"{builds31[0] == builds31[1]} {builds31[0]}; same commands: {applied('otis') == applied('greta')}; "
       f"hires after the new month's list: {hired31}")
 fail |= not ok31

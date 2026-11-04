@@ -175,8 +175,12 @@ function StaffProfile:randomiseOrganical()
   end
   -- (Multiplayer: the cosmetic random numbers. How many phrases fit depends
   -- on the language, and the shared ones must not: players may play in
-  -- different languages, MultiplayerLobby.buildId.)
-  self.desc = our_concat(shuffle(descs, TheApp and TheApp.mp_session and math.cosmetic_random or math.random))
+  -- different languages, MultiplayerLobby.buildId. Also while the level
+  -- loads, TheApp.mp_loading, before there is a session: the first staff
+  -- lists are made then. Russian phrases take two bytes a letter, so fewer
+  -- fit, and a Russian player's game parted from the others' at step 1.)
+  local mp = TheApp and (TheApp.mp_session or TheApp.mp_loading)
+  self.desc = our_concat(shuffle(descs, mp and math.cosmetic_random or math.random))
   if self:isType("Doctor") then
     self.is_black = math.random(0, 1) == 0
     if self.is_black then

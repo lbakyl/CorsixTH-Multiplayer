@@ -24,6 +24,9 @@
 --   MP_DEBUG_END      log speed, open windows and staff at the end
 --   MP_LUA_CPATH      extra package.cpath entries (for luasocket)
 --   MP_LUA_PATH       extra package.path entries
+--   MP_TRACE_RANDOM   write MP_OUT..".random": each math.random draw until
+--                     this many App:onTick calls, with its caller (to find
+--                     where two runs that should match part)
 --   MP_CANONICAL_ORDER  if 1, sort the game definition lists like a
 --                     multiplayer game does (MultiplayerLobby.useCanonicalOrder);
 --                     needed to compare different platforms
@@ -261,6 +264,24 @@ local function run()
     MultiplayerLobby.useCanonicalOrder(TheApp)
   end
   math.randomseed(seed)
+  local trace_until = tonumber(os.getenv("MP_TRACE_RANDOM") or "")
+  local trace = trace_until and out_path and assert(io.open(out_path .. ".random", "w"))
+  local tick_no = 0
+  if trace then
+    local random = math.random
+    rawset(math, "random", function(...)
+      if tick_no <= trace_until then
+        local where = {}
+        for level = 2, 5 do
+          local info = debug.getinfo(level, "Sl")
+          if not info then break end
+          where[#where + 1] = info.short_src:match("[^/]*$") .. ":" .. tostring(info.currentline)
+        end
+        trace:write(string.format("%d %s %s\n", tick_no, table.concat({...}, ","), table.concat(where, " < ")))
+      end
+      return random(...)
+    end)
+  end
   TheApp:_loadLevel(1, "full", nil, "LEVEL.L1")
   assert(TheApp.world, "Level did not load")
   local world = TheApp.world
@@ -275,6 +296,7 @@ local function run()
   local level_ended, peer_ended
   local pending, seq, issued, applied, rejected = {}, 0, 0, 0, 0
   for i = 1, callbacks do
+    tick_no = i
     TheApp:onTick()
     if TheApp.world ~= world then
       -- The level was won or lost and the game returned to the main menu.

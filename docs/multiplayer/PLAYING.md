@@ -210,7 +210,12 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   hospital that may buy it bids.) The gavel sinks while
   nobody bids and every bid raises it again; when nobody bids for 6
   seconds (10 for the first bid) it is down: "going once", "going twice",
-  sold to the highest bid. Bots bid too, up to a limit.
+  sold to the highest bid. Bots bid too, up to what the plot is worth to
+  them: a little over the price while they have room, up to two and a half
+  times the price once their rooms fill most of their floor. A bot that
+  shares your hospital bids for it while you are away (no commands for a
+  game week), and a bot whose side of the map is bought up asks for plots
+  on other sides when it runs out of room.
   Short of money? Under the bars your balance and loan are shown: **+**
   borrows $5,000 from the bank (up to the bank's limit), **-** pays $5,000
   back, without leaving the auction.

@@ -7,6 +7,11 @@
 # with the same seed on two builds, and the hourly fingerprints must be
 # identical. Default 80000 game ticks, about three game years (until the
 # level is lost). Runs both builds in parallel; takes several minutes.
+# BASE_LANGUAGE and NEW_LANGUAGE (default English) set each run's game
+# language: the same build in two languages must also give the same
+# fingerprints (players in different languages play one game). Languages
+# such as Russian or Chinese need UNICODE_FONT (a .ttf/.ttc file); without
+# one the game falls back to English.
 set -euo pipefail
 if [[ $# -lt 5 ]]; then
   echo "Usage: $0 BASE_CHECKOUT BASE_BINARY NEW_CHECKOUT NEW_BINARY GAME_DATA [CALLBACKS]" >&2
@@ -21,7 +26,7 @@ echo "Output: $out"
 export USER="${USER:-corsixth-probe}"
 export SDL_VIDEODRIVER=dummy SDL_AUDIO_DRIVER=dummy SDL_RENDER_DRIVER=software
 
-run() { # name source binary
+run() { # name source binary language
   local dir="$out/$1"
   mkdir -p "$dir/config" "$dir/saves"
   cat > "$dir/config.txt" <<EOF
@@ -31,7 +36,8 @@ player_name = "Regression"
 fullscreen = false
 width = 800
 height = 600
-language = [[English]]
+language = [[$4]]
+unicode_font = [[${UNICODE_FONT:-}]]
 audio = false
 play_music = false
 play_sounds = false
@@ -46,8 +52,8 @@ EOF
     "--interpreter=$2/scripts/multiplayer/sync_probe.lua" \
     "--config-file=$dir/config.txt" > "$dir/log.txt" 2>&1 || true
 }
-run base "$base_src" "$base_bin" & p1=$!
-run new "$new_src" "$new_bin" & p2=$!
+run base "$base_src" "$base_bin" "${BASE_LANGUAGE:-English}" & p1=$!
+run new "$new_src" "$new_bin" "${NEW_LANGUAGE:-English}" & p2=$!
 wait $p1 $p2
 
 python3 - "$out" <<'PY'
