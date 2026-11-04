@@ -70,10 +70,14 @@ local EARNERS = {operating_theatre = 25, scanner = 10, x_ray = 8, cardiogram = 8
 -- The score a team mate's wish adds: before the bot's own ideas, after the
 -- basics of an opening hospital (90 and more).
 local WISH = 50
--- The size a player gives a room (square), when there is space.
-local SIZES = {gp = 5, pharmacy = 5, general_diag = 5, psych = 6, ward = 7, staff_room = 6, toilets = 5,
-    research = 6, operating_theatre = 7, x_ray = 6, scanner = 6, decontamination = 6, dna_fixer = 6,
-    electrolysis = 6, training = 6}
+-- The size a bot gives a room (square): one more than the game's smallest,
+-- so a plant and a radiator fit beside the machines (Jan). Bot:layoutSpot
+-- puts it snugly against walls and other rooms, so floor is left for the
+-- GP's offices a busy hospital needs later (a 3-year level 7 race: land
+-- gone by month 7, GP queues of 60 to 80). Extras that do not fit are sold.
+local SIZES = {gp = 5, pharmacy = 5, general_diag = 6, psych = 6, ward = 7, staff_room = 6, toilets = 5,
+    research = 6, operating_theatre = 7, x_ray = 7, scanner = 6, decontamination = 6, dna_fixer = 6,
+    electrolysis = 6, training = 5}
 -- What a player puts into a new room besides what it needs: warmth, a
 -- plant, a bin; comfort in the staff room; more toilets and beds.
 local EXTRAS = {
@@ -412,8 +416,9 @@ function M:projects(s)
   -- this moment is no reason not to: the doctor may be on a break.)
   for id, n in pairs(s.rooms) do
     local per = s.queue[id] / n
-    if per > busy_q and n < (COPIES[id] or 1) + (COPIES[id] and more or 0) then
-      room(id, (per - busy_q + 1) * 1.2, id == "ward" and 7 or nil)
+    -- (GP's offices: at most COPIES.gp, rich or not.)
+    if per > busy_q and n < (COPIES[id] or 1) + (COPIES[id] and id ~= "gp" and more or 0) then
+      room(id, (per - busy_q + 1) * 1.2)
     end
   end
 

@@ -915,16 +915,18 @@ function Bot:layoutSpot(min, size)
           if not ok then break end
         end
         if ok then
-          local score = w * h * 0.6
+          -- (Against walls and other rooms, and the size asked: the
+          -- smallest only where nothing bigger fits snugly.)
+          local score = w * h * 0.5
           for tx = x, x + w - 1 do
-            if solid(tx, y - 1) then score = score + 1 end
+            if solid(tx, y - 1) then score = score + 1.5 end
             -- (A one tile gap above: nothing will ever fit in it.)
             if f(tx, y - 1) and solid(tx, y - 2) then score = score - 1.5 end
             if f(tx, y + h + 1) then score = score + 0.3 end
           end
           for ty = y, y + h - 1 do
-            if solid(x - 1, ty) then score = score + 1 end
-            if solid(x + w, ty) then score = score + 1 end
+            if solid(x - 1, ty) then score = score + 1.5 end
+            if solid(x + w, ty) then score = score + 1.5 end
             if f(x - 1, ty) and solid(x - 2, ty) then score = score - 1.5 end
             if f(x + w, ty) and solid(x + w + 1, ty) then score = score - 1.5 end
           end
@@ -1041,7 +1043,7 @@ function Bot:drawRoom(room_type, size, extras)
   if hospital.balance - self:roomCost(room_type) < RESERVE then return nil, "money" end
   local min = math.max(room_type.minimum_size or 4, SMALLEST[room_type.id] or 0)
   local ax, ay = self:anchor()
-  size = math.max(min, size or math.min(7, math.max(5, min + 1)))
+  size = math.max(min, size or min + 1) -- (one more than the smallest: room for a plant)
   self.reserved = self:reservedTiles()
   local x, y, w, h
   -- Where a player would put it (against walls and rooms, in rows).
