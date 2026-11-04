@@ -41,7 +41,6 @@ local COLUMNS = {
   {"name", 95}, {"hospital", 75}, {"ping", 50}, {"status", 115},
   {"value", 65}, {"balance", 65}, {"reputation", 70}, {"goals", 60},
 }
-local MAX_ROWS = 4
 local WIDTH = 20 * 2 + (#COLUMNS - 1) * 4
 for _, c in ipairs(COLUMNS) do WIDTH = WIDTH + c[2] end
 
@@ -50,8 +49,20 @@ local BEHIND_STEPS = 24
 -- No word from a player for this long (seconds) is shown.
 local QUIET_SECONDS = 5
 
+--! How many rows the window has: a row per place in the room (2 to 8), or
+--! per player in the game's list if that has more.
+local function rowCount()
+  local lobby = TheApp.mp_lobby
+  local places = lobby and lobby.room and tonumber(lobby.room.max) or 4
+  local listed = lobby and lobby.game_players and #lobby.game_players or 0
+  return math.max(2, math.min(MultiplayerLobby.PLACES, math.max(places, listed)))
+end
+
 function UIMultiplayerPlayers:UIMultiplayerPlayers(ui)
-  local height = 70 + (MAX_ROWS + 1) * 25 + 75
+  local MAX_ROWS = rowCount()
+  self.max_rows = MAX_ROWS
+  -- (the rows, the note, and the Close button with a margin below it)
+  local height = 40 + (MAX_ROWS + 1) * 25 + 5 + 28 + 30 + 15
   self:UIResizable(ui, WIDTH, height, col.bg)
   self.esc_closes = true
   self.resizable = false
@@ -136,7 +147,7 @@ end
 
 function UIMultiplayerPlayers:refresh()
   local rows = UIMultiplayerPlayers.rows(TheApp.mp_lobby, TheApp.mp_session, TheApp.world)
-  for row = 1, MAX_ROWS do
+  for row = 1, self.max_rows do
     for _, c in ipairs(COLUMNS) do
       local text = rows[row] and rows[row][c[1]] or ""
       self.cells[row][c[1]]:setLabel(text)
@@ -147,13 +158,13 @@ function UIMultiplayerPlayers:refresh()
   end
   self.shown_list = TheApp.mp_lobby and TheApp.mp_lobby.game_players
   self.row_hospitals = {}
-  for row = 1, MAX_ROWS do self.row_hospitals[row] = rows[row] and rows[row].hospital_entity end
+  for row = 1, self.max_rows do self.row_hospitals[row] = rows[row] and rows[row].hospital_entity end
 end
 
 --! Each player's colour (a game with a hospital each) in a tab before the row.
 function UIMultiplayerPlayers:draw(canvas, x_, y_)
   UIResizable.draw(self, canvas, x_, y_)
-  for row = 1, MAX_ROWS do
+  for row = 1, self.max_rows do
     MultiplayerSession.drawColourTab(canvas, self, x_, y_, self.row_hospitals[row], 6, 40 + row * 25, 10, 23)
   end
 end

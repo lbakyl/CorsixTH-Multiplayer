@@ -496,6 +496,21 @@ describe("MultiplayerSession game options", function()
     assert.is_nil(MultiplayerSession.auctionBidders(world, 4, world.hospitals[1]))
   end)
 
+  it("gives bots different appetites for a plot, the same on every peer", function()
+    local auction = {id = 3, plot = 9}
+    local seen = {}
+    for i = 1, 8 do
+      local a = MultiplayerSession.botAppetite(auction, i)
+      assert.is_true(a >= 0 and a <= 1)
+      assert.equal(a, MultiplayerSession.botAppetite({id = 3, plot = 9}, i))
+      seen[math.floor(a * 4)] = true
+    end
+    -- (spread out: in at least three of the four quarters)
+    local quarters = 0
+    for _ in pairs(seen) do quarters = quarters + 1 end
+    assert.is_true(quarters >= 3)
+  end)
+
   it("lets at most four bid: the asker and the hospitals nearest the plot", function()
     -- A row of twelve plots: hospital i owns plot i (its camera there), 9 to
     -- 12 are for sale.

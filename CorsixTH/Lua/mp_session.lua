@@ -2904,8 +2904,13 @@ MultiplayerSession.AUCTION_OPEN_SECONDS = 10
 local function auction_frames(seconds) return math.ceil(seconds * 1000 / 18) end -- world ticks
 -- A bot bids up to this much of the price: the first with plenty of room,
 -- the second with its land full (MultiplayerSession.landNeed), at least the
--- third for land it asked for; and keeps this much money.
-local BOT_AUCTION_LOW, BOT_AUCTION_HIGH, BOT_AUCTION_OWN = 1.15, 2.5, 1.6
+-- third for land it asked for; and keeps this much money. On top, each bot
+-- wants each plot a little differently (up to BOT_AUCTION_APPETITE more,
+-- botAppetite), so that several bots bid against each other: with one
+-- worth for all, the first bid (a tenth over the price) was already as far
+-- as any other bot would go.
+local BOT_AUCTION_LOW, BOT_AUCTION_HIGH, BOT_AUCTION_OWN = 1.3, 2.5, 1.6
+local BOT_AUCTION_APPETITE = 0.45
 MultiplayerSession.BOT_AUCTION_RESERVE = 5000
 
 --! How badly `hospital` needs more land: 0 (plenty of room) to 1 (full).
@@ -2930,10 +2935,18 @@ function MultiplayerSession.landNeed(world, hospital)
   return math.max(0, math.min(1, (rooms / inside - 0.45) / 0.3))
 end
 
+--! How much bot hospital `i` wants the auction's plot beyond its need:
+--! 0 to 1, from the auction and the hospital only (the same on every peer,
+--! no random numbers drawn).
+function MultiplayerSession.botAppetite(auction, i)
+  return ((auction.id * 7919 + auction.plot * 131 + i * 104729) % 1000) / 999
+end
+
 --! The most a bot running hospital `i` would pay for the auction's plot.
 function MultiplayerSession.botPlotWorth(world, i, auction)
   local need = MultiplayerSession.landNeed(world, world.hospitals[i])
-  local factor = BOT_AUCTION_LOW + (BOT_AUCTION_HIGH - BOT_AUCTION_LOW) * need
+  local factor = BOT_AUCTION_LOW + (BOT_AUCTION_HIGH - BOT_AUCTION_LOW) * need +
+      BOT_AUCTION_APPETITE * MultiplayerSession.botAppetite(auction, i)
   if i == auction.by then factor = math.max(factor, BOT_AUCTION_OWN) end
   return math.floor(auction.price * factor), need
 end

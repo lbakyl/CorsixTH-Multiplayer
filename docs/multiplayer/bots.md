@@ -24,7 +24,7 @@ referee build cannot run bots (the button is not shown there).
   connects (`HELLO role=bot room token`) or `BOT_START_TIMEOUT` passes. The bot
   joins ready; `PLAYER` lines say `bot=1`, `LOBBY` says how many are still
   `starting`. When the last person leaves a room, its bots are stopped. At most
-  `CORSIXTH_MP_MAX_BOTS` (default 6) run on a server at once.
+  `CORSIXTH_MP_MAX_BOTS` (default 7: a room of 8 with one person) run on a server at once.
 - Lobby window (`dialogs/resizables/multiplayer.lua`): the player places are
   buttons; `UIMultiplayer:clickPlace` adds or removes a bot
   (`MultiplayerLobby:addBot`, `removeBot`, `canAddBots`).

@@ -94,11 +94,11 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
    One shared hospital plays the campaign's levels (1 to 12); several
    hospitals play the multiplayer levels (1 to 8; a higher number plays
    level 8, as the room says). A saved game keeps its colours and teams.
-   **How many hospitals:** Theme Hospital's maps have room for 4; with more
-   players, some share a hospital (the same colour). TEAM TOWN (level 8)
-   also has a map for 5 to 8 hospitals: four more hospitals north and south
-   of the middle (the empty ones' plots are for sale). The host cannot start
-   with more colours than the level fits.
+   **How many players:** a room has as many places as its level has
+   hospitals. Theme Hospital's maps have room for 4; TEAM TOWN (level 8) also
+   has a map for 5 to 8 hospitals: four more hospitals north and south of the
+   middle (the empty ones' plots are for sale), so its rooms have up to 8
+   places.
 5. **Sharing a hospital:** team mates build, hire and answer faxes in the
    same hospital. A bot can share yours too: it builds in your hospital along
    with you (a desk, rooms, staff), and whatever you have already built it

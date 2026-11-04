@@ -61,6 +61,13 @@ local function placesOf(lobby)
   return math.max(4, math.min(MultiplayerLobby.PLACES, max))
 end
 
+--! How many places a new room on this level may have: as many as the level
+--! has hospitals (mp_levels.maxHospitals; a level above the multiplayer
+--! levels plays the last one with several hospitals).
+local function placesFor(level)
+  return math.min(MultiplayerLobby.PLACES, corsixth.require("mp_levels").maxHospitals(tonumber(level) or 1))
+end
+
 --! The height of a view of the window.
 local function viewHeight(view, lobby)
   return heights[view] + (view == "room" and (placesOf(lobby) - 4) * PLACE_H or 0)
@@ -264,7 +271,9 @@ function UIMultiplayer:_buildRooms()
   -- preset of the newcomers' colours and teams.)
   self.new_mode = form.mode
   self.new_level = form.level or 1
-  self.new_max = form.max or 2
+  -- (A room has as many places as the level has hospitals: 4, or 8 on a
+  -- level with a map for 8.)
+  self.new_max = math.min(form.max or 2, placesFor(self.new_level))
   self.level_button = button(self, 20, y, 180, S.level:format(self.new_level), self.buttonLevel, T.level)
   self.max_button = button(self, 205, y, WIDTH - 225, S.players:format(self.new_max), self.buttonMax, T.players)
   -- A new game, or a saved multiplayer game picked in the Load MP game
@@ -357,10 +366,13 @@ end
 function UIMultiplayer:setLevel(level)
   self.new_level = math.max(1, math.min(12, level))
   self.level_button.panel_for_sprite:setLabel(_S.multiplayer_window.level:format(self.new_level))
+  self.new_max = math.min(self.new_max, placesFor(self.new_level))
+  self.max_button.panel_for_sprite:setLabel(_S.multiplayer_window.players:format(self.new_max))
 end
 
+--! The number of players: the next one, up to the level's places.
 function UIMultiplayer:buttonMax()
-  self.new_max = self.new_max % MultiplayerLobby.PLACES + 1
+  self.new_max = self.new_max % placesFor(self.new_level) + 1
   if self.new_max < 2 then self.new_max = 2 end
   self.max_button.panel_for_sprite:setLabel(_S.multiplayer_window.players:format(self.new_max))
 end

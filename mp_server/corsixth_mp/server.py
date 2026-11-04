@@ -95,8 +95,9 @@ GAME_OPTIONS = {"auctions": ("1", "2", "0"), "tricks": ("1", "0"), "sharing": ("
 # this many seconds.
 KICK_BLOCK_SECONDS = 300.0
 # Each bot is a whole game running on this server: at most this many at once
-# (all rooms together; CORSIXTH_MP_MAX_BOTS).
-MAX_BOTS = 6
+# (all rooms together; CORSIXTH_MP_MAX_BOTS). Seven: a room of 8 with one
+# person in it.
+MAX_BOTS = 7
 # A bot asks the language model (advisor.py) at most this often (seconds).
 ASK_INTERVAL = {"plan": 20.0, "chat": 3.0}
 # Gameplay settings every peer must use (lesson 4 in the handover README).
@@ -681,6 +682,8 @@ class Server:
         preset = "coop"
         if continue_step is None:
             preset, mode = (mode if mode != "free" else "coop"), "free"
+            # A new game has as many places as the level has hospitals.
+            max_players = min(max_players, max(2, hospitals))
         room = Room(name=name, salt=salt,
                     password_hash=_hash_password(password, salt) if password else None,
                     build=player.build, max_players=max_players, mode=mode, preset=preset, level=level,

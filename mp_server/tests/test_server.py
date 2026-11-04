@@ -757,11 +757,10 @@ def test_colours_and_teams(run):
 
 
 def test_eight_places_and_the_levels_hospitals(run):
-    """A room has up to 8 places. Newcomers get colours up to the level's
-    hospitals (4 unless the client says more); after that they share the
-    hospital with the fewest players."""
+    """A new room has as many places as the level has hospitals (4 unless the
+    client says more, up to 8); newcomers get a colour each."""
     async def body(server, port):
-        for room, hospitals, want in (("four", None, "1234" "1234"), ("eight", 8, "12345678")):
+        for room, hospitals, places in (("four", None, 4), ("eight", 8, 8)):
             fields = dict(room=room, password="", max=9, level=8)
             if hospitals:
                 fields["hospitals"] = hospitals
@@ -769,23 +768,26 @@ def test_eight_places_and_the_levels_hospitals(run):
             clients = [await Client.connect(port, names[0])]
             clients[0].send(encode("CREATE", **fields))
             joined = await clients[0].expect("JOINED")
-            assert joined["max"] == "8"
+            assert joined["max"] == str(places)
             colours = [(await clients[0].expect("PLAYER"))["colour"]]
-            for i in range(1, 8):
+            for i in range(1, places):
                 c = await Client.connect(port, names[i])
                 c.send(encode("JOIN", room=room, password=""))
                 await c.expect("JOINED")
                 colours.append((await c.expect("PLAYER", peer=str(i + 1)))["colour"])
                 clients.append(c)
-            assert "".join(colours) == want
-            extra = await Client.connect(port, names[8])
+            assert colours == [str(i) for i in range(1, places + 1)]
+            extra = await Client.connect(port, names[places])
             extra.send(encode("JOIN", room=room, password=""))
             assert (await extra.expect("ERROR"))["code"] == "room_full"
-            # Colour 8 is a colour.
-            clients[1].send(encode("SEAT", colour=8))
-            await clients[1].expect("PLAYER", peer="2", colour="8")
             for c in clients:
                 await c.close()
+        # Colour 8 is a colour (the room for 8 is still there).
+        dan = await Client.connect(port, "Dan")
+        dan.send(encode("CREATE", room="pick", password="", max=3, level=8, hospitals=8))
+        await dan.expect("JOINED")
+        dan.send(encode("SEAT", colour=8))
+        await dan.expect("PLAYER", peer="1", colour="8")
     run(body)
 
 
