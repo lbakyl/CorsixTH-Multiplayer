@@ -1,6 +1,7 @@
-"""The server's daily report to Discord: the games of a day (how many, how
-long, people and bots) and what the bots' advice cost, from the files the
-server keeps (stats.py), posted to a Discord webhook.
+"""The server's daily report to Discord, a short summary of a day: how many
+games, how long in all, how many people and bots played, and what the bots'
+advice cost (from the files the server keeps, stats.py), posted to a
+Discord webhook.
 
     python -m corsixth_mp.daily_report [--date YYYY-MM-DD] [--dry-run]
 
@@ -24,15 +25,7 @@ import urllib.request
 
 from . import stats
 
-MAX_GAMES_LISTED = 8
 DISCORD_LIMIT = 2000
-# The lobby's modes in words.
-MODES = {"coop": "co-op", "shared": "one shared hospital", "competitive": "race", "teams": "team race",
-         "teamshared": "team hospitals", "free": "free"}
-
-
-def _plural(n: int, word: str) -> str:
-    return f"{n} {word}{'' if n == 1 else 's'}"
 
 
 def _duration(seconds: float) -> str:
@@ -79,30 +72,12 @@ def report(day: str, env: dict[str, str] | None = None) -> str:
         lines.append("No games played.")
     else:
         total = sum(float(g["ended"]) - float(g["started"]) for g in games)
-        longest = max(float(g["ended"]) - float(g["started"]) for g in games)
         people = {n.lower() for g in games for n in g.get("humans", [])}
-        seats = sum(len(g.get("humans", [])) for g in games)
         bots = sum(len(g.get("bots", [])) for g in games)
-        repairs = sum(int(g.get("repairs", 0)) for g in games)
-        lines.append(f"Games: {len(games)}, {_duration(total)} in all (longest {_duration(longest)})")
-        lines.append(f"Human players: {len(people)} different ({seats} in all games together)")
+        lines.append(f"Games played: {len(games)}, {_duration(total)} in all")
+        lines.append(f"Human players: {len(people)}")
         lines.append(f"Bots: {bots}")
-        if repairs:
-            lines.append(f"Desync repairs: {repairs}")
-    lines.append(f"Bot advice (Haiku): ${advice['usd']:.2f} for {_plural(advice['answers'], 'answer')}")
-    if games:
-        lines.append("")
-        ordered = sorted(games, key=lambda g: float(g["started"]))
-        for g in ordered[:MAX_GAMES_LISTED]:
-            who = ", ".join(g.get("humans", [])) or "nobody"
-            nbots = len(g.get("bots", []))
-            extra = f" + {_plural(nbots, 'bot')}" if nbots else ""
-            start = datetime.datetime.fromtimestamp(float(g["started"]), stats.timezone(env)).strftime("%H:%M")
-            mode = MODES.get(g.get("mode", ""), g.get("mode", "?"))
-            lines.append(f"- {start} {g.get('room', '?')}: {_duration(float(g['ended']) - float(g['started']))}, "
-                         f"{mode}, level {g.get('level', '?')}; {who}{extra}")
-        if len(ordered) > MAX_GAMES_LISTED:
-            lines.append(f"... and {len(ordered) - MAX_GAMES_LISTED} more")
+    lines.append(f"Bot advice (Haiku): ${advice['usd']:.2f}")
     text = "\n".join(lines)
     return text if len(text) <= DISCORD_LIMIT else text[:DISCORD_LIMIT - 3] + "..."
 

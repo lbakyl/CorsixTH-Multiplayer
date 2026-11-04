@@ -25,14 +25,9 @@ def test_report_of_a_day(tmp_path):
     stats.record_advice(0.05, _ts(day, 21), env)
     stats.record_advice(1.0, _ts((2026, 11, 4), 1), env)
     text = daily_report.report("2026-11-03", env)
-    assert text.splitlines()[0] == "**eu2: Tue 03 Nov 2026**"
-    assert "Games: 2, 2 h 10 min in all (longest 1 h 30 min)" in text
-    assert "Human players: 2 different (3 in all games together)" in text
-    assert "Bots: 2" in text
-    assert "Desync repairs: 1" in text
-    assert "Bot advice (Haiku): $0.30 for 2 answers" in text
-    assert "- 20:00 Jan's room: 1 h 30 min, team hospitals, level 3; Jan + 2 bots" in text
-    assert "- 22:00 duo: 40 min, co-op, level 2; jan, Mira" in text
+    # (Jan and jan are one person.)
+    assert text.splitlines() == ["**eu2: Tue 03 Nov 2026**", "Games played: 2, 2 h 10 min in all",
+                                 "Human players: 2", "Bots: 2", "Bot advice (Haiku): $0.30"]
     data = json.loads((tmp_path / "ai-daily.json").read_text())
     assert data["2026-11-04"] == {"usd": 1.0, "answers": 1}
 
@@ -40,9 +35,7 @@ def test_report_of_a_day(tmp_path):
 def test_report_of_a_quiet_day(tmp_path):
     env = {"CORSIXTH_MP_STATS_DIR": str(tmp_path), "CORSIXTH_MP_SERVER_NAME": "eu1"}
     text = daily_report.report("2026-11-01", env)
-    assert "No games played." in text and "$0.00 for 0 answers" in text
-    stats.record_advice(0.01, _ts((2026, 11, 1), 12), env)
-    assert "$0.01 for 1 answer" in daily_report.report("2026-11-01", env)
+    assert text.splitlines()[1:] == ["No games played.", "Bot advice (Haiku): $0.00"]
 
 
 def test_nothing_kept_without_a_folder(tmp_path, monkeypatch):
