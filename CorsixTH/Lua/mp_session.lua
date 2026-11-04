@@ -577,6 +577,7 @@ function MultiplayerSession:beforeStep()
   end
   self:tickVote()
   self:tickAuction()
+  self:tickHold()
   self:_dropStaleOutline()
 end
 
@@ -2935,6 +2936,8 @@ function MultiplayerSession.auctionBidders(world, plot, hospital, peek)
   end
   local me = world:getHospitalIndex(hospital)
   local list = {me}
+  -- (The room's owner turned auctions off: whoever asks first buys it.)
+  if world.mp_coop.auctions_off then return list end
   local touching = MultiplayerSession.plotsTouching(world, plot)
   local side = MultiplayerSession.plotSide(world, plot, peek)
   for i, other in ipairs(world.hospitals) do
@@ -3124,6 +3127,108 @@ function MultiplayerSession:syncAuction(world)
     if not waiting then ui:addWindow(wait_class(ui)) end
   elseif waiting then
     waiting:close()
+  end
+end
+
+--------------------------------------------------------------------------------
+-- Holds: the game stands still for everybody (no game hours, as during an
+-- auction) while the people read the annual report, or until a win fax is
+-- answered. Every peer keeps stepping (World:_mpHoursForStep gives 0 hours),
+-- so nobody falls behind. A hold waits for every hospital a person plays
+-- (one of its players is enough), not for bots or players who left, and
+-- ends after HOLD_SECONDS at the latest.
+--------------------------------------------------------------------------------
+
+MultiplayerSession.HOLD_SECONDS = {year = 180, win = 300}
+
+--! Start (or widen) a hold. kind "year" (it ends when each waiting
+--! hospital's player closed the report: hold_done) or "win" (it ends when
+--! the fax message msg_id is answered); only: just that hospital's player.
+function MultiplayerSession.startHold(world, kind, msg_id, only)
+  local count = world.mp_coop and world.mp_coop.players or 1
+  local bots = world.mp_coop and world.mp_coop.bot_hospitals or {}
+  local hold = world.mp_hold
+  if not hold then
+    world.mp_hold_count = (world.mp_hold_count or 0) + 1
+    hold = {id = world.mp_hold_count, kind = kind, waiting = {}, msgs = {}, frames = 0,
+        limit = auction_frames(MultiplayerSession.HOLD_SECONDS[kind] or 180)}
+  elseif kind == "win" then
+    hold.kind = "win" -- (a win fax at the year end: the longer wait, its text)
+    hold.limit = math.max(hold.limit, auction_frames(MultiplayerSession.HOLD_SECONDS.win))
+  end
+  for i = 1, count do
+    local h = world.hospitals[i]
+    if h and not h.mp_player_away and not bots[i] and (not only or only == i) then hold.waiting[i] = true end
+  end
+  if msg_id then hold.msgs[#hold.msgs + 1] = msg_id end
+  if next(hold.waiting) then world.mp_hold = hold end
+  return world.mp_hold
+end
+
+--! This player closed their annual report: {hold}.
+function handlers.hold_done(world, cmd)
+  local hold, hospital = world.mp_hold, hospital_of(world, cmd)
+  if not hold or hold.id ~= tonumber(cmd.hold) or not hospital then return false, "nothing to wait for" end
+  hold.waiting[world:getHospitalIndex(hospital)] = nil
+  return true
+end
+
+--! Count the hold's time and see whether it is over (after every step's
+--! commands, on every peer).
+function MultiplayerSession:tickHold()
+  local world = self.world
+  local hold = world and world.mp_hold
+  if hold then
+    for i in pairs(hold.waiting) do
+      local h = world.hospitals[i]
+      if not h or h.mp_player_away then hold.waiting[i] = nil end
+    end
+    -- A win fax: over once it is answered (no longer in the message bar).
+    if #hold.msgs > 0 then
+      local open = {}
+      local panel = world.ui and world.ui.bottom_panel
+      for _, info in ipairs(panel and panel.message_queue or {}) do
+        if info.mp_id then open[info.mp_id] = true end
+      end
+      local left = {}
+      for _, id in ipairs(hold.msgs) do
+        if open[id] then left[#left + 1] = id end
+      end
+      hold.msgs = left
+      if #left == 0 and hold.kind == "win" then hold.waiting = {} end
+    end
+    hold.frames = hold.frames + world:_mpStepFrames(world.mp_speed or "Normal")
+    if not next(hold.waiting) or hold.frames >= hold.limit then
+      world.mp_hold = nil
+      self.applied_this_step = true
+      self.log(string.format("hold %d (%s) over", hold.id, hold.kind))
+    end
+  end
+  self:syncHold(world)
+end
+
+--! While a hold waits for others (this player's report is closed, or the
+--! fax is not theirs): a box saying for whom; closed when it is over.
+function MultiplayerSession:syncHold(world)
+  local ui = world and world.ui
+  local class_ = rawget(_G, "UIMultiplayerHoldWait")
+  if self.observer or self.abstains or not ui or not class_ then return end -- (not for bots)
+  local hold = world.mp_hold
+  -- (Not for oneself only: this player's "done" is on its way.)
+  if hold then
+    local others = false
+    for i in pairs(hold.waiting) do
+      if world.hospitals[i] ~= ui.hospital or self.hold_done_sent ~= hold.id then others = true end
+    end
+    if not others then hold = nil end
+  end
+  local box = ui:getWindow(class_)
+  local report_class, fax_class = rawget(_G, "UIAnnualReport"), rawget(_G, "UIFax")
+  local reading = hold and ((report_class and ui:getWindow(report_class)) or (fax_class and ui:getWindow(fax_class)))
+  if hold and not reading then
+    if not box then ui:addWindow(class_(ui)) end
+  elseif box then
+    box:close()
   end
 end
 

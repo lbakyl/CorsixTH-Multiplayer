@@ -458,3 +458,42 @@ function UIMultiplayerAuctionWait:back()
     ui:addWindow(UIMultiplayerAuction(ui))
   end
 end
+
+--------------------------------------------------------------------------------
+
+--! While the game stands still for the others (MultiplayerSession.startHold):
+--! the annual report or a win fax still open somewhere. It goes when the
+--! hold is over (MultiplayerSession:syncHold).
+class "UIMultiplayerHoldWait" (UIResizable)
+
+---@class UIMultiplayerHoldWait: UIResizable
+---@operator call: UIMultiplayerHoldWait
+local UIMultiplayerHoldWait = _G["UIMultiplayerHoldWait"] ---@type UIMultiplayerHoldWait
+
+function UIMultiplayerHoldWait:UIMultiplayerHoldWait(ui)
+  self:UIResizable(ui, 400, 64, wait_col.bg)
+  self.esc_closes = false
+  self.resizable = false
+  self.on_top = true
+  self:setDefaultPosition(0.5, 0.35)
+  self.text_panel = self:addBevelPanel(20, 19, 360, 26, wait_col.text)
+  self.text_panel.lowered = true
+  self:onTick()
+end
+
+function UIMultiplayerHoldWait:onTick()
+  local world = self.ui.app.world
+  local hold = world and world.mp_hold
+  if hold then
+    local names = {}
+    local session = TheApp.mp_session
+    local mine = session and session.hold_done_sent == hold.id and self.ui.hospital
+    for i = 1, #world.hospitals do
+      if hold.waiting[i] and world.hospitals[i] ~= mine then names[#names + 1] = world.hospitals[i].name end
+    end
+    local S = _S.multiplayer_window
+    local text = hold.kind == "year" and S.hold_year or S.hold_win
+    self.text_panel:setLabel(text:format(table.concat(names, ", ")))
+  end
+  return UIResizable.onTick(self)
+end

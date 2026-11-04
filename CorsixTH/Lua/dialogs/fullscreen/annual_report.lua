@@ -484,6 +484,15 @@ function UIAnnualReport:close()
   -- In multiplayer the monthly check (in the simulation) decides; closing
   -- happens at a different moment on every machine.
   if not TheApp.mp_session then self.ui.app.world:checkIfGameWon() end
+  -- Multiplayer: the game stands still until everybody has read theirs
+  -- (MultiplayerSession.startHold); this player has.
+  local session, world = TheApp.mp_session, TheApp.world
+  local hold = world and world.mp_hold
+  if session and hold and hold.kind == "year" and not session.observer and not session.abstains and
+      self.hospital == world.ui.hospital then
+    session:issue({kind = "hold_done", hold = hold.id})
+    session.hold_done_sent = hold.id -- (not "waiting for" oneself meanwhile)
+  end
 end
 
 --! Changes the page of the annual report

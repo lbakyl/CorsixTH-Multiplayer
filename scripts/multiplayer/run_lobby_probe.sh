@@ -96,6 +96,10 @@
 #  34. the host removes a player ("kick"): uma double-clicks vic's line,
 #      the menu's "remove" -> vic is back in the room list, told why, and
 #      joining that room again is refused ("kicked")
+#  35. the year end waits ("yearhold", co-op): wes keeps the annual
+#      report open for 80 steps; xan closes it at once and gets the box
+#      "the game waits while WES read...", and no game hours pass until wes
+#      closes it -> IN SYNC
 #  31. two languages in one game ("lang"): otis plays in English, greta in
 #      German (the build id no longer has the language); a busy hospital,
 #      staff hired by both, past the first month's new hiring lists -> IN
@@ -271,6 +275,10 @@ run_probe ben MP_ROLE=join MP_ROOM=auction MP_STEPS=600   MP_UI_SCRIPT="30:openh
 run_probe uma MP_ROLE=host MP_ROOM=kick MP_KICK=2 & pids+=($!)
 sleep 1
 run_probe vic MP_ROLE=join MP_ROOM=kick MP_EXPECT_KICK=1 & pids+=($!)
+# The year end waits for everybody's annual report.
+run_probe wes MP_ROLE=host MP_ROOM=yearhold MP_COOP=1 MP_STEPS=400 MP_KEEP_REPORT=80   MP_UI_SCRIPT="20:openhospital;100:yearend" & pids+=($!)
+sleep 1
+run_probe xan MP_ROLE=join MP_ROOM=yearhold MP_STEPS=400 MP_UI_SCRIPT="30:openhospital" & pids+=($!)
 # Two languages in one game: otis in English, greta in German.
 run_probe otis MP_ROLE=host MP_ROOM=lang MP_STEPS=2000 MP_SCENARIO=busy \
   MP_UI_SCRIPT="1600:hire:Doctor;1700:hire:Handyman" & pids+=($!)
@@ -776,6 +784,20 @@ ok33 = (len(sold33[0]) == 1 and sold33 == [sold33[0], sold33[0]] and sold33[0][0
         and result('ana').startswith('IN SYNC') and result('ben').startswith('IN SYNC'))
 print(f"33. Land auction:           {sold33[0]}; screens {screens33}; closed by ben {hidden33}; {result('ana')} / {result('ben')}")
 fail |= not ok33
+
+# The year end waits for everybody's annual report.
+closed35 = {n: re.findall(r'UI: closed the annual report at step (\d+) \(game hours (\d+)\)', log(n))
+            for n in ('wes', 'xan')}
+box35 = re.findall(r'UI: hold box at step (\d+) \(game hours (\d+)\): (.*)', log('xan'))
+gone35 = re.findall(r'UI: hold box gone at step (\d+) \(game hours (\d+)\)', log('xan'))
+ok35 = (len(closed35['wes']) == 1 and len(closed35['xan']) == 1 and len(box35) == 1 and len(gone35) == 1
+        and 'WES' in box35[0][2]
+        and int(closed35['wes'][0][0]) - int(closed35['xan'][0][0]) >= 70
+        and int(gone35[0][1]) - int(box35[0][1]) <= 1  # (no game hours while it waited)
+        and result('wes').startswith('IN SYNC') and result('xan').startswith('IN SYNC'))
+print(f"35. Year end waits:         closed {closed35}; xan's box {box35} gone {gone35}; "
+      f"{result('wes')} / {result('xan')}")
+fail |= not ok35
 
 # The host removes a player.
 menu34 = re.search(r'UI: kick menu open: (\w+)', log('uma'))

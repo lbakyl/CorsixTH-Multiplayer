@@ -123,7 +123,7 @@ function World:World(app, free_build_mode)
     -- (bot_hospitals: hospital index -> true for those only bots play)
     self.mp_coop = {players = coop.players, competitive = coop.competitive or nil, teams = coop.teams,
         team_hospitals = coop.team_hospitals, colours = coop.colours, mode = coop.mode,
-        bot_hospitals = coop.bot_hospitals}
+        bot_hospitals = coop.bot_hospitals, auctions_off = coop.auctions_off}
     self.mp_local_index = coop.local_index
     for i = 1, coop.players do
       local hospital = PlayerHospital(self, avail_rooms, coop.names[i] or ("PLAYER " .. i), i)
@@ -1143,8 +1143,9 @@ function World:_mpHoursForStep()
   local speed = self.mp_speed or "Normal"
   local timing = tick_rates[speed] or tick_rates.Normal
   if speed == "Pause" or speed == "Speed Up" then return 0 end
-  -- The game stands still during a land auction (MultiplayerSession.startAuction).
-  if self.mp_auction then return 0 end
+  -- The game stands still during a land auction (MultiplayerSession.startAuction)
+  -- and while the people read the annual report or a win fax (startHold).
+  if self.mp_auction or self.mp_hold then return 0 end
   local rate = timing[2]
   self.mp_frames = (self.mp_frames or 0) + math.min(rate, MP_STEP_FRAMES)
   local hours = 0
@@ -1316,6 +1317,8 @@ function World:_annualReports()
       self.ui:addWindow(report)
     end
   end
+  -- The game stands still until the people have read their reports.
+  MultiplayerSession.startHold(self, "year")
 end
 
 --! Patients come to town once a player hospital is open (multiplayer co-op:
@@ -1954,6 +1957,9 @@ function World:_mpPlace(hosp, how)
   }
   -- Only this hospital's player sees it (and answers it: fax_choice).
   self.ui.bottom_panel:queueMessage("information", message, nil, nil, 2, nil, hosp)
+  if how == "won" then
+    MultiplayerSession.startHold(self, "win", self.next_message_id, self:getHospitalIndex(hosp))
+  end
   if self.ui.hospital == hosp then self.ui.bottom_panel:openLastMessage() end
 end
 
@@ -1987,6 +1993,7 @@ function World:_mpRaceCheckOver()
     },
   }
   self.ui.bottom_panel:queueMessage("information", message, nil, nil, 2, nil, nil, true)
+  MultiplayerSession.startHold(self, "win", self.next_message_id)
   self.ui.bottom_panel:openLastMessage()
 end
 
@@ -2225,9 +2232,10 @@ function World:_mpTeamWon()
       {text = S.keep_playing, choice = "stay_on_level"},
     },
   }
-  -- (No timeout: faxes do not pause a multiplayer game, and the single
-  -- player value 0 would answer it at once.)
+  -- (No timeout: the game stands still until somebody answers it, startHold;
+  -- the single player value 0 would answer it at once.)
   self.ui.bottom_panel:queueMessage("information", message, nil, nil, 2, nil, nil, true)
+  MultiplayerSession.startHold(self, "win", self.next_message_id)
   self.ui.bottom_panel:openLastMessage()
 end
 
@@ -2254,6 +2262,7 @@ function World:winGame(player_no)
     end
     self.hospitals[player_no].game_won = true
     self.ui.bottom_panel:queueMessage("information", message, nil, nil, 2, callback)
+    MultiplayerSession.startHold(self, "win", self.next_message_id)
     self.ui.bottom_panel:openLastMessage()
     return
   end

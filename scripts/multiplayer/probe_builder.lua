@@ -990,6 +990,7 @@ function builder.register_handlers()
   end
   -- Run the year-end checks now (the team loses at a second failing year end).
   MultiplayerSession.default_handlers.probe_yearend = function(w)
+    w:_annualReports() -- (as at a real year end: the reports first)
     w:onEndYear()
     return true
   end

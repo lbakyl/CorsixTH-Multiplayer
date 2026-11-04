@@ -454,6 +454,10 @@ multiplayer_window = {
   trade_offered = "Offered. They join you if the other player accepts.",
   loading = "LOADING...",
   kick_player = "Remove %s from the room",
+  hold_year = "The game waits for %s to close the annual report...",
+  hold_win = "The game waits for %s to answer the fax...",
+  auctions_on = "Land auctions: on",
+  auctions_off = "Land auctions: off (whoever asks first buys)",
   kicked = "%s, the room's owner, removed you from the room.",
   auction_title = "Land auction: plot %d",
   auction_paused = "The game stands still during the auction.",
@@ -845,6 +849,7 @@ multiplayer_window = {
 }
 
 tooltip.multiplayer_window = {
+  auctions = "The host decides: plots near other hospitals go to auction, or the first to ask buys them",
   refer_button = "Offer this patient to another player's hospital. They must accept.",
   share_research = "Offer research you have to another player's hospital, free or for a price. They must accept.",
   ask_money = "Ask another player for money. They decide whether to pay.",
