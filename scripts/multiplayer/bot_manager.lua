@@ -1455,9 +1455,18 @@ end
 --! A wish's project in words ("an inflation room", "a nurse", "a bench").
 local function wish_words(key)
   local kind, what = key:match("^(%a+):([^:]+)")
+  local function room_name(id)
+    local ok, name = pcall(function() return _S.rooms_short[id] end)
+    return (ok and type(name) == "string" and name or id:gsub("_", " ")) .. " room"
+  end
   if kind == "room" then
-    local ok, name = pcall(function() return _S.rooms_short[what] end)
-    return (ok and type(name) == "string" and name or what:gsub("_", " ")) .. " room"
+    return room_name(what)
+  elseif kind == "add" then
+    -- "add:gp:plant": the plant in the GP room
+    local obj = key:match("^add:[^:]+:(.+)$") or "thing"
+    return obj:gsub("_", " ") .. " in the " .. room_name(what)
+  elseif kind == "bigger" then
+    return "bigger " .. room_name(what)
   elseif kind == "hire" then
     return "a " .. what:lower()
   elseif key == "buy:land" then
@@ -1474,7 +1483,9 @@ function M:tellWisher(w, kind, key)
   for _, peer in ipairs(peers) do
     local name = bot:playerName(peer)
     if name then
-      local line = self.pick(self.lines[kind]):format(name, wish_words(key))
+      -- (Something put into a room: "the plant in the GP room is in place".)
+      local lines = (kind == "wish_done" and key:find("^add:") and self.lines.wish_done_add) or self.lines[kind]
+      local line = self.pick(lines):format(name, wish_words(key))
       bot:say(line, self.typing(line), peer)
     end
   end
