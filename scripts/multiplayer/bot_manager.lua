@@ -371,7 +371,8 @@ function M:projects(s)
   end
 
   -- The basics of an opening hospital.
-  if s.staffed_desks == 0 and (s.staff.Receptionist or 0) == 0 then hire("Receptionist", 100) end
+  -- (A receptionist for a desk there is, not before: staff only for a need.)
+  if s.desks > 0 and s.staffed_desks == 0 and (s.staff.Receptionist or 0) == 0 then hire("Receptionist", 100) end
   if not s.rooms.gp then room("gp", 90) end
   if s.rooms.gp and (s.staff.Doctor or 0) == 0 then hire("Doctor", 95) end
 
@@ -630,16 +631,19 @@ function M:projects(s)
     end
   end
   -- What the model's plan named that no rule above listed (one nurse more,
-  -- say): tried, within the staff caps and the copies of a room, and never
-  -- urgent (no loan for it). (Before, such a plan item was dropped without a
-  -- word; tried without those limits, the bots built six pharmacies on loans.)
+  -- say): tried, within the copies of a room, and never urgent (no loan for
+  -- it). (Before, such a plan item was dropped without a word; tried without
+  -- those limits, the bots built six pharmacies on loans.) Staff only for a
+  -- need: a desk or a room without its staff (Jan: a second receptionist
+  -- and a doctor came before there was a desk or a room for them).
+  local need = {Receptionist = s.desks, Doctor = want.Doctor, Nurse = want.Nurse, Handyman = handymen}
   for key, b in pairs(self.boost) do
     if b > 0 and not listed[key] then
       local kind, what = key:match("^(%a+):(.+)$")
       local score = math.min(0, URGENT - 5 - b)
       if kind == "hire" then
         local base = SPECIALISTS[what] and "Doctor" or what
-        if hosp:countStaffOfCategory(base) < (cap[base] or 99) then hire(what, score) end
+        if hosp:countStaffOfCategory(base) < math.min(cap[base] or 99, need[base] or 0) then hire(what, score) end
       elseif kind == "room" then
         if (s.rooms[what] or 0) < (COPIES[what] or 1) then room(what, score) end
       elseif kind == "buy" then
