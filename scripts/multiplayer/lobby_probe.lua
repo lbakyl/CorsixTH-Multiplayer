@@ -452,6 +452,7 @@ local function run_lobby()
       local until_t = socket.gettime() + 4
       wait_for("the kicked player's try", function() return socket.gettime() > until_t end, 10)
       log("RESULT: KICK DONE")
+      log("PROBE: DONE")
       os.exit(0)
     end
     log(string.format("lobby: %d players, recommended speed %s, delay %s, one way %s ms",
@@ -520,6 +521,7 @@ local function run_lobby()
       wait_for("the answer", function() return lobby.error ~= nil end, 10)
       log("UI: joining again: " .. tostring(lobby.error.code) .. ": " .. tostring(lobby.error.text))
       log("RESULT: KICK DONE")
+      log("PROBE: DONE")
       os.exit(0)
     end
     wait_for("game start", function() return lobby.state == "in_game" end, 60)
