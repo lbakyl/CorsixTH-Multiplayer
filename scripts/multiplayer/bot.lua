@@ -471,6 +471,15 @@ function Bot:hospitalMates()
   return mates
 end
 
+--! Does it leave building to the person it shares the hospital with (the
+--! room's "helpers" game option off: no rooms, nothing for the corridors)?
+--! (From the room's options: one shared hospital has no world.mp_coop.)
+function Bot:leavesBuilding()
+  local off = (self.lobby and self.lobby.optionValue and self.lobby:optionValue("helpers") == "0") or
+      (self.world and self.world.mp_coop and self.world.mp_coop.helpers_off)
+  return off and #self:hospitalMates() > 0 or false
+end
+
 --! Note who gives commands (every command, just before it runs): a person
 --! sharing the hospital is there while they play.
 function Bot:watchCommands()
@@ -1915,7 +1924,10 @@ function Bot:think()
     -- The smart brain: a room being furnished or edited first, then the
     -- manager.
     if self:furnishTick() or self:editTick() then return end
-    if not hospital.mp_place and #hospital:getReceptionDesks() == 0 then
+    -- (Not when bots leave the building to the person sharing the hospital:
+    -- the "helpers" game option.)
+    local leaves_building = self:leavesBuilding()
+    if not hospital.mp_place and #hospital:getReceptionDesks() == 0 and not leaves_building then
       if day >= plan.desk then
         plan.desk = self:later(3)
         local ok, err = pcall(self.buyCorridor, self, "reception_desk")

@@ -65,6 +65,11 @@ best project it can afford is done, one every one to four game days.
   for a queue.
 - **Hiring**: the most skilled person on the list (of those with the skill a
   room needs).
+- **"Allied bots build: off"** (the room's `helpers` game option): a bot
+  sharing a person's hospital builds no rooms, buys nothing for the corridors
+  or rooms (no reception desk either) and takes no room in, unless the person
+  asks for it in the chat (a wish). Staff, bonuses, research, auctions, land
+  and the rest it still does (`Bot:leavesBuilding`).
 - **Training**: a training room (5x5, three lecture chairs) once it has two
   juniors, five doctors and $30,000, and a consultant to teach. Every 6 months
   it picks the teacher again: the consultant with the most special skills

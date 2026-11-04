@@ -654,6 +654,9 @@ MultiplayerLobby.OPTIONS = {
   }},
   {name = "tricks", on = "tricks_on", off = "tricks_off", short = "no_tricks", tooltip = "tricks"},
   {name = "sharing", on = "sharing_on", off = "sharing_off", short = "no_sharing", tooltip = "sharing"},
+  -- Bots sharing a person's hospital build rooms and furnish the corridors,
+  -- or leave that to the person (and do the rest: staff, research, land).
+  {name = "helpers", on = "helpers_on", off = "helpers_off", short = "no_helper_building", tooltip = "helpers"},
 }
 
 --! The room owner removes a player from the room (the server answers KICKED to them).
@@ -1458,7 +1461,8 @@ function MultiplayerLobby:_beginGame(f)
         team_hospitals = mode == "teamshared" or nil, colours = layout and layout.colours,
         mode = mode, bot_hospitals = bot_hospitals, auctions_off = f.auctions == "0" or nil,
         auctions_all = f.auctions == "2" or nil,
-        tricks_off = f.tricks == "0" or nil, sharing_off = f.sharing == "0" or nil}
+        tricks_off = f.tricks == "0" or nil, sharing_off = f.sharing == "0" or nil,
+        helpers_off = f.helpers == "0" or nil}
   end
   f.mode = mode -- (the menu, the bots)
 

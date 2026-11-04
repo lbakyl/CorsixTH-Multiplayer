@@ -117,8 +117,11 @@ to the original if you like: **Land auctions** (Contested, the default: the
 plots described under Land auctions below; Every plot: every plot goes to
 auction among all the hospitals that may buy it; Off: whoever asks for a plot
 first buys it), **Dirty tricks** in a race (off: no tricks for anybody, bots
-included) and **Research sharing** (off: nobody gives or sells research).
-What the host changed shows in the room.
+included), **Research sharing** (off: nobody gives or sells research) and
+**Allied bots build** (off: a bot sharing a person's hospital builds no rooms
+and puts nothing in the corridors, unless that person asks it to in the
+chat; it still hires staff, pays bonuses, shares research, bids at auctions
+and buys land). What the host changed shows in the room.
 
 **Nobody to play with?** As the host, click an empty place in your room
 ("click: add a bot") and a computer player takes it; click the bot to take it

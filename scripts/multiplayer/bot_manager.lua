@@ -324,7 +324,20 @@ function M:projects(s)
   local world = bot.world
   local list = {}
   local listed = {}
+  -- (The room's owner chose that bots sharing a person's hospital leave the
+  -- rooms and the corridors to the person: no rooms, nothing bought for
+  -- the corridors or rooms, no room taken in; land, staff and the rest
+  -- still. What the person asks for is still done.)
+  local builds = not bot:leavesBuilding()
+  if not builds and not self.said_hands_off then
+    self.said_hands_off = true
+    self:note(string.format("day %d: leaves the rooms and corridors to the person (game option)", s.day))
+  end
   local function add(key, score, run, cost)
+    if not builds and not self.wishes[key] and key ~= "buy:land" and
+        (key:find("^room:") or key:find("^buy:") or key:find("^edit:")) then
+      return
+    end
     -- (Not what a team mate said they would do themselves.)
     if self.hands_off[key] and s.day <= self.hands_off[key] then return end
     -- (Only the basics of an opening hospital are done without the money
@@ -508,7 +521,7 @@ function M:projects(s)
   local size_of = land_price and SIZES_OF or smallest_size
   -- (One room at a time, a month apart: each edit closes the room a while.)
   -- (Never in a hospital a person plays in too: the rooms are theirs as well.)
-  if wanted and not bot:sharesWithPerson() and #bot:peopleOfHospital(bot:hospitalIndex()) == 0 and
+  if wanted and #bot:hospitalMates() == 0 and
       s.day - (self.shrink_day or -99) > 30 and bot:oversizedRoom(size_of) then
     add("edit:shrink", 12 + wanted * 6, function()
       local ok, why = bot:shrinkRoom(size_of)

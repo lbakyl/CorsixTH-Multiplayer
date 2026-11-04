@@ -309,9 +309,9 @@ def test_owner_turns_auctions_off(run):
         assert (await b.expect("ERROR"))["code"] == "not_owner"
         a.send(encode("OPTION", auctions=0))
         assert (await b.expect("LOBBY", auctions=0))["room"] == "r1"
-        a.send(encode("OPTION", tricks=0, sharing=0))
+        a.send(encode("OPTION", tricks=0, sharing=0, helpers=0))
         lobby = await b.expect("LOBBY", tricks=0)
-        assert lobby["sharing"] == "0" and lobby["auctions"] == "0"
+        assert lobby["sharing"] == "0" and lobby["auctions"] == "0" and lobby["helpers"] == "0"
         a.send(encode("OPTION", sharing=1))
         lobby = await b.expect("LOBBY", tricks=0)
         assert "sharing" not in lobby

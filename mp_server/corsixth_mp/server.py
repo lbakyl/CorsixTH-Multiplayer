@@ -90,7 +90,8 @@ BOT_START_TIMEOUT = 60.0
 # auctions (1 plots near other hospitals, 2 every plot, 0 off), dirty tricks
 # (in a race) and research sharing (1 on, 0 off). The first value is the
 # default; any other is sent as <name>=<value> in LOBBY and START.
-GAME_OPTIONS = {"auctions": ("1", "2", "0"), "tricks": ("1", "0"), "sharing": ("1", "0")}
+GAME_OPTIONS = {"auctions": ("1", "2", "0"), "tricks": ("1", "0"), "sharing": ("1", "0"),
+                "helpers": ("1", "0")}
 # A player the room owner removed (KICK) may not come back to that room for
 # this many seconds.
 KICK_BLOCK_SECONDS = 300.0
