@@ -72,7 +72,8 @@
 #      sees a new room appear without clicking Refresh, and what they typed
 #      (the password) stays -> they join, IN SYNC
 #  28. a room's code fails as a patient enters (test command; five more
-#      patients come just before, so one enters a GP's office in time): the
+#      patients come just before and just after, so one enters a GP's
+#      office in time): the
 #      patient walks out and queues again in both games, the report has the
 #      room's layout -> IN SYNC
 #  27. the reception desk moved one tile over (right, then down) -> both
@@ -293,7 +294,7 @@ sleep 1
 PROBE_LANG=$greta_lang PROBE_FONT="$lang_font" run_probe greta MP_ROLE=join MP_ROOM=lang MP_STEPS=2000 MP_SCENARIO=busy \
   MP_UI_SCRIPT="1650:hire:Nurse;1750:hire:Doctor" & pids+=($!)
 run_probe wade MP_ROLE=host MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
-  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;620:patients:5;640:breakroom:gp;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench;820:buy:plant;840:moveinto:plant:gp;920:objectroom:plant;860:movestaff:Doctor;870:whereis:Doctor;950:overlay" & pids+=($!)
+  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;605:breakroom:gp;620:patients:5;645:patients:5;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench;820:buy:plant;840:moveinto:plant:gp;920:objectroom:plant;860:movestaff:Doctor;870:whereis:Doctor;950:overlay" & pids+=($!)
 sleep 1
 run_probe yara MP_ROLE=join MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
   MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront;500:furnishroom:gp:5:5;750:cancelroom:toilets:4:4;870:whereis:Doctor;900:uistate;920:objectroom:plant;950:overlay" & pids+=($!)
