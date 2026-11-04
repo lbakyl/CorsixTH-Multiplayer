@@ -515,12 +515,21 @@ function UIMultiplayer:_updateRoom()
   end
   self.mode_panel:setLabel(MultiplayerLobby.modeLabel(mode) .. ", " .. level_text ..
       (lobby.room["continue"] == "1" and (", " .. S.continuing:format((lobby.room.date or ""):gsub("T.*", ""))) or ""))
-  -- The options switched off show for everybody, on the hint's line.
-  local off -- (strings of the language: joined with .., not table.concat)
+  -- The options not as by default show for everybody, on the hint's line.
+  local changed -- (strings of the language: joined with .., not table.concat)
   for _, option in ipairs(MultiplayerLobby.OPTIONS) do
-    if not lobby:optionOn(option.name) then off = off and (off .. ", " .. S[option.short]) or S[option.short] end
+    local short
+    if option.choices then
+      local value = lobby:optionValue(option.name)
+      for _, choice in ipairs(option.choices) do
+        if choice.value == value then short = choice.short end
+      end
+    elseif not lobby:optionOn(option.name) then
+      short = option.short
+    end
+    if short then changed = changed and (changed .. ", " .. S[short]) or S[short] end
   end
-  self.hint_panel:setLabel(off and S.options_off_line:format(off) or S.room_hint)
+  self.hint_panel:setLabel(changed and S.options_off_line:format(changed) or S.room_hint)
   local owner = lobby:isOwner()
   local options = self.options_window
   if options and options.lobby == lobby then options:update() end
@@ -559,8 +568,12 @@ function UIMultiplayer:buttonOptions()
   for _, w in ipairs(self.windows or {}) do -- (one at a time)
     if w == self.options_window then w:close() break end
   end
-  self.options_window = rawget(_G, "UIMultiplayerRoomOptions")(self.ui, self.lobby) -- (defined below)
-  self:addWindow(self.options_window)
+  local options = rawget(_G, "UIMultiplayerRoomOptions")(self.ui, self.lobby) -- (defined below)
+  self.options_window = options
+  self:addWindow(options)
+  -- (Over the room's window, in its middle: a window in a window is placed
+  -- from its parent's corner; a negative x would count from the right.)
+  options:setPosition(math.max(0, math.floor((self.width - options.width) / 2)), 80)
 end
 
 --! The host's menu on another person's line: remove them from the room.
@@ -681,9 +694,10 @@ end
 
 --------------------------------------------------------------------------------
 
---! A room's game options, one switch a line (MultiplayerLobby's OPTIONS
---! list); only the host may change them, and not in a continued game (it
---! keeps what it was started with).
+--! A room's game options, one a line (MultiplayerLobby's OPTIONS list): a
+--! switch, or a button for each choice (one chosen at a time); only the
+--! host may change them, and not in a continued game (it keeps what it was
+--! started with).
 class "UIMultiplayerRoomOptions" (UIResizable)
 
 ---@class UIMultiplayerRoomOptions: UIResizable
@@ -692,7 +706,7 @@ local UIMultiplayerRoomOptions = _G["UIMultiplayerRoomOptions"] ---@type UIMulti
 
 function UIMultiplayerRoomOptions:UIMultiplayerRoomOptions(ui, lobby)
   local S = _S.multiplayer_window
-  local w = 320
+  local w = 400
   local options = MultiplayerLobby.OPTIONS
   self:UIResizable(ui, w, 70 + #options * 30 + 40, col.bg)
   self.lobby = lobby
@@ -702,10 +716,27 @@ function UIMultiplayerRoomOptions:UIMultiplayerRoomOptions(ui, lobby)
   self.default_button_sound = "selectx.wav"
   self:addBevelPanel(20, 10, w - 40, 20, col.caption):setLabel(S.game_options).lowered = true
   self.option_buttons = {}
+  local caption_w = 110
   for i, option in ipairs(options) do
-    self.option_buttons[i] = self:addBevelPanel(20, 40 + (i - 1) * 30, w - 40, 25, col.button)
-        :setLabel(""):makeButton(0, 0, w - 40, 25, nil, function() self:toggle(i) end)
-        :setTooltip(_S.tooltip.multiplayer_window[option.tooltip])
+    local y = 40 + (i - 1) * 30
+    if option.choices then
+      self:addBevelPanel(20, y, caption_w, 25, col.bg):setLabel(S[option.caption])
+          :setTooltip(_S.tooltip.multiplayer_window[option.tooltip]).lowered = true
+      local n = #option.choices
+      local bw = math.floor((w - 40 - caption_w - 5 * n) / n)
+      local buttons = {}
+      for c, choice in ipairs(option.choices) do
+        buttons[c] = self:addBevelPanel(20 + caption_w + 5 + (c - 1) * (bw + 5), y, bw, 25, col.setting,
+            nil, nil, nil, col.setting_active):setLabel(S[choice.label])
+            :makeToggleButton(0, 0, bw, 25, nil, function() self:choose(i, c) end)
+            :setTooltip(_S.tooltip.multiplayer_window[choice.tooltip])
+      end
+      self.option_buttons[i] = buttons
+    else
+      self.option_buttons[i] = self:addBevelPanel(20, y, w - 40, 25, col.button)
+          :setLabel(""):makeButton(0, 0, w - 40, 25, nil, function() self:toggle(i) end)
+          :setTooltip(_S.tooltip.multiplayer_window[option.tooltip])
+    end
   end
   self.note_panel = self:addBevelPanel(20, 40 + #options * 30 + 5, w - 40, 20, col.bg)
   self.note_panel.lowered = true
@@ -719,9 +750,17 @@ function UIMultiplayerRoomOptions:update()
   local lobby, S = self.lobby, _S.multiplayer_window
   local may = lobby:isOwner() and lobby.room and lobby.room["continue"] ~= "1"
   for i, option in ipairs(MultiplayerLobby.OPTIONS) do
-    local on = lobby:optionOn(option.name)
-    self.option_buttons[i]:setLabel(on and S[option.on] or S[option.off])
-    self.option_buttons[i]:enable(may)
+    if option.choices then
+      local value = lobby:optionValue(option.name)
+      for c, choice in ipairs(option.choices) do
+        self.option_buttons[i][c]:setToggleState(choice.value == value)
+        self.option_buttons[i][c]:enable(may)
+      end
+    else
+      local on = lobby:optionOn(option.name)
+      self.option_buttons[i]:setLabel(on and S[option.on] or S[option.off])
+      self.option_buttons[i]:enable(may)
+    end
   end
   self.note_panel:setLabel(may and "" or S.options_host_only)
 end
@@ -731,4 +770,14 @@ function UIMultiplayerRoomOptions:toggle(i)
   local option = MultiplayerLobby.OPTIONS[i]
   if not (option and lobby:isOwner()) then return end
   lobby:setOption(option.name, not lobby:optionOn(option.name))
+end
+
+--! Choose choice `c` of option `i` (the buttons show it once the server's
+--! LOBBY says so).
+function UIMultiplayerRoomOptions:choose(i, c)
+  local lobby = self.lobby
+  local option = MultiplayerLobby.OPTIONS[i]
+  local choice = option and option.choices and option.choices[c]
+  if choice and lobby:isOwner() then lobby:setOption(option.name, choice.value) end
+  self:update()
 end

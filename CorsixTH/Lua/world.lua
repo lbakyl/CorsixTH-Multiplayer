@@ -124,6 +124,7 @@ function World:World(app, free_build_mode)
     self.mp_coop = {players = coop.players, competitive = coop.competitive or nil, teams = coop.teams,
         team_hospitals = coop.team_hospitals, colours = coop.colours, mode = coop.mode,
         bot_hospitals = coop.bot_hospitals, auctions_off = coop.auctions_off,
+        auctions_all = coop.auctions_all,
         tricks_off = coop.tricks_off, sharing_off = coop.sharing_off}
     self.mp_local_index = coop.local_index
     for i = 1, coop.players do

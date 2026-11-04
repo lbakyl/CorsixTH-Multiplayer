@@ -2847,8 +2847,8 @@ function handlers.player_away(world, cmd)
 end
 
 --! Buy a plot of land: {plot}. A plot that borders another hospital's land
---! goes to auction (see below). Otherwise, in co-op, only plots on the
---! buyer's side.
+--! (or any plot, when the room's owner chose that) goes to auction (see
+--! below).
 function handlers.buy_plot(world, cmd)
   local hospital = hospital_of(world, cmd)
   if not hospital then return false, "no such hospital" end
@@ -2880,7 +2880,10 @@ end
 -- auctioned among the one who asked, the player whose side it is on and the
 -- hospitals whose land borders it (those of them that may buy it). A plot
 -- on the asker's own side that no other hospital borders is bought straight
--- away. The game stands still during the auction (no game hours,
+-- away. The room's owner may choose instead that every plot goes to
+-- auction among all the hospitals that may buy it (world.mp_coop.
+-- auctions_all), or none (auctions_off: whoever asks first buys it).
+-- The game stands still during the auction (no game hours,
 -- World:_mpHoursForStep); every player sees it (UIMultiplayerAuction).
 -- The auction (world.mp_auction) is game state, the same on every peer. It
 -- opens at the plot's price, the one who asked leading. Each bid is one step
@@ -2933,7 +2936,8 @@ end
 
 --! Who would bid for `plot` if `hospital` asked to buy it: hospital indices,
 --! the asker first, then (by index) every other hospital in the game that
---! may buy it and whose side it is on or whose land borders it. Nil: no
+--! may buy it and whose side it is on or whose land borders it (with every
+--! plot auctioned: every other hospital that may buy it). Nil: no
 --! auction for that plot (one that cannot be bought, a single-player game,
 --! free build mode).
 --!param peek (table) optional; a screen's question (see plotSide)
@@ -2952,7 +2956,7 @@ function MultiplayerSession.auctionBidders(world, plot, hospital, peek)
   for i, other in ipairs(world.hospitals) do
     local player = other:getPlayerIndex()
     if i ~= me and not other.mp_player_away and th:isParcelPurchasable(plot, player) then
-      local near = i == side
+      local near = i == side or world.mp_coop.auctions_all
       if not near then
         for q in pairs(touching) do
           if th:getPlotOwner(q) == player then

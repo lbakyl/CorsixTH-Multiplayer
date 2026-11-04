@@ -315,8 +315,11 @@ def test_owner_turns_auctions_off(run):
         a.send(encode("OPTION", sharing=1))
         lobby = await b.expect("LOBBY", tricks=0)
         assert "sharing" not in lobby
+        a.send(encode("OPTION", auctions=2, tricks=5))  # every plot; 5 is no value
+        lobby = await b.expect("LOBBY", auctions=2)
+        assert lobby["tricks"] == "0"
         _, sb = await start(a, b)
-        assert sb["auctions"] == "0" and sb["tricks"] == "0" and "sharing" not in sb
+        assert sb["auctions"] == "2" and sb["tricks"] == "0" and "sharing" not in sb
         await a.close()
         await b.close()
     run(body)

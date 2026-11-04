@@ -594,20 +594,34 @@ end
 --! like a player, ready at once) or takes one away by its peer number.
 function MultiplayerLobby:addBot() self.error = nil; self:send("BOT", {add = 1}) end
 function MultiplayerLobby:removeBot(peer) self.error = nil; self:send("BOT", {remove = peer}) end
---! The room owner switches a game option (auctions, tricks, sharing) on or off.
-function MultiplayerLobby:setOption(name, on) self.error = nil; self:send("OPTION", {[name] = on and 1 or 0}) end
---! Is this game option on in this room (LOBBY says <name>=0 when the owner turned it off)?
-function MultiplayerLobby:optionOn(name) return not (self.summary and self.summary[name] == "0") end
+--! The room owner sets a game option (auctions, tricks, sharing): true or
+--! false, or one of its values ("0" is off; see OPTIONS).
+function MultiplayerLobby:setOption(name, value)
+  if type(value) == "boolean" then value = value and "1" or "0" end
+  self.error = nil
+  self:send("OPTION", {[name] = value})
+end
+--! A game option's value in this room: LOBBY gives <name>=<value> when the
+--! owner chose other than the default ("1", on).
+function MultiplayerLobby:optionValue(name) return self.summary and self.summary[name] or "1" end
+--! Is this game option on in this room (not "0")?
+function MultiplayerLobby:optionOn(name) return self:optionValue(name) ~= "0" end
 function MultiplayerLobby:setAuctions(on) self:setOption("auctions", on) end
 function MultiplayerLobby:auctionsOn() return self:optionOn("auctions") end
 
 --! The room's game options (UIMultiplayerRoomOptions shows a switch for
 --! each; on by default): its name (OPTION, START: <name>=0 when off, the game
 --! keeps world.mp_coop.<name>_off), the strings for on and off, the short
---! text in the room's mode line when off, and the tooltip
---! (_S.multiplayer_window, _S.tooltip.multiplayer_window).
+--! text in the room's hint line when off, and the tooltip
+--! (_S.multiplayer_window, _S.tooltip.multiplayer_window). An option with
+--! `choices` has more values than on and off: one button each, one chosen
+--! at a time (the first the default); `short` for each other than it.
 MultiplayerLobby.OPTIONS = {
-  {name = "auctions", on = "auctions_on", off = "auctions_off", short = "no_auctions", tooltip = "auctions"},
+  {name = "auctions", caption = "auctions_caption", tooltip = "auctions", choices = {
+    {value = "1", label = "auctions_near", tooltip = "auctions_near"},
+    {value = "2", label = "auctions_all", tooltip = "auctions_all", short = "every_plot_auctioned"},
+    {value = "0", label = "auctions_none", tooltip = "auctions_none", short = "no_auctions"},
+  }},
   {name = "tricks", on = "tricks_on", off = "tricks_off", short = "no_tricks", tooltip = "tricks"},
   {name = "sharing", on = "sharing_on", off = "sharing_off", short = "no_sharing", tooltip = "sharing"},
 }
@@ -1411,6 +1425,7 @@ function MultiplayerLobby:_beginGame(f)
         competitive = MultiplayerLobby.isRace(mode), teams = layout and layout.teams,
         team_hospitals = mode == "teamshared" or nil, colours = layout and layout.colours,
         mode = mode, bot_hospitals = bot_hospitals, auctions_off = f.auctions == "0" or nil,
+        auctions_all = f.auctions == "2" or nil,
         tricks_off = f.tricks == "0" or nil, sharing_off = f.sharing == "0" or nil}
   end
   f.mode = mode -- (the menu, the bots)

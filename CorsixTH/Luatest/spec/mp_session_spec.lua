@@ -465,4 +465,34 @@ describe("MultiplayerSession game options", function()
     assert.is_false(ok)
     assert.equal("research sharing is off in this game", why)
   end)
+
+  -- A map one row of four plots: hospital 1 owns plot 1, hospital 2 plot 4.
+  local function plot_world(coop)
+    local owner = {1, 0, 0, 2}
+    local th = {
+      size = function() return 4, 1 end,
+      getPlotCount = function() return 5 end,
+      getCellFlags = function(_, x, _, t) t = t or {}; t.parcelId = x; return t end,
+      getPlotOwner = function(_, plot) return owner[plot] or 0 end,
+      isParcelPurchasable = function(_, plot) return owner[plot] == 0 end,
+    }
+    local hospitals = {}
+    for i = 1, 2 do hospitals[i] = {getPlayerIndex = function() return i end} end
+    return {map = {th = th}, hospitals = hospitals, mp_coop = coop,
+        getHospitalIndex = function(_, h) return h == hospitals[1] and 1 or 2 end}
+  end
+
+  it("auctions only contested plots, every plot or none, as the room's owner chose", function()
+    local world = plot_world({})
+    -- Plot 2: hospital 1's side, hospital 2's land does not border it.
+    assert.same({1}, MultiplayerSession.auctionBidders(world, 2, world.hospitals[1]))
+    -- Plot 3 borders hospital 2's land.
+    assert.same({1, 2}, MultiplayerSession.auctionBidders(world, 3, world.hospitals[1]))
+    world = plot_world({auctions_all = true})
+    assert.same({1, 2}, MultiplayerSession.auctionBidders(world, 2, world.hospitals[1]))
+    world = plot_world({auctions_off = true})
+    assert.same({1}, MultiplayerSession.auctionBidders(world, 3, world.hospitals[1]))
+    -- Owned land is not for sale.
+    assert.is_nil(MultiplayerSession.auctionBidders(world, 4, world.hospitals[1]))
+  end)
 end)

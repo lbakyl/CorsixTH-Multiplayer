@@ -108,10 +108,12 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
 from the room (double-click or right-click their line, then "Remove <name>
 from the room"; they cannot come back to that room for 5 minutes). **Game
 options** (everybody may look, the host switches them) bring the game closer
-to the original if you like: **Land auctions** (off: whoever asks for a plot
+to the original if you like: **Land auctions** (Contested, the default: the
+plots described under Land auctions below; Every plot: every plot goes to
+auction among all the hospitals that may buy it; Off: whoever asks for a plot
 first buys it), **Dirty tricks** in a race (off: no tricks for anybody, bots
 included) and **Research sharing** (off: nobody gives or sells research).
-What is switched off shows in the room.
+What the host changed shows in the room.
 
 **Nobody to play with?** As the host, click an empty place in your room
 ("click: add a bot") and a computer player takes it; click the bot to take it
@@ -203,7 +205,9 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   plot's price, with you in the lead. The players whose side it is on or
   whose land borders it may bid: the tick bids the sum next to it (10%
   of the price more each time), the cross drops out. The others can only
-  watch, and close the screen with the cross. The gavel sinks while
+  watch, and close the screen with the cross. (If the host chose **Every
+  plot** in the game options, every plot goes to auction, and every
+  hospital that may buy it bids.) The gavel sinks while
   nobody bids and every bid raises it again; when nobody bids for 6
   seconds (10 for the first bid) it is down: "going once", "going twice",
   sold to the highest bid. Bots bid too, up to a limit.
