@@ -803,14 +803,20 @@ void animation_manager::set_animation_alt_palette_map(size_t iAnimation,
 
 int animation_manager::set_layer_alt_palette_map(int iLayer, int iLayerId,
                                                   const uint8_t* pMap,
-                                                  uint32_t iAlt32) {
+                                                  uint32_t iAlt32, int iSlot) {
   int iChanged = 0;
   for (size_t i = 0; i < element_count && i < elements.size(); ++i) {
     element& oElement = elements[i];
-    if (oElement.layer == iLayer && oElement.layer_id == iLayerId &&
+    if ((iLayer < 0 || oElement.layer == iLayer) &&
+        oElement.layer_id == iLayerId &&
         oElement.element_sprite_sheet != nullptr) {
-      oElement.element_sprite_sheet->set_sprite_alt_palette_map(
-          oElement.sprite, pMap, iAlt32);
+      if (iSlot == 2) {
+        oElement.element_sprite_sheet->set_sprite_alt_palette_map2(
+            oElement.sprite, pMap);
+      } else {
+        oElement.element_sprite_sheet->set_sprite_alt_palette_map(
+            oElement.sprite, pMap, iAlt32);
+      }
       ++iChanged;
     }
   }
@@ -942,7 +948,8 @@ void animation_manager::draw_frame(render_target* pCanvas, size_t iFrame,
     return;
   }
 
-  uint32_t iPassOnFlags = iFlags & (thdf_alt_palette | thdf_nearest);
+  uint32_t iPassOnFlags =
+      iFlags & (thdf_alt_palette | thdf_alt_palette2 | thdf_nearest);
 
   size_t iListIndex = frames[iFrame].list_index;
   for (;; ++iListIndex) {

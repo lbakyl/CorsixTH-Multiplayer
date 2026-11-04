@@ -1166,6 +1166,10 @@ void sprite_sheet::_freeSingleSprite(size_t iNumber) {
     SDL_DestroyTexture(sprites[iNumber].alt_texture);
     sprites[iNumber].alt_texture = nullptr;
   }
+  if (sprites[iNumber].alt_texture2 != nullptr) {
+    SDL_DestroyTexture(sprites[iNumber].alt_texture2);
+    sprites[iNumber].alt_texture2 = nullptr;
+  }
   if (sprites[iNumber].data != nullptr) {
     delete[] sprites[iNumber].data;
     sprites[iNumber].data = nullptr;
@@ -1201,8 +1205,10 @@ bool sprite_sheet::set_sprite_count(size_t iCount, render_target* pCanvas) {
     sprite& spr = sprites[i];
     spr.texture = nullptr;
     spr.alt_texture = nullptr;
+    spr.alt_texture2 = nullptr;
     spr.data = nullptr;
     spr.alt_palette_map = nullptr;
+    spr.alt_palette_map2 = nullptr;
     spr.sprite_flags = thdf_alt32_plain;
     spr.width = 0;
     spr.height = 0;
@@ -1252,8 +1258,10 @@ bool sprite_sheet::load_from_th_file(const uint8_t* pTableData,
 
     pSprite->texture = nullptr;
     pSprite->alt_texture = nullptr;
+    pSprite->alt_texture2 = nullptr;
     pSprite->data = nullptr;
     pSprite->alt_palette_map = nullptr;
+    pSprite->alt_palette_map2 = nullptr;
     pSprite->width = thSprite.width;
     pSprite->height = thSprite.height;
 
@@ -1313,6 +1321,20 @@ void sprite_sheet::set_sprite_alt_palette_map(size_t iSprite,
     if (pSprite->alt_texture) {
       SDL_DestroyTexture(pSprite->alt_texture);
       pSprite->alt_texture = nullptr;
+    }
+  }
+}
+
+void sprite_sheet::set_sprite_alt_palette_map2(size_t iSprite,
+                                               const uint8_t* pMap) {
+  if (iSprite >= sprite_count) return;
+
+  sprite* pSprite = sprites + iSprite;
+  if (pSprite->alt_palette_map2 != pMap) {
+    pSprite->alt_palette_map2 = pMap;
+    if (pSprite->alt_texture2) {
+      SDL_DestroyTexture(pSprite->alt_texture2);
+      pSprite->alt_texture2 = nullptr;
     }
   }
 }
@@ -1406,7 +1428,13 @@ void sprite_sheet::draw_sprite(render_target* pCanvas, size_t iSprite, float iX,
         sprite.width, sprite.height, sprite.data, palette, iSprFlags);
     sprite.texture = pTexture;
   }
-  if (iFlags & thdf_alt_palette) {
+  if ((iFlags & thdf_alt_palette2) && sprite.alt_palette_map2 && palette) {
+    pTexture = sprite.alt_texture2;
+    if (!pTexture) {
+      pTexture = _makeAltBitmap2(&sprite);
+      if (!pTexture) return;
+    }
+  } else if (iFlags & thdf_alt_palette) {
     pTexture = sprite.alt_texture;
     if (!pTexture) {
       pTexture = _makeAltBitmap(&sprite);
@@ -1510,6 +1538,19 @@ SDL_Texture* sprite_sheet::_makeAltBitmap(sprite* pSprite) {
   }
 
   return pSprite->alt_texture;
+}
+
+SDL_Texture* sprite_sheet::_makeAltBitmap2(sprite* pSprite) {
+  const auto& argb_data = palette->get_argb_data();
+  ::palette oPalette;
+  for (int iColour = 0; iColour < 255; iColour++) {
+    oPalette.set_argb(iColour, argb_data[pSprite->alt_palette_map2[iColour]]);
+  }
+  oPalette.set_argb(255, argb_data[255]);
+  pSprite->alt_texture2 = target->create_palettized_texture(
+      pSprite->width, pSprite->height, pSprite->data, &oPalette,
+      (pSprite->sprite_flags & ~thdf_alt32_mask) | thdf_alt32_plain);
+  return pSprite->alt_texture2;
 }
 
 namespace {

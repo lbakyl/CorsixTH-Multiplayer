@@ -155,6 +155,7 @@ tooltip.research_policy.research_progress = "Progress towards the next discovery
 
 menu = {
   player_count = "PLAYER COUNT",
+  map_size = "MAP SIZE",
   cheats_title = "CHEATS",
   cheats       = "  (%1%) CHEATS  ",
 }
@@ -261,6 +262,9 @@ menu_player_count = {
   players_6 = "  6 PLAYERS  ",
   players_7 = "  7 PLAYERS  ",
   players_8 = "  8 PLAYERS  ",
+}
+menu_map_size = {
+  size = "  NEW MAP %d x %d  ",
 }
 
 tooltip.toolbar = {
@@ -654,7 +658,7 @@ multiplayer_window = {
   keep_playing = "Keep playing",
   level_won_end = "You won the level. Well done!",
   -- Competitive: a race to the level's goals
-  places = {"1st", "2nd", "3rd", "4th"},
+  places = {"1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"},
   race_won = {
     "Congratulations!",
     "Your hospital has reached this level's goals: %s place.",

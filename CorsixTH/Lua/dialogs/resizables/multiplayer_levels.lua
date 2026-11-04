@@ -42,7 +42,9 @@ local col = {
 
 local WIDTH, HEIGHT = 600, 440
 local ROWS = 12
-local MAP_X, MAP_Y, TILE = 200, 75, 2 -- the preview: 2 pixels a tile (a map is 128 tiles)
+-- The preview: 2 pixels a tile on a 128 tile map (256 pixels; a bigger map
+-- in the same space).
+local MAP_X, MAP_Y, TILE = 200, 75, 2
 local INFO_X = MAP_X + 128 * TILE + 10
 local TEXT_Y, TEXT_ROWS = 340, 4
 local SCROLL_W = 20
@@ -256,6 +258,7 @@ function UIMultiplayerLevels:preview()
     end
     rows[y] = runs
   end
+  rows.size = math.max(w, h)
   self.previews[key] = rows
   return rows
 end
@@ -292,11 +295,14 @@ function UIMultiplayerLevels:draw(canvas, x, y)
   x, y = x + self.x * s, y + self.y * s
   local rows = self:preview()
   if rows then
+    local tile = 128 * TILE / (rows.size or 128) -- (pixels a tile: 2 on 128 tiles)
     for ty, runs in ipairs(rows) do
       for _, run in ipairs(runs) do
         local c = run[3]
-        canvas:drawRect(canvas:mapRGB(c[1], c[2], c[3]), x + (MAP_X + (run[1] - 1) * TILE) * s,
-            y + (MAP_Y + (ty - 1) * TILE) * s, run[2] * TILE * s, TILE * s)
+        local rx, ry = math.floor((MAP_X + (run[1] - 1) * tile) * s), math.floor((MAP_Y + (ty - 1) * tile) * s)
+        canvas:drawRect(canvas:mapRGB(c[1], c[2], c[3]), x + rx, y + ry,
+            math.floor((MAP_X + (run[1] - 1 + run[2]) * tile) * s) - rx,
+            math.max(1, math.floor((MAP_Y + ty * tile) * s) - ry))
       end
     end
   else

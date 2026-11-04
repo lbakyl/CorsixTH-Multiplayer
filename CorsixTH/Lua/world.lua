@@ -1897,7 +1897,10 @@ end
 
 --! The English ordinal of a place (1st, 2nd...).
 local function place_text(place)
-  return _S.multiplayer_window.places[place] or tostring(place)
+  -- (A language without this place: the number. The string tables raise an
+  -- error for a missing key, which once stopped a race of 7 at a year end.)
+  local ok, text = pcall(function() return _S.multiplayer_window.places[place] end)
+  return ok and text or tostring(place)
 end
 
 --! The standings lines in one text, comma-separated. (They are localised

@@ -257,7 +257,8 @@ class level_map {
   ~level_map();
 
   bool set_size(int iWidth, int iHeight);
-  bool load_blank();
+  //! A blank map of this size (128 x 128 unless said; up to 256 x 256).
+  bool load_blank(int iWidth = 128, int iHeight = 128);
   bool load_from_th_file(const uint8_t* pData, size_t iDataLength,
                          map_load_object_callback_fn fnObjectCallback,
                          void* pCallbackToken);

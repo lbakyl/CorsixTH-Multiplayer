@@ -2036,7 +2036,10 @@ function App:restart(message)
 end
 
 --! Begin the map editor
-function App:mapEdit()
+--!param size (number) optional: a blank map of size x size tiles (128, the
+--! size of Theme Hospital's maps, unless given; up to 256)
+function App:mapEdit(size)
+  self.map_editor_size = size
   self:loadLevel("", nil, nil, nil, nil, true, _S.errors.load_map_prefix, nil)
 end
 

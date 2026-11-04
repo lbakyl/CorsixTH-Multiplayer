@@ -37,11 +37,14 @@ Status: on `mp/team-hospitals`; first released in mp-test-d5a471a7 (eu2).
   to 8, and one Camera and one Heliport button set the tiles of the player
   the Player button shows (a click: the next one). It saves players 5 to 8
   in the same spare bytes. (`scripts/multiplayer/editor_probe.lua` tests it.)
-- Larger maps (192 x 192, up to 256 x 256) are possible but not built: the
-  map format would need a header with the size, the town map and the level
-  preview draw at a fixed 3 and 2 pixels a tile, and every map would have to
-  be made new. The pathfinder's edge at tile 127 is already fixed to the
-  map's size.
+- Larger maps, up to 256 x 256: the editor's MAP SIZE menu starts a blank
+  map of 128, 192 or 256 tiles. A map of another size than 128 x 128 starts
+  with a 16 byte header ("CTHMAP1", the width and the height, low byte
+  first, 4 bytes spare); the rest follows Theme Hospital's layout with the
+  offsets after the size. 128 x 128 maps are saved exactly as before. The
+  town map keeps its 384 pixels (3 a tile at 128, 2 at 192, 1 at 256), the
+  level browser's preview its 256. No larger map is made yet: they are for
+  map makers.
 
 ## Other parts that changed
 
@@ -59,8 +62,10 @@ Status: on `mp/team-hospitals`; first released in mp-test-d5a471a7 (eu2).
   wear the white, lavender and salmon shirts redrawn blue, teal and pink (a
   palette map on every sprite of that clothes layer, drawn only for their
   patients: `TH.anims:setLayerAltPalette`, `MultiplayerSession.setupShirtColours`).
-  Colour 5 keeps colour 1's mustard shirt: it is part of the body sprite, not
-  a layer of its own. The colour bars at the feet tell all of them apart.
+  Colour 5's mustard shirt is part of the body sprites, not a layer of its
+  own: those sprites get a second palette map (`DrawFlags.AltPalette2`) that
+  turns only the mustard shades green. The colour bars at the feet tell all
+  of them apart too.
 - **Auctions:** the auction room's picture has 4 bidder bars. With more
   hospitals, the bidders are the one that asks and the 3 others whose
   hospitals are nearest the plot. Each bot wants each plot a little

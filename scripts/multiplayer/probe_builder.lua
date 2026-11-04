@@ -871,7 +871,17 @@ function builder.edit_tick(world, state, log)
     return false
   end
   local name = state.name
-  if step - state.since > 800 then finish_step(false, "timed out") return false end
+  if step - state.since > 800 then
+    -- (Things that would not go back in: the room is confirmed if it has
+    -- what it needs, rather than left in the editor.)
+    if name == "place" and shown and dlg.phase == "objects" and dlg.confirm_button.enabled then
+      log(string.format("UI: edit: %d thing(s) left out at step %d", #dlg.objects, step))
+      finish_step(true)
+      return false
+    end
+    finish_step(false, "timed out")
+    return false
+  end
   if name == "pickup" then
     if shown and count() > state.before then finish_step(true) end
   elseif name == "buy" then

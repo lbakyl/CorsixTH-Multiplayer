@@ -161,15 +161,25 @@ end
 --! Map:load uses), or nil if the file cannot be read.
 function levels.hospitalTiles(app, players, level)
   local ok, data = pcall(app.readDataFile, app, "Levels", levels.mapFile(app, players, level))
-  -- (th_map.cpp: the player count is the first byte; camera tiles at 163876,
-  -- two bytes each, y * 128 + x; those of players 5 to 8 at 163892)
-  local function at(i) return i <= 4 and 163876 + 2 * i - 1 or 163892 + 2 * (i - 4) - 1 end
-  if not ok or type(data) ~= "string" or #data < at(players) + 1 then return nil end
+  if not ok or type(data) ~= "string" then return nil end
+  -- (th_map.cpp: Theme Hospital's 128 x 128 layout, or a bigger map's with a
+  -- 16 byte header first: "CTHMAP1", the width and the height. The player
+  -- count is the first byte; the camera tiles follow the tiles and the plot
+  -- numbers, two bytes each, y * width + x; those of players 5 to 8 after
+  -- the heliports.)
+  local base, w, h = 0, 128, 128
+  if data:sub(1, 8) == "CTHMAP1\0" then
+    w, h = data:byte(9) + data:byte(10) * 256, data:byte(11) + data:byte(12) * 256
+    base = 16
+  end
+  local camera = base + 34 + w * h * 10 + 2 -- (0 based: 163876 on 128 x 128)
+  local function at(i) return i <= 4 and camera + 2 * (i - 1) + 1 or camera + 16 + 2 * (i - 5) + 1 end
+  if #data < at(players) + 1 then return nil end
   local tiles = {}
   for i = 1, players do
     local lo, hi = data:byte(at(i), at(i) + 1)
     local index = hi * 256 + lo
-    tiles[i] = {index % 128, math.floor(index / 128)}
+    tiles[i] = {index % w, math.floor(index / w)}
   end
   return tiles
 end

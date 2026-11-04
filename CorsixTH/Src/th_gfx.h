@@ -79,6 +79,10 @@ enum draw_flags : uint32_t {
   //! Draw the sprite with red and blue colours swapped.
   thdf_alt32_blue_red_swap = 2 << thdf_alt32_start,
 
+  //! Draw using the second remapped palette (a sprite has two: see
+  //! sprite_sheet::set_sprite_alt_palette_map); before thdf_alt_palette.
+  thdf_alt_palette2 = 1 << 11,
+
   //! Attach to the early sprite list (right-to-left pass)
   /* (should be set prior to attaching to a tile) */
   thdf_early_list = 1 << 10,
@@ -302,13 +306,14 @@ class animation_manager {
   //! Set the palette remap data for the sprites of one layer variant
   /*!
       Like set_animation_alt_palette_map, for every sprite of every animation
-      whose element is of layer class iLayer with value iLayerId (a
-      multiplayer hospital's colour: a patient's clothes drawn in another
-      colour when drawn with thdf_alt_palette).
+      whose element is of layer class iLayer (any if negative) with value
+      iLayerId (a multiplayer hospital's colour: a patient's clothes drawn in
+      another colour when drawn with thdf_alt_palette, or with
+      thdf_alt_palette2 for iSlot 2).
       @return The number of elements changed.
   */
   int set_layer_alt_palette_map(int iLayer, int iLayerId, const uint8_t* pMap,
-                                uint32_t iAlt32);
+                                uint32_t iAlt32, int iSlot = 1);
 
   //! Draw an animation frame
   /*!

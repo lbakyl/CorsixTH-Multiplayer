@@ -1133,8 +1133,8 @@ MultiplayerSession.markers = "others" -- (a new sight: own people plain at first
 -- 0 mustard, 2 white, 4 lavender, 6 salmon), its staff have a bar of it at
 -- their feet, and its player's chat lines a darker version of it
 -- (UIMultiplayerChat.colourOf). Colours 5 to 8 (green, blue, teal, pink:
--- a game for more than 4 hospitals) wear the shirts of colours 1 to 4, those
--- of 6 to 8 redrawn in their own colour (setupShirtColours).
+-- a game for more than 4 hospitals) wear the shirts of colours 1 to 4
+-- redrawn in their own colour (setupShirtColours).
 MultiplayerSession.CLOTHES = {0, 6, 4, 2, 0, 6, 4, 2}
 local MARKER_COLOURS = {{232, 186, 52}, {236, 130, 118}, {160, 146, 232}, {236, 236, 236},
     {100, 200, 80}, {70, 120, 235}, {60, 200, 200}, {225, 95, 200}}
@@ -1243,10 +1243,11 @@ end
 --! variant gets the map (TH.anims:setLayerAltPalette), and those patients
 --! are drawn with DrawFlags.AltPalette (setFloorMarkers, on this screen
 --! only). Each entry keeps its brightness in the new colour, the nearest
---! the game's palette has; near black stays (the outlines). Colour 5 keeps
---! colour 1's mustard shirt: that one is part of the patient's body sprite,
---! not a clothes layer of its own, so it cannot be redrawn alone (its bar
---! tells it apart).
+--! the game's palette has; near black stays (the outlines). Colour 5:
+--! colour 1's mustard shirt is part of the patient's body sprites, not a
+--! clothes layer of its own, so those sprites get a second map
+--! (DrawFlags.AltPalette2) that turns only the mustard shades green (by
+--! hue and saturation: skin and hair keep theirs).
 --!return true if the maps are set
 local shirt_colours_set = setmetatable({}, {__mode = "k"}) -- anims -> done (true/false)
 function MultiplayerSession.setupShirtColours(app, anims)
@@ -1289,6 +1290,34 @@ function MultiplayerSession.setupShirtColours(app, anims)
     local n = anims:setLayerAltPalette(1, MultiplayerSession.CLOTHES[colour], table.concat(bytes))
     print(string.format("multiplayer: shirts of colour %d: %d sprites recoloured", colour, n))
   end
+  -- Colour 5: the mustard of the body sprites (every element always drawn,
+  -- layer value 0) to green; nothing else.
+  local function hsv(c)
+    local r, g, b = c[1] / 255, c[2] / 255, c[3] / 255
+    local mx, mn = math.max(r, g, b), math.min(r, g, b)
+    local h = 0
+    if mx > mn then
+      if mx == r then h = 60 * (((g - b) / (mx - mn)) % 6)
+      elseif mx == g then h = 60 * ((b - r) / (mx - mn) + 2)
+      else h = 60 * ((r - g) / (mx - mn) + 4) end
+    end
+    return h, mx > 0 and (mx - mn) / mx or 0, mx
+  end
+  local green = MARKER_COLOURS[5]
+  local g_lum = lum(green)
+  local bytes, changed = {}, 0
+  for i = 0, 255 do
+    local to = i
+    local h, sat, v = hsv(pal[i])
+    if i < 255 and h >= 36 and h <= 56 and sat >= 0.55 and v >= 0.3 then
+      local k = lum(pal[i]) / g_lum
+      to = nearest(math.min(255, green[1] * k), math.min(255, green[2] * k), math.min(255, green[3] * k))
+      changed = changed + 1
+    end
+    bytes[i + 1] = string.char(to)
+  end
+  local n = anims:setLayerAltPalette(-1, 0, table.concat(bytes), 0, 2)
+  print(string.format("multiplayer: shirts of colour 5: %d mustard shades, %d sprites", changed, n))
   shirt_colours_set[anims] = true
   return true
 end
@@ -1305,18 +1334,19 @@ function MultiplayerSession.setFloorMarkers(ui)
   local on = mode ~= "off" and TheApp.mp_session and world.mp_coop and world.mp_coop.players > 1
   local cache = {}
   -- (Shirts of colours 5 to 8: setupShirtColours.)
-  local shirts = world.mp_coop and world.mp_coop.players > 5 and
+  local shirts = world.mp_coop and world.mp_coop.players > 4 and
       MultiplayerSession.setupShirtColours(ui.app, world.anims)
   local recolour = {}
   for _, e in ipairs(world.entities) do
     if shirts and e.th and e.hospital and class.is(e, Patient) then
       local r = recolour[e.hospital]
       if r == nil then
-        r = (MultiplayerSession.hospitalColour(world, e.hospital) or 1) > 5
+        r = MultiplayerSession.hospitalColour(world, e.hospital) or 1
         recolour[e.hospital] = r
       end
-      e.th:setPartialFlag(DrawFlags.AltPalette, r and e.humanoid_class ~= "Elvis Patient" and
-          e.humanoid_class ~= "Invisible Patient")
+      local dressed = e.humanoid_class ~= "Elvis Patient" and e.humanoid_class ~= "Invisible Patient"
+      e.th:setPartialFlag(DrawFlags.AltPalette, dressed and r > 5)
+      e.th:setPartialFlag(DrawFlags.AltPalette2, dressed and r == 5)
     end
     if e.humanoid_class and e.th then
       local hospital = on and e.hospital

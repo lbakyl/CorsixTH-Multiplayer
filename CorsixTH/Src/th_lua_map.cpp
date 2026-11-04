@@ -125,7 +125,10 @@ int l_map_load(lua_State* L) {
 
 int l_map_loadblank(lua_State* L) {
   level_map* pMap = luaT_testuserdata<level_map>(L);
-  if (pMap->load_blank()) {
+  // map:loadBlank([width, height]): 128 x 128 unless given.
+  int iWidth = static_cast<int>(luaL_optinteger(L, 2, 128));
+  int iHeight = static_cast<int>(luaL_optinteger(L, 3, iWidth));
+  if (pMap->load_blank(iWidth, iHeight)) {
     lua_pushboolean(L, 1);
   } else {
     lua_pushboolean(L, 0);

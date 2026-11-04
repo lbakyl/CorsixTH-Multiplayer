@@ -108,10 +108,18 @@ function UITownMap:close()
 end
 
 local flag_cache = {}
+--! Pixels per map tile (unscaled): 3 on Theme Hospital's 128 x 128 maps,
+--! fewer on bigger ones (2 at 192, 1 at 256), so the map keeps its 384
+--! pixels (the same as the engine's drawing, th_lua_ui.cpp).
+function UITownMap:tilePixels()
+  local map = self.ui.app.map
+  return math.max(1, math.floor(384 / math.max(map.width or 128, map.height or 128)))
+end
+
 function UITownMap:onMouseMove(x, y, dx, dy)
   local s = TheApp.gfx:getUIScale()
-  local tx = math.floor((x - 227 * s) / (3 * s))
-  local ty = math.floor((y - 25 * s) / (3 * s))
+  local tx = math.floor((x - 227 * s) / (self:tilePixels() * s))
+  local ty = math.floor((y - 25 * s) / (self:tilePixels() * s))
   self.hover_plot = nil
   local map = self.ui.hospital.world.map.th
   local width, height = map:size()
@@ -125,8 +133,8 @@ function UITownMap:onMouseUp(button, x, y)
   local redraw = false
   local s = TheApp.gfx:getUIScale()
   if button == "left" then
-    local tx = math.floor((x - 227 * s) / (3 * s))
-    local ty = math.floor((y - 25 * s) / (3 * s))
+    local tx = math.floor((x - 227 * s) / (self:tilePixels() * s))
+    local ty = math.floor((y - 25 * s) / (self:tilePixels() * s))
     local map = self.ui.hospital.world.map.th
     local width, height = map:size()
     if 0 <= tx and tx < width and 0 <= ty and ty < height then
@@ -146,8 +154,8 @@ function UITownMap:onMouseUp(button, x, y)
       end
     end
   elseif button == "right" then
-    local tx = math.floor((x - 227 * s) / (3 * s))
-    local ty = math.floor((y - 25 * s) / (3 * s))
+    local tx = math.floor((x - 227 * s) / (self:tilePixels() * s))
+    local ty = math.floor((y - 25 * s) / (self:tilePixels() * s))
     local map = self.ui.hospital.world.map.th
     local width, height = map:size()
     if 0 <= tx and tx < width and 0 <= ty and ty < height then
@@ -226,6 +234,7 @@ function UITownMap:draw(canvas, x, y)
   -- city name
   self.city_font:draw(canvas, map.level_name, x + 300 * s, y + 43 * s, 260 * s, 15 * s)
 
+  local tp = self:tilePixels()
   local town_map_offset_x = x + 227 * s
   local town_map_offset_y = y + 25 * s
   TH.windowHelpers.townMapDraw(self, map.th, canvas, town_map_offset_x, town_map_offset_y,
@@ -235,8 +244,8 @@ function UITownMap:draw(canvas, x, y)
   local function draw_entities(list, color, size)
     for _, ent in ipairs(list) do
       -- 3 is the number of pixel that are used to represent one world tile in the map
-      canvas:drawRect(color, town_map_offset_x + ent.tile_x * 3 * s - 2 * s,
-        town_map_offset_y + ent.tile_y * 3 * s + s, size * s, size * s)
+      canvas:drawRect(color, town_map_offset_x + ent.tile_x * tp * s - 2 * s,
+        town_map_offset_y + ent.tile_y * tp * s + s, size * s, size * s)
     end
   end
 
@@ -245,8 +254,8 @@ function UITownMap:draw(canvas, x, y)
       local tile_x, tile_y = ent.tile_x, ent.tile_y
       if tile_x and hospital:isInHospital(tile_x, tile_y) then
         -- 3 is the number of pixel that are used to represent one world tile in the map
-        canvas:drawRect(color, town_map_offset_x + tile_x * 3 * s - 2 * s,
-          town_map_offset_y + tile_y * 3 * s + s, size * s, size * s)
+        canvas:drawRect(color, town_map_offset_x + tile_x * tp * s - 2 * s,
+          town_map_offset_y + tile_y * tp * s + s, size * s, size * s)
       end
     end
   end

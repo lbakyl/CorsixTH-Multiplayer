@@ -581,6 +581,10 @@ class sprite_sheet {
   void set_sprite_alt_palette_map(size_t iSprite, const uint8_t* pMap,
                                   uint32_t iAlt32);
 
+  //! Supply a second mapped palette to a sprite (drawn with
+  //! thdf_alt_palette2; the sprite keeps its first one).
+  void set_sprite_alt_palette_map2(size_t iSprite, const uint8_t* pMap);
+
   //! Get the number of sprites at the sheet.
   /*!
       @return The number of sprites available at the sheet.
@@ -678,11 +682,17 @@ class sprite_sheet {
     //! SDL structure containing the sprite with alternative palette.
     SDL_Texture* alt_texture;
 
+    //! The same with the second alternative palette.
+    SDL_Texture* alt_texture2;
+
     //! Data of the sprite.
     const uint8_t* data;
 
     //! Alternative palette (if available).
     const uint8_t* alt_palette_map;
+
+    //! Second alternative palette (if available).
+    const uint8_t* alt_palette_map2;
 
     //! Flags how to render the sprite, contains #THDF_Alt32_Mask bits.
     uint32_t sprite_flags;
@@ -719,6 +729,7 @@ class sprite_sheet {
       @return SDL texture containing the sprite.
   */
   SDL_Texture* _makeAltBitmap(sprite* pSprite);
+  SDL_Texture* _makeAltBitmap2(sprite* pSprite);
 };
 
 class cursor {

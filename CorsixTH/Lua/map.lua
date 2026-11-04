@@ -253,7 +253,8 @@ function Map:load(level, difficulty, level_name, map_file, level_intro, map_edit
     self.level_name = "MAP EDITOR"
     self.level_number = "MAP EDITOR"
     if level == "" then
-      _, objects = self.th:loadBlank()
+      -- (A blank map of the size chosen in the editor's MAP SIZE menu.)
+      _, objects = self.th:loadBlank(self.app.map_editor_size or 128)
     else
       local data, errors = self:getRawData(level)
       if data then

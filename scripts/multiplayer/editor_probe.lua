@@ -62,6 +62,32 @@ local ok, err = pcall(function()
   assert(c2x == 10 and c2y == 12, ("camera 2 at %d,%d"):format(c2x, c2y))
   print(("EDITOR OK: 8 players; camera 7 at %d,%d, heliport 7 at %d,%d, camera 2 at %d,%d; buttons %s"):format(
       cx, cy, hx, hy, c2x, c2y, table.concat(labels, ", ")))
+
+  -- A bigger map (MAP SIZE menu): 192 x 192, cameras beyond tile 128.
+  TheApp:mapEdit(192)
+  local big = TheApp.map
+  local bw, bh = big.th:size()
+  assert(bw == 192 and bh == 192, ("new map %dx%d"):format(bw, bh))
+  local ed2 = assert(TheApp.ui.map_editor, "no map editor for the big map")
+  ed2:setPlayerCount(6)
+  big:setCameraTile(150, 170, 6)
+  big:setHeliportTile(190, 3, 6)
+  local file2 = out .. "/big.map"
+  big:save(file2)
+  local f2 = assert(io.open(file2, "rb"))
+  local data2 = f2:read("*a")
+  f2:close()
+  assert(data2:sub(1, 7) == "CTHMAP1", "no size header")
+  local th2 = require("TH").map()
+  assert(th2:load(data2), "the big map does not load")
+  local w2, h2 = th2:size()
+  local c6x, c6y = th2:getCameraTile(6)
+  local h6x, h6y = th2:getHeliportTile(6)
+  assert(w2 == 192 and h2 == 192 and th2:getPlayerCount() == 6, ("big map %dx%d, %d players"):format(w2, h2, th2:getPlayerCount()))
+  assert(c6x == 150 and c6y == 170 and h6x == 190 and h6y == 3, ("camera 6 %d,%d heliport 6 %d,%d"):format(c6x, c6y, h6x, h6y))
+  -- A 128 x 128 map saved again is Theme Hospital's format, as before.
+  assert(#data == 163948 and data:sub(1, 7) ~= "CTHMAP1", "128 map format changed")
+  print(("EDITOR BIG OK: %dx%d, %d bytes, camera 6 at %d,%d, heliport 6 at %d,%d"):format(w2, h2, #data2, c6x, c6y, h6x, h6y))
 end)
 if not ok then fail(err) end
 os.exit(0)

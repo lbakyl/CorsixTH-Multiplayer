@@ -186,9 +186,7 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   **Player colours:** every hospital has a colour (hospital 1 mustard, 2
   salmon, 3 lavender, 4 white; in a game of more, 5 green, 6 blue, 7 teal,
   8 pink): its patients wear shirts of it (as in the original game's
-  multiplayer; colours 6 to 8 have shirts of their own, colour 5 wears colour
-  1's mustard and its green bar tells it apart; a patient sent to another
-  hospital changes to that one's), its patients and staff have a small bar
+  multiplayer; a patient sent to another hospital changes to that one's), its patients and staff have a small bar
   of it at their feet, and its player's chat lines are a darker shade of it.
   **Other hospitals:** press **N** to look at the next hospital's starting
   place (each press the next one, your own among them), or click a player or

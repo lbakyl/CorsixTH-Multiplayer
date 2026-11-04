@@ -679,9 +679,15 @@ function M:training(s)
   local function inside(st)
     return st.tile_x and world:getRoom(st.tile_x, st.tile_y) == room
   end
+  -- The teacher: the one at the projector, or a consultant of the room away
+  -- on a break (it comes back by itself: last_room).
   local teacher = room.staff_member
-  -- The teacher.
-  if s.day >= (self.teacher_review or 0) or (not teacher and s.day - (self.teacher_sent or -99) > 10) then
+  if not teacher then
+    for _, st in ipairs(self:doctorsWhere(function(p) return bot.flag(p, "is_consultant") end)) do
+      if st.last_room == room then teacher = st end
+    end
+  end
+  if s.day >= (self.teacher_review or 0) or (not teacher and s.day - (self.teacher_sent or -99) > 30) then
     self.teacher_review = s.day + 180
     local best, best_v
     for _, st in ipairs(self:doctorsWhere(function(p) return bot.flag(p, "is_consultant") end)) do
