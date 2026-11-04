@@ -26,6 +26,13 @@ from . import stats
 
 MAX_GAMES_LISTED = 8
 DISCORD_LIMIT = 2000
+# The lobby's modes in words.
+MODES = {"coop": "co-op", "shared": "one shared hospital", "competitive": "race", "teams": "team race",
+         "teamshared": "team hospitals", "free": "free"}
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}{'' if n == 1 else 's'}"
 
 
 def _duration(seconds: float) -> str:
@@ -82,16 +89,18 @@ def report(day: str, env: dict[str, str] | None = None) -> str:
         lines.append(f"Bots: {bots}")
         if repairs:
             lines.append(f"Desync repairs: {repairs}")
-    lines.append(f"Bot advice (Haiku): ${advice['usd']:.2f} for {advice['answers']} answers")
+    lines.append(f"Bot advice (Haiku): ${advice['usd']:.2f} for {_plural(advice['answers'], 'answer')}")
     if games:
         lines.append("")
         ordered = sorted(games, key=lambda g: float(g["started"]))
         for g in ordered[:MAX_GAMES_LISTED]:
             who = ", ".join(g.get("humans", [])) or "nobody"
             nbots = len(g.get("bots", []))
-            extra = f" + {nbots} bot{'s' if nbots != 1 else ''}" if nbots else ""
-            lines.append(f"- {g.get('room', '?')}: {_duration(float(g['ended']) - float(g['started']))}, "
-                         f"{g.get('mode', '?')}, level {g.get('level', '?')}; {who}{extra}")
+            extra = f" + {_plural(nbots, 'bot')}" if nbots else ""
+            start = datetime.datetime.fromtimestamp(float(g["started"]), stats.timezone(env)).strftime("%H:%M")
+            mode = MODES.get(g.get("mode", ""), g.get("mode", "?"))
+            lines.append(f"- {start} {g.get('room', '?')}: {_duration(float(g['ended']) - float(g['started']))}, "
+                         f"{mode}, level {g.get('level', '?')}; {who}{extra}")
         if len(ordered) > MAX_GAMES_LISTED:
             lines.append(f"... and {len(ordered) - MAX_GAMES_LISTED} more")
     text = "\n".join(lines)
