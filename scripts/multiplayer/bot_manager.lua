@@ -61,6 +61,8 @@ local SHARE_DAYS = 21
 -- benches for the queue, a plant and a radiator, and a drinks machine by
 -- every third, within WAITING_R tiles. Not by rooms nobody queues for.
 local WAITING = {bench = true, plant = true, radiator = true, drinks_machine = true}
+-- A drinks machine serves the waiting places this many tiles around it.
+local DRINKS_R = 8
 local WAITING_R = 4
 local NO_WAITING = {staff_room = true, research = true, training = true}
 -- Rooms that earn the most: repaired and looked after first.
@@ -278,6 +280,7 @@ function M:assess()
   end
 
   -- What already stands by each waiting place.
+  s.comfort = comfort
   for _, d in ipairs(s.doors) do
     d.near = {bench = 0, plant = 0, radiator = 0, drinks_machine = 0}
     for _, c in ipairs(comfort) do
@@ -504,7 +507,9 @@ function M:projects(s)
   if wanted then _, land_price = bot:cheapestPlot() end
   local size_of = land_price and SIZES_OF or smallest_size
   -- (One room at a time, a month apart: each edit closes the room a while.)
-  if wanted and s.day - (self.shrink_day or -99) > 30 and bot:oversizedRoom(size_of) then
+  -- (Never in a hospital a person plays in too: the rooms are theirs as well.)
+  if wanted and not bot:sharesWithPerson() and #bot:peopleOfHospital(bot:hospitalIndex()) == 0 and
+      s.day - (self.shrink_day or -99) > 30 and bot:oversizedRoom(size_of) then
     add("edit:shrink", 12 + wanted * 6, function()
       local ok, why = bot:shrinkRoom(size_of)
       if ok then self.shrink_day = s.day end
@@ -549,14 +554,31 @@ function M:projects(s)
       if d.near.bench < benches_wanted then place("bench", d, 3 + (benches_wanted - d.near.bench) * 1.5 + d.queue * 0.3) end
       if d.near.plant < 1 then place("plant", d, 2 + (1 - s.happiness)) end
       if d.near.radiator < 1 then place("radiator", d, 2 + s.cold * 0.5) end
-      if i % 3 == 1 and d.near.drinks_machine < 1 and s.patients >= 8 then
-        place("drinks_machine", d, 2 + s.thirst * 4)
+    end
+    -- Drinks machines: one per 25 patients (one at least), each by the
+    -- busiest waiting place with none within DRINKS_R tiles. (Before, every
+    -- third place wanted one within 4 tiles, and which places were third
+    -- changed with the queues: machines everywhere, side by side.)
+    local drinks_now = s.objects.drinks_machine or 0
+    if s.patients >= 8 and drinks_now < 1 + s.patients / 25 then
+      local covered = false
+      for _, d in ipairs(s.doors) do
+        if not covered then
+          local near = 0
+          for _, c in ipairs(s.comfort or {}) do
+            if c[1] == "drinks_machine" and math.abs(c[2] - d.x) <= DRINKS_R and math.abs(c[3] - d.y) <= DRINKS_R then
+              near = near + 1
+            end
+          end
+          if near == 0 then
+            place("drinks_machine", d, 2 + s.thirst * 4)
+            covered = true
+          end
+        end
       end
     end
     local benches = s.objects.bench or 0
     if benches < waiting * 0.6 and benches < 40 then buy("bench", 1 + (waiting * 0.6 - benches) * 0.5) end
-    local drinks = s.objects.drinks_machine or 0
-    if s.patients >= 8 and drinks < 1 + s.patients / 25 then buy("drinks_machine", 1 + s.thirst * 6) end
     local radiators = s.objects.radiator or 0
     if radiators < 2 + s.room_count / 3 and (s.cold > 2 or radiators == 0) then buy("radiator", 2 + s.cold * 0.5) end
     if (s.objects.bin or 0) < 2 and s.litter > 8 then buy("bin", 1.5) end

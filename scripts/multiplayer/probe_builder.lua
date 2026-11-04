@@ -812,7 +812,16 @@ function builder.edit_tick(world, state, log)
   -- Wait for this player's editor (the room empties first).
   if not state.current then
     if not (shown and dlg.phase == "objects") then
-      if step - state.since > 300 then
+      if step - state.since > 300 and not state.giving_back then
+        -- The room was asked for (everybody walks out) but its editor has
+        -- not opened yet: the edit is given up, but the room is still
+        -- waited for and given back as it was (confirmed) once it opens,
+        -- else it would stay closed.
+        log(string.format("UI: edit %s FAILED: editor did not open at step %d; the room is given back when it does",
+            state.steps[state.i] or "?", step))
+        state.giving_back = true
+        state.steps, state.i, state.since = {"done"}, 1, step
+      elseif step - state.since > 3000 then
         state.current = state.current or state.steps[state.i]
         finish_step(false, "editor did not open")
       end
