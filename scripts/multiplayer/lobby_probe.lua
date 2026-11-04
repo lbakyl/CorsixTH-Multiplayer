@@ -443,6 +443,14 @@ local function run_lobby()
       local win = lobby_window()
       win:buttonOptions()
       shot("room-options")
+      -- Where the tooltip of the "Every plot" button goes (a window in a
+      -- window placed it from the wrong corner once).
+      local ow = win.options_window
+      local btn = ow.option_buttons[1][2]
+      local bx, by = win.x + ow.x + btn.x, win.y + ow.y + btn.y
+      local tip = TheApp.ui:getTooltipAt(bx + 5, by + 5)
+      log(string.format("UI: options button at %d,%d; tooltip at %s,%s", bx, by,
+          tostring(tip and tip.x), tostring(tip and tip.y)))
       win.options_window:choose(1, 2)
       win.options_window:toggle(2)
       win.options_window:toggle(3)

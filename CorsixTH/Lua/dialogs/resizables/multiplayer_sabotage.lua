@@ -91,6 +91,7 @@ function UIMultiplayerSabotage:UIMultiplayerSabotage(ui, target)
   self.status_panel = self:addBevelPanel(20, y + 45, WIDTH - 160, 25, col.bg)
   self.status_panel:setLabel("")
   self.status_panel.lowered = true
+  self.status_panel:setVisible(false) -- (shown with a message)
   self:addBevelPanel(WIDTH - 130, y + 42, 110, 30, col.button):setLabel(S.sabotage_close)
       :makeButton(0, 0, 110, 30, nil, self.close)
 end
@@ -172,7 +173,7 @@ function UIMultiplayerSabotage:choose(kind, level)
 end
 
 function UIMultiplayerSabotage:setStatus(text)
-  if self.status_panel then self.status_panel:setLabel(text) end
+  if self.status_panel then self.status_panel:setLabel(text):setVisible((text or "") ~= "") end
 end
 
 --! Order a trick. The game checks again when the command runs (the same on

@@ -50,7 +50,7 @@ local function view_of(lobby)
   return "rooms"
 end
 
-local heights = {connect = 225, rooms = 435, room = 325}
+local heights = {connect = 225, rooms = 435, room = 295}
 
 -- The new room's settings as last sent with Create: shown again when the
 -- player leaves the room or a game ends, forgotten on Disconnect.
@@ -91,9 +91,13 @@ function UIMultiplayer:UIMultiplayer(ui, status)
   else
     self:_buildRoom()
   end
-  self.status_panel = self:addBevelPanel(20, heights[self.view] - 75, WIDTH - 40, 20, col.bg)
-  self.status_panel:setLabel(self.status_text)
-  self.status_panel.lowered = true
+  -- A line for messages (connecting, errors), shown only while it has one;
+  -- in a room they go on the hint's line instead (UIMultiplayer:_updateRoom).
+  if self.view ~= "room" then
+    self.status_panel = self:addBevelPanel(20, heights[self.view] - 75, WIDTH - 40, 20, col.bg)
+    self.status_panel.lowered = true
+    self:setStatus(self.status_text)
+  end
 end
 
 --! Replace this window by a fresh one for the current lobby state.
@@ -106,7 +110,12 @@ end
 
 function UIMultiplayer:setStatus(text)
   self.status_text = text or ""
-  self.status_panel:setLabel(self.status_text)
+  if self.status_panel then
+    self.status_panel:setLabel(self.status_text)
+    self.status_panel:setVisible(self.status_text ~= "")
+  elseif self.hint_panel then
+    self:_updateRoom()
+  end
 end
 
 local function textbox(window, x, y, w, text, limit, input, tooltip)
@@ -529,7 +538,9 @@ function UIMultiplayer:_updateRoom()
     end
     if short then changed = changed and (changed .. ", " .. S[short]) or S[short] end
   end
-  self.hint_panel:setLabel(changed and S.options_off_line:format(changed) or S.room_hint)
+  -- (A message, as an error, comes first.)
+  local status = self.status_text ~= "" and self.status_text or nil
+  self.hint_panel:setLabel(status or (changed and S.options_off_line:format(changed)) or S.room_hint)
   local owner = lobby:isOwner()
   local options = self.options_window
   if options and options.lobby == lobby then options:update() end
@@ -708,13 +719,14 @@ function UIMultiplayerRoomOptions:UIMultiplayerRoomOptions(ui, lobby)
   local S = _S.multiplayer_window
   local w = 400
   local options = MultiplayerLobby.OPTIONS
-  self:UIResizable(ui, w, 70 + #options * 30 + 40, col.bg)
+  self:UIResizable(ui, w, 45 + #options * 30 + 40, col.bg)
   self.lobby = lobby
   self.resizable = false
   self.on_top = true
   self:setDefaultPosition(0.5, 0.3)
   self.default_button_sound = "selectx.wav"
-  self:addBevelPanel(20, 10, w - 40, 20, col.caption):setLabel(S.game_options).lowered = true
+  self.caption_panel = self:addBevelPanel(20, 10, w - 40, 20, col.caption):setLabel(S.game_options)
+  self.caption_panel.lowered = true
   self.option_buttons = {}
   local caption_w = 110
   for i, option in ipairs(options) do
@@ -738,9 +750,7 @@ function UIMultiplayerRoomOptions:UIMultiplayerRoomOptions(ui, lobby)
           :setTooltip(_S.tooltip.multiplayer_window[option.tooltip])
     end
   end
-  self.note_panel = self:addBevelPanel(20, 40 + #options * 30 + 5, w - 40, 20, col.bg)
-  self.note_panel.lowered = true
-  self:addBevelPanel(w / 2 - 50, 70 + #options * 30, 100, 30, col.button):setLabel(S.options_close)
+  self:addBevelPanel(w / 2 - 50, 45 + #options * 30, 100, 30, col.button):setLabel(S.options_close)
       :makeButton(0, 0, 100, 30, nil, self.close)
   self:update()
 end
@@ -762,7 +772,8 @@ function UIMultiplayerRoomOptions:update()
       self.option_buttons[i]:enable(may)
     end
   end
-  self.note_panel:setLabel(may and "" or S.options_host_only)
+  -- (Who may not change them is told in the caption.)
+  self.caption_panel:setLabel(may and S.game_options or S.options_host_only)
 end
 
 function UIMultiplayerRoomOptions:toggle(i)

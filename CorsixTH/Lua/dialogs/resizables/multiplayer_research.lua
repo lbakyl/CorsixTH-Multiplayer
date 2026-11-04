@@ -104,6 +104,7 @@ function UIMultiplayerResearch:UIMultiplayerResearch(ui, target)
   y = height - 75
   self.status_panel = self:addBevelPanel(20, y, WIDTH - 40, 22, col.bg)
   self.status_panel.lowered = true
+  self.status_panel:setVisible(false) -- (shown with a message)
   y = height - 45
   self:addBevelPanel(20, y, 120, 30, col.button):setLabel(S.research_offer)
       :makeButton(0, 0, 120, 30, nil, self.offer)
@@ -131,7 +132,7 @@ function UIMultiplayerResearch:_nextTarget(current)
 end
 
 function UIMultiplayerResearch:setStatus(text)
-  if self.status_panel then self.status_panel:setLabel(text or "") end
+  if self.status_panel then self.status_panel:setLabel(text or ""):setVisible((text or "") ~= "") end
 end
 
 function UIMultiplayerResearch:_pages()

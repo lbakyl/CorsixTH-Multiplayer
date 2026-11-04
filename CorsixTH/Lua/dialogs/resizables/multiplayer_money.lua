@@ -62,6 +62,7 @@ function UIMultiplayerAskMoney:UIMultiplayerAskMoney(ui, target)
       :makeRepeatButton(0, 0, 125, 26, nil, function(window) window:setAmount(window.amount + 500) end)
   self.status_panel = self:addBevelPanel(20, y + 34, WIDTH - 40, 22, Colours.PanelDefault)
   self.status_panel.lowered = true
+  self.status_panel:setVisible(false) -- (shown with a message)
   y = height - 45
   self:addBevelPanel(20, y, 120, 30, Colours.PanelDefault):setLabel(S.ask_button)
       :makeButton(0, 0, 120, 30, nil, self.ask)
@@ -143,7 +144,7 @@ function UIMultiplayerAskMoney:ask()
   local session = TheApp.mp_session
   if not session or not self.target then return end
   session:issue({kind = "ask_money", to = self.world:getHospitalIndex(self.target), amount = self.amount})
-  self.status_panel:setLabel(_S.multiplayer_window.ask_asked)
+  self.status_panel:setLabel(_S.multiplayer_window.ask_asked):setVisible(true)
 end
 
 function UIMultiplayerAskMoney:nextPlayer()

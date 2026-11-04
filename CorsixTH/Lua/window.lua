@@ -2112,7 +2112,13 @@ function Window:getTooltipAt(x, y)
     for _, window in ipairs(self.windows) do
       local ws = window.apply_ui_scale and TheApp.gfx:getUIScale() or 1
       if window:hitTest(x - window.x * ws, y - window.y * ws) then
-        return window:getTooltipAt(x - window.x * ws, y - window.y * ws)
+        local tooltip = window:getTooltipAt(x - window.x * ws, y - window.y * ws)
+        -- (The child placed it from its own corner, which is relative to
+        -- this window: add this window's place on the screen too.)
+        if tooltip and tooltip.x and tooltip.y then
+          tooltip.x, tooltip.y = tooltip.x + (self.x or 0) * s, tooltip.y + (self.y or 0) * s
+        end
+        return tooltip
       end
     end
   end
