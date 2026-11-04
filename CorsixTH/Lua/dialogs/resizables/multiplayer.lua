@@ -450,11 +450,10 @@ function UIMultiplayer:_buildRoom()
   self.summary_panel = label(self, 20, 40 + 4 * 27 + 5, WIDTH - 40, "")
   self.mode_panel = label(self, 20, 40 + 5 * 27 + 5, WIDTH - 40, "")
   self.hint_panel = label(self, 20, 40 + 6 * 27 + 5, WIDTH - 40, S.room_hint)
-  -- The game's options, the host's to set: land auctions on or off.
-  self.auctions_button = self:addBevelPanel(20, 40 + 7 * 27 + 5, WIDTH - 40, 25, col.button)
-      :setLabel(""):makeButton(0, 0, WIDTH - 40, 25, nil, self.buttonAuctions)
-      :setTooltip(_S.tooltip.multiplayer_window.auctions)
   local y = heights.room - 50
+  -- The game's options (UIMultiplayerRoomOptions): the host sets them,
+  -- everybody may look.
+  button(self, 150, y, 120, S.game_options, self.buttonOptions, _S.tooltip.multiplayer_window.game_options)
   -- The host starts the game; the others say they are ready. Both buttons
   -- sit in the same place, and only the one for this player is shown.
   self.ready_button = self:addBevelPanel(20, y, 120, 30, col.setting, nil, nil, nil, col.setting_active)
@@ -514,12 +513,13 @@ function UIMultiplayer:_updateRoom()
   if MultiplayerLobby.hospitalEach(mode) and level > mp_count then
     level_text = S.mp_level:format(level_text, mp_count)
   end
+  -- (An option changed from its default shows here too, for everybody.)
   self.mode_panel:setLabel(MultiplayerLobby.modeLabel(mode) .. ", " .. level_text ..
-      (lobby.room["continue"] == "1" and (", " .. S.continuing:format((lobby.room.date or ""):gsub("T.*", ""))) or ""))
+      (lobby.room["continue"] == "1" and (", " .. S.continuing:format((lobby.room.date or ""):gsub("T.*", ""))) or "") ..
+      (lobby:auctionsOn() and "" or (", " .. S.no_auctions)))
   local owner = lobby:isOwner()
-  self.auctions_button:setLabel(lobby:auctionsOn() and S.auctions_on or S.auctions_off)
-  -- (A continued game keeps what it was started with.)
-  self.auctions_button:enable(owner and lobby.room["continue"] ~= "1")
+  local options = self.options_window
+  if options and options.lobby == lobby then options:update() end
   self.start_button:setVisible(owner)
   self.start_button:enable(owner)
   self.ready_button:setVisible(not owner)
@@ -550,11 +550,13 @@ function UIMultiplayer:clickPlace(i)
   end
 end
 
---! The host switches land auctions on or off for this game.
-function UIMultiplayer:buttonAuctions()
-  local lobby = self.lobby
-  if not lobby:isOwner() then return end
-  lobby:setAuctions(not lobby:auctionsOn())
+--! The game's options: a small window (the host changes them).
+function UIMultiplayer:buttonOptions()
+  for _, w in ipairs(self.windows or {}) do -- (one at a time)
+    if w == self.options_window then w:close() break end
+  end
+  self.options_window = rawget(_G, "UIMultiplayerRoomOptions")(self.ui, self.lobby) -- (defined below)
+  self:addWindow(self.options_window)
 end
 
 --! The host's menu on another person's line: remove them from the room.
@@ -671,4 +673,58 @@ function UIMultiplayer:close()
   if not self.rebuilding and not TheApp.world and not (self.lobby and self.lobby.state == "in_game") then
     self.ui:addWindow(UIMainMenu(self.ui))
   end
+end
+
+--------------------------------------------------------------------------------
+
+--! A room's game options, one switch a line (MultiplayerLobby's OPTIONS
+--! list); only the host may change them, and not in a continued game (it
+--! keeps what it was started with).
+class "UIMultiplayerRoomOptions" (UIResizable)
+
+---@class UIMultiplayerRoomOptions: UIResizable
+---@operator call: UIMultiplayerRoomOptions
+local UIMultiplayerRoomOptions = _G["UIMultiplayerRoomOptions"] ---@type UIMultiplayerRoomOptions
+
+function UIMultiplayerRoomOptions:UIMultiplayerRoomOptions(ui, lobby)
+  local S = _S.multiplayer_window
+  local w = 320
+  local options = MultiplayerLobby.OPTIONS
+  self:UIResizable(ui, w, 70 + #options * 30 + 40, col.bg)
+  self.lobby = lobby
+  self.resizable = false
+  self.on_top = true
+  self:setDefaultPosition(0.5, 0.3)
+  self.default_button_sound = "selectx.wav"
+  self:addBevelPanel(20, 10, w - 40, 20, col.caption):setLabel(S.game_options).lowered = true
+  self.option_buttons = {}
+  for i, option in ipairs(options) do
+    self.option_buttons[i] = self:addBevelPanel(20, 40 + (i - 1) * 30, w - 40, 25, col.button)
+        :setLabel(""):makeButton(0, 0, w - 40, 25, nil, function() self:toggle(i) end)
+        :setTooltip(_S.tooltip.multiplayer_window[option.tooltip])
+  end
+  self.note_panel = self:addBevelPanel(20, 40 + #options * 30 + 5, w - 40, 20, col.bg)
+  self.note_panel.lowered = true
+  self:addBevelPanel(w / 2 - 50, 70 + #options * 30, 100, 30, col.button):setLabel(S.options_close)
+      :makeButton(0, 0, 100, 30, nil, self.close)
+  self:update()
+end
+
+--! Labels and whether this player may change them, from the lobby.
+function UIMultiplayerRoomOptions:update()
+  local lobby, S = self.lobby, _S.multiplayer_window
+  local may = lobby:isOwner() and lobby.room and lobby.room["continue"] ~= "1"
+  for i, option in ipairs(MultiplayerLobby.OPTIONS) do
+    local on = option.get(lobby)
+    self.option_buttons[i]:setLabel(on and S[option.on] or S[option.off])
+    self.option_buttons[i]:enable(may)
+  end
+  self.note_panel:setLabel(may and "" or S.options_host_only)
+end
+
+function UIMultiplayerRoomOptions:toggle(i)
+  local lobby = self.lobby
+  local option = MultiplayerLobby.OPTIONS[i]
+  if not (option and lobby:isOwner()) then return end
+  option.set(lobby, not option.get(lobby))
 end

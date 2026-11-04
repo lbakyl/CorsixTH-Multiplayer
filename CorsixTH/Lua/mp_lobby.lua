@@ -599,6 +599,16 @@ function MultiplayerLobby:setAuctions(on) self.error = nil; self:send("OPTION", 
 --! Land auctions on in this room (LOBBY says auctions=0 when the owner turned them off)?
 function MultiplayerLobby:auctionsOn() return not (self.summary and self.summary.auctions == "0") end
 
+--! The room's game options (UIMultiplayerRoomOptions shows a switch for
+--! each): the strings for on and off and the tooltip
+--! (_S.multiplayer_window, _S.tooltip.multiplayer_window), and how to read
+--! and set it. More to come (bots in auctions, dirty tricks, sharing).
+MultiplayerLobby.OPTIONS = {
+  {on = "auctions_on", off = "auctions_off", tooltip = "auctions",
+    get = function(lobby) return lobby:auctionsOn() end,
+    set = function(lobby, on) lobby:setAuctions(on) end},
+}
+
 --! The room owner removes a player from the room (the server answers KICKED to them).
 function MultiplayerLobby:kickPlayer(peer) self.error = nil; self:send("KICK", {peer = peer}) end
 

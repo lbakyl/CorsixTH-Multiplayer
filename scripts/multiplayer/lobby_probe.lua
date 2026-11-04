@@ -437,6 +437,19 @@ local function run_lobby()
     end
     log("UI: room seats " .. seats_text(lobby) .. " (" .. tostring(lobby.summary.mode) .. ")")
     shot("lobby-room-host")
+    -- MP_SHOT_OPTIONS=1: the game options window, auctions on, then off.
+    if os.getenv("MP_SHOT_OPTIONS") then
+      local win = lobby_window()
+      win:buttonOptions()
+      shot("room-options")
+      win.options_window:toggle(1)
+      wait_for("auctions off", function() return not lobby:auctionsOn() end, 10)
+      tick()
+      shot("room-options-off")
+      win.options_window:close()
+      tick()
+      shot("room-auctions-off")
+    end
     -- MP_KICK=<place>: the host double-clicks that player's line and picks
     -- the menu's "remove" (UIMultiplayer:playerMenu), then stops.
     local kick = tonumber(os.getenv("MP_KICK") or "")
