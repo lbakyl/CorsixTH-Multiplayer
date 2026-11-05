@@ -5,11 +5,11 @@
 [![Latest release](https://img.shields.io/github/v/release/lbakyl/CorsixTH-Multiplayer?style=for-the-badge&color=green&label=latest%20release)](https://github.com/lbakyl/CorsixTH-Multiplayer/releases/latest)
 [![Linux and Tests](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/Linux.yml/badge.svg?branch=master)](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/Linux.yml) [![Windows](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/Windows.yml/badge.svg?branch=master&event=push)](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/Windows.yml) [![Linux package](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/LinuxPackage.yml/badge.svg?branch=master)](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/LinuxPackage.yml) [![macOS app](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/macOS.yml/badge.svg?branch=master)](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/macOS.yml)
 
-**Network multiplayer for [CorsixTH](https://github.com/CorsixTH/CorsixTH)**, the open-source reimplementation of Bullfrog's 1997 business sim Theme Hospital. Play with friends over the internet: in **one shared hospital**, or **each in your own hospital as a team** on the original multiplayer maps. Windows, Linux and macOS players play together.
+**Network multiplayer for [CorsixTH](https://github.com/CorsixTH/CorsixTH)**, the open-source reimplementation of Bullfrog's 1997 business sim Theme Hospital. Play with friends over the internet, **up to 8 players**: in **one shared hospital**, **each in your own hospital as a team**, or **in a race against each other** with dirty tricks, land auctions and computer players (bots) for the empty places. Windows, Linux and macOS players play together, each in their own game language.
 
 This is a fork of CorsixTH, not an official CorsixTH release. Single player works exactly as in CorsixTH.
 
-<picture>![A co-op game: a busy hospital, and the other player's chat message at the top](docs/multiplayer/images/coop-game.png)</picture>
+<picture>![Eight hospitals in one town: every hospital's patients wear its own colour, with a bar of that colour at their feet](docs/multiplayer/images/hospitals-colours.png)</picture>
 
 ## Getting Started ##
 
@@ -18,27 +18,46 @@ This is a fork of CorsixTH, not an official CorsixTH release. Single player work
    - **Linux** (x86_64, Ubuntu 24.04, Linux Mint 22 or newer): unpack `...-linux-x86_64.tar.gz` and start `CorsixTH-Multiplayer/CorsixTH-Multiplayer.sh`.
    - **macOS** (Apple Silicon, macOS 26 Tahoe or newer): unzip `...-macos-arm64.zip` and move `CorsixTH.app` to Applications. The app is not notarized by Apple: the first time, open **System Settings > Privacy & Security** and click **Open Anyway**.
 2. **Theme Hospital's game data** is needed, as for CorsixTH: the original CD, or a download from [GOG.com](https://www.gog.com/game/theme_hospital) or [EA](https://www.ea.com/games/theme/theme-hospital). The first start asks for its folder.
-3. **Main menu > Multiplayer**: enter the server address `eu1.bachelor-tech.com:47800` (it runs the newest stable release; `eu2.bachelor-tech.com:47800` runs the newest test build) and your name, then **Connect**.
-4. **Create a room** (one shared hospital, or a hospital each; the level; how many players; a password if you like) or **join** one. When everybody is ready, the room's owner starts the game. The lobby measures everybody's connection and sets the top speed that stays smooth.
+3. **Main menu > Multiplayer**: click **EU1: stable** (`eu1.bachelor-tech.com:47800`, the newest stable release) or **EU2: test builds** (`eu2.bachelor-tech.com:47800`, the newest test build), enter your name, then **Connect**.
+4. **Create a room** (the level, how many places, a password if you like) or **join** one. Everybody picks a colour and a team: the same colour shares a hospital, the same team wins together. Click an empty place to add a bot. When everybody is ready, the room's owner starts the game. The lobby measures everybody's connection and sets the top speed that stays smooth.
 5. Everybody in a game must run the **same release**. A server only lets in the release it runs, and tells you which one to download.
 
-The full guide, with co-op, trading, saving and what to do if something goes wrong: [docs/multiplayer/PLAYING.md](docs/multiplayer/PLAYING.md). To run your own server with the referee, like eu1 and eu2: [docs/multiplayer/SERVER-SETUP.md](docs/multiplayer/SERVER-SETUP.md).
+The full guide, with co-op, races, trading, saving and what to do if something goes wrong: [docs/multiplayer/PLAYING.md](docs/multiplayer/PLAYING.md). To run your own server with the referee, like eu1 and eu2: [docs/multiplayer/SERVER-SETUP.md](docs/multiplayer/SERVER-SETUP.md).
 
 ### What's Working? ###
-The whole single player game of CorsixTH (you can complete the full campaign), and multiplayer for two to four players.
+The whole single player game of CorsixTH (you can complete the full campaign), and multiplayer for two to eight players.
 
 ##### Multiplayer #####
+- **Up to 8 players**, people and bots, with 8 colours and 8 teams. Level 8, **TEAM TOWN** (a map by Matroftt), has room for 8 hospitals; the other levels use Theme Hospital's maps for up to 4, where more players can share a hospital.
 - **One shared hospital:** everybody builds, hires and manages the same hospital; single player rules for winning and losing.
-- **A hospital each (co-op):** the original two- to four-player maps, each player running their own hospital, as a team: the level is won when every hospital has reached its goals, and lost if one keeps failing them.
-- **Trading between hospitals:** send money or ask for it, offer staff (free or for a price, also from the staff window), refer patients, share research (free or for a price).
-- **Smooth at every speed:** a click takes effect in about a tenth of a second, Slowest and pause included.
-- **Shared speed:** pause and unpause are instant for everybody; a new speed is put to a vote and needs more than half of the players.
-- **Nobody waits for another player's windows:** faxes, pay rises, questions and the annual report do not pause the game.
-- **In-game chat**, to everybody or one player, and a players window (MULTIPLAYER > PLAYERS) with ping, money, value and each hospital's goals.
+- **A hospital each, as a team (co-op):** each player runs their own hospital; the level is won when every hospital has reached its goals, and lost if one keeps failing them.
+- **Races:** everyone for themselves, teams against teams, or team mates running one hospital together against another team's. The first to reach the goals wins, and a hospital that fails them at two year ends is out. Standings come by fax.
+- **Dirty tricks** (MULTIPLAYER > DIRTY TRICKS), in three levels each: an evil handyman who breaks machines, an epidemic, an emergency the rival can hardly handle, a rat attack, a headhunter who poaches staff, a broken boiler, a smear campaign and espionage. You can sack the evil handyman and shoot the rats.
+- **Bots** take the empty places. They research, build what their patients need, hire the most skilled staff when a room needs them, train juniors with their best consultant, pay bonuses, answer pay rises, borrow and pay back, bid at auctions and play dirty tricks in a race (and say so in the chat). A bot on your team does what you ask it in the chat ("Agnes, build a psychiatry") and runs your hospital while you are away; with **Allied bots build** off, it leaves building to you.
+- **Land auctions:** a plot next to another hospital's land goes to auction, with up to 4 bidders and the game standing still meanwhile (game option: contested plots, every plot, or off).
+- **Trading between hospitals:** send money or ask for it, offer staff (free or for a price), refer patients, share research.
+- **Look at the other hospitals:** press **N** for the next hospital, or click a player in the Players window (MULTIPLAYER > PLAYERS), with each one's ping, value, balance, reputation and goals.
+- **Smooth at every speed:** a click takes effect in about a tenth of a second, Slowest and pause included. Pause is instant for everybody; a new speed is put to a vote.
+- **Nobody waits for another player's windows:** faxes, pay rises and questions do not pause the game; the year end waits until everybody has read the annual report.
+- **In-game chat**, to everybody, your team or one player.
 - **Saving and continuing** a multiplayer game from the lobby (File > Save and a monthly autosave).
 - **Self-repairing games:** the server runs its own copy of every game; if the players' games ever differ, everybody quietly loads the server's copy and plays on. A player who drops out can rejoin.
+- **Any game language and any edition** of Theme Hospital's data, all in one game. The multiplayer windows are translated into every CorsixTH language.
 
-<picture>![The players window: each player's hospital, ping, value, balance, reputation and goals](docs/multiplayer/images/players-window.png)</picture>
+<table>
+<tr>
+<td width="50%"><img src="docs/multiplayer/images/lobby-eight.png" alt="A room of eight: one person and seven bots, each with a colour and a team"><br>A room of eight: a colour and a team for each place.</td>
+<td width="50%"><img src="docs/multiplayer/images/players-eight.png" alt="The Players window with eight hospitals: ping, value, balance and reputation"><br>The Players window: click a row to look at that hospital.</td>
+</tr>
+<tr>
+<td><img src="docs/multiplayer/images/dirty-tricks.png" alt="The dirty tricks window: eight tricks in three levels, with their prices"><br>Dirty tricks against a rival, in three levels.</td>
+<td><img src="docs/multiplayer/images/rat-attack.png" alt="Rats running about a rival hospital's grounds, enlarged"><br>A rat attack: rats run about the rival's hospital (enlarged).</td>
+</tr>
+<tr>
+<td><img src="docs/multiplayer/images/auction.png" alt="A land auction: two hospitals bid for a plot; the map shows the eight hospitals' land in their colours"><br>A land auction on TEAM TOWN, the eight hospitals' land in their colours.</td>
+<td><img src="docs/multiplayer/images/bot-chat.png" alt="Bots taunting each other in the chat after a rat attack"><br>Bots have their say in the chat.</td>
+</tr>
+</table>
 
 ##### Original Features (from CorsixTH) #####
 - Single player campaign
@@ -51,10 +70,11 @@ The whole single player game of CorsixTH (you can complete the full campaign), a
 
 ### New Features ###
 ##### In this fork #####
-- Network multiplayer, shared and co-op, through a small relay server ([run your own](docs/multiplayer/vps-guide.md))
+- Network multiplayer for up to 8 players, shared, co-op and races, through a small relay server ([run your own](docs/multiplayer/vps-guide.md))
 - Builds for Windows, Linux and macOS (Apple Silicon) that play together
-- Votes on the game speed, trades with prices, chat, a players window
+- Bots, dirty tricks, land auctions, teams, trades with prices, chat, a players window, votes on the game speed
 - A headless referee on the server that repairs games and lets players rejoin
+- The map editor makes maps for up to 8 players, and maps of 128, 192 or 256 tiles a side (MAP SIZE menu)
 
 ##### From CorsixTH #####
 - Custom levels and campaigns
@@ -62,7 +82,7 @@ The whole single player game of CorsixTH (you can complete the full campaign), a
 - Zooming
 - UI scaling
 - Subtitles
-- More than 20 different languages (multiplayer games are played in English for now)
+- More than 20 different languages, in multiplayer too
 - Make your own maps and levels with built-in map editor
 - Unlimited save files
 - Play your own music!
@@ -75,15 +95,14 @@ The whole single player game of CorsixTH (you can complete the full campaign), a
 
 ### What's missing/needs improvement? ###
 ##### Multiplayer #####
-- Competitive games (hospitals playing against each other)
 - Encryption: connections and room passwords are not encrypted, so do not use a password you use elsewhere
-- Other game languages in multiplayer (everybody plays in English)
 - A notarized macOS app, and builds for Intel Macs and 32-bit systems
+- Levels for more than 4 hospitals besides TEAM TOWN, and playable larger maps (the map editor can make them)
 - Now and then the players' games still go out of sync; the server repairs this within a second
 
 ##### From CorsixTH #####
 - AI Hospitals (and the components associated with it)
-- Rats (but rat holes are present) and the bonus rat level
+- Rats (but rat holes are present) and the bonus rat level (in multiplayer races rats come as a dirty trick)
 - Vomit waves
 - Win level video/letter
 - The original graphics do not have a complete set for Pregnancy, Alien DNA, and female Fractured Bones patients -- these may cause anomalies if you enable regular spawning in settings
