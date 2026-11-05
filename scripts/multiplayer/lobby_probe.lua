@@ -2646,6 +2646,29 @@ local function run()
           filming = {who = who, left = tonumber(entry.arg) or 40, n = 0}
           log(string.format("UI: filming %s for %d steps (step %d)", who and who.humanoid_class or "nobody",
               filming.left, session.step))
+        elseif a == "lookat" then
+          -- lookat:rat|evil: centre the view on the first attack rat or evil
+          -- handyman (in any hospital) and take a screenshot; looks again
+          -- later if there is none yet.
+          local who
+          for _, e in ipairs(world.entities) do
+            if not who and e.tile_x and ((entry.arg == "rat" and e.mp_attack_rat and not e.shot) or
+                (entry.arg == "evil" and e.mp_saboteur and not e.mp_in_transit)) then
+              who = e
+            end
+          end
+          if not who and (entry.retries or 0) < 40 and entry.hour < target - 100 then
+            entry.retries = (entry.retries or 0) + 1
+            entry.hour = entry.hour + 25
+            done[i] = nil
+          elseif who then
+            look_at(who.tile_x, who.tile_y)
+            log(string.format("UI: looking at a %s at %d,%d (step %d)", entry.arg, who.tile_x, who.tile_y,
+                session.step))
+            shot("lookat-" .. entry.arg .. "-" .. session.step)
+          else
+            log("UI: no " .. entry.arg .. " to look at")
+          end
         elseif a == "shotview" then
           -- Centre the view on this player's first member of staff (the
           -- player colour bars, MultiplayerSession.drawMarkers) and take a
