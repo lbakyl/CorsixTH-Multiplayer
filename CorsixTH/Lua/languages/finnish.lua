@@ -3194,6 +3194,18 @@ original_credits = {
 --   of the multiplayer windows. Translated from english.lua; the keys
 --   missing here show in English.
 -------------------------------------------------------------------------------
+hotkey_window.ingame_mp_chat = "Moninpelin keskustelu"
+hotkey_window.ingame_mp_next_hospital = "Seuraava sairaala (MP)"
+main_menu.multiplayer = "Moninpeli"
+map_editor_window.pages.camera_n = "Kamera %d"
+map_editor_window.pages.heliport_n = "Helikopterikenttä %d"
+map_editor_window.pages.player = "Pelaaja %d"
+menu.map_size = "KARTAN KOKO"
+menu_map_size.size = "  UUSI KARTTA %d x %d  "
+menu_player_count.players_5 = "  5 PELAAJAA  "
+menu_player_count.players_6 = "  6 PELAAJAA  "
+menu_player_count.players_7 = "  7 PELAAJAA  "
+menu_player_count.players_8 = "  8 PELAAJAA  "
 multiplayer_window.add_bot = "odotetaan pelaajaa... (klikkaa: lisää bot)"
 multiplayer_window.ask_amount = "Summa: $%d"
 multiplayer_window.ask_asked = "Pyyntö lähetetty. Odotetaan vastausta."
@@ -3631,6 +3643,7 @@ multiplayer_window.vote_passed_paused = "Pelaajat sopivat nopeudeksi %s: peli ja
 multiplayer_window.vote_request = "%s haluaisi muuttaa pelin nopeutta"
 multiplayer_window.vote_request_speed = "nopeuteen: %s."
 multiplayer_window.waiting_player = "odotetaan pelaajaa..."
+tooltip.main_menu.multiplayer = "Pelaa muiden kanssa moninpelipalvelimen kautta (kokeellinen)"
 tooltip.multiplayer_window.ask_money = "Pyydä toiselta pelaajalta rahaa. Hän päättää, maksaako."
 tooltip.multiplayer_window.auctions = "Isäntä päättää, mitkä tontit menevät huutokauppaan, kun pelaaja pyytää ostaa sellaisen"
 tooltip.multiplayer_window.auctions_all = "Jokainen tontti menee huutokauppaan kaikkien sen ostaa voivien sairaaloiden kesken"

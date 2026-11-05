@@ -3890,6 +3890,18 @@ multiplayer.everyone_failed = "所有玩家都没有完成最终目标。因此�
 --   of the multiplayer windows. Translated from english.lua; the keys
 --   missing here show in English.
 -------------------------------------------------------------------------------
+hotkey_window.ingame_mp_chat = "多人游戏聊天"
+hotkey_window.ingame_mp_next_hospital = "下一家医院 (MP)"
+main_menu.multiplayer = "多人游戏"
+map_editor_window.pages.camera_n = "摄像机 %d"
+map_editor_window.pages.heliport_n = "直升机坪 %d"
+map_editor_window.pages.player = "玩家 %d"
+menu.map_size = "地图大小"
+menu_map_size.size = "  新地图 %d x %d  "
+menu_player_count.players_5 = "  5 玩家  "
+menu_player_count.players_6 = "  6 玩家  "
+menu_player_count.players_7 = "  7 玩家  "
+menu_player_count.players_8 = "  8 玩家  "
 multiplayer_window.add_bot = "等待玩家... (点击：添加 Bot)"
 multiplayer_window.ask_amount = "金额：$%d"
 multiplayer_window.ask_asked = "已发出请求，等待对方回复。"
@@ -4327,6 +4339,7 @@ multiplayer_window.vote_passed_paused = "玩家们同意了%s：取消暂停后�
 multiplayer_window.vote_request = "%s想更改游戏速度"
 multiplayer_window.vote_request_speed = "改为%s。"
 multiplayer_window.waiting_player = "等待玩家..."
+tooltip.main_menu.multiplayer = "通过多人游戏服务器与他人一起游戏（实验性）"
 tooltip.multiplayer_window.ask_money = "向另一位玩家要钱。由对方决定是否支付。"
 tooltip.multiplayer_window.auctions = "房主决定当有玩家要买地时，哪些地块要拍卖"
 tooltip.multiplayer_window.auctions_all = "每个地块都在所有有资格购买的医院之间拍卖"

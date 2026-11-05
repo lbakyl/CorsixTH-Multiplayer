@@ -1955,6 +1955,18 @@ tooltip.cheats_window.cheats = {
 --   of the multiplayer windows. Translated from english.lua; the keys
 --   missing here show in English.
 -------------------------------------------------------------------------------
+hotkey_window.ingame_mp_chat = "Chat multijugador"
+hotkey_window.ingame_mp_next_hospital = "Hospital siguiente (MJ)"
+main_menu.multiplayer = "Multijugador"
+map_editor_window.pages.camera_n = "Cámara %d"
+map_editor_window.pages.heliport_n = "Helipuerto %d"
+map_editor_window.pages.player = "Jugador %d"
+menu.map_size = "TAMAÑO DEL MAPA"
+menu_map_size.size = "  NUEVO MAPA %d x %d  "
+menu_player_count.players_5 = "  5 JUGADORES  "
+menu_player_count.players_6 = "  6 JUGADORES  "
+menu_player_count.players_7 = "  7 JUGADORES  "
+menu_player_count.players_8 = "  8 JUGADORES  "
 multiplayer_window.add_bot = "esperando a un jugador... (clic: añadir un bot)"
 multiplayer_window.ask_amount = "Cantidad: $%d"
 multiplayer_window.ask_asked = "Pedido enviado. Esperando su respuesta."
@@ -2392,6 +2404,7 @@ multiplayer_window.vote_passed_paused = "Los jugadores han acordado %s: la parti
 multiplayer_window.vote_request = "%s querría cambiar la velocidad del juego"
 multiplayer_window.vote_request_speed = "a %s."
 multiplayer_window.waiting_player = "esperando a un jugador..."
+tooltip.main_menu.multiplayer = "Juega con otros a través de un servidor multijugador (experimental)"
 tooltip.multiplayer_window.ask_money = "Pide dinero a otro jugador. Él decide si paga."
 tooltip.multiplayer_window.auctions = "El anfitrión decide qué parcelas de terreno salen a subasta cuando un jugador pide comprar una"
 tooltip.multiplayer_window.auctions_all = "Cada parcela sale a subasta entre todos los hospitales que pueden comprarla"

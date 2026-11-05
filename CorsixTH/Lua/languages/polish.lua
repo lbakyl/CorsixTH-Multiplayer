@@ -3285,6 +3285,18 @@ menu_player_count = {
 --   of the multiplayer windows. Translated from english.lua; the keys
 --   missing here show in English.
 -------------------------------------------------------------------------------
+hotkey_window.ingame_mp_chat = "Czat gry wieloosobowej"
+hotkey_window.ingame_mp_next_hospital = "Następny szpital (MP)"
+main_menu.multiplayer = "Gra wieloosobowa"
+map_editor_window.pages.camera_n = "Kamera %d"
+map_editor_window.pages.heliport_n = "Lądowisko %d"
+map_editor_window.pages.player = "Gracz %d"
+menu.map_size = "ROZMIAR MAPY"
+menu_map_size.size = "  NOWA MAPA %d x %d  "
+menu_player_count.players_5 = "  5 GRACZY  "
+menu_player_count.players_6 = "  6 GRACZY  "
+menu_player_count.players_7 = "  7 GRACZY  "
+menu_player_count.players_8 = "  8 GRACZY  "
 multiplayer_window.add_bot = "czekamy na gracza... (klik: dodaj bota)"
 multiplayer_window.ask_amount = "Kwota: $%d"
 multiplayer_window.ask_asked = "Prośba wysłana. Czekamy na odpowiedź."
@@ -3722,6 +3734,7 @@ multiplayer_window.vote_passed_paused = "Gracze zgodzili się na %s: gra ruszy z
 multiplayer_window.vote_request = "%s chce zmienić prędkość gry"
 multiplayer_window.vote_request_speed = "na %s."
 multiplayer_window.waiting_player = "czekamy na gracza..."
+tooltip.main_menu.multiplayer = "Graj z innymi przez serwer gry wieloosobowej (eksperymentalne)"
 tooltip.multiplayer_window.ask_money = "Poproś innego gracza o pieniądze. On decyduje, czy zapłacić."
 tooltip.multiplayer_window.auctions = "Gospodarz decyduje, które działki idą na aukcję, gdy gracz chce je kupić"
 tooltip.multiplayer_window.auctions_all = "Każda działka idzie na aukcję między wszystkimi szpitalami, które mogą ją kupić"

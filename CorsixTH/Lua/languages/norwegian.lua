@@ -3703,6 +3703,18 @@ original_credits = {
 --   of the multiplayer windows. Translated from english.lua; the keys
 --   missing here show in English.
 -------------------------------------------------------------------------------
+hotkey_window.ingame_mp_chat = "Flerspillerchat"
+hotkey_window.ingame_mp_next_hospital = "Neste sykehus (MP)"
+main_menu.multiplayer = "Flerspiller"
+map_editor_window.pages.camera_n = "Kamera %d"
+map_editor_window.pages.heliport_n = "Helikopterplass %d"
+map_editor_window.pages.player = "Spiller %d"
+menu.map_size = "KARTSTÖRRELSE"
+menu_map_size.size = "  NYTT KART %d x %d  "
+menu_player_count.players_5 = "  5 SPILLERE  "
+menu_player_count.players_6 = "  6 SPILLERE  "
+menu_player_count.players_7 = "  7 SPILLERE  "
+menu_player_count.players_8 = "  8 SPILLERE  "
 multiplayer_window.add_bot = "venter på en spiller... (klikk: legg til en bot)"
 multiplayer_window.ask_amount = "Belöp: $%d"
 multiplayer_window.ask_asked = "Forespörsel sendt. Venter på svar."
@@ -4140,6 +4152,7 @@ multiplayer_window.vote_passed_paused = "Spillerne ble enige om %s: spillet fort
 multiplayer_window.vote_request = "%s vil gjerne endre spillfarten"
 multiplayer_window.vote_request_speed = "til %s."
 multiplayer_window.waiting_player = "venter på en spiller..."
+tooltip.main_menu.multiplayer = "Spill med andre via en flerspillerserver (eksperimentell)"
 tooltip.multiplayer_window.ask_money = "Be en annen spiller om penger. De avgjör om de betaler."
 tooltip.multiplayer_window.auctions = "Verten bestemmer hvilke tomter som går på auksjon når en spiller ber om å kjöpe en"
 tooltip.multiplayer_window.auctions_all = "Alle tomter går på auksjon mellom alle sykehusene som kan kjöpe dem"

@@ -3929,6 +3929,18 @@ subtitles = {
 --   of the multiplayer windows. Translated from english.lua; the keys
 --   missing here show in English.
 -------------------------------------------------------------------------------
+hotkey_window.ingame_mp_chat = "Чат мультиплеера"
+hotkey_window.ingame_mp_next_hospital = "Следующая больница (MP)"
+main_menu.multiplayer = "Мультиплеер"
+map_editor_window.pages.camera_n = "Камера %d"
+map_editor_window.pages.heliport_n = "Верт. Площадка %d"
+map_editor_window.pages.player = "Игрок %d"
+menu.map_size = "РАЗМЕР КАРТЫ"
+menu_map_size.size = "  НОВАЯ КАРТА %d x %d  "
+menu_player_count.players_5 = "  5 Игроков  "
+menu_player_count.players_6 = "  6 Игроков  "
+menu_player_count.players_7 = "  7 Игроков  "
+menu_player_count.players_8 = "  8 Игроков  "
 multiplayer_window.add_bot = "ждём игрока... (щелчок: добавить бота)"
 multiplayer_window.ask_amount = "Сумма: $%d"
 multiplayer_window.ask_asked = "Запрос отправлен. Ждём ответа."
@@ -4366,6 +4378,7 @@ multiplayer_window.vote_passed_paused = "Игроки согласились н�
 multiplayer_window.vote_request = "%s хочет сменить скорость игры"
 multiplayer_window.vote_request_speed = "на %s."
 multiplayer_window.waiting_player = "ждём игрока..."
+tooltip.main_menu.multiplayer = "Играть с другими через сервер мультиплеера (экспериментально)"
 tooltip.multiplayer_window.ask_money = "Попросить денег у другого игрока. Он сам решает, давать ли."
 tooltip.multiplayer_window.auctions = "Хозяин комнаты решает, какие участки земли идут на аукцион, когда игрок хочет их купить"
 tooltip.multiplayer_window.auctions_all = "Каждый участок идёт на аукцион между всеми больницами, которые могут его купить"

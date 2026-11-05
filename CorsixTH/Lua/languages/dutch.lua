@@ -3568,6 +3568,18 @@ hotkey_window = {
 --   of the multiplayer windows. Translated from english.lua; the keys
 --   missing here show in English.
 -------------------------------------------------------------------------------
+hotkey_window.ingame_mp_chat = "Multiplayer-chat"
+hotkey_window.ingame_mp_next_hospital = "Volgend ziekenhuis (MP)"
+main_menu.multiplayer = "Multiplayer"
+map_editor_window.pages.camera_n = "Camera %d"
+map_editor_window.pages.heliport_n = "Helikopterplatform %d"
+map_editor_window.pages.player = "Speler %d"
+menu.map_size = "KAARTGROOTTE"
+menu_map_size.size = "  NIEUWE KAART %d x %d  "
+menu_player_count.players_5 = "  5 SPELERS  "
+menu_player_count.players_6 = "  6 SPELERS  "
+menu_player_count.players_7 = "  7 SPELERS  "
+menu_player_count.players_8 = "  8 SPELERS  "
 multiplayer_window.add_bot = "wacht op een speler... (klik: bot toevoegen)"
 multiplayer_window.ask_amount = "Bedrag: $%d"
 multiplayer_window.ask_asked = "Gevraagd. Wacht op het antwoord."
@@ -4005,6 +4017,7 @@ multiplayer_window.vote_passed_paused = "De spelers kozen voor %s: het spel gaat
 multiplayer_window.vote_request = "%s wil de spelsnelheid wijzigen"
 multiplayer_window.vote_request_speed = "naar %s."
 multiplayer_window.waiting_player = "wacht op een speler..."
+tooltip.main_menu.multiplayer = "Speel met anderen via een multiplayerserver (experimenteel)"
 tooltip.multiplayer_window.ask_money = "Vraag een andere speler om geld. Die beslist of hij betaalt."
 tooltip.multiplayer_window.auctions = "De host bepaalt welke percelen worden geveild als een speler er een wil kopen"
 tooltip.multiplayer_window.auctions_all = "Elk perceel wordt geveild onder alle ziekenhuizen die het mogen kopen"

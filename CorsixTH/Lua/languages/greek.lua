@@ -3356,6 +3356,18 @@ staff_list = {
 --   of the multiplayer windows. Translated from english.lua; the keys
 --   missing here show in English.
 -------------------------------------------------------------------------------
+hotkey_window.ingame_mp_chat = "Συνομιλία πολλών παικτών"
+hotkey_window.ingame_mp_next_hospital = "Επόμενο νοσοκομείο (MP)"
+main_menu.multiplayer = "Πολλοί παίκτες"
+map_editor_window.pages.camera_n = "Κάμερα %d"
+map_editor_window.pages.heliport_n = "Ελικοδρόμιο %d"
+map_editor_window.pages.player = "Παίκτης %d"
+menu.map_size = "ΜΕΓΕΘΟΣ ΧΑΡΤΗ"
+menu_map_size.size = "  ΝΕΟΣ ΧΑΡΤΗΣ %d x %d  "
+menu_player_count.players_5 = "  5 ΠΑΙΚΤΕΣ  "
+menu_player_count.players_6 = "  6 ΠΑΙΚΤΕΣ  "
+menu_player_count.players_7 = "  7 ΠΑΙΚΤΕΣ  "
+menu_player_count.players_8 = "  8 ΠΑΙΚΤΕΣ  "
 multiplayer_window.add_bot = "αναμονή για παίκτη... (κλικ: προσθήκη bot)"
 multiplayer_window.ask_amount = "Ποσό: $%d"
 multiplayer_window.ask_asked = "Στάλθηκε το αίτημα. Αναμονή για απάντηση."
@@ -3793,6 +3805,7 @@ multiplayer_window.vote_passed_paused = "Οι παίκτες συμφώνησα�
 multiplayer_window.vote_request = "Ο/Η %s θα ήθελε να αλλάξει την ταχύτητα του παιχνιδιού"
 multiplayer_window.vote_request_speed = "σε %s."
 multiplayer_window.waiting_player = "αναμονή για παίκτη..."
+tooltip.main_menu.multiplayer = "Παίξτε με άλλους μέσω διακομιστή πολλών παικτών (πειραματικό)"
 tooltip.multiplayer_window.ask_money = "Ζητήστε χρήματα από άλλον παίκτη. Αποφασίζει εκείνος αν θα πληρώσει."
 tooltip.multiplayer_window.auctions = "Ο οικοδεσπότης αποφασίζει ποια οικόπεδα πηγαίνουν σε δημοπρασία όταν ένας παίκτης ζητά να αγοράσει ένα"
 tooltip.multiplayer_window.auctions_all = "Κάθε οικόπεδο πηγαίνει σε δημοπρασία ανάμεσα σε όλα τα νοσοκομεία που μπορούν να το αγοράσουν"

@@ -3855,6 +3855,18 @@ subtitles = {
 --   of the multiplayer windows. Translated from english.lua; the keys
 --   missing here show in English.
 -------------------------------------------------------------------------------
+hotkey_window.ingame_mp_chat = "Chat pro více hráčů"
+hotkey_window.ingame_mp_next_hospital = "Další nemocnice (MP)"
+main_menu.multiplayer = "Multiplayer"
+map_editor_window.pages.camera_n = "Kamera %d"
+map_editor_window.pages.heliport_n = "Heliport %d"
+map_editor_window.pages.player = "Hráč %d"
+menu.map_size = "VELIKOST MAPY"
+menu_map_size.size = "  NOVÁ MAPA %d x %d  "
+menu_player_count.players_5 = "  5 HRÁČŮ  "
+menu_player_count.players_6 = "  6 HRÁČŮ  "
+menu_player_count.players_7 = "  7 HRÁČŮ  "
+menu_player_count.players_8 = "  8 HRÁČŮ  "
 multiplayer_window.add_bot = "čeká se na hráče... (klikněte: přidat bota)"
 multiplayer_window.ask_amount = "Částka: $%d"
 multiplayer_window.ask_asked = "Požádáno. Čeká se na odpověď."
@@ -4292,6 +4304,7 @@ multiplayer_window.vote_passed_paused = "Hráči se shodli na rychlosti %s: hra 
 multiplayer_window.vote_request = "Hráč %s by chtěl změnit rychlost hry"
 multiplayer_window.vote_request_speed = "na %s."
 multiplayer_window.waiting_player = "čeká se na hráče..."
+tooltip.main_menu.multiplayer = "Hrajte s ostatními přes server pro více hráčů (experimentální)"
 tooltip.multiplayer_window.ask_money = "Požádejte jiného hráče o peníze. Rozhodne, zda zaplatí."
 tooltip.multiplayer_window.auctions = "Hostitel rozhoduje, které pozemky jdou do dražby, když si je hráč chce koupit"
 tooltip.multiplayer_window.auctions_all = "Každý pozemek jde do dražby mezi všemi nemocnicemi, které ho mohou koupit"

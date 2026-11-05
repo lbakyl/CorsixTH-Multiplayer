@@ -2450,6 +2450,18 @@ bank_manager = {
 --   of the multiplayer windows. Translated from english.lua; the keys
 --   missing here show in English.
 -------------------------------------------------------------------------------
+hotkey_window.ingame_mp_chat = "マルチプレイヤー チャット"
+hotkey_window.ingame_mp_next_hospital = "次の病院 (MP)"
+main_menu.multiplayer = "マルチプレイヤー"
+map_editor_window.pages.camera_n = "カメラ %d"
+map_editor_window.pages.heliport_n = "ヘリポート %d"
+map_editor_window.pages.player = "プレイヤー %d"
+menu.map_size = "マップサイズ"
+menu_map_size.size = "  新しいマップ %d x %d  "
+menu_player_count.players_5 = "  5 プレイヤー  "
+menu_player_count.players_6 = "  6 プレイヤー  "
+menu_player_count.players_7 = "  7 プレイヤー  "
+menu_player_count.players_8 = "  8 プレイヤー  "
 multiplayer_window.add_bot = "プレイヤー待ち... (クリックでボットを追加)"
 multiplayer_window.ask_amount = "金額: $%d"
 multiplayer_window.ask_asked = "お願いしました。返事を待っています。"
@@ -2887,6 +2899,7 @@ multiplayer_window.vote_passed_paused = "プレイヤーが%sに賛成しまし�
 multiplayer_window.vote_request = "%sがゲームスピードの変更を希望しています"
 multiplayer_window.vote_request_speed = "%sに。"
 multiplayer_window.waiting_player = "プレイヤー待ち..."
+tooltip.main_menu.multiplayer = "マルチプレイヤーサーバーで他の人と遊びます (試験的)"
 tooltip.multiplayer_window.ask_money = "他のプレイヤーにお金をお願いします。払うかどうかは相手が決めます。"
 tooltip.multiplayer_window.auctions = "プレイヤーが土地の購入を希望したとき、どの区画をオークションにかけるかをホストが決めます"
 tooltip.multiplayer_window.auctions_all = "全区画を、買える権利のあるすべての病院でオークションにかけます"

@@ -2710,6 +2710,18 @@ adviser.warnings.no_desk_4 = "En receptionist skal have sit eget bord for at tag
 --   of the multiplayer windows. Translated from english.lua; the keys
 --   missing here show in English.
 -------------------------------------------------------------------------------
+hotkey_window.ingame_mp_chat = "Multiplayer-chat"
+hotkey_window.ingame_mp_next_hospital = "Næste hospital (MP)"
+main_menu.multiplayer = "Multiplayer"
+map_editor_window.pages.camera_n = "Kamera %d"
+map_editor_window.pages.heliport_n = "Helikopterplads %d"
+map_editor_window.pages.player = "Spiller %d"
+menu.map_size = "KORTSTÖRRELSE"
+menu_map_size.size = "  NYT KORT %d x %d  "
+menu_player_count.players_5 = "  5 SPILLERE  "
+menu_player_count.players_6 = "  6 SPILLERE  "
+menu_player_count.players_7 = "  7 SPILLERE  "
+menu_player_count.players_8 = "  8 SPILLERE  "
 multiplayer_window.add_bot = "venter på en spiller... (klik: tilföj en bot)"
 multiplayer_window.ask_amount = "Belöb: $%d"
 multiplayer_window.ask_asked = "Spurgt. Venter på svar."
@@ -3147,6 +3159,7 @@ multiplayer_window.vote_passed_paused = "Spillerne blev enige om %s: spillet for
 multiplayer_window.vote_request = "%s vil gerne ændre spillets hastighed"
 multiplayer_window.vote_request_speed = "til %s."
 multiplayer_window.waiting_player = "venter på en spiller..."
+tooltip.main_menu.multiplayer = "Spil med andre via en multiplayer-server (eksperimentel)"
 tooltip.multiplayer_window.ask_money = "Bed en anden spiller om penge. Vedkommende bestemmer, om der betales."
 tooltip.multiplayer_window.auctions = "Værten bestemmer, hvilke grunde der går til auktion, når en spiller vil köbe en"
 tooltip.multiplayer_window.auctions_all = "Alle grunde går til auktion blandt de hospitaler, der må köbe dem"

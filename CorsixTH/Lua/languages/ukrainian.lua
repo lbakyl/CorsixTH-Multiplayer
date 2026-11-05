@@ -3579,6 +3579,18 @@ warnings = {
 --   of the multiplayer windows. Translated from english.lua; the keys
 --   missing here show in English.
 -------------------------------------------------------------------------------
+hotkey_window.ingame_mp_chat = "Чат мультиплеєра"
+hotkey_window.ingame_mp_next_hospital = "Наступна лікарня (MP)"
+main_menu.multiplayer = "Мультиплеєр"
+map_editor_window.pages.camera_n = "Камера %d"
+map_editor_window.pages.heliport_n = "Гелік. майданчик %d"
+map_editor_window.pages.player = "Гравець %d"
+menu.map_size = "РОЗМІР МАПИ"
+menu_map_size.size = "  НОВА МАПА %d x %d  "
+menu_player_count.players_5 = "  5 Гравців  "
+menu_player_count.players_6 = "  6 Гравців  "
+menu_player_count.players_7 = "  7 Гравців  "
+menu_player_count.players_8 = "  8 Гравців  "
 multiplayer_window.add_bot = "чекаємо гравця... (клік: додати бота)"
 multiplayer_window.ask_amount = "Сума: $%d"
 multiplayer_window.ask_asked = "Запит надіслано. Чекаємо відповіді."
@@ -4016,6 +4028,7 @@ multiplayer_window.vote_passed_paused = "Гравці погодилися на 
 multiplayer_window.vote_request = "%s хоче змінити швидкість гри"
 multiplayer_window.vote_request_speed = "на %s."
 multiplayer_window.waiting_player = "чекаємо гравця..."
+tooltip.main_menu.multiplayer = "Грати з іншими через сервер мультиплеєра (експериментально)"
 tooltip.multiplayer_window.ask_money = "Попросити грошей в іншого гравця. Він сам вирішує, чи давати."
 tooltip.multiplayer_window.auctions = "Господар кімнати вирішує, які ділянки землі йдуть на аукціон, коли гравець хоче їх купити"
 tooltip.multiplayer_window.auctions_all = "Кожна ділянка йде на аукціон між усіма лікарнями, які можуть її купити"

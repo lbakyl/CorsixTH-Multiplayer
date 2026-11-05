@@ -2555,6 +2555,18 @@ menu = {
 --   of the multiplayer windows. Translated from english.lua; the keys
 --   missing here show in English.
 -------------------------------------------------------------------------------
+hotkey_window.ingame_mp_chat = "멀티플레이어 채팅"
+hotkey_window.ingame_mp_next_hospital = "다음 병원 (MP)"
+main_menu.multiplayer = "멀티플레이어"
+map_editor_window.pages.camera_n = "카메라 %d"
+map_editor_window.pages.heliport_n = "헬리포트 %d"
+map_editor_window.pages.player = "플레이어 %d"
+menu.map_size = "맵 크기"
+menu_map_size.size = "  새 맵 %d x %d  "
+menu_player_count.players_5 = "  5 플레이어  "
+menu_player_count.players_6 = "  6 플레이어  "
+menu_player_count.players_7 = "  7 플레이어  "
+menu_player_count.players_8 = "  8 플레이어  "
 multiplayer_window.add_bot = "플레이어 대기 중... (클릭: 봇 추가)"
 multiplayer_window.ask_amount = "금액: $%d"
 multiplayer_window.ask_asked = "요청했습니다. 답을 기다리는 중입니다."
@@ -2992,6 +3004,7 @@ multiplayer_window.vote_passed_paused = "플레이어들이 %s에 찬성했습�
 multiplayer_window.vote_request = "%s 님이 게임 속도를 바꾸고 싶어 합니다"
 multiplayer_window.vote_request_speed = "%s(으)로."
 multiplayer_window.waiting_player = "플레이어 대기 중..."
+tooltip.main_menu.multiplayer = "멀티플레이어 서버를 통해 다른 사람과 함께 플레이합니다 (실험적)"
 tooltip.multiplayer_window.ask_money = "다른 플레이어에게 돈을 요청합니다. 낼지 말지는 상대가 정합니다."
 tooltip.multiplayer_window.auctions = "플레이어가 토지를 사려 할 때 어느 부지를 경매에 부칠지 방장이 정합니다"
 tooltip.multiplayer_window.auctions_all = "모든 부지를 살 수 있는 모든 병원 사이에서 경매에 부칩니다"

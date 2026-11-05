@@ -1908,6 +1908,18 @@ adviser.warnings.nurse_needs_desk_2 = "A nővérke boldog, hogy megengedted neki
 --   of the multiplayer windows. Translated from english.lua; the keys
 --   missing here show in English.
 -------------------------------------------------------------------------------
+hotkey_window.ingame_mp_chat = "Többjátékos csevegés"
+hotkey_window.ingame_mp_next_hospital = "Következő kórház (MP)"
+main_menu.multiplayer = "Többjátékos"
+map_editor_window.pages.camera_n = "Kamera %d"
+map_editor_window.pages.heliport_n = "Helikopter-leszálló %d"
+map_editor_window.pages.player = "Játékos %d"
+menu.map_size = "TÉRKÉPMÉRET"
+menu_map_size.size = "  ÚJ TÉRKÉP %d x %d  "
+menu_player_count.players_5 = "  5 JÁTÉKOS  "
+menu_player_count.players_6 = "  6 JÁTÉKOS  "
+menu_player_count.players_7 = "  7 JÁTÉKOS  "
+menu_player_count.players_8 = "  8 JÁTÉKOS  "
 multiplayer_window.add_bot = "várakozás játékosra... (kattints: bot hozzáadása)"
 multiplayer_window.ask_amount = "Összeg: $%d"
 multiplayer_window.ask_asked = "Elküldve. Várakozás a válaszra."
@@ -2345,6 +2357,7 @@ multiplayer_window.vote_passed_paused = "A játékosok ebben egyeztek meg: %s - 
 multiplayer_window.vote_request = "%s szeretné megváltoztatni a játék sebességét"
 multiplayer_window.vote_request_speed = "erre: %s."
 multiplayer_window.waiting_player = "várakozás játékosra..."
+tooltip.main_menu.multiplayer = "Játék másokkal egy többjátékos szerveren keresztül (kísérleti)"
 tooltip.multiplayer_window.ask_money = "Kérj pénzt egy másik játékostól. Ő dönti el, fizet-e."
 tooltip.multiplayer_window.auctions = "A házigazda dönti el, mely telkek kerülnek árverésre, amikor egy játékos meg akar venni egyet"
 tooltip.multiplayer_window.auctions_all = "Minden telek árverésre kerül az összes olyan kórház között, amely megvehetné"
