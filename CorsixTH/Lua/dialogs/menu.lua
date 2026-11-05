@@ -927,7 +927,6 @@ end
 function UIMenuBar:unlockCheats()
   local app = self.ui.app
   if not (app.config.debug or app.cheats_menu_unlocked) then return end
-  local UICheats = _G["UICheats"] ---@type UICheats
   self:addMenu(_S.menu.cheats_title, UIMenu()
     :appendItem(_S.menu.cheats:format(hotkey_value_label("ingame_showCheatWindow", app.hotkeys)),
       function() self.ui:showCheatsWindow() end))
