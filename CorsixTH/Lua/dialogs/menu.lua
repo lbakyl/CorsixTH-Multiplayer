@@ -18,9 +18,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
+local TH = require("TH")
+
 local ipairs, math_floor, unpack, select, assert
     = ipairs, math.floor, unpack, select, assert
-local TH = require("TH")
+local Window = _G['Window'] ---@type Window
 
 --! The ingame menu bar which sits (nominally hidden) at the top of the screen.
 class "UIMenuBar" (Window)
@@ -646,6 +648,7 @@ local function audio_options(menu, game)
       :appendMenu(_S.menu_options.announcements_vol, appendVolume("announcement"))
   end
   if app.audio.has_bg_music then
+    local UIJukebox = _G["UIJukebox"] ---@type UIJukebox
     menu:appendMenu(_S.menu_options.music_vol, appendVolume("music"))
       :appendItem(_S.menu_options.jukebox:format(hotkey_value_label("ingame_jukebox", hotkeys)),
           function() app.ui:addWindow(UIJukebox(app)) end)
@@ -704,6 +707,8 @@ function UIMenuBar:makeMapeditorMenu(app)
   local menu = UIMenu()
   local hotkeys = app.hotkeys
 
+  local UISaveMap = _G["UISaveMap"] ---@type UISaveMap
+  local UILoadMap = _G["UILoadMap"] ---@type UILoadMap
   menu:appendItem(_S.menu_file.load:format(hotkey_value_label("ingame_loadMenu", hotkeys)), function() self.ui:addWindow(UILoadMap(self.ui, "map")) end)
     :appendItem(_S.menu_file.save:format(hotkey_value_label("ingame_saveMenu", hotkeys)), function() self.ui:addWindow(UISaveMap(self.ui)) end)
     :appendItem(_S.menu_file.restart:format(hotkey_value_label("ingame_restartLevel", hotkeys)), function() self.ui:restartMapEditor() end)
@@ -749,6 +754,8 @@ function UIMenuBar:makeGameMenu(app)
   local menu = UIMenu()
   local hotkeys = app.hotkeys
 
+  local UILoadGame = _G["UILoadGame"] ---@type UILoadGame
+  local UISaveGame = _G["UISaveGame"] ---@type UISaveGame
   -- Loading or restarting would leave the other multiplayer players behind.
   menu:appendItem(_S.menu_file.load:format(hotkey_value_label("ingame_loadMenu", hotkeys)), function()
       if MultiplayerSession.blockUnsupported(self.ui) then return end
@@ -833,6 +840,8 @@ function UIMenuBar:makeGameMenu(app)
 
   self:addMenu(_S.menu.options, options)
 
+  local UIMachineMenu = _G["UIMachineMenu"] ---@type UIMachineMenu
+  local UIAdviserHistory = _G["UIAdviserHistory"] ---@type UIAdviserHistory
   self:addMenu(_S.menu.charts, UIMenu()
     :appendItem(_S.menu_charts.bank_manager:format(hotkey_value_label("ingame_panel_bankManager", hotkeys)), function() self.ui.bottom_panel:dialogBankManager(true) end)
     :appendItem(_S.menu_charts.statement:format(hotkey_value_label("ingame_panel_bankStats", hotkeys)), function() self.ui.bottom_panel:dialogBankStats(true) end)
@@ -872,6 +881,9 @@ function UIMenuBar:makeGameMenu(app)
     end)
   end
   if self.ui.app.config.debug then
+    local UIMakeDebugPatient = _G["UIMakeDebugPatient"] ---@type UIMakeDebugPatient
+    local UILuaConsole = _G["UILuaConsole"] ---@type UILuaConsole
+    local UICallsDispatcher = _G["UICallsDispatcher"] ---@type UICallsDispatcher
     self:addMenu(_S.menu.debug, UIMenu() -- Debug
       :appendMenu(_S.menu_debug.jump_to_level, levels_menu)
       :appendMenu(_S.menu_debug.allow_blocking_off_areas, UIMenu()
@@ -915,6 +927,7 @@ end
 function UIMenuBar:unlockCheats()
   local app = self.ui.app
   if not (app.config.debug or app.cheats_menu_unlocked) then return end
+  local UICheats = _G["UICheats"] ---@type UICheats
   self:addMenu(_S.menu.cheats_title, UIMenu()
     :appendItem(_S.menu.cheats:format(hotkey_value_label("ingame_showCheatWindow", app.hotkeys)),
       function() self.ui:showCheatsWindow() end))

@@ -18,14 +18,17 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
+local HumanoidAction = _G['HumanoidAction'] ---@type HumanoidAction
+local Object = _G['Object'] ---@type Object
+
 class "UseScreenAction" (HumanoidAction)
 
 ---@class UseScreenAction: HumanoidAction
 ---@operator call: UseScreenAction
 local UseScreenAction = _G["UseScreenAction"] ---@type UseScreenAction
 
---! Action to use the screen.
---!param screen (object) Screen to use.
+--- Action to use the screen.
+--- @param screen (screen) Screen to use.
 function UseScreenAction:UseScreenAction(screen)
   assert(class.is(screen, Object) and (
       screen.object_type.id == "screen" or

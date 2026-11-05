@@ -18,6 +18,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
+local HumanoidAction = _G['HumanoidAction'] ---@type HumanoidAction
+
 class "AnswerCallAction" (HumanoidAction)
 
 ---@class AnswerCallAction: HumanoidAction
@@ -28,9 +30,13 @@ function AnswerCallAction:AnswerCallAction()
   self:HumanoidAction("answer_call")
 end
 
+--- Start the answer-call action.
+--- @param action AnswerCallAction
+--- @param humanoid Humanoid
 local function action_answer_call_start(action, humanoid)
   action.must_happen = true
-  CallsDispatcher.onCheckpointCompleted(action, humanoid)
+  local CallsDispatcher = _G["CallsDispatcher"] ---@type CallsDispatcher
+  CallsDispatcher.onCheckpointCompleted(action)
   if not humanoid.world.dispatcher:answerCall(humanoid) then
     local room = humanoid:getRoom()
     if room then

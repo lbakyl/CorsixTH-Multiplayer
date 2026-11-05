@@ -18,6 +18,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
+local Window = _G['Window'] ---@type Window
 
 --! Dialog for staff member requesting a salaray raise.
 class "UIStaffRise" (Window)
@@ -83,6 +84,7 @@ function UIStaffRise:UIStaffRise(ui, staff, rise_amount)
   self:makeTooltip(_S.tooltip.staff_window.salary, 14, 171, 168, 193)
   self:makeTooltip(_S.tooltip.staff_window.ability, 12, 213, 89, 243)
 
+  local Doctor = _G["Doctor"] ---@type Doctor
   if class.is(staff, Doctor) then
     self:makeTooltip(_S.tooltip.staff_window.doctor_seniority, 89, 197, 168, 243)
     self:makeTooltip(_S.tooltip.staff_window.skills, 14, 132, 47, 166)
@@ -208,6 +210,7 @@ end
 function UIStaffRise:afterLoad(old, new)
   Window.afterLoad(self, old, new)
   if old < 236 then
+    local TheApp = _G["TheApp"] ---@type App
     self.white_font = TheApp.gfx:loadFontAndSpriteTable("QData", "Font01V", nil, nil, { apply_ui_scale = true })
     self.black_font = TheApp.gfx:loadFontAndSpriteTable("QData", "Font00V", nil, nil, { apply_ui_scale = true })
     self.face_parts = TheApp.gfx:loadRaw("Face01V", 65, 1350, nil, "Data", "MPalette.dat", false, { flags = DrawFlags.Nearest })

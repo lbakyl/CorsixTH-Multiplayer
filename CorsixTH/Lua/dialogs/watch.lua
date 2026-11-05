@@ -18,6 +18,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
+local Window = _G['Window'] ---@type Window
+
 --! Timer / clock / watch / countdown dialog for emergencies / level start
 --! The timer lasts approximately 100 days, split into 13 segments
 class "UIWatch" (Window)
@@ -40,6 +42,7 @@ function UIWatch:UIWatch(ui, count_type, hospital)
 
   self.esc_closes = false
   self.modal_class = "open_countdown"
+  local Date = _G["Date"] ---@type Date
   if count_type == "emergency" then
     self.tick_rate = math.floor((TICK_DAYS_EMERGENCY * Date.hoursPerDay()) / TIMER_SEGMENTS)
     self.tick_timer = self.tick_rate
@@ -250,6 +253,7 @@ function UIWatch:cycleTimerEventPatient()
   self.ui:playSound("camclick.wav")
   local hospital = self.hospital
 
+  local UIPatient = _G["UIPatient"] ---@type UIPatient
   if self.count_type == "emergency" then
     local patients = hospital.emergency_patients
 
@@ -294,6 +298,7 @@ function UIWatch:scrollToTimerEventPatient()
   end
   if patient then
     -- Current open dialog
+    local UIPatient = _G["UIPatient"] ---@type UIPatient
     local current_patient_dialog = self.ui:getWindow(UIPatient)
     if not current_patient_dialog then
       -- Create the dialog but don't add it to the window

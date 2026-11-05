@@ -25,6 +25,8 @@ local --[[persistable:staff_dialog_is_in_view_circle]] function is_in_view_circl
   return (x - 55 * s)^2 + (y - circle_center_y)^2 < (39 * s)^2
 end
 
+local Window = _G['Window'] ---@type Window
+
 --! Individual staff information dialog
 class "UIStaff" (Window)
 
@@ -61,6 +63,9 @@ function UIStaff:getParcelText()
 end
 
 function UIStaff:UIStaff(ui, staff)
+  local Handyman = _G["Handyman"] ---@type Handyman
+  local Doctor = _G["Doctor"] ---@type Doctor
+
   self:Window()
 
   local app = ui.app
@@ -108,6 +113,7 @@ function UIStaff:UIStaff(ui, staff)
     self:addPanel(302,   5, 178) -- View circle top/Wage
     self:addPanel(303,   0, 226) -- View circle midpiece
     self:addPanel(304,   6, 274) -- View circle bottom
+
     if not class.is(staff, Doctor) then
       self:addColourPanel(32, 141, 171, 39, 85, 202, 219)  -- Hides Skills
     end
@@ -251,6 +257,7 @@ function UIStaff:draw(canvas, x_, y_)
     end
   end
 
+  local Doctor = _G["Doctor"] ---@type Doctor
   if class.is(self.staff, Doctor) then
     -- Junior / Doctor / Consultant marker
     if profile.is_junior then
@@ -276,6 +283,7 @@ function UIStaff:draw(canvas, x_, y_)
 end
 
 function UIStaff:onMouseDown(button, x, y)
+  local Handyman = _G["Handyman"] ---@type Handyman
   self.do_scroll = button == "left" and is_in_view_circle(x, y, class.is(self.staff, Handyman))
   return Window.onMouseDown(self, button, x, y)
 end
@@ -288,6 +296,7 @@ function UIStaff:onMouseUp(button, x, y)
   local repaint = Window.onMouseUp(self, button, x, y)
   local s = TheApp.gfx:getUIScale()
   -- Test for hit within the view circle and name box
+  local Handyman = _G["Handyman"] ---@type Handyman
   local hit_namebox = x > self.tooltip_regions[1].x * s and x < self.tooltip_regions[1].r * s
                       and y > self.tooltip_regions[1].y * s and y < self.tooltip_regions[1].b * s
   if button == "right" and is_in_view_circle(x, y, class.is(self.staff, Handyman))
@@ -326,6 +335,7 @@ function UIStaff:onMouseUp(button, x, y)
 end
 
 function UIStaff:onMouseMove(x, y, dx, dy)
+  local Handyman = _G["Handyman"] ---@type Handyman
   self.do_scroll = self.do_scroll and is_in_view_circle(x, y, class.is(self.staff, Handyman))
   return Window.onMouseMove(self, x, y, dx, dy)
 end
@@ -346,6 +356,7 @@ function UIStaff:pickupStaff()
 end
 
 function UIStaff:fireStaff()
+  local UIConfirmDialog = _G["UIConfirmDialog"] ---@type UIConfirmDialog
   self.ui:addWindow(UIConfirmDialog(self.ui, false, _S.confirmation.sack_staff, --[[persistable:staff_dialog_confirm_sack]] function()
     if MultiplayerSession.actionsAreCommands() then
       TheApp.mp_session:issue({kind = "fire_staff", staff = self.staff.mp_id})
@@ -432,6 +443,7 @@ function UIStaff:doMoreRepairing()
 end
 
 function UIStaff:openStaffManagement()
+  local UIStaffManagement = _G["UIStaffManagement"] ---@type UIStaffManagement
   local dlg = UIStaffManagement(self.ui)
   -- Make sure that the dialog managed to create itself properly.
   -- For example, if using the demo files closed will be true because the dialog could not be loaded.
@@ -443,6 +455,7 @@ function UIStaff:openStaffManagement()
 end
 
 function UIStaff:hitTest(x, y)
+  local Handyman = _G["Handyman"] ---@type Handyman
   return Window.hitTest(self, x, y) or is_in_view_circle(x, y, class.is(self.staff, Handyman))
 end
 
@@ -452,6 +465,7 @@ function UIStaff:afterLoad(old, new)
   end
   Window.afterLoad(self, old, new)
   if old < 236 then
+    local TheApp = _G["TheApp"] ---@type App
     self.white_font = TheApp.gfx:loadFontAndSpriteTable("QData", "Font01V", nil, nil, { apply_ui_scale = true })
     self.face_parts = TheApp.gfx:loadRaw("Face01V", 65, 1350, nil, "Data", "MPalette.dat", false, { flags = DrawFlags.Nearest })
   end

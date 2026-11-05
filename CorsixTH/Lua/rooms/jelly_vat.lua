@@ -18,6 +18,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
+local Room = _G['Room'] ---@type Room
+
 local room = {}
 room.id = "jelly_vat"
 room.vip_must_visit = false
@@ -46,7 +48,7 @@ class "JellyVatRoom" (Room)
 
 ---@class JellyVatRoom: Room
 ---@operator call: JellyVatRoom
-local JellyVatRoom = _G["JellyVatRoom"] ---@type  JellyVatRoom
+local JellyVatRoom = _G["JellyVatRoom"] ---@type JellyVatRoom
 
 function JellyVatRoom:JellyVatRoom(...)
   self:Room(...)

@@ -18,6 +18,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
+local UIFullscreen = _G['UIFullscreen'] ---@type UIFullscreen
+
 --! Annual Report fullscreen window shown at the start of each year.
 class "UIAnnualReport" (UIFullscreen)
 
@@ -25,10 +27,9 @@ class "UIAnnualReport" (UIFullscreen)
 ---@operator call: UIAnnualReport
 local UIAnnualReport = _G["UIAnnualReport"] ---@type UIAnnualReport
 
---! Helper function that enables and makes visible button or table of buttons/panels.
---!param button The button or table of buttons that should be activated/deactivated. If
--- a table is given it needs to have the is_table flag set to true.
---!param active Defines if the new state is active (true) or inactive (false).
+--- Helper function that enables and makes visible button or table of buttons/panels.
+---@param button (Button | {[integer]: Button, is_table: true }) The button or table of buttons that should be activated/deactivated. If a table is given it needs to have the `is_table` flag set to true.
+---@param active (boolean) Defines if the new state is active (true) or inactive (false).
 local function setActive(button, active)
   if button.is_table then
     for _, btn in ipairs(button) do
@@ -70,6 +71,7 @@ function UIAnnualReport:UIAnnualReport(ui, world, report_hospital)
 
     self.panel_sprites = gfx:loadSpriteTable("QData", "Award03V", true, palette)
   end) then
+    local UIInformation = _G["UIInformation"] ---@type UIInformation
     ui:addWindow(UIInformation(ui, {_S.errors.dialog_missing_graphics}))
     self:close()
     return
@@ -174,7 +176,7 @@ function UIAnnualReport:mustPause()
   return not TheApp.mp_session
 end
 
---! Finds out which awards and/or trophies the player has been awarded this year.
+--- Finds out which awards and/or trophies the player has been awarded this year.
 function UIAnnualReport:checkTrophiesAndAwards(world)
 
   local hosp = self.hospital or self.ui.hospital
@@ -356,10 +358,10 @@ local trophy_prop = {
   },
 }
 
---! Adds a trophy figure with some text if the player clicks on it.
---!param text (string) The text to show as motivation.
---!param award_type (string) Should be one of "reputation" or "money"
---!param amount (integer) How much the player got/lost.
+--- Adds a trophy figure with some text if the player clicks on it.
+--- @param text (string) The text to show as motivation.
+--- @param award_type ("reputation" | "money") Kind of award
+--- @param amount (integer) How much the player got/lost.
 function UIAnnualReport:addTrophy(text, award_type, amount)
   local no = self.no_trophies + 1
   -- Only show up to three trophies visually.
@@ -434,8 +436,8 @@ function UIAnnualReport:addAward(text, award_type, amount)
   self.no_awards = no
 end
 
---! Activates the motivation scroll with the given text on it.
---!param text_index_to_show The index of the award to show info from.
+--- Activates the motivation scroll with the given text on it.
+--- @param text_index_to_show (integer) The index of the award to show info from.
 function UIAnnualReport:showAwardMotivation(text_index_to_show)
   if text_index_to_show then
     -- Make sure no trophy motivation is shown
@@ -456,8 +458,8 @@ function UIAnnualReport:showAwardMotivation(text_index_to_show)
   end
 end
 
---! Activates the motivation plaque with the given text on it.
---!param text_index_to_show The index of the trophy to show info from.
+--- Activates the motivation plaque with the given text on it.
+--- @param text_index_to_show (integer) The index of the trophy to show info from.
 function UIAnnualReport:showTrophyMotivation(text_index_to_show)
   if text_index_to_show then
     -- Make sure no award motivation is shown
@@ -476,6 +478,8 @@ end
 
 --! Overridden close function. The game should be unpaused again when closing the dialog.
 function UIAnnualReport:close()
+  local TheApp = _G["TheApp"] ---@type App
+  local Window = _G["Window"] ---@type Window
   if TheApp.world:getUIHospital().game_won then
     TheApp.video:setBlueFilterActive(false)
   end

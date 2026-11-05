@@ -18,6 +18,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
+local HumanoidAction = _G['HumanoidAction'] ---@type HumanoidAction
+
 class "DieAction" (HumanoidAction)
 
 ---@class DieAction: HumanoidAction
@@ -73,6 +75,10 @@ local action_die_tick_reaper; action_die_tick_reaper = permanent"action_die_tick
   local action = humanoid:getCurrentAction()
   local mirror = humanoid.last_move_direction == "east" and 0 or 1
   local phase = action.phase
+
+  local IdleSpawnAction = _G["IdleSpawnAction"] ---@type IdleSpawnAction
+  local WalkAction = _G["WalkAction"] ---@type WalkAction
+  local UseObjectAction = _G["UseObjectAction"] ---@type UseObjectAction
 
   if phase == 0 then
     action.phase = 1

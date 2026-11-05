@@ -18,6 +18,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
+local Window = _G['Window'] ---@type Window
+
 --! Interface for items within a UI tree control
 class "TreeNode"
 
@@ -488,7 +490,7 @@ class "TreeControl" (Window) ---@type TreeControl
 
 ---@class TreeControl: Window
 ---@operator call: TreeControl
-local TreeControl = _G["TreeControl"]
+local TreeControl = _G["TreeControl"] ---@type TreeControl
 
 --!param root (TreeNode) The single root node of the tree (use a `DummyRootNode`
 -- here if multiple root nodes are desired).

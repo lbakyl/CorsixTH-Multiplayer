@@ -21,6 +21,8 @@ SOFTWARE. --]]
 corsixth.require("ui")
 corsixth.require("announcer")
 
+local UI = _G['UI'] ---@type UI
+
 --! Variant of UI for running games
 class "GameUI" (UI)
 
@@ -194,8 +196,9 @@ function GameUI:makeVisibleDiamond(scr_w, scr_h)
   -- is limited to, and ensures that the map always covers all of the screen.
   -- Its vertices are at (x + w, y), (x - w, y), (x, y + h), (x, y - h).
   -- In multiplayer a player's plot can be at the edge of the map, under the
-  -- windows that open at the sides: there the camera may go past the edge.
-  local margin = self.app.mp_session and math.max(scr_w / 2, scr_h) or 0
+  -- windows that open at the sides, and the map editor's tools cover its
+  -- edges: there the camera may go past the edge.
+  local margin = (self.app.mp_session or self.map_editor) and math.max(scr_w / 2, scr_h) or 0
   return {
     x = - scr_w / 2,
     y = 16 * map_h - scr_h / 2,

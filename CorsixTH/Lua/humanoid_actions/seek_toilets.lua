@@ -19,6 +19,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
+local HumanoidAction = _G['HumanoidAction'] ---@type HumanoidAction
+
 class "SeekToiletsAction" (HumanoidAction)
 
 ---@class SeekToiletsAction: HumanoidAction
@@ -62,6 +64,7 @@ local function seek_toilets_action_start(action, humanoid)
     if humanoid.next_room_to_visit then
       humanoid:setNextAction(SeekRoomAction(humanoid.next_room_to_visit.room_info.id))
     else
+      local SeekReceptionAction = _G["SeekReceptionAction"] ---@type SeekReceptionAction
       humanoid:queueAction(SeekReceptionAction())
     end
     humanoid.going_to_toilet = "no"

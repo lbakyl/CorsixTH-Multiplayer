@@ -18,6 +18,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
+local Window = _G['Window'] ---@type Window
+
 --! UI display area for announcer subtitles
 class "Subtitles" (Window)
 
@@ -32,6 +34,7 @@ function Subtitles:Subtitles()
   self.y = 0
   self.white_font = TheApp.gfx:loadFontAndSpriteTable("QData", "Font01V", nil, nil, { apply_ui_scale = true })
 
+  local SubtitleQueue = _G["SubtitleQueue"] ---@type SubtitleQueue
   self.queue = SubtitleQueue()
 end
 
@@ -79,6 +82,7 @@ function Subtitles:onTick()
 end
 
 function Subtitles:afterLoad(old, new)
+  local SubtitleQueue = _G["SubtitleQueue"] ---@type SubtitleQueue
   self.queue = SubtitleQueue()
 end
 

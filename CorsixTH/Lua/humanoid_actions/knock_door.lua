@@ -18,16 +18,20 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
+local HumanoidAction = _G['HumanoidAction'] ---@type HumanoidAction
+
 class "KnockDoorAction" (HumanoidAction)
 
 ---@class KnockDoorAction: HumanoidAction
 ---@operator call: KnockDoorAction
 local KnockDoorAction = _G["KnockDoorAction"] ---@type KnockDoorAction
 
---! Constructor for knocking on the door action.
---!param door (Object) Door to knock on.
---!param direction (string) Direction of facing.
+--- Constructor for knocking on the door action.
+--- @param door (Object) Door to knock on.
+--- @param direction (string) Direction of facing.
 function KnockDoorAction:KnockDoorAction(humanoid, door, direction)
+  local Humanoid = _G["Humanoid"] ---@type Humanoid
+  local Door = _G["Door"] ---@type Door
   assert(class.is(humanoid, Humanoid), "Invalid value for parameter 'humanoid'")
   assert(class.is(door, Door), "Invalid value for parameter 'door'")
   assert(direction == "north" or direction == "south" or

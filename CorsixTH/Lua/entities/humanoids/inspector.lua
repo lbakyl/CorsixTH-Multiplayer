@@ -20,7 +20,8 @@ SOFTWARE. --]]
 
 corsixth.require("announcer")
 
-local AnnouncementPriority = _G["AnnouncementPriority"] ---@type AnnouncementPriority
+local AnnouncementPriority = _G["AnnouncementPriority"] --[[@as AnnouncementPriority]]
+local Humanoid = _G['Humanoid'] ---@type Humanoid
 
 --[[ An `Inspector` is called to the hospital after an epidemic to issue a report]]
 class "Inspector" (Humanoid)
@@ -79,6 +80,7 @@ function Inspector:checkForReceptionDesk()
   -- the desk they were aiming for is gone, they will either:
   if self:isMeandering() then
     if self.hospital:hasReceptionDesk(true) then
+      local SeekReceptionAction = _G["SeekReceptionAction"] ---@type SeekReceptionAction
       self:setNextAction(SeekReceptionAction()) -- Head towards an existing desk
     else
       self.hospital.epidemic:handleInspectorArrival() -- Deliver results anyway

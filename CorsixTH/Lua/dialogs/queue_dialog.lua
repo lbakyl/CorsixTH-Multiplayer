@@ -20,6 +20,8 @@ SOFTWARE. --]]
 
 local TH = require("TH")
 
+local Window = _G['Window'] ---@type Window
+
 --! Room / door / reception desk queue visualisation dialog.
 class "UIQueue" (Window)
 
@@ -200,6 +202,7 @@ function UIQueue:onMouseDown(button, x, y)
     self.just_added = true
     local px = self.x + math.floor(x / s)
     local py = self.y + math.floor(y / s)
+    local UIQueuePopup = _G["UIQueuePopup"] ---@type UIQueuePopup
     self.ui:addWindow(UIQueuePopup(self.ui, px, py, self.hovered.patient))
   end
 end
@@ -209,6 +212,7 @@ function UIQueue:onMouseUp(button, x, y)
     self.just_added = false
   else
     -- Always remove any leftover popup windows
+    local UIQueuePopup = _G["UIQueuePopup"] ---@type UIQueuePopup
     local window = self.ui:getWindow(UIQueuePopup)
     if window then
       window:close()
@@ -302,6 +306,7 @@ end
 
 function UIQueue:close()
   -- Always remove any leftover popup windows
+  local UIQueuePopup = _G["UIQueuePopup"] ---@type UIQueuePopup
   local window = self.ui:getWindow(UIQueuePopup)
   if window then
     window:close()
@@ -455,6 +460,7 @@ function UIQueuePopup:sendToReception()
   if MultiplayerSession.actionsAreCommands() then
     TheApp.mp_session:issue({kind = "to_reception", patient = self.patient.mp_id})
   else
+    local SeekReceptionAction = _G["SeekReceptionAction"] ---@type SeekReceptionAction
     self.patient:setNextAction(SeekReceptionAction())
   end
   self:close()

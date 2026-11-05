@@ -18,6 +18,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
+local HumanoidAction = _G['HumanoidAction'] ---@type HumanoidAction
+
 class "IdleAction" (HumanoidAction)
 
 ---@class IdleAction: HumanoidAction
@@ -30,9 +32,9 @@ function IdleAction:IdleAction()
   self.on_interrupt = nil -- Function to call at an interrupt.
 end
 
---! Set the direction of facing while standing idle.
---!param direction (string) Direction of facing.
---!return (action) Self, for daisy-chaining.
+--- Set the direction of facing while standing idle.
+--- @param direction (string) Direction of facing.
+--- @return (IdleAction) # Self, for daisy-chaining.
 function IdleAction:setDirection(direction)
   assert(direction == nil or
       direction == "north" or direction == "south" or
@@ -43,9 +45,9 @@ function IdleAction:setDirection(direction)
   return self
 end
 
---! Set the function to call on interrupt.
---!param on_interrupt (function) Function to call on interrupt.
---!return (action) Self, for daisy-chaining.
+--- Set the function to call on interrupt.
+--- @param on_interrupt (function) Function to call on interrupt.
+--- @return (IdleAction) # Self, for daisy-chaining.
 function IdleAction:setOnInterrupt(on_interrupt)
   assert(on_interrupt == nil or type(on_interrupt) == "function",
       "Invalid value for parameter 'on_interrupt'")
