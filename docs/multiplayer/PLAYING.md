@@ -8,8 +8,9 @@ It is a test version: expect rough edges, and please report what you find.
 
 ## What you need
 
-- **Windows or Linux** (64-bit), or **macOS 26 Tahoe or newer on Apple
-  Silicon** (M1 or later). Players on all three can play together.
+- **Windows or Linux** (64-bit), or a **Mac with Apple Silicon** (M1 or
+  later) on the macOS version the release names: usually macOS 27 or newer
+  (macOS 26 for releases built on GitHub's machines). Players on all three can play together.
 - **Your own Theme Hospital game data** (GOG, EA or the original CD). It is
   not included and must never be shared. Editions differ in their
   multiplayer maps and level settings; the servers eu1 and eu2 have the GOG
@@ -41,7 +42,7 @@ It is a test version: expect rough edges, and please report what you find.
 that folder. It brings its own libraries; the usual desktop ones (graphics,
 sound) come from your system.
 
-**macOS** (Apple Silicon, macOS 26 Tahoe or newer): download the
+**macOS** (Apple Silicon, the macOS version the release names): download the
 `...-macos-arm64.zip` of the same release, unzip it and move
 `CorsixTH.app` to Applications. The app is not notarized by Apple, so the
 first time macOS refuses to open it: open **System Settings > Privacy &

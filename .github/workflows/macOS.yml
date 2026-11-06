@@ -4,15 +4,23 @@ name: macOS app
 permissions:
   contents: read
 
-# A self-contained macOS app for Apple Silicon, macOS 26 Tahoe or newer, for
-# multiplayer testing, with Lua 5.5 like the Windows and Linux builds (the
-# multiplayer build id contains the Lua version). Signed ad hoc, not
-# notarized. See scripts/multiplayer/build_macos_app.sh.
+# A self-contained macOS app for Apple Silicon for multiplayer testing, with
+# Lua 5.5 like the Windows and Linux builds (the multiplayer build id contains
+# the Lua version). Signed ad hoc, not notarized. See
+# scripts/multiplayer/build_macos_app.sh.
 #
-# GitHub sometimes has no macOS 26 machine free for a while and cancels the
-# queued job. The "fallback" job then starts this workflow again on macOS 15;
-# that app runs on macOS 15 or newer (so on 26 as well). macos-15-intel (by
-# hand) builds an Intel app, which Apple Silicon Macs run through Rosetta.
+# It builds on Iris's Mac (a self-hosted runner, labels self-hosted and
+# macos-27, a launchd agent of her user: it takes jobs while she is logged
+# in). That app needs macOS 27 or newer: Homebrew's libraries on that Mac are
+# made for macOS 27. When the Mac has not taken the job after 15 minutes
+# (switched off, asleep, busy), "wait-for-mac" starts this workflow again on
+# GitHub's macos-26 (an app for macOS 26 or newer) and cancels this run.
+#
+# By hand: macos-26, macos-15 (an app for macOS 15 or newer) or
+# macos-15-intel (an Intel app, which Apple Silicon Macs run through
+# Rosetta). GitHub sometimes has no macOS 26 machine free for a while and
+# cancels the queued job; with "fallback" ticked the "fallback" job then
+# starts the workflow again on macOS 15.
 on:
   push:
     branches:
@@ -24,34 +32,44 @@ on:
         description: macOS machine to build on
         type: choice
         options:
+          - macos-27
           - macos-26
           - macos-15
           - macos-15-intel
-        default: macos-26
+        default: macos-27
       fallback:
-        description: build on macOS 15 if no macOS 26 machine comes
+        description: build on macOS 15 if no macOS 26 machine comes (macos-26 only)
         type: boolean
-        default: true
+        default: false
 
 jobs:
   app:
-    runs-on: ${{ inputs.runner || 'macos-26' }}
+    # (A list, so that a GitHub image called macos-27 never takes the job.)
+    runs-on: ${{ (inputs.runner || 'macos-27') == 'macos-27' && fromJSON('["self-hosted", "macos-27"]') || inputs.runner }}
     timeout-minutes: 90
     env:
-      MACOSX_DEPLOYMENT_TARGET: ${{ startsWith(inputs.runner, 'macos-15') && '15.0' || '26.0' }}
+      MACOSX_DEPLOYMENT_TARGET: >-
+        ${{ startsWith(inputs.runner, 'macos-15') && '15.0' ||
+        ((inputs.runner || 'macos-27') == 'macos-27' && '27.0' || '26.0') }}
     steps:
       - uses: actions/checkout@v7
       - name: Install build packages
         run: |
-          brew update --quiet
-          brew install ninja pkgconf freetype libpng zstd fluidsynth dylibbundler
+          packages="ninja pkgconf freetype libpng zstd fluidsynth dylibbundler"
+          if [ "$RUNNER_ENVIRONMENT" = self-hosted ]; then
+            # Somebody's own Mac: install only what is missing, upgrade nothing.
+            for p in $packages; do brew list --versions "$p" > /dev/null || brew install "$p"; done
+          else
+            brew update --quiet
+            brew install $packages
+          fi
           cmake --version
           sw_vers
       - name: Cache SDL3 and Lua 5.5
         uses: actions/cache@v5
         with:
           path: build-macos-app/prefix
-          key: macos-app-prefix-${{ inputs.runner || 'macos-26' }}-${{ hashFiles('scripts/multiplayer/build_macos_app.sh') }}
+          key: macos-app-prefix-${{ inputs.runner || 'macos-27' }}-${{ hashFiles('scripts/multiplayer/build_macos_app.sh') }}
       - name: Build the app
         run: bash scripts/multiplayer/build_macos_app.sh "$(git rev-parse --short=8 HEAD)"
       - name: Videos (FFmpeg linked and bundled)
@@ -61,11 +79,14 @@ jobs:
           ls "$app/Contents/Frameworks" | grep -E "^libavcodec"
       - name: Smoke test (Lua modules, build checksum, LuaSocket to a local server)
         run: |
-          PYTHONPATH=mp_server python3 -m corsixth_mp --host 127.0.0.1 --port 47800 --log-level INFO > server.log 2>&1 &
+          # (Not the usual port 47800: a self-hosted Mac may run a server.)
+          PYTHONPATH=mp_server python3 -m corsixth_mp --host 127.0.0.1 --port 47891 --log-level INFO > server.log 2>&1 &
+          server=$!
           sleep 2
           app=dist/CorsixTH-Multiplayer/CorsixTH.app
           "$app/Contents/MacOS/CorsixTH" --interpreter="$PWD/scripts/multiplayer/macos_smoke.lua" \
-            --resources="$PWD/$app/Contents/Resources" --server=127.0.0.1:47800 | tee smoke.txt
+            --resources="$PWD/$app/Contents/Resources" --server=127.0.0.1:47891 | tee smoke.txt
+          kill "$server" || true
           grep -q "MACOS SMOKE OK" smoke.txt
       - name: Smoke test (the game starts and keeps running without game data)
         run: |
@@ -91,13 +112,36 @@ jobs:
           path: dist/*.zip
           if-no-files-found: error
 
+  wait-for-mac:
+    if: (inputs.runner || 'macos-27') == 'macos-27'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: write
+    steps:
+      - name: Build on GitHub's macOS 26 if the Mac does not take the job
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jobs="repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs"
+          for i in $(seq 1 30); do
+            status=$(gh api "$jobs" --jq '.jobs[] | select(.name == "app") | .status')
+            case "$status" in
+              in_progress|completed) echo "The Mac took the job ($status)"; exit 0 ;;
+            esac
+            sleep 30
+          done
+          gh workflow run macOS.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f runner=macos-26 -f fallback=false
+          echo "No Mac after 15 minutes: started the build again on macos-26, cancelling this run"
+          gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   fallback:
     needs: app
     # (A job GitHub gives up on in the queue makes the run "failed", not
     # "cancelled"; the step below tells a job that never started apart.)
     if: >-
-      always() && needs.app.result != 'success' && (inputs.runner || 'macos-26') == 'macos-26' &&
-      inputs.fallback != false
+      always() && needs.app.result != 'success' && inputs.runner == 'macos-26' &&
+      inputs.fallback == true
     runs-on: ubuntu-latest
     permissions:
       actions: write
