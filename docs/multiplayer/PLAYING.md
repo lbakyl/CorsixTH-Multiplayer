@@ -93,13 +93,13 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
    colour. With several hospitals the game seats team mates next to each
    other on the map and names each hospital after its players ("JAN + ABI").
    One shared hospital plays the campaign's levels (1 to 12); several
-   hospitals play the multiplayer levels (1 to 8; a higher number plays
-   level 8, as the room says). A saved game keeps its colours and teams.
+   hospitals play the multiplayer levels (1 to 9; a higher number plays
+   level 9, as the room says). A saved game keeps its colours and teams.
    **How many players:** a room has as many places as its level has
    hospitals. Theme Hospital's maps have room for 4; TEAM TOWN (level 8) also
    has a map for 5 to 8 hospitals: four more hospitals north and south of the
-   middle (the empty ones' plots are for sale), so its rooms have up to 8
-   places.
+   middle (the empty ones' plots are for sale), and CROSSROADS (level 9) is
+   made for 8, so their rooms have up to 8 places.
 5. **Sharing a hospital:** team mates build, hire and answer faxes in the
    same hospital. A bot can share yours too: it builds in your hospital along
    with you (a desk, rooms, staff), and whatever you have already built it
@@ -287,8 +287,8 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 ## Levels
 
 **One shared hospital** plays the campaign levels 1 to 12, as in single
-player. **A hospital each** (co-op and the race) has eight levels of its own,
-on Theme Hospital's multiplayer maps (levels 6 and 7 are scenarios, below; level 8 is Matroftt's Team Town). Each takes its diseases, rooms and
+player. **A hospital each** (co-op and the race) has nine levels of its own,
+on Theme Hospital's multiplayer maps (levels 6 and 7 are scenarios, below; levels 8 and 9 are Matroftt's Team Town and Crossroads). Each takes its diseases, rooms and
 research from a campaign level, so level 1 is the smallest. From level 2 on
 the training room is there from the start (there are few staff to hire, so
 training should begin early). Every hospital hires from its own list: each
@@ -306,6 +306,7 @@ share a hospital share its list.
 | 6 | $60,000 | 15 | as level 3, on the map EMERGENCY! |
 | 7 | $50,000 | 26 | as level 4, on map 3 (with four players on Matroftt's map): Cutthroat, made for the race |
 | 8 | $50,000 | 15 | as level 3; with four players on Team Town, Matroftt's map made for two against two (team mates' hospitals side by side); with two or three on map 0 |
+| 9 | $60,000 | 26 | as level 4, on Crossroads, Matroftt's map for 8: eight walled hospitals in three rows of three around four small plots for sale; with 2 to 4 players the corners |
 
 To win, a hospital needs all of these at once, and no bank loan (when it
 meets the goals but still owes the bank, the adviser says so: pay off the
@@ -321,6 +322,7 @@ loan by clicking your money in the bottom bar):
 | 6 | 550 | $60,000 | plot + $80,000 | 150 | 40% |
 | 7 | 650 | $150,000 | plot + $150,000 | 300 | 55% |
 | 8 | 650 | $100,000 | plot + $110,000 | 200 | 50% |
+| 9 | 650 | $150,000 | plot + $150,000 | 300 | 55% |
 
 **Level 6, Emergency!** (2 to 4 players). In the first year (months 2 to
 12) an emergency comes four times a month, to each hospital in turn (a

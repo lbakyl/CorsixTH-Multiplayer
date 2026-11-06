@@ -11,8 +11,10 @@ Status: on `mp/team-hospitals`; first released in mp-test-d5a471a7 (eu2).
   - Theme Hospital's own maps have room for 4, so rooms on those levels have
     up to 4 places.
   - **TEAM TOWN** (level 8) also has a map for 8 hospitals.
+  - **CROSSROADS** (level 9) is Matroftt's map for 8 (with 2 to 4 players,
+    the corner hospitals).
 - A new room has as many places as its level has hospitals: up to 4, or up
-  to 8 on TEAM TOWN. Players may still share a hospital (the same colour).
+  to 8 on TEAM TOWN and CROSSROADS. Players may still share a hospital (the same colour).
 - The host can't start a game with more colours than the level has room for.
 
 ## The map for 8
@@ -32,6 +34,13 @@ Status: on `mp/team-hospitals`; first released in mp-test-d5a471a7 (eu2).
   - each new hospital's camera looks at its plot;
   - its helicopter lands on the nearest of the four original heliports.
 - 12 plots stay for sale, instead of 16.
+- `Levels/crossroads8.map` is Matroftt's `128-8p-v2.map` (2026-11-06), made
+  for 8: eight walled hospitals with their doors in three rows of three
+  (corners 839 tiles, players 1 to 4; sides 784, players 5 to 8) and four
+  walled plots for sale of 255 tiles in the middle. His file had no
+  heliports (no emergencies, no helicopter trick); the copy here has one for
+  each hospital on the path by its own door, 13-15 tiles from its camera
+  and at least 23 from any other. Nothing else is changed.
 - With 5 to 7 players, the starting plots of the missing ones are for sale.
 - The map editor makes maps for up to 8 players: its player count menu goes
   to 8, and one Camera and one Heliport button set the tiles of the player

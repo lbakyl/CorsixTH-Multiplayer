@@ -73,6 +73,18 @@ levels.LEVELS = {
     name = "TEAM TOWN", map_files = {[4] = "level40teams.map", [8] = "teamtown8.map"},
     map_author = "Matroftt",
     goals = {reputation = 650, balance = 100000, value = 110000, cured = 200, cure_rate = 50}},
+  -- Matroftt's map for 8 (Levels/crossroads8.map, his 128-8p-v2.map of
+  -- 2026-11-06 with a heliport added for each hospital on the path by its
+  -- door; his had none, so no emergencies): a town of three rows of three,
+  -- eight walled hospitals around four small plots for sale where the paths
+  -- cross. Players 1 to 4 have the corners (a little bigger): with 2 to 4
+  -- players only those, the other hospitals are for sale. Level 4's rooms
+  -- and research, CUTTHROAT's goals.
+  {campaign = 8, map = 0, cash = 60000, intro = "level_intro_9",
+    name = "CROSSROADS", map_author = "Matroftt",
+    map_files = {[2] = "crossroads8.map", [3] = "crossroads8.map", [4] = "crossroads8.map",
+      [8] = "crossroads8.map"},
+    goals = {reputation = 650, balance = 150000, value = 150000, cured = 300, cure_rate = 55}},
 }
 levels.COUNT = #levels.LEVELS
 

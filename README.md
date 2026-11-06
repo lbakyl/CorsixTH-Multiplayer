@@ -28,7 +28,7 @@ The full guide, with co-op, races, trading, saving and what to do if something g
 The whole single player game of CorsixTH (you can complete the full campaign), and multiplayer for two to eight players.
 
 ##### Multiplayer #####
-- **Up to 8 players**, people and bots, with 8 colours and 8 teams. Level 8, **TEAM TOWN** (a map by Matroftt), has room for 8 hospitals; the other levels use Theme Hospital's maps for up to 4, where more players can share a hospital.
+- **Up to 8 players**, people and bots, with 8 colours and 8 teams. Levels 8 and 9, **TEAM TOWN** and **CROSSROADS** (maps by Matroftt), have room for 8 hospitals; the other levels use Theme Hospital's maps for up to 4, where more players can share a hospital.
 - **One shared hospital:** everybody builds, hires and manages the same hospital; single player rules for winning and losing.
 - **A hospital each, as a team (co-op):** each player runs their own hospital; the level is won when every hospital has reached its goals, and lost if one keeps failing them.
 - **Races:** everyone for themselves, teams against teams, or team mates running one hospital together against another team's. The first to reach the goals wins, and a hospital that fails them at two year ends is out. Standings come by fax.
@@ -97,7 +97,7 @@ The whole single player game of CorsixTH (you can complete the full campaign), a
 ##### Multiplayer #####
 - Encryption: connections and room passwords are not encrypted, so do not use a password you use elsewhere
 - A notarized macOS app, and builds for Intel Macs and 32-bit systems
-- Levels for more than 4 hospitals besides TEAM TOWN, and playable larger maps (the map editor can make them)
+- More levels for more than 4 hospitals, and playable larger maps (the map editor can make them)
 - Now and then the players' games still go out of sync; the server repairs this within a second
 
 ##### From CorsixTH #####
