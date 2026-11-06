@@ -2885,14 +2885,19 @@ local function hospital_of(world, cmd)
 end
 
 --! Take (amount > 0) or repay (amount < 0) a bank loan: {amount}.
+--! The most `hospital` may owe the bank (a third of its value and $10000;
+--! nothing in free build mode).
+function MultiplayerSession.maxLoan(world, hospital)
+  if world.free_build_mode then return 0 end
+  return math.floor((hospital.value or 0) * 0.33 / 5000) * 5000 + 10000
+end
+
 function handlers.loan(world, cmd)
   local hospital = hospital_of(world, cmd)
   local amount = math.floor(tonumber(cmd.amount) or 0)
   if not hospital or amount == 0 then return false, "nothing to do" end
   if amount > 0 then
-    local max_loan = not world.free_build_mode and
-        (math.floor((hospital.value * 0.33) / 5000) * 5000) + 10000 or 0
-    if hospital.loan + amount > max_loan then return false, "loan limit" end
+    if hospital.loan + amount > MultiplayerSession.maxLoan(world, hospital) then return false, "loan limit" end
     hospital.loan = hospital.loan + amount
     hospital:receiveMoney(amount, _S.transactions.bank_loan)
   else
@@ -3074,7 +3079,9 @@ MultiplayerSession.AUCTION_OPEN_SECONDS = 10
 local function auction_frames(seconds) return math.ceil(seconds * 1000 / 18) end -- world ticks
 -- A bot bids up to this much of the price: the first with plenty of room,
 -- the second with its land full (MultiplayerSession.landNeed), at least the
--- third for land it asked for; and keeps this much money. On top, each bot
+-- third for land it asked for; and keeps this much money (a bot whose land
+-- is nearly full, BOT_BORROW_FILL, may borrow for the rest: it takes the loan
+-- when it wins, end_auction). On top, each bot
 -- wants each plot a little differently (up to BOT_AUCTION_APPETITE more,
 -- botAppetite), so that several bots bid against each other: with one
 -- worth for all, the first bid (a tenth over the price) was already as far
@@ -3082,11 +3089,15 @@ local function auction_frames(seconds) return math.ceil(seconds * 1000 / 18) end
 local BOT_AUCTION_LOW, BOT_AUCTION_HIGH, BOT_AUCTION_OWN = 1.3, 2.5, 1.6
 local BOT_AUCTION_APPETITE = 0.45
 MultiplayerSession.BOT_AUCTION_RESERVE = 5000
+-- How full a bot's land is (landFill) when it starts looking for a plot to
+-- buy, and when it is willing to borrow for one (at an auction too).
+MultiplayerSession.BOT_LAND_FILL = 0.75
+MultiplayerSession.BOT_BORROW_FILL = 0.65
 
---! How badly `hospital` needs more land: 0 (plenty of room) to 1 (full).
---! From the share of its indoor floor that rooms take: up to 45% is
---! plenty, 75% or more is full. (Game state only: the same on every peer.)
-function MultiplayerSession.landNeed(world, hospital)
+--! How full `hospital`'s land is: the share of its indoor floor that rooms
+--! take, 0 to 1 (1 with no indoor floor). (Game state only: the same on
+--! every peer.)
+function MultiplayerSession.landFill(world, hospital)
   local th = world.map.th
   local player = hospital:getPlayerIndex()
   local w, h = th:size()
@@ -3102,7 +3113,25 @@ function MultiplayerSession.landNeed(world, hospital)
     end
   end
   if inside == 0 then return 1 end
-  return math.max(0, math.min(1, (rooms / inside - 0.45) / 0.3))
+  return rooms / inside
+end
+
+--! How badly `hospital` needs more land: 0 (plenty of room) to 1 (full).
+--! From the share of its indoor floor that rooms take: up to 45% is
+--! plenty, 75% or more is full. (Game state only: the same on every peer.)
+function MultiplayerSession.landNeed(world, hospital, fill)
+  fill = fill or MultiplayerSession.landFill(world, hospital)
+  return math.max(0, math.min(1, (fill - 0.45) / 0.3))
+end
+
+--! What bot hospital `i` may spend on a plot beyond its money, keeping its
+--! reserve: what it can still borrow, if its land is nearly full
+--! (BOT_BORROW_FILL), else nothing. With the fill: borrow, fill.
+function MultiplayerSession.botCanBorrow(world, i, fill)
+  local hospital = world.hospitals[i]
+  fill = fill or MultiplayerSession.landFill(world, hospital)
+  if fill < MultiplayerSession.BOT_BORROW_FILL then return 0, fill end
+  return math.max(0, MultiplayerSession.maxLoan(world, hospital) - (hospital.loan or 0)), fill
 end
 
 --! How much bot hospital `i` wants the auction's plot beyond its need:
@@ -3112,13 +3141,15 @@ function MultiplayerSession.botAppetite(auction, i)
   return ((auction.id * 7919 + auction.plot * 131 + i * 104729) % 1000) / 999
 end
 
---! The most a bot running hospital `i` would pay for the auction's plot.
+--! The most a bot running hospital `i` would pay for the auction's plot,
+--! how badly it needs land (landNeed) and how full its land is (landFill).
 function MultiplayerSession.botPlotWorth(world, i, auction)
-  local need = MultiplayerSession.landNeed(world, world.hospitals[i])
+  local fill = MultiplayerSession.landFill(world, world.hospitals[i])
+  local need = MultiplayerSession.landNeed(world, world.hospitals[i], fill)
   local factor = BOT_AUCTION_LOW + (BOT_AUCTION_HIGH - BOT_AUCTION_LOW) * need +
       BOT_AUCTION_APPETITE * MultiplayerSession.botAppetite(auction, i)
   if i == auction.by then factor = math.max(factor, BOT_AUCTION_OWN) end
-  return math.floor(auction.price * factor), need
+  return math.floor(auction.price * factor), need, fill
 end
 
 -- Which plots touch which (along a tile edge), from the map: the same on
@@ -3263,15 +3294,17 @@ local function bots_bid(world, auction)
     for _, i in ipairs(auction.bidders) do
       if bots[i] and auction.leader ~= i and not auction.out[i] then
         auction.worth = auction.worth or {}
+        auction.borrow = auction.borrow or {}
         if not auction.worth[i] then
-          local worth, need = MultiplayerSession.botPlotWorth(world, i, auction)
+          local worth, need, fill = MultiplayerSession.botPlotWorth(world, i, auction)
           auction.worth[i] = worth
-          auction_log(string.format("auction %d: plot worth $%d to bot hospital %d (land need %d%%)",
-              auction.id, worth, i, math.floor(need * 100 + 0.5)))
+          auction.borrow[i] = MultiplayerSession.botCanBorrow(world, i, fill)
+          auction_log(string.format("auction %d: plot worth $%d to bot hospital %d (land %d%% full, may borrow $%d)",
+              auction.id, worth, i, math.floor(fill * 100 + 0.5), auction.borrow[i]))
         end
         local amount = auction.bid + auction.step
-        if amount <= auction.worth[i] and
-            world.hospitals[i].balance - amount >= MultiplayerSession.BOT_AUCTION_RESERVE then
+        if amount <= auction.worth[i] and world.hospitals[i].balance + (auction.borrow[i] or 0) -
+            amount >= MultiplayerSession.BOT_AUCTION_RESERVE then
           place_bid(auction, i, amount)
           again = true
         else
@@ -3298,6 +3331,19 @@ local function end_auction(world)
   local winner = world.hospitals[auction.leader]
   local S = _S.multiplayer_window
   local ui = world.ui
+  -- A bot that bid with borrowed money borrows it now (in steps of $5000,
+  -- keeping its reserve, as far as the bank lets it).
+  local bots = world.mp_coop and world.mp_coop.bot_hospitals or {}
+  if winner and bots[auction.leader] and winner.balance - auction.bid < MultiplayerSession.BOT_AUCTION_RESERVE then
+    local short = auction.bid + MultiplayerSession.BOT_AUCTION_RESERVE - winner.balance
+    local room = MultiplayerSession.maxLoan(world, winner) - winner.loan
+    local amount = math.min(math.ceil(short / 5000) * 5000, math.floor(room / 5000) * 5000)
+    if amount > 0 then
+      winner.loan = winner.loan + amount
+      winner:receiveMoney(amount, _S.transactions.bank_loan)
+      auction_log(string.format("auction %d: bot hospital %d borrows $%d", auction.id, auction.leader, amount))
+    end
+  end
   -- (purchasePlot gives cost advice through the UI; only to that player.)
   local adviser = ui and ui.adviser
   if ui and ui.hospital ~= winner then ui.adviser = nil end

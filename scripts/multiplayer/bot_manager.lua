@@ -926,16 +926,28 @@ function M:roomShortOf(category)
   return best
 end
 
+--! How full its land is (MultiplayerSession.landFill), worked out once a day.
+function M:landFill(s)
+  if self.fill_day ~= s.day then
+    self.fill_day = s.day
+    self.fill = MultiplayerSession.landFill(self.bot.world, s.hosp)
+  end
+  return self.fill
+end
+
 --! Does it need land: how many kinds of room found no floor in the last 30
 --! days, or nil. Not while plenty of floor is free (then the rooms were
 --! badly placed, more land would not help), unless three kinds failed.
+--! Once rooms take BOT_LAND_FILL of its floor it looks for a plot anyway
+--! (2: urgent enough to borrow for), before a rival buys up the land.
 function M:landWanted(s)
   local wanted = 0
   for _, day in pairs(self.no_space) do
     if s.day - day <= 30 then wanted = wanted + 1 end
   end
+  if wanted < 3 and wanted > 0 and self.bot:freeFloor() >= 120 then wanted = 0 end
+  if self:landFill(s) >= MultiplayerSession.BOT_LAND_FILL then wanted = math.max(wanted, 2) end
   if wanted == 0 then return nil end
-  if wanted < 3 and self.bot:freeFloor() >= 120 then return nil end
   return wanted
 end
 
@@ -1072,11 +1084,12 @@ function M:monthLine(s)
   local consultants = #self:doctorsWhere(function(p) return self.bot.flag(p, "is_consultant") end)
   return string.format("month %d: left %s; lost most: %s; in hospital %d; queues %s, reception %d; psychiatrists %d,"
       .. " surgeons %d; prices %d%%; reputation %d, $%d; loan $%d; staff %d (%s), juniors %d, consultants %d;"
-      .. " staff happy %d%%, tired %d%%; patients happy %d%%", s.month, table.concat(left, " "), table.concat(top, " "),
+      .. " staff happy %d%%, tired %d%%; patients happy %d%%; land %d%% full", s.month, table.concat(left, " "), table.concat(top, " "),
       s.patients, table.concat(queues, " "), s.reception_queue, hosp:countStaffOfCategory("Psychiatrist"),
       hosp:countStaffOfCategory("Surgeon"), self.price_target or 100, s.reputation, math.floor(s.balance),
       math.floor(s.loan or 0), n, table.concat(staff, ","), juniors, consultants, math.floor(s.staff_happy * 100 + 0.5),
-      math.floor(s.fatigue * 100 + 0.5), math.floor((s.happiness or 0) * 100 + 0.5))
+      math.floor(s.fatigue * 100 + 0.5), math.floor((s.happiness or 0) * 100 + 0.5),
+      math.floor(self:landFill(s) * 100 + 0.5))
 end
 
 --! Once a month: prices, repaying the loan, research.
@@ -1360,8 +1373,9 @@ function M:report()
   local lines = {}
   local function add(fmt, ...) lines[#lines + 1] = string.format(fmt, ...) end
   add("Month %d of the game, day %d. Mode: %s.", s.month, s.day, self.bot.mode)
-  add("Money $%d, loan $%d (up to $%d), reputation %d, patients in the hospital %d, open: %s.",
-      math.floor(s.balance), s.loan, s.max_loan, s.reputation, s.patients, tostring(s.hosp.opened or false))
+  add("Money $%d, loan $%d (up to $%d), reputation %d, patients in the hospital %d, open: %s. Rooms take %d%% of its floor.",
+      math.floor(s.balance), s.loan, s.max_loan, s.reputation, s.patients, tostring(s.hosp.opened or false),
+      math.floor(self:landFill(s) * 100 + 0.5))
   local problems = self:problems(s)
   if #problems > 0 then
     add("PROBLEMS TO FIX FIRST (found from its numbers):")

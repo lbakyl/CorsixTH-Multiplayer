@@ -1452,17 +1452,32 @@ function Bot:bidAtAuction()
   end
   local key = auction.id .. ":" .. auction.bid
   if self.auction_tried == key then return true end -- (once for each bid; it comes back as the new bid)
-  self.auction_tried = key
   if not (self.auction_worth and self.auction_worth.id == auction.id) then
-    local worth, need = MultiplayerSession.botPlotWorth(world, me, auction)
-    self.auction_worth = {id = auction.id, worth = worth}
-    log(string.format("auction %d for plot %d: worth $%d to us (land need %d%%), the person is away",
-        auction.id, auction.plot, worth, math.floor(need * 100 + 0.5)))
+    local worth, need, fill = MultiplayerSession.botPlotWorth(world, me, auction)
+    self.auction_worth = {id = auction.id, worth = worth, fill = fill}
+    log(string.format("auction %d for plot %d: worth $%d to us (land %d%% full, need %d%%), the person is away",
+        auction.id, auction.plot, worth, math.floor(fill * 100 + 0.5), math.floor(need * 100 + 0.5)))
   end
   local amount = auction.bid + auction.step
   local session = TheApp.mp_session
-  if amount <= self.auction_worth.worth and
-      world.ui.hospital.balance - amount >= MultiplayerSession.BOT_AUCTION_RESERVE then
+  local hospital = world.ui.hospital
+  local reserve = MultiplayerSession.BOT_AUCTION_RESERVE
+  local borrow = MultiplayerSession.botCanBorrow(world, me, self.auction_worth.fill)
+  local bids = amount <= self.auction_worth.worth and hospital.balance + borrow - amount >= reserve
+  -- (A bid needs the money in the bank: with its land nearly full, a loan
+  -- first, once; the bid when it has come.)
+  if bids and hospital.balance - amount < reserve then
+    if self.auction_borrowed ~= key then
+      self.auction_borrowed = key
+      local loan = math.min(math.ceil((amount + reserve - hospital.balance) / 5000) * 5000,
+          math.floor(borrow / 5000) * 5000)
+      log(string.format("auction %d: borrowing $%d to bid $%d", auction.id, loan, amount))
+      session:issue({kind = "loan", amount = loan})
+    end
+    if hospital.balance < amount then return true end
+  end
+  self.auction_tried = key
+  if bids then
     log(string.format("auction %d: bidding $%d", auction.id, amount))
     session:issue({kind = "auction_bid", auction = auction.id, amount = amount})
   else

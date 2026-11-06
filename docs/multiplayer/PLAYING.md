@@ -231,7 +231,11 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   seconds (10 for the first bid) it is down: "going once", "going twice",
   sold to the highest bid. Bots bid too, up to what the plot is worth to
   them: a little over the price while they have room, up to two and a half
-  times the price once their rooms fill most of their floor. A bot that
+  times the price once their rooms fill most of their floor. They keep
+  $5,000; a bot whose rooms take 65% of its floor or more also borrows
+  from the bank to outbid you (when it wins). From 75% a bot looks for a
+  plot to buy on its own (borrowing for it too), not only when a room no
+  longer fits. A bot that
   shares your hospital bids for it while you are away (no commands for a
   game week), and a bot whose side of the map is bought up asks for plots
   on other sides when it runs out of room.
