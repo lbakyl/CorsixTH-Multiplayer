@@ -165,7 +165,15 @@ environment):
   of the map (keeping $9,000); a room that still does not fit after three
   tries is given up. Corridor furniture waits until four rooms stand.
 - **Hires** what its rooms need (specialists when the room needs one and the
-  list has one), a handyman from 3 rooms and another from 8.
+  list has one), a handyman from 3 rooms and another from 8. A room that
+  cannot work at all for want of staff (an operating theatre with one
+  surgeon) gets its missing specialist before any new room.
+- **Emergencies**: it accepts one when every room that cures the disease
+  stands and its staff is complete or on the hiring list. While one is on
+  (accepted, or sent by a rival), the missing staff of those rooms comes
+  before all but the basics, and a missing room is built at once. The model's
+  report starts with the emergency (patients, cured, days left, the rooms)
+  and each room short of staff, with the `hire:` project that fixes it.
 - **Opens** the hospital once it has a staffed desk, a GP's office and a
   doctor; then buys some benches, plants, a drinks machine and an
   extinguisher for its corridors.

@@ -784,12 +784,18 @@ function Bot:answerEmergencies()
     if icon.type == "emergency" and icon.hospital == mine and icon.mp_id and not self.offers_seen[icon.mp_id]
         and mine.emergency then
       self.offers_seen[icon.mp_id] = true
-      local rooms = mine.emergency.disease.treatment_rooms
-      local room = rooms and rooms[#rooms]
-      local can = false
-      if room then
-        local _, required_staff = self.world:getRoomNameAndRequiredStaffName(room)
-        can = mine:countRoomOfType(room, 1) > 0 and mine:countStaffOfCategory(required_staff) > 0
+      -- Every room that cures it stands, with its staff complete or on the
+      -- hiring list (two surgeons for an operating theatre: the second is
+      -- hired at once, see BotManager:projects).
+      local rooms = mine.emergency.disease.treatment_rooms or {}
+      local can = #rooms > 0
+      for _, id in ipairs(rooms) do
+        local rt
+        for _, r in ipairs(TheApp.rooms) do if r.id == id then rt = r end end
+        if not rt or mine:countRoomOfType(id, 1) == 0 then can = false break end
+        for cat, k in pairs(rt.required_staff or {}) do
+          if mine:countStaffOfCategory(cat, k) < k and not self:canHire(cat) then can = false end
+        end
       end
       local msg = icon.mp_id
       local delay = 2 + rand() * 4

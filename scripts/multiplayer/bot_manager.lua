@@ -236,6 +236,58 @@ function M:assess()
   end
   s.fatigue, s.staff_happy = avg(s.fatigue, sn), avg(s.staff_happy, sn)
 
+  -- An emergency on (accepted, or one a rival sent): its disease, the rooms
+  -- that cure it and the days left (Agnes, 2026-11-06, took 30 days to hire
+  -- the second surgeon for her emergency: nothing told her it was missing).
+  s.emergency = nil
+  local em = hosp.emergency
+  -- (In multiplayer the emergency is set while its fax waits for an answer
+  -- too; it is on once accepted, when its countdown runs.)
+  if em and em.disease and (hosp.mp_emergency_timer or not world.mp_coop) then
+    local t = hosp.mp_emergency_timer
+    local days
+    if t and t.tick_rate and Date and Date.hoursPerDay then
+      days = math.max(0, math.floor((t.open_timer + 1) * t.tick_rate / Date.hoursPerDay()))
+    end
+    s.emergency = {disease = em.disease.id, name = em.disease.name, victims = em.victims or 0,
+        cured = em.cured_emergency_patients or 0, killed = em.killed_emergency_patients or 0,
+        rooms = {}, days = days}
+    for _, id in ipairs(em.disease.treatment_rooms or {}) do s.emergency.rooms[id] = true end
+    if self.noted_emergency ~= em then
+      self.noted_emergency = em
+      self:note(string.format("day %d: emergency on: %d %s, cured in %s", s.day, s.emergency.victims,
+          s.emergency.disease, table.concat(em.disease.treatment_rooms or {}, ", ")))
+    end
+  end
+
+  -- Rooms (built, being built, or wanted by the emergency) that cannot work
+  -- at all: one needs more staff of a kind than the whole hospital has, like
+  -- an operating theatre with one surgeon. (Any doctor or nurse is called
+  -- over from another room; a missing surgeon is missing.)
+  s.short = {}
+  local types = {}
+  for _, rt in ipairs(TheApp.rooms) do types[rt.id] = rt end
+  local checked = {}
+  local function check(id)
+    if checked[id] or not types[id] then return end
+    checked[id] = true
+    for cat, k in pairs(types[id].required_staff or {}) do
+      local have = hosp:countStaffOfCategory(cat, k)
+      if have < k then
+        s.short[#s.short + 1] = {room = id, cat = cat, need = k, have = have,
+            emergency = s.emergency and s.emergency.rooms[id] or false,
+            built = (s.rooms[id] or 0) > 0}
+      end
+    end
+  end
+  for id in pairs(s.emergency and s.emergency.rooms or {}) do check(id) end
+  for id in pairs(s.rooms) do check(id) end
+  for id in pairs(s.building) do check(id) end
+  table.sort(s.short, function(a, b)
+    if a.emergency ~= b.emergency then return a.emergency end
+    return a.room .. a.cat < b.room .. b.cat
+  end)
+
   -- Desks, corridor objects, litter, machines, rats and saboteurs.
   s.desks = #hosp:getReceptionDesks()
   s.staffed_desks = #hosp:getReceptionDesks(true)
@@ -477,6 +529,25 @@ function M:projects(s)
   for cat, k in pairs(want) do
     local have = hosp:countStaffOfCategory(cat)
     if have < k then hire(cat, 8 + (k - have) * 2) end
+  end
+  -- A room that cannot work for want of a specialist (or of anybody of a
+  -- kind) comes before new rooms, and an emergency's rooms before all but
+  -- the basics: its patients die while the room waits. (A research room
+  -- treats nobody: less urgent. A room the emergency wants that it cannot
+  -- build gets nobody.)
+  for _, sh in ipairs(s.short) do
+    if sh.built or s.building[sh.room] or self:available(sh.room) then
+      local score = (sh.room == "research" and 15 or 45) + math.min(20, (s.queue[sh.room] or 0) * 2)
+      if sh.emergency then score = score + 35 end
+      hire(sh.cat, score)
+    end
+  end
+  -- The emergency's rooms it lacks, built at once (room() waits for a
+  -- specialist on the staff or the hiring list).
+  if s.emergency then
+    for id in pairs(s.emergency.rooms) do
+      if not s.rooms[id] and not destroyed[id] then room(id, 70) end
+    end
   end
   for id, n in pairs(s.rooms) do
     local per = s.queue[id] / n
@@ -1290,6 +1361,27 @@ function M:problems(s)
   local out = {}
   local function add(fmt, ...) out[#out + 1] = string.format(fmt, ...) end
   local hosp = s.hosp
+  local e = s.emergency
+  if e then
+    local need = {}
+    for id in pairs(e.rooms) do need[#need + 1] = id .. (s.rooms[id] and "" or " (MISSING: room:" .. id .. ")") end
+    table.sort(need)
+    add("EMERGENCY: %d %s patients by helicopter, %d cured, %d dead so far%s. They need: %s."
+        .. " Every one of those rooms must work, with all its staff, before anything else.",
+        e.victims, e.disease, e.cured, e.killed, e.days and string.format(", %d days left", e.days) or "",
+        table.concat(need, ", "))
+  end
+  for _, sh in ipairs(s.short or {}) do
+    local state = sh.built and "cannot work" or "will not work"
+    if self.bot:canHire(sh.cat) then
+      add("The %s %s%s: it needs %d %s, the hospital has %d. Hire one now: hire:%s.", sh.room, state,
+          sh.emergency and " (the EMERGENCY needs it)" or "", sh.need, sh.cat, sh.have, sh.cat)
+    else
+      add("The %s %s%s: it needs %d %s, the hospital has %d, and none is on the hiring list now"
+          .. " (wait for one, or train a doctor in the training room).", sh.room, state,
+          sh.emergency and " (the EMERGENCY needs it)" or "", sh.need, sh.cat, sh.have)
+    end
+  end
   for _, r in ipairs(s.crashed) do
     local id = r.room_info.id
     local progress = hosp.research.research_progress[r.room_info]
