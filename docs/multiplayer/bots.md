@@ -62,10 +62,10 @@ best project it can afford is done, one every one to four game days.
   smaller on a side with nothing on it, its things put back: `Bot:shrinkRoom`,
   the `shrink:<side>` edit step); with no land left to buy, rooms go down to
   their smallest size. Then it buys land. It also looks for land once rooms
-  take `MultiplayerSession.BOT_LAND_FILL` (75%) of its indoor floor
+  take `MultiplayerSession.BOT_LAND_FILL` (70%) of its indoor floor
   (`MultiplayerSession.landFill`), urgent enough to borrow for. At an
   auction it bids with its money (keeping $5,000) and, from
-  `BOT_BORROW_FILL` (65%), with what it can still borrow: a bot hospital
+  `BOT_BORROW_FILL` (60%), with what it can still borrow: a bot hospital
   takes the loan when it wins (`end_auction`), a bot standing in for a
   person borrows before the bid. Up to 6 GP's offices, each only
   for a queue.

@@ -3091,8 +3091,8 @@ local BOT_AUCTION_APPETITE = 0.45
 MultiplayerSession.BOT_AUCTION_RESERVE = 5000
 -- How full a bot's land is (landFill) when it starts looking for a plot to
 -- buy, and when it is willing to borrow for one (at an auction too).
-MultiplayerSession.BOT_LAND_FILL = 0.75
-MultiplayerSession.BOT_BORROW_FILL = 0.65
+MultiplayerSession.BOT_LAND_FILL = 0.70
+MultiplayerSession.BOT_BORROW_FILL = 0.60
 
 --! How full `hospital`'s land is: the share of its indoor floor that rooms
 --! take, 0 to 1 (1 with no indoor floor). (Game state only: the same on
