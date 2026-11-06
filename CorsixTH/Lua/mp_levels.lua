@@ -74,17 +74,19 @@ levels.LEVELS = {
     map_author = "Matroftt",
     goals = {reputation = 650, balance = 100000, value = 110000, cured = 200, cure_rate = 50}},
   -- Matroftt's map for 8 (Levels/crossroads8.map, his 128-8p-v2.map of
-  -- 2026-11-06 with a heliport added for each hospital on the path by its
-  -- door; his had none, so no emergencies): a town of three rows of three,
-  -- eight walled hospitals around four small plots for sale where the paths
-  -- cross. Players 1 to 4 have the corners (a little bigger): with 2 to 4
-  -- players only those, the other hospitals are for sale. Level 4's rooms
-  -- and research, CUTTHROAT's goals.
+  -- 2026-11-06 scaled to 192 x 192 by scripts/multiplayer/scale_map.py:
+  -- every hospital about twice the floor, all eight the same within 1%,
+  -- and a helipad by each; his had none, so no emergencies): a town of three
+  -- rows of three, eight walled hospitals around four plots for sale where
+  -- the paths cross. Players 1 to 4 have the corners: with 2 to 4 players
+  -- only those, the other hospitals are for sale. Level 4's rooms and
+  -- research, CUTTHROAT's goals.
   {campaign = 8, map = 0, cash = 60000, intro = "level_intro_9",
     name = "CROSSROADS", map_author = "Matroftt",
     map_files = {[2] = "crossroads8.map", [3] = "crossroads8.map", [4] = "crossroads8.map",
       [8] = "crossroads8.map"},
-    goals = {reputation = 650, balance = 150000, value = 150000, cured = 300, cure_rate = 55}},
+    -- (Value: the bigger plots start every hospital about $21,500 higher.)
+    goals = {reputation = 650, balance = 150000, value = 170000, cured = 300, cure_rate = 55}},
 }
 levels.COUNT = #levels.LEVELS
 

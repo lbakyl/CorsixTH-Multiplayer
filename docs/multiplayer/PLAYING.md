@@ -312,7 +312,7 @@ share a hospital share its list.
 | 6 | $60,000 | 15 | as level 3, on the map EMERGENCY! |
 | 7 | $50,000 | 26 | as level 4, on map 3 (with four players on Matroftt's map): Cutthroat, made for the race |
 | 8 | $50,000 | 15 | as level 3; with four players on Team Town, Matroftt's map made for two against two (team mates' hospitals side by side); with two or three on map 0 |
-| 9 | $60,000 | 26 | as level 4, on Crossroads, Matroftt's map for 8: eight walled hospitals in three rows of three around four small plots for sale; with 2 to 4 players the corners |
+| 9 | $60,000 | 26 | as level 4, on Crossroads, Matroftt's map for 8 (192 x 192): eight walled hospitals with a helipad each, in three rows of three around four plots for sale; with 2 to 4 players the corners |
 
 To win, a hospital needs all of these at once, and no bank loan (when it
 meets the goals but still owes the bank, the adviser says so: pay off the

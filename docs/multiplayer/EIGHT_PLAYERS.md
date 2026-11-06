@@ -35,12 +35,17 @@ Status: on `mp/team-hospitals`; first released in mp-test-d5a471a7 (eu2).
   - its helicopter lands on the nearest of the four original heliports.
 - 12 plots stay for sale, instead of 16.
 - `Levels/crossroads8.map` is Matroftt's `128-8p-v2.map` (2026-11-06), made
-  for 8: eight walled hospitals with their doors in three rows of three
-  (corners 839 tiles, players 1 to 4; sides 784, players 5 to 8) and four
-  walled plots for sale of 255 tiles in the middle. His file had no
-  heliports (no emergencies, no helicopter trick); the copy here has one for
-  each hospital on the path by its own door, 13-15 tiles from its camera
-  and at least 23 from any other. Nothing else is changed.
+  for 8: eight walled hospitals with their doors in three rows of three and
+  four walled plots for sale in the middle. The copy here is scaled from
+  his 128 x 128 to 192 x 192 by `scripts/multiplayer/scale_map.py`: rows and
+  columns that can repeat (no borders, doors or corners across them) are
+  repeated, chosen so that every line stays within 3 tiles of its 1.5x
+  place and the plots stay fair. Each hospital has 1,512-1,527 tiles of
+  floor (his: 715) and each plot in the middle 512 (his: 175). His file had
+  no heliports (no emergencies, no helicopter trick); the copy has a
+  painted helipad (an H, like Finisham's) on the grass by each hospital,
+  with its own path onto the nearest road. Land costs $25 a tile, so a
+  hospital's plot is worth $42,450 (his: $20,975).
 - With 5 to 7 players, the starting plots of the missing ones are for sale.
 - The map editor makes maps for up to 8 players: its player count menu goes
   to 8, and one Camera and one Heliport button set the tiles of the player

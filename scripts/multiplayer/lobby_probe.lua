@@ -2692,6 +2692,16 @@ local function run()
           else
             log("UI: no " .. entry.arg .. " to look at")
           end
+        elseif a == "lookheli" then
+          -- lookheli:<hospital>: centre the view on that hospital's heliport
+          -- and take a screenshot (logs the tile, or that it has none).
+          local h = world.hospitals[tonumber(entry.arg) or 1]
+          local x, y
+          if h then x, y = h:getHeliportPosition() end
+          if x then look_at(x, y) end
+          shot("heli" .. tostring(entry.arg))
+          log(string.format("UI: heliport of hospital %s: %s at step %d", entry.arg,
+              x and (x .. "," .. y) or "none", session.step))
         elseif a == "shotview" then
           -- Centre the view on this player's first member of staff (the
           -- player colour bars, MultiplayerSession.drawMarkers) and take a
