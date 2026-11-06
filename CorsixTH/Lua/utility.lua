@@ -219,6 +219,7 @@ DrawFlags.FlipVertical    = 2^1
 DrawFlags.Alpha50         = 2^2
 DrawFlags.Alpha75         = 2^3
 DrawFlags.AltPalette      = 2^4
+DrawFlags.AltPalette3     = 2^8
 DrawFlags.EarlyList       = 2^10
 DrawFlags.AltPalette2     = 2^11
 DrawFlags.BoundBoxHitTest = 2^12

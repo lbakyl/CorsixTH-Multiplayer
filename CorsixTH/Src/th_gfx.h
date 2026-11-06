@@ -83,6 +83,11 @@ enum draw_flags : uint32_t {
   //! sprite_sheet::set_sprite_alt_palette_map); before thdf_alt_palette.
   thdf_alt_palette2 = 1 << 11,
 
+  //! Draw using the third remapped palette (multiplayer: shirts of colours 6
+  //! to 8); before thdf_alt_palette2 and thdf_alt_palette. A sprite without
+  //! that map is drawn with its normal palette.
+  thdf_alt_palette3 = 1 << 8,
+
   //! Attach to the early sprite list (right-to-left pass)
   /* (should be set prior to attaching to a tile) */
   thdf_early_list = 1 << 10,
@@ -309,7 +314,7 @@ class animation_manager {
       whose element is of layer class iLayer (any if negative) with value
       iLayerId (a multiplayer hospital's colour: a patient's clothes drawn in
       another colour when drawn with thdf_alt_palette, or with
-      thdf_alt_palette2 for iSlot 2).
+      thdf_alt_palette2 for iSlot 2, thdf_alt_palette3 for iSlot 3).
       @return The number of elements changed.
   */
   int set_layer_alt_palette_map(int iLayer, int iLayerId, const uint8_t* pMap,

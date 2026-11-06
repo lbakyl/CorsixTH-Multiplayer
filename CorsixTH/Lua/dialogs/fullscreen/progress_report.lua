@@ -98,17 +98,23 @@ function UIProgressReport:UIProgressReport(ui)
     return others_shown and text or (text .. " " .. _S.misc.not_yet_implemented)
   end
   local function make_hosp_button(num)
-    self:addPanel(0, 265, 71 + (num - 1) * 25)
+    local bx, by = UIProgressReport.hospitalSlot(num)
+    self:addPanel(0, bx, by)
       :makeButton(0, 0, 147, 20, 9, btn_handler(num))
       :setTooltip(tooltip(num))
       :enable(num == self.own or others_shown)
   end
 
-  for i = 1, math.min(#world.hospitals, 4) do
+  -- (Multiplayer games of 5 to 8 hospitals: a second column of four on the
+  -- right, where the population chart would be.)
+  self.two_columns = #world.hospitals > 4
+  for i = 1, math.min(#world.hospitals, 8) do
     make_hosp_button(i)
   end
 
-  self:makeTooltip(_S.tooltip.status.population_chart .. " " .. _S.misc.not_yet_implemented, 433, 64, 578, 179)
+  if not self.two_columns then
+    self:makeTooltip(_S.tooltip.status.population_chart .. " " .. _S.misc.not_yet_implemented, 433, 64, 578, 179)
+  end
   self:makeTooltip(_S.tooltip.status.happiness, 433, 179, 578, 209)
   self:makeTooltip(_S.tooltip.status.thirst, 433, 209, 578, 239)
   self:makeTooltip(_S.tooltip.status.warmth, 433, 239, 578, 270)
@@ -116,6 +122,13 @@ function UIProgressReport:UIProgressReport(ui)
   self.warning = self:addPanel(7, 252, 295)
   self.warning.visible = false
   -- TODO: 6 gray
+end
+
+--! Where hospital `num`'s button goes (its top left corner): four in a
+--! column at the left, hospitals 5 to 8 in a second column to the right.
+function UIProgressReport.hospitalSlot(num)
+  local col, row = math.floor((num - 1) / 4), (num - 1) % 4
+  return 265 + col * 175, 71 + row * 25
 end
 
 -- Get the localised name for the month
@@ -259,17 +272,28 @@ function UIProgressReport:draw(canvas, x, y)
   local total_visitors = 0
 
   -- Names of the players playing
-  local ly = 73 * s
   for pnum, hospital in ipairs(world.hospitals) do
+    if pnum > 8 then break end
+    local bx, by = UIProgressReport.hospitalSlot(pnum)
+    local ly = (by + 2) * s
+    if pnum > 4 then
+      -- (The picture has bars for four: the second column's drawn alike.)
+      local bar = {{65, 65, 61, 0, 147, 21}, {160, 160, 160, 1, 145, 19}, {250, 250, 250, 1, 143, 17},
+          {219, 219, 215, 2, 142, 16}}
+      for _, b in ipairs(bar) do
+        canvas:drawRect(canvas:mapRGB(b[1], b[2], b[3]), x + (bx - 1 + b[4]) * s, y + (by + b[4]) * s,
+            b[5] * s, b[6] * s)
+      end
+    end
     -- (Multiplayer: the square before the name in the hospital's colour, as
-    -- picked in the room, over the picture's red, yellow, green and blue.)
+    -- picked in the room, over the picture's red, yellow, green and blue;
+    -- the second column has no squares in the picture, so always drawn.)
     local rgb = world.mp_coop and MultiplayerSession.markerColour(world, hospital)
     if rgb then
-      canvas:drawRect(canvas:mapRGB(rgb[1], rgb[2], rgb[3]), x + 246 * s, y + ly - 2 * s, 19 * s, 19 * s)
+      canvas:drawRect(canvas:mapRGB(rgb[1], rgb[2], rgb[3]), x + (bx - 19) * s, y + ly - 2 * s, 19 * s, 19 * s)
     end
     local font = (pnum == self.selected) and self.red_font or self.normal_font
-    font:draw(canvas, self:fitName(font, hospital.name:upper(), 136 * s), x + 272 * s, y + ly)
-    ly = ly + 25 * s
+    font:draw(canvas, self:fitName(font, hospital.name:upper(), 136 * s), x + (bx + 7) * s, y + ly)
     total_visitors = total_visitors + hospital.num_visitors_pm
   end
 
@@ -313,8 +337,11 @@ function UIProgressReport:draw(canvas, x, y)
     population_percent = selected_hospital.num_visitors_pm / total_visitors * 100
   end
   -- TODO: `math.floor` may result in the total of all four hospitals not equal up to 100%.
+  -- (Under the second column of hospitals when there is one.)
+  local px, py = 450, 65
+  if self.two_columns then px, py = 440, 172 end
   self.small_font:draw(canvas, _S.progress_report.percentage_pop:upper() .. " " ..
-      math.floor(population_percent) .. "%", x + 450 * s, y + 65 * s)
+      math.floor(population_percent) .. "%", x + px * s, y + py * s)
 end
 
 function UIProgressReport:afterLoad(old, new)

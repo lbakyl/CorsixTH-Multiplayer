@@ -2649,23 +2649,46 @@ local function run()
         elseif a == "lookat" then
           -- lookat:rat|evil: centre the view on the first attack rat or evil
           -- handyman (in any hospital) and take a screenshot; looks again
-          -- later if there is none yet.
+          -- later if there is none yet. lookat:shirt<n>: a patient of
+          -- colour <n> (5 to 8) using an object (a toilet, ...) or treated
+          -- by a member of staff in one animation (the pharmacy's drink).
           local who
+          local colour, wanted = entry.arg:match("^shirt(%d):?(.*)$")
+          colour = tonumber(colour or "")
+          if wanted == "" then wanted = nil end
+          if colour then
+            for _, e in ipairs(world.entities) do
+              local patient = e
+              if class.is(e, Staff) then
+                local act = e:getCurrentAction()
+                patient = act and act.name == "multi_use_object" and act.use_with
+              elseif not e.user_of then
+                patient = nil
+              end
+              local object = e.user_of
+              if not who and patient and class.is(patient, Patient) and patient.hospital and
+                  MultiplayerSession.hospitalColour(world, patient.hospital) == colour and
+                  (not wanted or (object and object.object_type.id == wanted)) then
+                who = e
+              end
+            end
+          end
           for _, e in ipairs(world.entities) do
             if not who and e.tile_x and ((entry.arg == "rat" and e.mp_attack_rat and not e.shot) or
                 (entry.arg == "evil" and e.mp_saboteur and not e.mp_in_transit)) then
               who = e
             end
           end
-          if not who and (entry.retries or 0) < 40 and entry.hour < target - 100 then
+          if not who and (entry.retries or 0) < (colour and 400 or 40) and entry.hour < target - 100 then
             entry.retries = (entry.retries or 0) + 1
-            entry.hour = entry.hour + 25
+            entry.hour = entry.hour + (colour and 3 or 25)
             done[i] = nil
           elseif who then
             look_at(who.tile_x, who.tile_y)
-            log(string.format("UI: looking at a %s at %d,%d (step %d)", entry.arg, who.tile_x, who.tile_y,
-                session.step))
-            shot("lookat-" .. entry.arg .. "-" .. session.step)
+            log(string.format("UI: looking at a %s at %d,%d (step %d)%s", entry.arg, who.tile_x, who.tile_y,
+                session.step, colour and (" " .. tostring(who.humanoid_class) .. " using " ..
+                tostring(who.user_of and who.user_of.object_type.id)) or ""))
+            shot("lookat-" .. entry.arg:gsub(":", "-") .. "-" .. session.step)
           else
             log("UI: no " .. entry.arg .. " to look at")
           end

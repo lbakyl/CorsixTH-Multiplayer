@@ -88,8 +88,18 @@ local function meander_action_start(action, humanoid)
     meander_parcel = humanoid.parcelNr
   end
 
-  local x, y = humanoid.world.pathfinder:findIdleTile(humanoid.tile_x,
-      humanoid.tile_y, math.random(1, 24), meander_parcel)
+  -- Multiplayer with a hospital each: staff wander on their own hospital's
+  -- land only. (Hospitals' buildings can touch, TEAM TOWN's do: a doctor
+  -- walked into a rival's part, where his player could not click him.)
+  local world = humanoid.world
+  local owner
+  if world.mp_coop and world.mp_coop.players > 1 and humanoid.hospital and
+      class.is(humanoid, Staff) then
+    owner = humanoid.hospital:getPlayerIndex()
+  end
+
+  local x, y = world.pathfinder:findIdleTile(humanoid.tile_x,
+      humanoid.tile_y, math.random(1, 24), meander_parcel, owner)
 
   if x == humanoid.tile_x and y == humanoid.tile_y then
     -- Nowhere to walk to - go idle instead, or go onto the next action

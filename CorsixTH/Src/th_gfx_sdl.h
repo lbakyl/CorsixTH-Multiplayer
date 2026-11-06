@@ -581,9 +581,11 @@ class sprite_sheet {
   void set_sprite_alt_palette_map(size_t iSprite, const uint8_t* pMap,
                                   uint32_t iAlt32);
 
-  //! Supply a second mapped palette to a sprite (drawn with
-  //! thdf_alt_palette2; the sprite keeps its first one).
-  void set_sprite_alt_palette_map2(size_t iSprite, const uint8_t* pMap);
+  //! Supply an extra mapped palette to a sprite: slot 0 is drawn with
+  //! thdf_alt_palette2, slot 1 with thdf_alt_palette3 (multiplayer shirt
+  //! colours); the sprite keeps its first one (thdf_alt_palette).
+  void set_sprite_extra_palette_map(size_t iSprite, int iSlot,
+                                    const uint8_t* pMap);
 
   //! Get the number of sprites at the sheet.
   /*!
@@ -674,6 +676,9 @@ class sprite_sheet {
  private:
   friend class cursor;
 
+  //! Extra palette maps a sprite can have (set_sprite_extra_palette_map).
+  static constexpr int extra_palette_slots = 2;
+
   //! Sprites of the sheet.
   struct sprite {
     //! SDL structure containing the sprite with original palette.
@@ -682,8 +687,8 @@ class sprite_sheet {
     //! SDL structure containing the sprite with alternative palette.
     SDL_Texture* alt_texture;
 
-    //! The same with the second alternative palette.
-    SDL_Texture* alt_texture2;
+    //! The same with the extra palettes (extra_palette_maps).
+    SDL_Texture* extra_textures[extra_palette_slots];
 
     //! Data of the sprite.
     const uint8_t* data;
@@ -691,8 +696,9 @@ class sprite_sheet {
     //! Alternative palette (if available).
     const uint8_t* alt_palette_map;
 
-    //! Second alternative palette (if available).
-    const uint8_t* alt_palette_map2;
+    //! Extra alternative palettes (if available): thdf_alt_palette2 and
+    //! thdf_alt_palette3.
+    const uint8_t* extra_palette_maps[extra_palette_slots];
 
     //! Flags how to render the sprite, contains #THDF_Alt32_Mask bits.
     uint32_t sprite_flags;
@@ -729,7 +735,7 @@ class sprite_sheet {
       @return SDL texture containing the sprite.
   */
   SDL_Texture* _makeAltBitmap(sprite* pSprite);
-  SDL_Texture* _makeAltBitmap2(sprite* pSprite);
+  SDL_Texture* _makeExtraBitmap(sprite* pSprite, int iSlot);
 };
 
 class cursor {

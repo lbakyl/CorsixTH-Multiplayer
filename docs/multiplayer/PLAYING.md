@@ -207,7 +207,10 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   to your hospital) that no other hospital borders, you just buy. One on another player's side, or
   one that borders another hospital's land, goes to auction (see Land auctions below); if nobody else
   may bid for it (that player is away, say), you just buy it. As in the original game, you can only buy
-  a plot that touches your land or the town's own (roads, parks): the others behind it come later. Faxes, emergencies and VIP visits come to the hospital they
+  a plot that touches your land or the town's own (roads, parks): the others behind it come later.
+  On the town map (**T**) the plots you can buy now are red and the other plots for sale red-striped; your
+  own land is dark blue, as in the original game, and every other hospital's land a dark shade of its
+  colour. Faxes, emergencies and VIP visits come to the hospital they
   are for.
 - **Land auctions (every game with more than one hospital):** click a
   plot on the town map as usual. If it is on another player's side, or

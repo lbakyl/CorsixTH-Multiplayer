@@ -239,8 +239,23 @@ function UITownMap:draw(canvas, x, y)
   local tp = self:tilePixels()
   local town_map_offset_x = x + 227 * s
   local town_map_offset_y = y + 25 * s
+  -- (Multiplayer with a hospital each: the plots this player may buy in
+  -- red, the plots for sale they cannot buy in red stripes, the other
+  -- hospitals' land in their colours.)
+  local player, options = 1, nil
+  if world.mp_coop and world.mp_coop.players > 1 then
+    player = hospital:getPlayerIndex()
+    options = {others = {}, for_sale = {255, 0, 0}}
+    for _, other in ipairs(world.hospitals) do
+      local c = other ~= hospital and MultiplayerSession.markerColour(world, other)
+      if c then
+        options.others[other:getPlayerIndex()] = {math.floor(c[1] * 0.6), math.floor(c[2] * 0.6),
+            math.floor(c[3] * 0.6)}
+      end
+    end
+  end
   TH.windowHelpers.townMapDraw(self, map.th, canvas, town_map_offset_x, town_map_offset_y,
-    config.radiators_enabled, s)
+    config.radiators_enabled, s, player, options)
 
   -- Draw entities
   local function draw_entities(list, color, size)

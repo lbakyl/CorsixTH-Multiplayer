@@ -1073,7 +1073,8 @@ int l_path_path(lua_State* L) {
   return 2;
 }
 
-// findIdleTile(path_finder, queue_x, queue_y, tile_number, opt_parcel)
+// findIdleTile(path_finder, queue_x, queue_y, tile_number, opt_parcel,
+//              opt_player)
 // -> Either nothing is returned or the coordinates of the found tile.
 //
 // The tile_number should be a random number, to get the (random) Nth tile.
@@ -1087,9 +1088,11 @@ int l_path_idle(lua_State* L) {
   int queue_y = static_cast<int>(luaL_checkinteger(L, 3) - 1);
   int n = static_cast<int>(luaL_optinteger(L, 4, 0));
   int opt_parcel = static_cast<int>(luaL_optinteger(L, 5, 0));
+  // (Only tiles of this player's land, 0 for anybody's.)
+  int opt_player = static_cast<int>(luaL_optinteger(L, 6, 0));
 
-  bool found =
-      pPathfinder->find_idle_tile(nullptr, queue_x, queue_y, n, opt_parcel);
+  bool found = pPathfinder->find_idle_tile(nullptr, queue_x, queue_y, n,
+                                           opt_parcel, opt_player);
   if (!found) {
     return 0;
   }

@@ -179,9 +179,9 @@ int l_anims_set_alt_pal(lua_State* L) {
 
 // anims:setLayerAltPalette(layer, layer_id, map, alt32, slot): the recolour
 // map (256 bytes) of every sprite of that layer variant (any layer if layer
-// is negative), slot 1 (drawn with thdf_alt_palette) or 2 (with
-// thdf_alt_palette2); returns how many elements it set. The map string is
-// kept in the object's environment.
+// is negative), slot 1 (drawn with thdf_alt_palette), 2 (with
+// thdf_alt_palette2) or 3 (with thdf_alt_palette3); returns how many elements
+// it set. The map string is kept in the object's environment.
 int l_anims_set_layer_alt_pal(lua_State* L) {
   animation_manager* pAnims = luaT_testuserdata<animation_manager>(L);
   int iLayer = static_cast<int>(luaL_checkinteger(L, 2));
@@ -193,8 +193,8 @@ int l_anims_set_layer_alt_pal(lua_State* L) {
   }
   uint32_t iAlt32 = static_cast<uint32_t>(luaL_optinteger(L, 5, 0));
   int iSlot = static_cast<int>(luaL_optinteger(L, 6, 1));
-  int iChanged = pAnims->set_layer_alt_palette_map(iLayer, iLayerId, pPal,
-                                                   iAlt32, iSlot);
+  int iChanged =
+      pAnims->set_layer_alt_palette_map(iLayer, iLayerId, pPal, iAlt32, iSlot);
   // Keep the map alive: env["layer:<layer>:<id>:<slot>"] = map.
   lua_getfenv(L, 1);
   lua_pushfstring(L, "layer:%d:%d:%d", iLayer, iLayerId, iSlot);

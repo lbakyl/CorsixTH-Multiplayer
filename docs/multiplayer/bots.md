@@ -170,7 +170,8 @@ environment):
   doctor; then buys some benches, plants, a drinks machine and an
   extinguisher for its corridors.
 - **Talks**: a greeting in the second to fourth month (friendly in co-op and
-  shared games, fiery in a race), and answers to the chat after a typing
+  shared games, fiery in a race; the bots of a game greet in turn, at least
+  6 game days apart, each with a line of its own), and answers to the chat after a typing
   pause: when written to privately or by name (at most every 10 seconds),
   otherwise seldom (one line in seven, at most every 3 minutes, less often
   with more bots), so the people's own chat stays readable. Its lines are

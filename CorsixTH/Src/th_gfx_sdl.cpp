@@ -1166,9 +1166,11 @@ void sprite_sheet::_freeSingleSprite(size_t iNumber) {
     SDL_DestroyTexture(sprites[iNumber].alt_texture);
     sprites[iNumber].alt_texture = nullptr;
   }
-  if (sprites[iNumber].alt_texture2 != nullptr) {
-    SDL_DestroyTexture(sprites[iNumber].alt_texture2);
-    sprites[iNumber].alt_texture2 = nullptr;
+  for (SDL_Texture*& extra : sprites[iNumber].extra_textures) {
+    if (extra != nullptr) {
+      SDL_DestroyTexture(extra);
+      extra = nullptr;
+    }
   }
   if (sprites[iNumber].data != nullptr) {
     delete[] sprites[iNumber].data;
@@ -1205,10 +1207,12 @@ bool sprite_sheet::set_sprite_count(size_t iCount, render_target* pCanvas) {
     sprite& spr = sprites[i];
     spr.texture = nullptr;
     spr.alt_texture = nullptr;
-    spr.alt_texture2 = nullptr;
     spr.data = nullptr;
     spr.alt_palette_map = nullptr;
-    spr.alt_palette_map2 = nullptr;
+    for (int j = 0; j < extra_palette_slots; ++j) {
+      spr.extra_textures[j] = nullptr;
+      spr.extra_palette_maps[j] = nullptr;
+    }
     spr.sprite_flags = thdf_alt32_plain;
     spr.width = 0;
     spr.height = 0;
@@ -1258,10 +1262,12 @@ bool sprite_sheet::load_from_th_file(const uint8_t* pTableData,
 
     pSprite->texture = nullptr;
     pSprite->alt_texture = nullptr;
-    pSprite->alt_texture2 = nullptr;
     pSprite->data = nullptr;
     pSprite->alt_palette_map = nullptr;
-    pSprite->alt_palette_map2 = nullptr;
+    for (int j = 0; j < extra_palette_slots; ++j) {
+      pSprite->extra_textures[j] = nullptr;
+      pSprite->extra_palette_maps[j] = nullptr;
+    }
     pSprite->width = thSprite.width;
     pSprite->height = thSprite.height;
 
@@ -1325,16 +1331,18 @@ void sprite_sheet::set_sprite_alt_palette_map(size_t iSprite,
   }
 }
 
-void sprite_sheet::set_sprite_alt_palette_map2(size_t iSprite,
-                                               const uint8_t* pMap) {
-  if (iSprite >= sprite_count) return;
+void sprite_sheet::set_sprite_extra_palette_map(size_t iSprite, int iSlot,
+                                                const uint8_t* pMap) {
+  if (iSprite >= sprite_count || iSlot < 0 || iSlot >= extra_palette_slots) {
+    return;
+  }
 
   sprite* pSprite = sprites + iSprite;
-  if (pSprite->alt_palette_map2 != pMap) {
-    pSprite->alt_palette_map2 = pMap;
-    if (pSprite->alt_texture2) {
-      SDL_DestroyTexture(pSprite->alt_texture2);
-      pSprite->alt_texture2 = nullptr;
+  if (pSprite->extra_palette_maps[iSlot] != pMap) {
+    pSprite->extra_palette_maps[iSlot] = pMap;
+    if (pSprite->extra_textures[iSlot]) {
+      SDL_DestroyTexture(pSprite->extra_textures[iSlot]);
+      pSprite->extra_textures[iSlot] = nullptr;
     }
   }
 }
@@ -1428,10 +1436,18 @@ void sprite_sheet::draw_sprite(render_target* pCanvas, size_t iSprite, float iX,
         sprite.width, sprite.height, sprite.data, palette, iSprFlags);
     sprite.texture = pTexture;
   }
-  if ((iFlags & thdf_alt_palette2) && sprite.alt_palette_map2 && palette) {
-    pTexture = sprite.alt_texture2;
+  // (The extra maps first: a sprite without the asked one is drawn as
+  // usual, never with its first map, which objects use for their ghost.)
+  int iExtra = -1;
+  if ((iFlags & thdf_alt_palette3) && sprite.extra_palette_maps[1]) {
+    iExtra = 1;
+  } else if ((iFlags & thdf_alt_palette2) && sprite.extra_palette_maps[0]) {
+    iExtra = 0;
+  }
+  if (iExtra >= 0 && palette) {
+    pTexture = sprite.extra_textures[iExtra];
     if (!pTexture) {
-      pTexture = _makeAltBitmap2(&sprite);
+      pTexture = _makeExtraBitmap(&sprite, iExtra);
       if (!pTexture) return;
     }
   } else if (iFlags & thdf_alt_palette) {
@@ -1540,17 +1556,18 @@ SDL_Texture* sprite_sheet::_makeAltBitmap(sprite* pSprite) {
   return pSprite->alt_texture;
 }
 
-SDL_Texture* sprite_sheet::_makeAltBitmap2(sprite* pSprite) {
+SDL_Texture* sprite_sheet::_makeExtraBitmap(sprite* pSprite, int iSlot) {
   const auto& argb_data = palette->get_argb_data();
+  const uint8_t* pMap = pSprite->extra_palette_maps[iSlot];
   ::palette oPalette;
   for (int iColour = 0; iColour < 255; iColour++) {
-    oPalette.set_argb(iColour, argb_data[pSprite->alt_palette_map2[iColour]]);
+    oPalette.set_argb(iColour, argb_data[pMap[iColour]]);
   }
   oPalette.set_argb(255, argb_data[255]);
-  pSprite->alt_texture2 = target->create_palettized_texture(
+  pSprite->extra_textures[iSlot] = target->create_palettized_texture(
       pSprite->width, pSprite->height, pSprite->data, &oPalette,
       (pSprite->sprite_flags & ~thdf_alt32_mask) | thdf_alt32_plain);
-  return pSprite->alt_texture2;
+  return pSprite->extra_textures[iSlot];
 }
 
 namespace {

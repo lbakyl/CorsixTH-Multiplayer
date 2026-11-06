@@ -125,6 +125,8 @@ local LINES = {
       "Hi all! My first patients are on their way. Fingers crossed.",
       "Greetings from across town! Let me know if you need anything.",
       "Hello! My receptionist says hi too.",
+      "Hi there! Plenty of patients for all of us, I hope.",
+      "Morning, neighbours! I've put the kettle on.",
     },
     fiery = {
       "Enjoy your lead while it lasts. My hospital is coming for yours.",
@@ -133,6 +135,8 @@ local LINES = {
       "Ready to lose? I have already ordered the trophy.",
       "I hope your patients like waiting. Mine won't have to.",
       "Watch out, %s. I play to win.",
+      "Nice hospitals, everyone. Shame about the competition.",
+      "I've already hired the best doctors in town. Sorry!",
     },
   },
   accept = {
@@ -527,6 +531,31 @@ function Bot:sharesWithPerson()
     end
   end
   return here
+end
+
+--! This bot's place among the game's bots (1, 2, ...: by peer, the same
+--! for every bot of the room), and how many there are.
+function Bot:botRank()
+  local peers = {}
+  for peer, p in pairs(self.lobby.players or {}) do
+    if p.bot == "1" then peers[#peers + 1] = peer end
+  end
+  table.sort(peers)
+  local me = TheApp.mp_session.peer_id
+  for i, peer in ipairs(peers) do
+    if peer == me then return i, #peers end
+  end
+  return 1, math.max(1, #peers)
+end
+
+--! A line of `list` for this bot that no other bot of the game picks the
+--! same way: the bots take turns through the list from a place the room's
+--! name sets. (Three bots once all greeted with the trophy line.)
+function Bot:ownLine(list)
+  local rank = self:botRank()
+  local base = 0
+  for i = 1, #room do base = (base * 31 + room:byte(i)) % 1000003 end
+  return list[(base + rank - 1) % #list + 1]
 end
 
 function Bot:hospitalIndex()
@@ -1771,8 +1800,9 @@ function Bot:attach(world)
       extras = 1,
       extra_day = day,
       -- The greeting some time in the second to fourth month of the game (or
-      -- of its time in a continued game).
-      greet = (month - 1) * 30 + rand(31, 119),
+      -- of its time in a continued game), each bot at least 6 days after
+      -- the one before it (Bot:botRank).
+      greet = (month - 1) * 30 + 31 + (self:botRank() - 1) * 12 + rand(0, 6),
       -- The first dirty trick in months 7 to 12.
       trick = (month - 1) * 30 + rand(181, 359),
     }
@@ -1917,7 +1947,7 @@ function Bot:think()
       if p.bot ~= "1" and peer ~= TheApp.mp_session.peer_id then others[#others + 1] = p.name end
     end
     table.sort(others)
-    local line = pick(LINES.greet[self.fiery and "fiery" or "friendly"]):format(others[1] and pick(others) or "everybody")
+    local line = self:ownLine(LINES.greet[self.fiery and "fiery" or "friendly"]):format(others[1] and pick(others) or "everybody")
     self:say(line, typing(line))
   end
 

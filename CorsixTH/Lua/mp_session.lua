@@ -1128,6 +1128,10 @@ end
 
 MultiplayerSession.markers = "others" -- (a new sight: own people plain at first)
 
+-- The parts of big objects last drawn in a user's shirt colour
+-- (setFloorMarkers): back to their own when the use is over.
+local split_dressed = setmetatable({}, {__mode = "k"})
+
 -- Each hospital's colour, by hospital index: its patients wear it (the
 -- original game's four shirt colours, layer 1 of a patient's animation:
 -- 0 mustard, 2 white, 4 lavender, 6 salmon), its staff have a bar of it at
@@ -1240,10 +1244,13 @@ end
 --! Shirts of colours 6 to 8: the game has four shirt colours (CLOTHES), so a
 --! patient of colour 6 wears colour 2's shirt drawn through a palette map
 --! that turns it blue (7 teal, 8 pink): every sprite of that clothes
---! variant gets the map (TH.anims:setLayerAltPalette), and those patients
---! are drawn with DrawFlags.AltPalette (setFloorMarkers, on this screen
---! only). Each entry keeps its brightness in the new colour, the nearest
---! the game's palette has; near black stays (the outlines). Colour 5:
+--! variant gets the map (TH.anims:setLayerAltPalette, slot 3), and those
+--! patients are drawn with DrawFlags.AltPalette3 (setFloorMarkers, on this
+--! screen only). (Not slot 1, DrawFlags.AltPalette: an object's sprites
+--! get their grey ghost there once somebody places one, and a patient
+--! drawn with it inside a toilet turned its blue cabin grey.) Each entry
+--! keeps its brightness in the new colour, the nearest the game's palette
+--! has; near black stays (the outlines). Colour 5:
 --! colour 1's mustard shirt is part of the patient's body sprites, not a
 --! clothes layer of its own, so those sprites get a second map
 --! (DrawFlags.AltPalette2) that turns only the mustard shades green (by
@@ -1287,7 +1294,7 @@ function MultiplayerSession.setupShirtColours(app, anims)
       end
       bytes[i + 1] = string.char(to)
     end
-    local n = anims:setLayerAltPalette(1, MultiplayerSession.CLOTHES[colour], table.concat(bytes))
+    local n = anims:setLayerAltPalette(1, MultiplayerSession.CLOTHES[colour], table.concat(bytes), 0, 3)
     print(string.format("multiplayer: shirts of colour %d: %d sprites recoloured", colour, n))
   end
   -- Colour 5: the mustard of the body sprites (every element always drawn,
@@ -1334,19 +1341,59 @@ function MultiplayerSession.setFloorMarkers(ui)
   local on = mode ~= "off" and TheApp.mp_session and world.mp_coop and world.mp_coop.players > 1
   local cache = {}
   -- (Shirts of colours 5 to 8: setupShirtColours.)
-  local shirts = world.mp_coop and world.mp_coop.players > 4 and
-      MultiplayerSession.setupShirtColours(ui.app, world.anims)
+  -- (Any hospital of colour 5 to 8, in a game of any size: colours are
+  -- picked in the room.)
+  local shirts = false
+  if world.mp_coop then
+    for _, h in ipairs(world.hospitals) do
+      if (MultiplayerSession.hospitalColour(world, h) or 1) > 4 then shirts = true end
+    end
+  end
+  shirts = shirts and MultiplayerSession.setupShirtColours(ui.app, world.anims)
   local recolour = {}
+  -- A patient's shirt colour: 5 to 8, or nil (drawn as they are).
+  local function shirt_of(patient)
+    if not (patient.hospital and class.is(patient, Patient)) then return nil end
+    if patient.humanoid_class == "Elvis Patient" or patient.humanoid_class == "Invisible Patient" then return nil end
+    local r = recolour[patient.hospital]
+    if r == nil then
+      r = MultiplayerSession.hospitalColour(world, patient.hospital) or 1
+      recolour[patient.hospital] = r
+    end
+    return r > 4 and r or nil
+  end
+  local function dress(th, r)
+    th:setPartialFlag(DrawFlags.AltPalette3, r ~= nil and r > 5)
+    th:setPartialFlag(DrawFlags.AltPalette2, r == 5)
+  end
+  local split_now = {}
   for _, e in ipairs(world.entities) do
-    if shirts and e.th and e.hospital and class.is(e, Patient) then
-      local r = recolour[e.hospital]
-      if r == nil then
-        r = MultiplayerSession.hospitalColour(world, e.hospital) or 1
-        recolour[e.hospital] = r
+    if shirts and e.th and e.humanoid_class then
+      -- Whose shirt this one draws: a patient their own; a member of staff
+      -- the patient they treat together in one animation (multi_use_object:
+      -- the staff's animation draws both, with the patient's layers); and
+      -- the other parts of a big object in use (split_anims) the user's.
+      -- (Not colour 5 for staff: its map turns mustard shades green in
+      -- every body sprite, and the nurse's blonde hair is drawn with them;
+      -- that patient wears colour 1's mustard during the drink.)
+      local r
+      if class.is(e, Patient) then
+        r = shirt_of(e)
+      elseif class.is(e, Staff) then
+        local action = e:getCurrentAction()
+        local with = action and action.name == "multi_use_object" and action.use_with
+        r = with and shirt_of(with) or nil
+        if r == 5 then r = nil end
       end
-      local dressed = e.humanoid_class ~= "Elvis Patient" and e.humanoid_class ~= "Invisible Patient"
-      e.th:setPartialFlag(DrawFlags.AltPalette, dressed and r > 5)
-      e.th:setPartialFlag(DrawFlags.AltPalette2, dressed and r == 5)
+      dress(e.th, r)
+      local object = e.user_of
+      if r and object and object.split_anims then
+        for i = 2, #object.split_anims do
+          local th = object.split_anims[i]
+          dress(th, r)
+          split_now[th] = true
+        end
+      end
     end
     if e.humanoid_class and e.th then
       local hospital = on and e.hospital
@@ -1362,6 +1409,13 @@ function MultiplayerSession.setFloorMarkers(ui)
       if c then e.th:setFloorMarker(c[1], c[2], c[3], 0xE0) else e.th:setFloorMarker() end
     end
   end
+  for th in pairs(split_dressed) do
+    if not split_now[th] then
+      dress(th, nil)
+      split_dressed[th] = nil
+    end
+  end
+  for th in pairs(split_now) do split_dressed[th] = true end
   return true
 end
 

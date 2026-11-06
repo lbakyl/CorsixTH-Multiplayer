@@ -287,7 +287,8 @@ bool idle_tile_finder::try_node(path_node* pNode, map_tile_flags flags,
 }
 
 bool idle_tile_finder::find_idle_tile(const level_map* pMap, int iStartX,
-                                      int iStartY, int iN, int parcelId) {
+                                      int iStartY, int iN, int parcelId,
+                                      int player) {
   if (pMap == nullptr) {
     pMap = parent->default_map;
   }
@@ -316,8 +317,10 @@ bool idle_tile_finder::find_idle_tile(const level_map* pMap, int iStartX,
     map_tile_flags flags = node_tile->flags;
 
     bool correct_parcel = parcelId == 0 || parcelId == node_tile->iParcelId;
+    bool correct_owner =
+        player == 0 || pMap->get_parcel_owner(node_tile->iParcelId) == player;
     if (!flags.do_not_idle && !flags.avoid_tile && flags.passable &&
-        flags.hospital && correct_parcel) {
+        flags.hospital && correct_parcel && correct_owner) {
       // Try to delay returning an idle tile until we find the Nth tile.
       if (iN == 0) {
         parent->destination = pNode;

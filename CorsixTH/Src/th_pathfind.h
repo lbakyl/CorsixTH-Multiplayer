@@ -199,9 +199,11 @@ class idle_tile_finder : public abstract_pathfinder {
      tiles.
       @param parcelId Id of the parcel with valid destinations, use \c 0 for
      any parcel.
+      @param player Only tiles of this player's land (multiplayer: staff stay
+     in their own hospital), \c 0 for anybody's.
    */
   bool find_idle_tile(const level_map* pMap, int iStartX, int iStartY, int iN,
-                      int parcelId);
+                      int parcelId, int player = 0);
 
   path_node* best_next_node;
   double best_distance;
@@ -262,9 +264,9 @@ class pathfinder {
   }
 
   inline bool find_idle_tile(const level_map* pMap, int iStartX, int iStartY,
-                             int iN, int parcelId) {
-    return idle_tile_finder.find_idle_tile(pMap, iStartX, iStartY, iN,
-                                           parcelId);
+                             int iN, int parcelId, int player = 0) {
+    return idle_tile_finder.find_idle_tile(pMap, iStartX, iStartY, iN, parcelId,
+                                           player);
   }
 
   inline bool find_path_to_hospital(const level_map* pMap, int iStartX,

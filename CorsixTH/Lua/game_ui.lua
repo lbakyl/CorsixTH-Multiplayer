@@ -478,6 +478,9 @@ end
 function GameUI:_isRivals(entity)
   local world = self.app.world
   if not (world and world.mp_coop and world.mp_coop.competitive) then return false end
+  -- (One's own staff and patients, wherever they stand: a doctor who had
+  -- wandered onto a rival's floor could not be picked up and brought back.)
+  if entity.hospital == self.hospital and class.is(entity, Humanoid) then return false end
   local x, y = entity.tile_x, entity.tile_y
   if x and self.hospital:isInHospital(x, y) then return false end
   if entity.hospital and world:mpRivals(entity.hospital, self.hospital) then return true end
