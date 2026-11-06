@@ -88,9 +88,11 @@ BOT_NAMES = ("Bot Agnes", "Bot Bertie", "Bot Clive", "Bot Dora", "Bot Edna", "Bo
 BOT_START_TIMEOUT = 60.0
 # The game options the room owner may set (OPTION <name>=<value>): land
 # auctions (1 plots near other hospitals, 2 every plot, 0 off), dirty tricks
-# (in a race) and research sharing (1 on, 0 off). The first value is the
-# default; any other is sent as <name>=<value> in LOBBY and START.
-GAME_OPTIONS = {"auctions": ("1", "2", "0"), "tricks": ("1", "0"), "sharing": ("1", "0"),
+# (in a race; 1 on, unlocked month by month in the first year, 2 on from the
+# start: no button, for the test rooms, 0 off) and research sharing (1 on,
+# 0 off). The first value is the default; any other is sent as
+# <name>=<value> in LOBBY and START.
+GAME_OPTIONS = {"auctions": ("1", "2", "0"), "tricks": ("1", "0", "2"), "sharing": ("1", "0"),
                 "helpers": ("1", "0")}
 # A player the room owner removed (KICK) may not come back to that room for
 # this many seconds.

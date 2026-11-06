@@ -465,6 +465,22 @@ money (the handyman), readiness (emergency), disease control (epidemic),
 staff (headhunter), comfort (boiler), patient numbers (smear campaign) and
 research (espionage).
 
+The tricks unlock during the first year, the mild ones first: a level not
+unlocked yet is greyed out in the window with the month it unlocks (month 1
+is the first January, 12 the first December). No emergency in the first two
+months; by December every trick at every level can be bought. Level 7,
+Cutthroat, has its own, later months (below).
+
+| Trick | L1 | L2 | L3 |
+|---|---|---|---|
+| Rat attack, broken boiler | February | April | July |
+| Smear campaign | March | May | August |
+| Evil handyman | March | May | September |
+| Espionage | March | June | September |
+| Headhunter | April | June | October |
+| Emergency | March | June | November |
+| Epidemic | April | July | December |
+
 | Trick | L1 | L2 | L3 |
 |---|---|---|---|
 | **Evil handyman**: looks like one of their handymen and strolls their corridors; stays 4, 3 or 2 months (L1, L2, L3), then goes home | $5,000: does no work | $12,500: also drops litter | $20,000: also "repairs" a machine about every three days, and walks away leaving it nearly broken |

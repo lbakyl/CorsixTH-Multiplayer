@@ -1498,6 +1498,9 @@ function MultiplayerLobby:_beginGame(f)
         mode = mode, bot_hospitals = bot_hospitals, auctions_off = f.auctions == "0" or nil,
         auctions_all = f.auctions == "2" or nil,
         tricks_off = f.tricks == "0" or nil, sharing_off = f.sharing == "0" or nil,
+        -- (tricks=2: every trick from the start, sabotage.unlockMonth; no
+        -- button, for the test rooms.)
+        tricks_anytime = f.tricks == "2" or nil,
         helpers_off = f.helpers == "0" or nil}
   end
   f.mode = mode -- (the menu, the bots)

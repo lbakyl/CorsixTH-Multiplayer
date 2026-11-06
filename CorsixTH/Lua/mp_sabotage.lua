@@ -65,6 +65,22 @@ sabotage.PRICES = {
 }
 sabotage.KINDS = {"handyman", "epidemic", "emergency", "rats", "headhunter", "boiler", "smear", "espionage"}
 
+--! The month of the game (1 = the first January) from which each level of
+--! each trick can be bought, in every race (Jan, 2026-11-06): the mild ones
+--! first, the worst late, all of them by the last month of the first year.
+--! No emergency in the first two months. A level with its own schedule
+--! (level 7's mp_tricks) can only make a trick wait longer.
+sabotage.SCHEDULE = {
+  rats = {2, 4, 7},        -- 5, 10, 20 rats
+  boiler = {2, 4, 7},      -- shorter or longer repairs
+  smear = {3, 5, 8},       -- one to three months of fewer patients
+  handyman = {3, 5, 9},    -- idle, litters, wears machines down
+  espionage = {3, 6, 9},   -- level 3: the rival loses half its research
+  headhunter = {4, 6, 10}, -- a junior, a doctor, a consultant or specialist
+  emergency = {3, 6, 11},  -- 3, 6, 10 patients (level 3: maybe undiscovered)
+  epidemic = {4, 7, 12},   -- 2, 4, 7 contagious patients
+}
+
 -- Evil handymen at once in one hospital, at most.
 local MAX_HANDYMEN = 3
 -- Contagious patients sent, and emergency patients, by level.
@@ -112,12 +128,19 @@ function sabotage.price(world, buyer, kind, level)
 end
 
 --! The month of the game from which a trick of `kind` at `level` can be
---! bought (nil: from the start), on a level with its own trick rules.
+--! bought (nil: from the start): sabotage.SCHEDULE, or later on a level
+--! with its own trick rules. (A room with tricks=2, the test rooms: every
+--! trick from the start, but for the level's own rules.)
 function sabotage.unlockMonth(world, kind, level)
+  local anytime = world.mp_coop and world.mp_coop.tricks_anytime
+  local month = not anytime and (sabotage.SCHEDULE[kind] or {})[level] or nil
   local rules = world.map.level_config.mp_tricks
-  if not rules then return nil end
-  local month = rules.unlock and rules.unlock[kind]
-  if level == 3 and rules.top_level_month then month = math.max(month or 0, rules.top_level_month) end
+  if rules then
+    local own = rules.unlock and rules.unlock[kind]
+    if level == 3 and rules.top_level_month then own = math.max(own or 0, rules.top_level_month) end
+    if own then month = math.max(month or 0, own) end
+  end
+  if month and month <= 1 then return nil end
   return month
 end
 
@@ -170,7 +193,7 @@ function sabotage.refusal(world, buyer, target, kind, level)
   end
   local from = sabotage.unlockMonth(world, kind, level)
   if from and world.game_date:monthOfGame() < from then
-    return string.format("not on this level before month %d", from)
+    return string.format("not before month %d", from)
   end
   if buyer.balance < sabotage.price(world, buyer, kind, level) then return "not enough money" end
   return nil

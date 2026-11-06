@@ -97,8 +97,9 @@ function UIMultiplayerSabotage:UIMultiplayerSabotage(ui, target)
 end
 
 --! Each level's price for this player now, greyed out with the month it
---! can first be bought on a level that unlocks the tricks month by month
---! (level 7). Again when the month changes (onTick): prices change too.
+--! can first be bought (sabotage.unlockMonth: the tricks unlock month by
+--! month in the first year, on level 7 later). Again when the month changes
+--! (onTick): prices change too.
 function UIMultiplayerSabotage:_showLevels()
   local S = _S.multiplayer_window
   local sabotage = MultiplayerSession.sabotage

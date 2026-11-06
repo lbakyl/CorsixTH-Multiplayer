@@ -1778,7 +1778,8 @@ function Bot:playTrick()
     choice = self.tricks_played == 0 and {"handyman", "rats"} or sabotage.KINDS
   end
   local kinds = {}
-  -- (Only tricks this level allows yet: level 7 unlocks them month by month.)
+  -- (Only tricks that can be bought yet: they unlock month by month,
+  -- sabotage.unlockMonth.)
   for _, k in ipairs(choice) do
     local from = sabotage.unlockMonth(world, k, 1)
     if not from or world.game_date:monthOfGame() >= from then kinds[#kinds + 1] = k end
@@ -1788,6 +1789,9 @@ function Bot:playTrick()
   -- The highest level it can afford with something left over, at most a
   -- random one.
   local level = rand(1, 3)
+  -- (Not above the highest level unlocked yet.)
+  local month = world.game_date:monthOfGame()
+  while level > 1 and (sabotage.unlockMonth(world, kind, level) or 0) > month do level = level - 1 end
   local function cost(l) return sabotage.price(world, mine, kind, l) end
   while level > 1 and mine.balance - cost(level) < 2 * RESERVE do level = level - 1 end
   if mine.balance - cost(level) < 2 * RESERVE then

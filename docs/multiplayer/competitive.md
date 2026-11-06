@@ -49,6 +49,14 @@ One command, `sabotage` {trick, level, to} (`kind` is the command's own name).
 `sabotage.refusal` checks the same conditions in the window (an answer at
 once) and in the handler (the same on every peer); the buyer pays when it is
 done (`spendMoney`, "Dirty tricks"). Prices in `sabotage.PRICES`.
+In every race the levels unlock month by month in the first year
+(`sabotage.SCHEDULE`: kind -> month of the game of L1, L2, L3, all by month
+12; no emergency before month 3); `sabotage.unlockMonth` takes the later of
+that and a level's own rules (level 7), and the refusal says "not before
+month N" (handler and window, which greys the level out with the month;
+bots pick only unlocked levels). The room option `tricks=2` (no button; the
+probe's rooms use it unless `MP_OPTIONS` is set) unlocks every trick from
+the start, as before.
 
 - **Evil handyman.** A new `Handyman` (fresh `StaffProfile`) with
   `mp_saboteur = {owner, target, level, hours}`, walking from the buyer's
@@ -134,7 +142,8 @@ A level made for the race (`scenario = "cutthroat"`, `config.mp_events`).
 Its rules for the tricks are data in the level config, read by
 `mp_sabotage.lua`; other levels have none and are unchanged.
 - `config.mp_tricks = {unlock, top_level_month}`: `sabotage.unlockMonth`
-  and the refusal "not on this level before month N" (handler and window).
+  (the later of these and `sabotage.SCHEDULE`) and the refusal "not before
+  month N" (handler and window).
 - `sabotage.price(world, buyer, kind, level)` is the price everywhere (the
   window, the handler, bots): `PRICES` times `mp_levels.trickPriceFactor`,
   which halves the trick of the month (`levels.trickOfTheMonth`) and applies
