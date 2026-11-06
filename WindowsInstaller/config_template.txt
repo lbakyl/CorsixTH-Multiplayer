@@ -516,3 +516,11 @@ player_name = [[]]
 --
 multiplayer_server = [[]]
 
+-------------------------------------------------------------------------------
+-- What bots say in a multiplayer game, on this computer: [[all]], [[useful]]
+-- (what they answer and tell their team mates, without greetings and taunts)
+-- or [[off]]. Also in the game's MULTIPLAYER menu, BOT CHAT.
+--
+multiplayer_bot_chat = [[all]]
+
+
