@@ -882,6 +882,7 @@ multiplayer_window = {
 
 tooltip.multiplayer_window = {
   player_row = "Click: look at this player's hospital (N: the next hospital)",
+  chat_target = "Who the message is for: everybody, your team (in a race of teams) or one player. Click or press Tab for the next",
   auctions = "The host decides which plots of land go to auction when a player asks to buy one",
   auctions_near = "Plots on another player's side or next to another hospital's land go to auction; the others are simply bought",
   auctions_all = "Every plot goes to auction among all the hospitals that may buy it",

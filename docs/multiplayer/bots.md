@@ -174,6 +174,16 @@ environment):
   before all but the basics, and a missing room is built at once. The model's
   report starts with the emergency (patients, cured, days left, the rooms)
   and each room short of staff, with the `hire:` project that fixes it.
+- **Lends specialists**: when an ally (co-op, or a team mate in a race of
+  teams) has a room that cannot work for want of a surgeon or psychiatrist
+  (not a researcher) and none is on their hiring list, a bot with one to
+  spare (more than its own rooms need) offers its least skilled one for
+  free, at most once in 20 game days per ally and kind; people accept it in
+  their messages, bots accept by themselves. A bot short of one itself, with
+  none to hire, asks in the chat: by name the people who have one to spare,
+  else every person on its side (once in 20 days, 7 in an emergency);
+  nothing when an allied bot has one to spare (that bot offers it). A bot
+  sharing a person's hospital lends nobody.
 - **Opens** the hospital once it has a staffed desk, a GP's office and a
   doctor; then buys some benches, plants, a drinks machine and an
   extinguisher for its corridors.

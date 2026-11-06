@@ -103,6 +103,14 @@ local LINES = {
     headhunter_kept = {"Somebody tried to poach my doctor. They're staying."},
     headhunter_lost = {"Somebody poached my doctor. Fine, I'll train another."},
   },
+  -- Specialists lent to an ally and asked for (Manager:helpAllies,
+  -- Manager:askAllies): names, who, kind, room, then the emergency's words.
+  staff_sent = {"%s, you can have %s, a %s, for your %s: free, accept my offer in your messages.%s",
+      "%s: I'm offering you %s, a %s for your %s. No charge, just accept the fax.%s"},
+  staff_for_emergency = {" It's for the emergency!", " Hurry, the emergency won't wait."},
+  -- (names, kind, room, how many it needs ("2 surgeons"), has, emergency)
+  staff_ask_one = {"%s, could you spare me a %s? My %s needs %s and I have %d, and there are none to hire.%s"},
+  staff_ask_all = {"Has anybody got a %s to spare, or one on their hiring list? My %s needs %s and I have %d.%s"},
   -- To an ally it sent its research (Manager:shareResearch).
   research_sent = {"I've sent you my research for free, %s: %s.", "Some research for you, %s: %s. On the house."},
   -- To a person sharing the hospital, before sharing its research.
@@ -1638,11 +1646,21 @@ end
 
 --! Can it hire somebody of this category (Doctor, Nurse, Handyman,
 --! Receptionist, or a specialist: Psychiatrist, Surgeon, Researcher) now?
-function Bot:canHire(category)
+function Bot:canHire(category, hospital)
   local class, skill = category, SPECIALISTS[category]
   if skill then class = "Doctor" end
-  -- (Its hospital's own list; a game without World:staffPool has one list.)
-  local pool = (self.world.staffPool and self.world:staffPool() or self.world.available_staff)[class]
+  -- (Its hospital's own list; a game without World:staffPool has one list.
+  -- Another hospital's list is only looked at, not made: World:staffPool
+  -- would make it in this game only.)
+  local world = self.world
+  local pools
+  if hospital and hospital ~= world.ui.hospital then
+    pools = hospital.available_staff_made == world.available_staff_made and hospital.available_staff or
+        world.available_staff
+  else
+    pools = world.staffPool and world:staffPool() or world.available_staff
+  end
+  local pool = pools[class]
   if not pool or #pool == 0 then return false end
   if not skill then return true end
   for _, profile in ipairs(pool) do

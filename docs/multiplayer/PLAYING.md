@@ -249,8 +249,9 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   answer within 20 game days counts as a rejection.
 - **Chat:** press **Y** (with or without Shift or Caps Lock; or
   **MULTIPLAYER**, **SEND A MESSAGE**) and
-  type; **Tab** chooses who it is for (all players, in a race of two teams
-  your team, or one player), and the game
+  type; **Tab** (or a click on the **To ...** box left of the text)
+  chooses who it is for (all players, in a race of teams your team, or one
+  player), and the game
   remembers it for next time; **Enter** sends, **Escape** cancels. Enter
   keeps its usual jobs (finish a room, OK in a dialog, hire). To use
   another key for the chat: **OPTIONS**, **Hotkeys**, **General In-Game
@@ -441,8 +442,8 @@ they are switched on).
   a team with all its hospitals out loses. If a player leaves, their
   hospital does not count for their team until they rejoin. You can look
   into your team mate's hospital, not into the other team's. Dirty tricks
-  work on the other team only. In the chat, **Tab** once picks **To
-  team** (only your team mates read it).
+  work on the other team only. In the chat, **Tab** once (or a click on
+  **To all**) picks **To team** (only your team mates read it).
 
 - **Race of teams** (three or four teams, or teams of different shapes,
   such as two players sharing a hospital against two who each have one):

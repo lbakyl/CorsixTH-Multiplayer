@@ -3828,6 +3828,7 @@ tooltip.multiplayer_window.name = "Το όνομα που βλέπουν οι ά
 tooltip.multiplayer_window.new_game = "Έναρξη νέου παιχνιδιού αντί για το αποθηκευμένο"
 tooltip.multiplayer_window.password = "Κωδικός του δωματίου για είσοδο ή δημιουργία (κενό: χωρίς κωδικό)"
 tooltip.multiplayer_window.player_row = "Κλικ: δείτε το νοσοκομείο αυτού του παίκτη (N: το επόμενο νοσοκομείο)"
+tooltip.multiplayer_window.chat_target = "Σε ποιον πάει το μήνυμα: σε όλους, στην ομάδα σου (σε αγώνα ομάδων) ή σε έναν παίκτη. Κάνε κλικ ή πάτα Tab για τον επόμενο"
 tooltip.multiplayer_window.players = "Για πόσους παίκτες είναι το δωμάτιο"
 tooltip.multiplayer_window.ready = "Πείτε στον οικοδεσπότη ότι είστε έτοιμοι να ξεκινήσετε"
 tooltip.multiplayer_window.refer_button = "Προσφέρετε αυτόν τον ασθενή στο νοσοκομείο άλλου παίκτη. Πρέπει να αποδεχτεί."

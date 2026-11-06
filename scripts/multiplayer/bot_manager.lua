@@ -57,6 +57,9 @@ local URGENT = 20
 local NOTICE_DAYS = {10, 18}
 -- Game days between research offers to the same ally.
 local SHARE_DAYS = 21
+-- Game days between specialists sent to the same ally (of one kind), and
+-- between asking the allies for one (an emergency: sooner).
+local GIVE_DAYS, ASK_DAYS, ASK_DAYS_EMERGENCY = 20, 20, 7
 -- Waiting areas (Jan, 2026-11-03): by each room's door and the reception
 -- benches for the queue, a plant and a radiator, and a drinks machine by
 -- every third, within WAITING_R tiles. Not by rooms nobody queues for.
@@ -137,6 +140,8 @@ function M.new(bot, ctx)
   self.no_space = {}       -- project key -> last game day it found no floor for it
   self.tricks = {}         -- kind of dirty trick -> game day noticed (from the adviser)
   self.shared = {}         -- ally hospital index -> {item key -> game day offered}
+  self.gave = {}           -- "<ally index>:<category>" -> game day a specialist was sent
+  self.asked_for = {}      -- category -> game day the allies were asked for one
   return self
 end
 
@@ -241,9 +246,8 @@ function M:assess()
   -- the second surgeon for her emergency: nothing told her it was missing).
   s.emergency = nil
   local em = hosp.emergency
-  -- (In multiplayer the emergency is set while its fax waits for an answer
-  -- too; it is on once accepted, when its countdown runs.)
-  if em and em.disease and (hosp.mp_emergency_timer or not world.mp_coop) then
+  local em_rooms = M.emergencyRooms(world, hosp)
+  if em_rooms then
     local t = hosp.mp_emergency_timer
     local days
     if t and t.tick_rate and Date and Date.hoursPerDay then
@@ -251,8 +255,7 @@ function M:assess()
     end
     s.emergency = {disease = em.disease.id, name = em.disease.name, victims = em.victims or 0,
         cured = em.cured_emergency_patients or 0, killed = em.killed_emergency_patients or 0,
-        rooms = {}, days = days}
-    for _, id in ipairs(em.disease.treatment_rooms or {}) do s.emergency.rooms[id] = true end
+        rooms = em_rooms, days = days}
     if self.noted_emergency ~= em then
       self.noted_emergency = em
       self:note(string.format("day %d: emergency on: %d %s, cured in %s", s.day, s.emergency.victims,
@@ -260,33 +263,8 @@ function M:assess()
     end
   end
 
-  -- Rooms (built, being built, or wanted by the emergency) that cannot work
-  -- at all: one needs more staff of a kind than the whole hospital has, like
-  -- an operating theatre with one surgeon. (Any doctor or nurse is called
-  -- over from another room; a missing surgeon is missing.)
-  s.short = {}
-  local types = {}
-  for _, rt in ipairs(TheApp.rooms) do types[rt.id] = rt end
-  local checked = {}
-  local function check(id)
-    if checked[id] or not types[id] then return end
-    checked[id] = true
-    for cat, k in pairs(types[id].required_staff or {}) do
-      local have = hosp:countStaffOfCategory(cat, k)
-      if have < k then
-        s.short[#s.short + 1] = {room = id, cat = cat, need = k, have = have,
-            emergency = s.emergency and s.emergency.rooms[id] or false,
-            built = (s.rooms[id] or 0) > 0}
-      end
-    end
-  end
-  for id in pairs(s.emergency and s.emergency.rooms or {}) do check(id) end
-  for id in pairs(s.rooms) do check(id) end
-  for id in pairs(s.building) do check(id) end
-  table.sort(s.short, function(a, b)
-    if a.emergency ~= b.emergency then return a.emergency end
-    return a.room .. a.cat < b.room .. b.cat
-  end)
+  -- Rooms that cannot work at all for want of staff (M.shortStaff).
+  s.short = M.shortStaff(world, hosp, em_rooms)
 
   -- Desks, corridor objects, litter, machines, rats and saboteurs.
   s.desks = #hosp:getReceptionDesks()
@@ -363,6 +341,95 @@ end
 --------------------------------------------------------------------------------
 -- Projects: what to build, hire or buy next
 --------------------------------------------------------------------------------
+
+local function room_types()
+  local types = {}
+  for _, rt in ipairs(TheApp.rooms) do types[rt.id] = rt end
+  return types
+end
+
+--! The rooms that cure the emergency `hosp` has on (room id -> true), or
+--! nil. (In multiplayer the emergency is set while its fax waits for an
+--! answer too; it is on once accepted, when its countdown runs.)
+function M.emergencyRooms(world, hosp)
+  local em = hosp.emergency
+  if not (em and em.disease and (hosp.mp_emergency_timer or not world.mp_coop)) then return nil end
+  local rooms = {}
+  for _, id in ipairs(em.disease.treatment_rooms or {}) do rooms[id] = true end
+  return rooms
+end
+
+--! Rooms of `hosp` (built, being built, or wanted by its emergency) that
+--! cannot work at all: one needs more staff of a kind than the whole
+--! hospital has, like an operating theatre with one surgeon. (Any doctor or
+--! nurse is called over from another room; a missing surgeon is missing.)
+--! Staff walking over from another hospital count as there.
+--!param emergency_rooms (table or nil) M.emergencyRooms
+--!return {{room, cat, need, have, built, building, emergency}, ...}, the
+--! emergency's first
+function M.shortStaff(world, hosp, emergency_rooms)
+  local types = room_types()
+  local built, building = {}, {}
+  for _, r in pairs(world.rooms) do
+    if r.hospital == hosp and not r.crashed then
+      local id = r.room_info.id
+      if r.is_active then built[id] = true else building[id] = true end
+    end
+  end
+  local index = world:getHospitalIndex(hosp)
+  local function coming(cat)
+    local n = 0
+    for _, st in ipairs(world.mp_transfers or {}) do
+      local t = st.mp_in_transit
+      if t and t.to == index and st.fulfillsCriterion and st.humanoid_class ~= "Patient" and
+          st:fulfillsCriterion(cat) then
+        n = n + 1
+      end
+    end
+    return n
+  end
+  local out, checked = {}, {}
+  local function check(id)
+    if checked[id] or not types[id] then return end
+    checked[id] = true
+    for cat, k in pairs(types[id].required_staff or {}) do
+      local have = hosp:countStaffOfCategory(cat, k)
+      if have < k then have = have + coming(cat) end
+      if have < k then
+        out[#out + 1] = {room = id, cat = cat, need = k, have = have, built = built[id] or false,
+            building = building[id] or false, emergency = emergency_rooms and emergency_rooms[id] or false}
+      end
+    end
+  end
+  for id in pairs(emergency_rooms or {}) do check(id) end
+  for id in pairs(built) do check(id) end
+  for id in pairs(building) do check(id) end
+  table.sort(out, function(a, b)
+    if a.emergency ~= b.emergency then return a.emergency end
+    return a.room .. a.cat < b.room .. b.cat
+  end)
+  return out
+end
+
+--! How many specialists of kind `cat` `hosp` can spare: those beyond what
+--! its rooms need (every room, built, being built or destroyed, and the
+--! rooms its emergency wants).
+function M.spareStaff(world, hosp, cat, emergency_rooms)
+  local types = room_types()
+  local need, counted = 0, {}
+  for _, r in pairs(world.rooms) do
+    if r.hospital == hosp then
+      local rt = types[r.room_info.id]
+      need = need + (rt and rt.required_staff and rt.required_staff[cat] or 0)
+      counted[r.room_info.id] = true
+    end
+  end
+  for id in pairs(emergency_rooms or {}) do
+    local rt = types[id]
+    if not counted[id] and rt and rt.required_staff then need = need + (rt.required_staff[cat] or 0) end
+  end
+  return math.max(0, hosp:countStaffOfCategory(cat) - need)
+end
 
 function M:available(room_id)
   local hosp = self.bot.world.ui.hospital
@@ -1673,6 +1740,111 @@ function M:shareResearch(s)
   end
 end
 
+--! Allied hospitals (not its own, played by somebody, on its side): index ->
+--! hospital, in index order.
+function M:allies()
+  local bot, world = self.bot, self.bot.world
+  local mine, out = world.ui.hospital, {}
+  if not (world.mp_coop and world.mpMayTrade) then return out end
+  for index, h in ipairs(world.hospitals) do
+    if h ~= mine and bot:playerOfHospital(index) and world:mpMayTrade(mine, h) and not world:mpRivals(mine, h) then
+      out[#out + 1] = {index = index, hosp = h}
+    end
+  end
+  return out
+end
+
+-- (Specialists for the rooms patients use: a research room waits.)
+local function lends(sh) return SPECIALISTS[sh.cat] and sh.room ~= "research" end
+
+--! The name of a room type for the chat ("operating theatre").
+local function room_name(id)
+  local rt = room_types()[id]
+  return rt and rt.name and plain(rt.name) or id:gsub("_", " ")
+end
+
+--! A specialist an ally needs and cannot hire (an operating theatre with one
+--! surgeon, none on their hiring list): one of its own it can spare is
+--! offered for free (they accept in their messages, as any offer of staff;
+--! a bot accepts an ally's), at most once in GIVE_DAYS per ally and kind.
+--! (A bot sharing a person's hospital leaves its staff to the person.)
+function M:helpAllies(s)
+  local bot, world = self.bot, self.bot.world
+  local mine = s.hosp
+  if bot:sharesWithPerson() then return end
+  for _, ally in ipairs(self:allies()) do
+    local h, index = ally.hosp, ally.index
+    for _, sh in ipairs(M.shortStaff(world, h, M.emergencyRooms(world, h))) do
+      local key = index .. ":" .. sh.cat
+      if lends(sh) and (sh.built or sh.building) and s.day - (self.gave[key] or -999) >= GIVE_DAYS and
+          not bot:canHire(sh.cat, h) and M.spareStaff(world, mine, sh.cat, s.emergency and s.emergency.rooms) > 0 then
+        -- (The least skilled of them: it keeps its best.)
+        local pick
+        for _, st in ipairs(mine.staff) do
+          if not st.fired and not st.mp_saboteur and not st.mp_in_transit and not st.mp_offer and st.mp_id and
+              st:fulfillsCriterion(sh.cat) and (not pick or (st.profile.skill or 0) < (pick.profile.skill or 0)) then
+            pick = st
+          end
+        end
+        if pick and self:issue({kind = "offer_staff", to = index, staff = pick.mp_id}) then
+          self.gave[key] = s.day
+          local who = plain(pick.profile:getFullName())
+          self:note(string.format("day %d: offered %s (%s) to hospital %d for its %s", s.day, who, sh.cat, index, sh.room))
+          local peers, people = bot:peopleOfHospital(index)
+          if #peers > 0 then
+            local line = self.pick(self.lines.staff_sent):format(table.concat(people, " and "), who,
+                sh.cat:lower(), room_name(sh.room), sh.emergency and self.pick(self.lines.staff_for_emergency) or "")
+            bot:say(line, self.typing(line), table.concat(peers, ","))
+          end
+          return -- (one at a time)
+        end
+      end
+    end
+  end
+end
+
+--! A specialist its own room needs and nobody is on the hiring list: the
+--! allies are asked (at most once in ASK_DAYS per kind; an emergency
+--! sooner). An allied bot with one to spare sends one by itself
+--! (M:helpAllies, an offer): no need to ask. People with one to spare are asked by
+--! name, else every person on its side.
+function M:askAllies(s)
+  local bot, world = self.bot, self.bot.world
+  for _, sh in ipairs(s.short) do
+    local wait = sh.emergency and ASK_DAYS_EMERGENCY or ASK_DAYS
+    if lends(sh) and (sh.built or sh.building) and not bot:canHire(sh.cat) and
+        s.day - (self.asked_for[sh.cat] or -999) >= wait then
+      local bot_spares, spare_peers, spare_names, everybody = false, {}, {}, {}
+      for _, ally in ipairs(self:allies()) do
+        local spare = M.spareStaff(world, ally.hosp, sh.cat, M.emergencyRooms(world, ally.hosp)) > 0
+        local peers, names = bot:peopleOfHospital(ally.index)
+        local _, _, is_bot = bot:playerOfHospital(ally.index)
+        if spare and #peers == 0 and is_bot then bot_spares = true end
+        for i, peer in ipairs(peers) do
+          everybody[#everybody + 1] = peer
+          if spare then spare_peers[#spare_peers + 1], spare_names[#spare_names + 1] = peer, names[i] end
+        end
+      end
+      if bot_spares or #everybody == 0 then return end
+      self.asked_for[sh.cat] = s.day
+      local urgent = sh.emergency and self.pick(self.lines.staff_for_emergency) or ""
+      local needs = sh.need .. " " .. sh.cat:lower() .. (sh.need > 1 and "s" or "")
+      local line, to
+      if #spare_peers > 0 then
+        line = self.pick(self.lines.staff_ask_one):format(table.concat(spare_names, " or "), sh.cat:lower(),
+            room_name(sh.room), needs, sh.have, urgent)
+        to = spare_peers
+      else
+        line = self.pick(self.lines.staff_ask_all):format(sh.cat:lower(), room_name(sh.room), needs, sh.have, urgent)
+        to = everybody
+      end
+      self:note(string.format("day %d: asked the allies for a %s (%s)", s.day, sh.cat, sh.room))
+      bot:say(line, self.typing(line), table.concat(to, ","))
+      return
+    end
+  end
+end
+
 --! (MP_BOT_DIAG) Where the GP's offices, their doctors, the patients and
 --! the doctors are, in the log once a month.
 function M:diagnose(s)
@@ -1751,6 +1923,12 @@ function M:think()
   self.next_daily = day + 1
   local s = self:assess()
   self:daily(s)
+  -- Specialists: lent to allies who cannot hire one (a hospital out of the
+  -- race or done still helps its team), asked for when it cannot hire one.
+  if bot.world.mp_coop then
+    self:helpAllies(s)
+    if not s.hosp.mp_place then self:askAllies(s) end
+  end
   if s.hosp.mp_place then return end -- out of the race (or won): no more building
   if not s.hosp.opened and s.staffed_desks > 0 and s.rooms.gp and (s.staff.Doctor or 0) > 0 and
       not bot:sharesWithPerson() then

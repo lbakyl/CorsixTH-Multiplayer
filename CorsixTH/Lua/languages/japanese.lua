@@ -2922,6 +2922,7 @@ tooltip.multiplayer_window.name = "他のプレイヤーに表示される名前
 tooltip.multiplayer_window.new_game = "セーブデータではなく新しいゲームを始めます"
 tooltip.multiplayer_window.password = "参加または作成する部屋のパスワード (空欄: パスワードなし)"
 tooltip.multiplayer_window.player_row = "クリック: このプレイヤーの病院を表示 (N: 次の病院)"
+tooltip.multiplayer_window.chat_target = "メッセージの宛先：全員、自分のチーム（チーム対抗レース）、または一人のプレイヤー。クリックまたはTabで次へ"
 tooltip.multiplayer_window.players = "この部屋の人数"
 tooltip.multiplayer_window.ready = "開始の準備ができたことをホストに伝えます"
 tooltip.multiplayer_window.refer_button = "この患者を他のプレイヤーの病院に紹介します。相手が受け取る必要があります。"

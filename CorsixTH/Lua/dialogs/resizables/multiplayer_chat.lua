@@ -23,9 +23,10 @@ SOFTWARE. --]]
 --!
 --! UIMultiplayerChat shows the last lines at the top left of the game view,
 --! each for a while on a bar in the sender's colour, and opens the input line
---! on Enter. UIMultiplayerChatInput is that line: Tab chooses
---! who it is for (everybody, in a race of two teams the own team, then each
---! other player), remembered for next time; Enter sends, Escape closes.
+--! on Enter. UIMultiplayerChatInput is that line: Tab (or a click on the
+--! "To ..." box) chooses who it is for (everybody, in a race of teams the own
+--! team, then each other player), remembered for next time; Enter sends,
+--! Escape closes.
 class "UIMultiplayerChat" (Window)
 
 ---@class UIMultiplayerChat: Window
@@ -186,6 +187,10 @@ function UIMultiplayerChatInput:UIMultiplayerChatInput(ui)
   self:setPosition(10, -70) -- just above the bottom bar
   self.target_panel = self:addBevelPanel(8, 8, 110, 24, Colours.Caption)
   self.target_panel.lowered = true
+  -- (A click does what Tab does: the box says who it is for, and players
+  -- did not find the team behind Tab.)
+  self.target_panel:makeButton(0, 0, 110, 24, nil, self.nextTarget)
+      :setTooltip(_S.tooltip.multiplayer_window.chat_target)
   self.box = self:addBevelPanel(124, 8, WIDTH - 132, 24, Colours.Textbox, Colours.PanelDefault,
       Colours.PanelDefault):setAutoClip(true)
       :makeTextbox(--[[persistable:mp_chat_send]] function() self:send() end,

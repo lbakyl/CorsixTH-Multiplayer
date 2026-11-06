@@ -4401,6 +4401,7 @@ tooltip.multiplayer_window.name = "Имя, которое видят други�
 tooltip.multiplayer_window.new_game = "Начать новую игру вместо сохранённой"
 tooltip.multiplayer_window.password = "Пароль комнаты, в которую вы входите или которую создаёте (пусто: без пароля)"
 tooltip.multiplayer_window.player_row = "Щелчок: показать больницу этого игрока (N: следующая больница)"
+tooltip.multiplayer_window.chat_target = "Кому сообщение: всем, вашей команде (в гонке команд) или одному игроку. Щёлкните или нажмите Tab для следующего"
 tooltip.multiplayer_window.players = "На сколько игроков комната"
 tooltip.multiplayer_window.ready = "Сообщить хозяину комнаты, что вы готовы начать"
 tooltip.multiplayer_window.refer_button = "Предложить этого пациента больнице другого игрока. Он должен согласиться."
