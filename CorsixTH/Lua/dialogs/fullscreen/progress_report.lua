@@ -278,19 +278,20 @@ function UIProgressReport:draw(canvas, x, y)
     local ly = (by + 2) * s
     if pnum > 4 then
       -- (The picture has bars for four: the second column's drawn alike.)
-      local bar = {{65, 65, 61, 0, 147, 21}, {160, 160, 160, 1, 145, 19}, {250, 250, 250, 1, 143, 17},
-          {219, 219, 215, 2, 142, 16}}
+      local bar = {{65, 65, 61, 0, 147, 20}, {160, 160, 160, 1, 145, 18}, {250, 250, 250, 1, 143, 16},
+          {219, 219, 215, 2, 142, 15}}
       for _, b in ipairs(bar) do
-        canvas:drawRect(canvas:mapRGB(b[1], b[2], b[3]), x + (bx - 1 + b[4]) * s, y + (by + b[4]) * s,
+        canvas:drawRect(canvas:mapRGB(b[1], b[2], b[3]), x + (bx + b[4]) * s, y + (by + b[4]) * s,
             b[5] * s, b[6] * s)
       end
     end
     -- (Multiplayer: the square before the name in the hospital's colour, as
-    -- picked in the room, over the picture's red, yellow, green and blue;
-    -- the second column has no squares in the picture, so always drawn.)
+    -- picked in the room, over the picture's red, yellow, green and blue,
+    -- in a dark frame like the bar's.)
     local rgb = world.mp_coop and MultiplayerSession.markerColour(world, hospital)
     if rgb then
-      canvas:drawRect(canvas:mapRGB(rgb[1], rgb[2], rgb[3]), x + (bx - 19) * s, y + ly - 2 * s, 19 * s, 19 * s)
+      canvas:drawRect(canvas:mapRGB(65, 65, 61), x + (bx - 20) * s, y + by * s, 21 * s, 20 * s)
+      canvas:drawRect(canvas:mapRGB(rgb[1], rgb[2], rgb[3]), x + (bx - 19) * s, y + (by + 1) * s, 19 * s, 18 * s)
     end
     local font = (pnum == self.selected) and self.red_font or self.normal_font
     font:draw(canvas, self:fitName(font, hospital.name:upper(), 136 * s), x + (bx + 7) * s, y + ly)
