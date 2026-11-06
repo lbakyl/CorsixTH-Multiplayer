@@ -3296,7 +3296,7 @@ local function bots_bid(world, auction)
         auction.worth = auction.worth or {}
         auction.borrow = auction.borrow or {}
         if not auction.worth[i] then
-          local worth, need, fill = MultiplayerSession.botPlotWorth(world, i, auction)
+          local worth, _, fill = MultiplayerSession.botPlotWorth(world, i, auction)
           auction.worth[i] = worth
           auction.borrow[i] = MultiplayerSession.botCanBorrow(world, i, fill)
           auction_log(string.format("auction %d: plot worth $%d to bot hospital %d (land %d%% full, may borrow $%d)",
