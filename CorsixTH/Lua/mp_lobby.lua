@@ -669,22 +669,31 @@ end
 
 function MultiplayerLobby:sendChat(text) self:send("CHAT", {text = text}) end
 
---! A race of two teams: the peers of this player's team mates still in the
---! game, in peer order (empty in any other game).
+--! This player's allies still in the game, in peer order: in a race of
+--! teams their team mates, in a game that is no race (co-op, one shared
+--! hospital) every other player; none in a race of single hospitals.
 --!param world (World) the game
 --!param me (integer) this player's peer number
 function MultiplayerLobby:teamMates(world, me)
   local mates = {}
   local hosp = self.peer_hospital or {}
+  local coop = world and world.mp_coop
   local mine = world and hosp[me] and world:mpTeam(world.hospitals[hosp[me]])
-  if not mine then return mates end
+  local everybody = coop and not coop.competitive
+  if not (mine or everybody) then return mates end
   for _, p in ipairs(self.game_players or {}) do
     if p.peer ~= me and p.connected and hosp[p.peer]
-        and world:mpTeam(world.hospitals[hosp[p.peer]]) == mine then
+        and (everybody or world:mpTeam(world.hospitals[hosp[p.peer]]) == mine) then
       mates[#mates + 1] = p.peer
     end
   end
   return mates
+end
+
+--! Does a team line in this game go to the team (a race of teams) or to the
+--! allies (everybody else; co-op)?
+function MultiplayerLobby.alliesWord(world)
+  return not (world and world.mp_coop and world.mp_coop.teams)
 end
 
 function MultiplayerLobby:leaveRoom()
@@ -800,12 +809,13 @@ function MultiplayerLobby:_onCHAT(f)
     local S = _S.multiplayer_window
     local text, private = (f.name or "?") .. ": " .. (f.text or ""), f.to ~= nil
     if f.team == "1" then
-      -- A team line (to the sender's team mates).
+      -- A team line (to the sender's team mates; in co-op to the allies).
       private = "team"
+      local allies = MultiplayerLobby.alliesWord(TheApp.world)
       if tonumber(f.peer) == session.peer_id then
-        text = S.chat_team_out:format(f.text or "")
+        text = (allies and S.chat_allies_out or S.chat_team_out):format(f.text or "")
       else
-        text = S.chat_team_in:format(f.name or "?", f.text or "")
+        text = (allies and S.chat_allies_in or S.chat_team_in):format(f.name or "?", f.text or "")
       end
     elseif private and tonumber(f.peer) == session.peer_id then
       local to_name = "?"

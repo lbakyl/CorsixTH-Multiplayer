@@ -24,9 +24,9 @@ SOFTWARE. --]]
 --! UIMultiplayerChat shows the last lines at the top left of the game view,
 --! each for a while on a bar in the sender's colour, and opens the input line
 --! on Enter. UIMultiplayerChatInput is that line: Tab (or a click on the
---! "To ..." box) chooses who it is for (everybody, in a race of teams the own
---! team, then each other player), remembered for next time; Enter sends,
---! Escape closes.
+--! "To ..." box) chooses who it is for (everybody, the own team in a race of
+--! teams or the allies in co-op, then each other player), remembered for next
+--! time; Enter sends, Escape closes.
 class "UIMultiplayerChat" (Window)
 
 ---@class UIMultiplayerChat: Window
@@ -232,15 +232,16 @@ function UIMultiplayerChatInput:_others()
   return others
 end
 
---! This player's team mates still in the game (their peers; a race of two
---! teams only).
+--! This player's team mates (a race of teams) or allies (co-op) still in the
+--! game: their peers (MultiplayerLobby:teamMates).
 function UIMultiplayerChatInput:_teamMates()
   local lobby, session = self:_lobby()
   return lobby and lobby:teamMates(TheApp.world, session.peer_id) or {}
 end
 
 --! Who a line can be for, in Tab order: everybody (nil), the own team
---! ("team", when there is a team mate), then each other player (their peer).
+--! ("team": the team mates, or the allies, when there is one), then each other
+--! player (their peer).
 function UIMultiplayerChatInput:_targets()
   local targets = {false}
   if #self:_teamMates() > 0 then targets[#targets + 1] = "team" end
@@ -253,7 +254,7 @@ function UIMultiplayerChatInput:_showTarget()
   local S = _S.multiplayer_window
   local label
   if lobby and lobby.chat_target == "team" and #self:_teamMates() > 0 then
-    label = S.chat_to_team
+    label = MultiplayerLobby.alliesWord(TheApp.world) and S.chat_to_allies or S.chat_to_team
   end
   for _, p in ipairs(self:_others()) do
     if lobby and p.peer == lobby.chat_target then label = S.chat_to:format(p.name) end

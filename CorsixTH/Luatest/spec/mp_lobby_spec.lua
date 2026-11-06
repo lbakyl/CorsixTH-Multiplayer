@@ -209,6 +209,16 @@ describe("MultiplayerLobby", function()
     teams = nil -- not a race of two teams
     world.mpTeam = function() return nil end
     assert.same({}, lobby:teamMates(world, 3))
+    -- Co-op (no race): every other player still there is an ally.
+    world.mp_coop = {players = 4}
+    assert.same({1, 4}, lobby:teamMates(world, 3))
+    assert.is_true(MultiplayerLobby.alliesWord(world))
+    -- A race of single hospitals: nobody.
+    world.mp_coop.competitive = true
+    assert.same({}, lobby:teamMates(world, 3))
+    -- A race of teams says "team".
+    world.mp_coop.teams = {1, 2, 1, 2}
+    assert.is_false(MultiplayerLobby.alliesWord(world))
   end)
 
   it("works out the mode from the colours and teams, like the server", function()

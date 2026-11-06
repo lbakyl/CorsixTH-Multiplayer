@@ -365,8 +365,8 @@ end
 function Bot:now() return socket.gettime() end
 
 --! Say something after `delay` seconds: to everybody, privately to one peer,
---! or to = "team": to its team mates only in a race of teams (to everybody
---! when there are no teams). `banter`: small talk (greetings, taunts, remarks
+--! or to = "team": to its team mates only in a race of teams, its allies in
+--! co-op (to everybody when it has none). `banter`: small talk (greetings, taunts, remarks
 --! nobody asked for), which players can hide (MULTIPLAYER > BOT CHAT), unlike
 --! what a bot answers or tells its team mates.
 function Bot:say(text, delay, to, fn, banter)

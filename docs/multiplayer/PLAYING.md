@@ -250,8 +250,9 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 - **Chat:** press **Y** (with or without Shift or Caps Lock; or
   **MULTIPLAYER**, **SEND A MESSAGE**) and
   type; **Tab** (or a click on the **To ...** box left of the text)
-  chooses who it is for (all players, in a race of teams your team, or one
-  player), and the game
+  chooses who it is for (all players; your team in a race of teams, or
+  **To allies** in co-op: every other hospital, people and bots, with a
+  green mark; or one player), and the game
   remembers it for next time; **Enter** sends, **Escape** cancels. Enter
   keeps its usual jobs (finish a room, OK in a dialog, hire). To use
   another key for the chat: **OPTIONS**, **Hotkeys**, **General In-Game

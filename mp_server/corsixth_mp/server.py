@@ -840,8 +840,9 @@ class Server:
         # player's game can hide it (MULTIPLAYER > BOT CHAT).
         extra = {"banter": 1} if f.get("banter") == "1" else {}
         if f.get("team") == "1":
-            # A team line (a race of two teams): the sender's team mates, as the
-            # sender's game knows them (to=<peer>,<peer>...), and back to the sender.
+            # A team line (a race of teams; in co-op the allies): the sender's
+            # team mates, as the sender's game knows them (to=<peer>,<peer>...),
+            # and back to the sender.
             peers = sorted({int(p) for p in to.split(",") if p.isdigit()} & set(room.players)
                            - {player.peer})
             if not peers:
