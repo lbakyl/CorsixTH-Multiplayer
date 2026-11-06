@@ -177,7 +177,11 @@ environment):
   with more bots), so the people's own chat stays readable. Its lines are
   grey in the players' chat. The answer depends on a few words (hello,
   thanks, how are you, a question, insults, winning, money, bot; a few Czech
-  ones too). Bots do not answer each other.
+  ones too). Bots do not answer each other. Small talk (greetings, taunts
+  about dirty tricks and rats, remarks nobody asked for) goes out marked
+  `banter=1`; each player chooses in MULTIPLAYER > BOT CHAT whether to see
+  all, everything but the small talk, or nothing from bots
+  (`multiplayer_bot_chat` in the config: `all`, `useful`, `off`).
 - **Offers** (staff, patients, research, money requests): after 3 to 8
   seconds it accepts in co-op (unless it cannot pay and keep its reserve) and
   declines in a race, each with a chat line to the sender. Money sent to it is

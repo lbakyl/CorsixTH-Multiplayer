@@ -189,6 +189,7 @@ local function new_config_defaults()
     new_machine_extra_info = true,
     player_name = [[]],
     multiplayer_server = [[]],
+    multiplayer_bot_chat = [[all]],
   }
 end
 
@@ -825,7 +826,14 @@ param(config_values, 'player_name') .. '\n' .. [=[
 -------------------------------------------------------------------------------
 -- Address of the last multiplayer server you connected to, like [[host:port]].
 --]=] .. '\n' ..
-param(config_values, 'multiplayer_server') .. '\n'
+param(config_values, 'multiplayer_server') .. '\n' .. [=[
+
+-------------------------------------------------------------------------------
+-- What bots say in a multiplayer game, on this computer: [[all]], [[useful]]
+-- (what they answer and tell their team mates, without greetings and taunts)
+-- or [[off]]. Also in the game's MULTIPLAYER menu, BOT CHAT.
+--]=] .. '\n' ..
+param(config_values, 'multiplayer_bot_chat') .. '\n'
 
   return table.concat(parts)
 end

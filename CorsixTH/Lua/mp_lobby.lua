@@ -775,7 +775,23 @@ function MultiplayerLobby:_onLOBBY(f)
   self:_changed("lobby", f)
 end
 
+--! Whether this computer shows a chat line: a bot's only as far as the
+--! player's BOT CHAT setting lets it ("all"; "useful": not its small talk,
+--! which the bot marks banter=1; "off"). People's lines always.
+--!param setting (string) the config's multiplayer_bot_chat
+--!param f (table) the CHAT message
+--!param sender (table) the sender in the player list, or nil
+function MultiplayerLobby.chatShown(setting, f, sender)
+  if not (sender and sender.bot == "1") then return true end
+  if setting == "off" then return false end
+  return not (setting == "useful" and f.banter == "1")
+end
+
 function MultiplayerLobby:_onCHAT(f)
+  local config = TheApp and TheApp.config
+  if not MultiplayerLobby.chatShown(config and config.multiplayer_bot_chat, f, self.players[tonumber(f.peer)]) then
+    return
+  end
   self.chat[#self.chat + 1] = f
   if #self.chat > 20 then table.remove(self.chat, 1) end
   local session = TheApp and TheApp.mp_session
@@ -1279,6 +1295,16 @@ function MultiplayerLobby:_addMultiplayerMenu(ui, mode)
     end
     menu:appendMenu(_S.multiplayer_window.menu_colours, colours)
   end
+  -- What the bots say, on this computer only (saved in the config).
+  local bot_chat = UIMenu()
+  for _, choice in ipairs({"all", "useful", "off"}) do
+    bot_chat:appendCheckItem(_S.multiplayer_window["menu_bot_chat_" .. choice],
+        (TheApp.config.multiplayer_bot_chat or "all") == choice, function()
+          TheApp.config.multiplayer_bot_chat = choice
+          TheApp:saveConfig()
+        end, "mp_bot_chat")
+  end
+  menu:appendMenu(_S.multiplayer_window.menu_bot_chat, bot_chat)
   if MultiplayerLobby.isRace(mode) and not (world and world.mp_coop and world.mp_coop.tricks_off) then
     menu:appendItem(_S.multiplayer_window.menu_sabotage, function()
       local current = TheApp.ui

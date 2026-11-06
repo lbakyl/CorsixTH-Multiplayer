@@ -196,7 +196,11 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   and the windows that send, offer or ask something have tabs of the other
   player's colour on both sides of their title. The
   **MULTIPLAYER** menu, **PLAYER COLOURS** shows the bars only for the
-  other players' people (the default), for everybody, or not at all. On the town map, land on
+  other players' people (the default), for everybody, or not at all.
+  **BOT CHAT** (same menu, for you only, kept for the next games) shows
+  everything bots say (the default), **no small talk** (their answers and
+  what a team mate bot tells you, without greetings and taunts), or nothing
+  from bots. On the town map, land on
   another player's side shows that player's name and "not for sale". The
   **MULTIPLAYER** menu, **TRADE WITH OTHER PLAYERS** sends money, or offers
   a member of staff, free or for a price up to $10,000 (the -$500 and +$500 buttons;

@@ -110,6 +110,37 @@ describe("MultiplayerLobby", function()
     assert.equal("connected", lobby.state)
   end)
 
+  it("shows a bot's chat as far as the player's BOT CHAT setting lets it", function()
+    local person, bot = {name = "Bob"}, {name = "Bot Agnes", bot = "1"}
+    local hello, answer = {text = "hi", banter = "1"}, {text = "done"}
+    for _, setting in ipairs({"all", "useful", "off"}) do
+      assert.is_true(MultiplayerLobby.chatShown(setting, hello, person)) -- people always
+      assert.is_true(MultiplayerLobby.chatShown(setting, hello, nil)) -- the server's notes
+    end
+    assert.is_true(MultiplayerLobby.chatShown("all", hello, bot))
+    assert.is_true(MultiplayerLobby.chatShown(nil, hello, bot)) -- (no setting: all)
+    assert.is_false(MultiplayerLobby.chatShown("useful", hello, bot))
+    assert.is_true(MultiplayerLobby.chatShown("useful", answer, bot))
+    assert.is_false(MultiplayerLobby.chatShown("off", answer, bot))
+    -- Hidden lines do not reach the chat list.
+    local saved = _G.TheApp
+    _G.TheApp = {config = {multiplayer_bot_chat = "useful"}}
+    local lobby, t = make_lobby()
+    t.inbox = {"WELCOME id=1 proto=1",
+      "JOINED difficulty=full level=2 max=3 mode=coop owner=1 peer=1 room=r",
+      "PLAYER name=Alice owner=1 peer=1 ready=0 rtt=0",
+      "PLAYER bot=1 name=Bot%20Agnes owner=0 peer=2 ready=1 rtt=0",
+      "LOBBY count=2 delay=3 latency=0 max=3 speed=Normal",
+      "CHAT banter=1 name=Bot%20Agnes peer=2 text=Hello%20everybody",
+      "CHAT name=Bot%20Agnes peer=2 text=Your%20ward%20is%20ready",
+      "CHAT banter=1 name=Alice peer=1 text=hi"}
+    lobby:poll()
+    _G.TheApp = saved
+    assert.equal(2, #lobby.chat)
+    assert.equal("Your ward is ready", lobby.chat[1].text)
+    assert.equal("hi", lobby.chat[2].text)
+  end)
+
   it("gives up when the server refuses the hello", function()
     local lobby, t = make_lobby()
     t.inbox = {"ERROR code=protocol text=old"}

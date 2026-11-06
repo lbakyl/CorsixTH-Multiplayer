@@ -836,6 +836,9 @@ class Server:
             return
         text = f.get("text", "")[:200]
         to = f.get("to", "")
+        # A bot's small talk (greetings, taunts) is marked, so that each
+        # player's game can hide it (MULTIPLAYER > BOT CHAT).
+        extra = {"banter": 1} if f.get("banter") == "1" else {}
         if f.get("team") == "1":
             # A team line (a race of two teams): the sender's team mates, as the
             # sender's game knows them (to=<peer>,<peer>...), and back to the sender.
@@ -844,19 +847,19 @@ class Server:
             if not peers:
                 return
             line = encode("CHAT", peer=player.peer, name=player.name, text=text,
-                          to=",".join(map(str, peers)), team=1)
+                          to=",".join(map(str, peers)), team=1, **extra)
             for p in peers:
                 room.players[p].send(line)
             player.send(line)
             return
         if to.isdigit() and int(to) in room.players:
             # A private line: only that player, and the sender sees it sent.
-            line = encode("CHAT", peer=player.peer, name=player.name, text=text, to=int(to))
+            line = encode("CHAT", peer=player.peer, name=player.name, text=text, to=int(to), **extra)
             room.players[int(to)].send(line)
             if int(to) != player.peer:
                 player.send(line)
             return
-        room.broadcast(encode("CHAT", peer=player.peer, name=player.name, text=text))
+        room.broadcast(encode("CHAT", peer=player.peer, name=player.name, text=text, **extra))
 
     # ------------------------------------------------------------------ bots
 

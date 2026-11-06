@@ -358,9 +358,12 @@ function Bot:now() return socket.gettime() end
 
 --! Say something after `delay` seconds: to everybody, privately to one peer,
 --! or to = "team": to its team mates only in a race of teams (to everybody
---! when there are no teams).
-function Bot:say(text, delay, to, fn)
-  self.outbox[#self.outbox + 1] = {at = self:now() + (fast and 0 or (delay or 2)), text = text, to = to, fn = fn}
+--! when there are no teams). `banter`: small talk (greetings, taunts, remarks
+--! nobody asked for), which players can hide (MULTIPLAYER > BOT CHAT), unlike
+--! what a bot answers or tells its team mates.
+function Bot:say(text, delay, to, fn, banter)
+  self.outbox[#self.outbox + 1] = {at = self:now() + (fast and 0 or (delay or 2)), text = text, to = to, fn = fn,
+      banter = banter and 1 or nil}
 end
 
 --! A person's typing time for a line: a pause to read, then some per letter.
@@ -378,13 +381,13 @@ function Bot:flushOutbox()
       if entry.text and entry.to == "team" then
         local mates = self.lobby:teamMates(self.world, TheApp.mp_session.peer_id)
         if #mates > 0 then
-          self.lobby:send("CHAT", {text = entry.text, to = table.concat(mates, ","), team = 1})
+          self.lobby:send("CHAT", {text = entry.text, to = table.concat(mates, ","), team = 1, banter = entry.banter})
         else
-          self.lobby:send("CHAT", {text = entry.text})
+          self.lobby:send("CHAT", {text = entry.text, banter = entry.banter})
         end
         log("CHAT" .. (#mates > 0 and " (team): " or ": ") .. entry.text)
       elseif entry.text then
-        self.lobby:send("CHAT", {text = entry.text, to = entry.to})
+        self.lobby:send("CHAT", {text = entry.text, to = entry.to, banter = entry.banter})
         log("CHAT: " .. entry.text)
       end
     end
@@ -447,10 +450,10 @@ function Bot:tellRival(kind, from)
     local peers, names = self:peopleOfHospital(hospitals[1])
     if #peers == 0 then return end -- a bot: bots do not chat with each other
     local line = pick(LINES.tricked[kind]):format(table.concat(names, " and "))
-    self:say(line, typing(line), table.concat(peers, ","))
+    self:say(line, typing(line), table.concat(peers, ","), nil, true)
   elseif #hospitals > 1 and LINES.tricked_unknown[kind] then
     local line = pick(LINES.tricked_unknown[kind])
-    self:say(line, typing(line))
+    self:say(line, typing(line), nil, nil, true)
   end
 end
 
@@ -718,7 +721,7 @@ function Bot:onChat(f)
     end)
     if asked then return end
   end
-  self:say(line, typing(line), to)
+  self:say(line, typing(line), to, nil, not (private or named))
 end
 
 --------------------------------------------------------------------------------
@@ -1776,7 +1779,7 @@ function Bot:playTrick()
   TheApp.mp_session:issue({kind = "sabotage", trick = kind, level = level, to = world:getHospitalIndex(target[1])})
   if rand() < 0.5 then
     local line = pick(LINES.trick):format(target[2])
-    self:say(line, 20 + rand() * 40)
+    self:say(line, 20 + rand() * 40, nil, nil, true)
   end
   return true
 end
@@ -1948,7 +1951,7 @@ function Bot:think()
     end
     table.sort(others)
     local line = self:ownLine(LINES.greet[self.fiery and "fiery" or "friendly"]):format(others[1] and pick(others) or "everybody")
-    self:say(line, typing(line))
+    self:say(line, typing(line), nil, nil, true)
   end
 
   if self.manager then

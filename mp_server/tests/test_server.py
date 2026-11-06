@@ -659,6 +659,22 @@ def test_private_chat_reaches_only_the_addressee(run):
     run(body)
 
 
+def test_banter_mark_goes_along(run):
+    async def body(server, port):
+        a, b = await two_players_in_room(port)
+        # Small talk keeps its mark (everybody, private, team); other lines
+        # get none, whatever else they send.
+        a.send(encode("CHAT", text="hi all", banter=1))
+        assert (await b.expect("CHAT", text="hi all"))["banter"] == "1"
+        a.send(encode("CHAT", text="psst", to=2, banter=1))
+        assert (await b.expect("CHAT", text="psst"))["banter"] == "1"
+        a.send(encode("CHAT", text="mates", to="2", team=1, banter=1))
+        assert (await b.expect("CHAT", text="mates"))["banter"] == "1"
+        a.send(encode("CHAT", text="plain", banter="yes"))
+        assert "banter" not in await b.expect("CHAT", text="plain")
+    run(body)
+
+
 def test_competitive_room_and_continued_seats(run):
     async def body(server, port):
         a = await Client.connect(port, "Ann")
