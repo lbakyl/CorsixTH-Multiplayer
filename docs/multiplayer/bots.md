@@ -91,9 +91,9 @@ best project it can afford is done, one every one to four game days.
   good reputation and a clean hospital; an epidemic is declared), and in a
   race it throws out evil handymen a few days after they arrive and shoots
   attack rats.
-- **Every month**: prices (down 10% when patients walked out over them, else
-  up with a good reputation and full queues, down when it suffers), repaying
-  the loan once money flows in again (the balance up since last month, over
+- **Prices**: a bot never changes the treatment prices (they stay at 100%;
+  one changed by an older bot is set back to 100% in its first month).
+- **Every month**: repaying the loan once money flows in again (the balance up since last month, over
   $17,000, keeping $12,000; or anything over $25,000), research aimed at the
   disease whose treatment room it lacks most.
 - **Sharing a hospital with a person** (one shared hospital, or a team
@@ -127,13 +127,12 @@ environment):
 
 - `ASK kind=plan` once a game week (at most every 25 seconds): the hospital's
   report (`Manager:report`: money, goals, rooms and queues, rooms patients
-  needed, staff, comfort, prices, why patients left, rivals, and what its team
+  needed, staff, comfort, why patients left, rivals, and what its team
   mates said in the last 30 game days) and the menu of projects
   (`Manager.menu`). The model (default `claude-haiku-5-5`, low effort,
-  structured output) answers up to six priorities with weights, a price and a
+  structured output) answers up to six priorities with weights and a
   one-line note. The server keeps only actions from the menu; the manager adds
-  the weights to those projects' scores until they are done, and sets the
-  price at the next monthly round. A team mate sometimes says the note in the
+  the weights to those projects' scores until they are done. A team mate sometimes says the note in the
   chat; a rival keeps it to itself.
 - `ASK kind=chat` when a person writes to the bot (privately or by name): the
   model answers in the bot's voice (friendly, or a cheeky rival), in one short
@@ -150,7 +149,7 @@ environment):
   would. A wish is over once anybody has done it, and lapses after 60 game
   days if it cannot be done. What a team mate says they will do themselves, or
   takes back, the bot leaves alone for 60 game days ("leave").
-- `ANSWER id=...` with `actions` ("action:weight,..."), `price`, `note`, or
+- `ANSWER id=...` with `actions` ("action:weight,..."), `note`, or
   `text` (and `wish`, a menu item); `error=off|busy|none|failed`. Only bots
   may ask, a plan at most every 20 seconds and a chat line every 3 seconds per bot.
 - A daily budget (`CORSIXTH_MP_AI_DAILY_USD`, default $3; kept in

@@ -7,8 +7,9 @@ question (ASK lines, see server.py):
 
   * plan: once per game week the bot sends a report of its hospital (its
     problems first) and the projects it can do; the model answers with up
-    to six priorities from that menu (with weights), a treatment price, and
-    a short note on why. The bot still checks and does everything itself.
+    to six priorities from that menu (with weights) and a short note on
+    why. The bot still checks and does everything itself. (No prices: bots
+    keep the normal treatment prices, Argus 2026-11-07.)
   * chat: a player wrote to the bot; the model writes its answer in the
     bot's voice (friendly in co-op, a good-natured rival in a race).
 
@@ -58,8 +59,7 @@ explode, no floor left for new rooms, long queues). Fix them first: the project 
 replace:<room> buys a new machine for that room. The report may end with what its team mates said lately: what
 they asked for and has not been done yet comes first, after the problems. Only name projects from the menu.
 Weights are 1 (nice to have) to 10 (do it first): a weight of 9 or 10 is done before the bot's own ideas, and
-it borrows for it if the money is short; 3 or less only tips the balance. The price is the treatment price in percent of normal (70 to 160): higher earns more
-but costs reputation and patients. The note is one short sentence on the main reason, as the player would
+it borrows for it if the money is short; 3 or less only tips the balance. The note is one short sentence on the main reason, as the player would
 say it in the chat (no numbers needed)."""
 
 PLAN_SCHEMA = {
@@ -77,10 +77,9 @@ PLAN_SCHEMA = {
                 "additionalProperties": False,
             },
         },
-        "price": {"type": "integer"},
         "note": {"type": "string"},
     },
-    "required": ["priorities", "price", "note"],
+    "required": ["priorities", "note"],
     "additionalProperties": False,
 }
 
@@ -229,7 +228,7 @@ class Advisor:
 
     async def plan(self, report: str, menu: list[str]) -> dict | None:
         """Priorities from the menu for this hospital: {"actions": [(action, weight)],
-        "price": int or None, "note": str}."""
+        "note": str}."""
         text = (f"Report:\n{report[:MAX_REPORT]}\n\nMenu of projects: {', '.join(menu)}\n\n"
                 "Choose up to six priorities.")
         answer = await self._ask(PLAN_SYSTEM, text, 4000, PLAN_SCHEMA)
@@ -246,10 +245,8 @@ class Advisor:
             if action in allowed:
                 weight = max(1, min(10, int(item.get("weight", 3))))
                 actions.append((action, weight))
-        price = data.get("price")
-        price = int(price) if isinstance(price, (int, float)) and 70 <= price <= 160 else None
         note = " ".join(str(data.get("note", "")).split())[:MAX_CHAT_OUT]
-        return {"actions": actions, "price": price, "note": note}
+        return {"actions": actions, "note": note}
 
     async def chat(self, name: str, rival: bool, context: str, lines: list[str]) -> str | None:
         """The bot's answer to the last chat line."""

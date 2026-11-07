@@ -1010,8 +1010,7 @@ class Server:
                     player.send(encode("ANSWER", id=qid, error="none"))
                     return
                 actions = ",".join(f"{a}:{w}" for a, w in plan["actions"])
-                player.send(encode("ANSWER", id=qid, actions=actions, price=plan["price"],
-                                   note=plan["note"] or None))
+                player.send(encode("ANSWER", id=qid, actions=actions, note=plan["note"] or None))
             elif f.get("menu") and f.get("rival") != "1":
                 # A team mate's bot: it may also do what it was asked (wish).
                 lines = [line for line in f.get("lines", "").split("\n") if line]

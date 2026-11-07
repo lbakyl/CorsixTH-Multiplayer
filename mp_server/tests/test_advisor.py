@@ -38,7 +38,8 @@ def test_plan_keeps_only_the_menu_and_counts_the_cost(tmp_path):
                          "note": "Long  queues\nat the GP."})
     a = fake_advisor(answer, tmp_path=tmp_path)
     plan = asyncio.run(a.plan("Money $9000", ["room:gp", "hire:Nurse"]))
-    assert plan == {"actions": [("room:gp", 10), ("hire:Nurse", 3)], "price": 110, "note": "Long queues at the GP."}
+    # (A price the model sends anyway is dropped: bots keep normal prices.)
+    assert plan == {"actions": [("room:gp", 10), ("hire:Nurse", 3)], "note": "Long queues at the GP."}
     call = a.client.messages.calls[0]
     assert call["model"] == "claude-haiku-5-5"
     assert call["output_config"]["format"]["type"] == "json_schema"
@@ -121,7 +122,7 @@ def test_only_bots_ask_and_not_too_often():
         await bot.expect("JOINED")
         bot.send(encode("ASK", id=7, kind="plan", text="Money $1", menu="room:gp,hire:Nurse"))
         answer = await bot.expect("ANSWER", id=7)
-        assert answer["actions"] == "room:gp:4" and answer["price"] == "100" and answer["note"] == "GP first."
+        assert answer["actions"] == "room:gp:4" and "price" not in answer and answer["note"] == "GP first."
         bot.send(encode("ASK", id=8, kind="plan", text="again", menu="room:gp"))
         assert (await bot.expect("ANSWER", id=8))["error"] == "busy"
         # Advice off: the bot plays on its own rules.

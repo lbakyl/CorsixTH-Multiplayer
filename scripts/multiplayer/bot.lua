@@ -654,7 +654,7 @@ function Bot:askPlan()
   self.last_plan = self:now()
   return self:ask("plan", {text = report, menu = table.concat(manager:planMenu(), ",")}, 60, function(f)
     if not f then return end
-    local plan = {priorities = {}, price = tonumber(f.price)}
+    local plan = {priorities = {}}
     for action, weight in (f.actions or ""):gmatch("([%w_:]+):(%d+)") do
       plan.priorities[#plan.priorities + 1] = {action = action, weight = tonumber(weight)}
     end

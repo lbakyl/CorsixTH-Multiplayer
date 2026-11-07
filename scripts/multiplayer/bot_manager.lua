@@ -18,12 +18,12 @@
 --    stands, land bought (borrowing for it) when there is no floor left.
 --  * In a race it throws out evil handymen and shoots attack rats (after
 --    a week or two, as a busy player would), more handymen for a broken
---    boiler, no dearer prices during a smear campaign, a word to whoever
+--    boiler, a word to whoever
 --    played the trick; it aims its own dirty tricks at whoever leads.
 --  * A research room with two desks, a researcher placed in it, and its
 --    research shared for free with its allies when they lack it.
 --  * A plan from a language model (Manager:applyPlan, through the server)
---    can raise the scores of some projects and change prices or the loan;
+--    can raise the scores of some projects (never prices: bots keep them);
 --    the manager still checks everything and plays on without it. The
 --    report for it starts with the hospital's problems (Manager:problems),
 --    and its most urgent choices come before the manager's own ideas.
@@ -1099,7 +1099,7 @@ function M:monthLine(s)
       .. " surgeons %d; prices %d%%; reputation %d, $%d; loan $%d; staff %d (%s), juniors %d, consultants %d;"
       .. " staff happy %d%%, tired %d%%; patients happy %d%%; land %d%% full", s.month, table.concat(left, " "), table.concat(top, " "),
       s.patients, table.concat(queues, " "), s.reception_queue, hosp:countStaffOfCategory("Psychiatrist"),
-      hosp:countStaffOfCategory("Surgeon"), self.price_target or 100, s.reputation, math.floor(s.balance),
+      hosp:countStaffOfCategory("Surgeon"), 100, s.reputation, math.floor(s.balance),
       math.floor(s.loan or 0), n, table.concat(staff, ","), juniors, consultants, math.floor(s.staff_happy * 100 + 0.5),
       math.floor(s.fatigue * 100 + 0.5), math.floor((s.happiness or 0) * 100 + 0.5),
       math.floor(self:landFill(s) * 100 + 0.5))
@@ -1109,40 +1109,19 @@ end
 function M:monthly(s)
   local hosp = s.hosp
   self.log(self:monthLine(s))
-  -- Prices: dearer with a good reputation and full queues, cheaper when the
-  -- reputation suffers.
-  local waiting = 0
-  for _, q in pairs(s.queue) do waiting = waiting + q end
-  local target = self.price_target or 100
-  local dear = (self.left.over_priced or 0) - (self.dear_seen or 0)
-  self.dear_seen = self.left.over_priced or 0
-  if dear >= 2 then
-    -- Patients walked out over the prices this month: cheaper, whatever else.
-    target = math.max(70, target - 10)
-    self.model_price = nil
-  elseif self.model_price then
-    -- The model's price, unless the reputation is already suffering.
-    target = s.reputation < 300 and math.min(100, self.model_price) or self.model_price
-    self.model_price = nil
-  elseif hosp.mp_smear then
-    -- A smear campaign keeps patients away: not dearer now.
-    target = math.min(target, 100)
-  elseif s.reputation >= 600 and waiting > s.room_count * 2 then
-    target = math.min(150, target + 10)
-  elseif s.reputation < 350 or s.happiness < 0.35 then
-    target = math.max(80, target - 10)
-  elseif s.reputation >= 450 then
-    target = math.min(120, target + 5)
-  end
-  if target ~= self.price_target then
-    self.price_target = target
+  -- Prices: a bot never changes them (Argus, 2026-11-07: its patients
+  -- walked out over prices, and that is the person's business, not a
+  -- computer player's). It sets back to normal what an older bot changed
+  -- (a game continued from a save), once.
+  if not self.prices_normal then
+    self.prices_normal = true
+    local changed = false
     for id, entry in pairs(hosp.disease_casebook) do
-      if entry.price and entry.discovered ~= false and not entry.pseudo then
-        local now = math.floor(entry.price * 100 + 0.5)
-        if now ~= target then self:issue({kind = "set_price", disease = id, percent = target}) end
+      if entry.price and entry.discovered ~= false and not entry.pseudo and math.floor(entry.price * 100 + 0.5) ~= 100 then
+        changed = self:issue({kind = "set_price", disease = id, percent = 100}) or changed
       end
     end
-    self:note(string.format("day %d: prices to %d%%", s.day, target))
+    if changed then self:note(string.format("day %d: prices back to 100%%", s.day)) end
   end
   -- Loan: repay it once the money flows in again (the balance up since a
   -- month ago), keeping $12,000; or what it can spare above $25,000.
@@ -1423,7 +1402,6 @@ function M:report()
       s.reception_queue, s.litter, #machines > 0 and table.concat(machines, "; ") or "none")
   add("Patients: thirst %.0f%%, warmth %.0f%% (%d cold, %d hot), toilet need %.0f%%, happiness %.0f%%. Heating %d/10.",
       s.thirst * 100, s.warmth * 100, s.cold, s.hot, s.toilet * 100, s.happiness * 100, s.heat)
-  add("Prices at %d%% of normal.", self.price_target or 100)
   if self.bot.fiery then
     local rivals = {}
     local world = self.bot.world
@@ -1691,8 +1669,7 @@ function M:leaveTo(key)
   self:note("left to a team mate: " .. key)
 end
 
---! A plan from the model: {priorities = {{action, weight}}, price = percent,
---! loan = amount, say = text}. Raises those projects' scores until done: a
+--! A plan from the model: {priorities = {{action, weight}}}. Raises those projects' scores until done: a
 --! weight of 10 comes before the manager's own ideas (as a team mate's
 --! wish), a weight of 3 only tips the balance.
 function M:applyPlan(plan)
@@ -1708,12 +1685,8 @@ function M:applyPlan(plan)
       taken[#taken + 1] = p.action
     end
   end
-  local price = tonumber(plan.price)
-  if price and price >= 70 and price <= 160 then
-    -- (Set at the next monthly round.)
-    self.model_price = math.floor(price / 5 + 0.5) * 5
-  end
-  self:note(string.format("plan: %s%s", table.concat(taken, ", "), price and (", prices " .. price .. "%") or ""))
+  -- (No price: bots keep the normal prices, M:monthly.)
+  self:note("plan: " .. table.concat(taken, ", "))
 end
 
 --! Its research (discoveries, better drugs and machines) to every ally, a
