@@ -264,6 +264,11 @@ local LINES = {
     "Got it, thanks %s!",
     "That's very kind of you, %s.",
   },
+  -- A room built, but not beside what was asked ({near}).
+  wish_done_far = {"{name}, the {what} is ready, but nothing fit next to the {near}, so I put it where there was room.",
+      "Done, {name}: the {what} is up. There was no space beside the {near}, so it went elsewhere.",
+      "{name}, your {what} is built. Sorry, the {near} had no free floor around it, so it stands a bit further away.",
+      "The {what} is ready, {name}, though not next to the {near}: nothing fit there."},
   refuse = {
     "Not on my watch, %s!",
     "Nice try, %s. No thanks.",
@@ -1324,13 +1329,20 @@ function Bot:roomFits(x, y, w, h)
   return true
 end
 
+-- A room asked for "next to" something is built within this many tiles of it,
+-- else the normal place is used and the person told.
+local NEAR_MAX_GAP = 8
+
 --! Where a player would put a w x h room (squares from `size` down to
 --! `min`, and one tile shorter): against the building's walls and the other
 --! rooms, in rows, with a corridor in front of the door (the row below it;
 --! two rows if possible), without thin gaps that nothing fits into, near the
 --! reception, and never on the reception's or the entrances' floor.
+--! With `near` (a list of {x0, y0, x1, y1} rectangles: the room, desk or door
+--! a person asked to build beside) only spots within NEAR_MAX_GAP tiles of one
+--! of them count, and the nearer the better.
 --!return x, y, w, h or nil
-function Bot:layoutSpot(min, size)
+function Bot:layoutSpot(min, size, near)
   local world = self.world
   local hosp = world.ui.hospital
   local th = world.map.th
@@ -1402,7 +1414,20 @@ function Bot:layoutSpot(min, size)
             if f(x + w, ty) and solid(x + w + 1, ty) then score = score - 1.5 end
           end
           score = score - 0.12 * (math.abs(x + w / 2 - ax) + math.abs(y + h / 2 - ay))
-          spots[#spots + 1] = {score, x, y, w, h}
+          if near then
+            -- Tiles between the spot and the nearest anchor (0: they touch).
+            local gap
+            for _, r in ipairs(near) do
+              local g = math.max(0, r[1] - (x + w - 1), x - r[3]) + math.max(0, r[2] - (y + h - 1), y - r[4])
+              if not gap or g < gap then gap = g end
+            end
+            if gap and gap <= NEAR_MAX_GAP then
+              score = score - 1.5 * gap
+              spots[#spots + 1] = {score, x, y, w, h}
+            end
+          else
+            spots[#spots + 1] = {score, x, y, w, h}
+          end
         end
       end
     end
@@ -1510,7 +1535,39 @@ local SMALLEST = {staff_room = 5}
 -- Game days a spot the room editor refused is left alone.
 local REFUSED_SPOT_DAYS = 90
 
-function Bot:drawRoom(room_type, size, extras)
+--! The tiles a person means by "next to the <place>": rectangles {x0, y0,
+--! x1, y1} of the reception desks, the entrance doors, or the rooms of that
+--! type (`place`: "reception", "entrance" or a room id), in a fixed order.
+function Bot:nearRects(place)
+  local world, hosp = self.world, self.world.ui.hospital
+  local out = {}
+  if place == "reception" then
+    for _, desk in ipairs(hosp:getReceptionDesks()) do
+      if desk.tile_x then out[#out + 1] = {desk.tile_x, desk.tile_y, desk.tile_x, desk.tile_y} end
+    end
+  elseif place == "entrance" then
+    for _, e in ipairs(world.entities) do
+      local id = e.object_type and e.object_type.id
+      if id and id:find("entrance", 1, true) and e.tile_x and hosp:isInHospital(e.tile_x, e.tile_y) then
+        out[#out + 1] = {e.tile_x, e.tile_y, e.tile_x, e.tile_y}
+      end
+    end
+    table.sort(out, function(a, b) return a[2] < b[2] or (a[2] == b[2] and a[1] < b[1]) end)
+  else
+    for _, rm in pairs(world.rooms) do
+      if rm.hospital == hosp and rm.is_active and not rm.crashed and rm.room_info.id == place then
+        out[#out + 1] = {rm.x, rm.y, rm.x + rm.width - 1, rm.y + rm.height - 1, rm.id}
+      end
+    end
+    table.sort(out, function(a, b) return a[5] < b[5] end)
+  end
+  return out
+end
+
+--!param near (string) optional: "reception", "entrance" or a room id: build the
+--! room as close to that as it fits (within NEAR_MAX_GAP tiles). When nothing
+--! fits there, the normal place is used and `self.near_missed` is set.
+function Bot:drawRoom(room_type, size, extras, near)
   local hospital = self.world.ui.hospital
   if self.furnishing then return nil, "busy" end
   if hospital.balance - self:roomCost(room_type) < RESERVE then return nil, "money" end
@@ -1527,12 +1584,30 @@ function Bot:drawRoom(room_type, size, extras)
     return day and today - day < REFUSED_SPOT_DAYS
   end
   local x, y, w, h
+  -- Beside what a person asked for, if it fits within reach.
+  self.near_missed = nil
+  if near then
+    local rects = self:nearRects(near)
+    local ok_near, nx, ny, nw, nh = true
+    if #rects > 0 then ok_near, nx, ny, nw, nh = pcall(self.layoutSpot, self, min, size, rects) end
+    if ok_near and nx and not refused(nx, ny, nw, nh or nw) then
+      x, y, w, h = nx, ny, nw, nh
+      log(string.format("%s next to the %s (%d anchors, the first at %d,%d-%d,%d): %dx%d at %d,%d", room_type.id, near,
+          #rects, rects[1][1], rects[1][2], rects[1][3], rects[1][4], nw, nh or nw, nx, ny))
+    else
+      if not ok_near then log("layout: " .. tostring(nx)) end
+      self.near_missed = near
+      log(string.format("no place for a %s next to the %s: the normal place", room_type.id, near))
+    end
+  end
   -- Where a player would put it (against walls and rooms, in rows).
-  local ok_layout, lx, ly, lw, lh = pcall(self.layoutSpot, self, min, size)
-  if ok_layout and lx and not refused(lx, ly, lw, lh or lw) then
-    x, y, w, h = lx, ly, lw, lh
-  elseif not ok_layout then
-    log("layout: " .. tostring(lx))
+  if not x then
+    local ok_layout, lx, ly, lw, lh = pcall(self.layoutSpot, self, min, size)
+    if ok_layout and lx and not refused(lx, ly, lw, lh or lw) then
+      x, y, w, h = lx, ly, lw, lh
+    elseif not ok_layout then
+      log("layout: " .. tostring(lx))
+    end
   end
   -- Else a free tile more below and to the right (where the door goes), so
   -- the corridor in front of it is two tiles wide.

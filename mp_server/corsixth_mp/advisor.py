@@ -30,6 +30,7 @@ import json
 import logging
 import os
 import pathlib
+import re
 import time
 
 from . import stats
@@ -46,6 +47,8 @@ PRICES = {
 MAX_REPORT = 6000  # characters of a hospital report
 MAX_CHAT_OUT = 200  # characters of an answer in the chat
 MAX_GIVE = 10_000_000  # dollars: a sum asked for above this is no sum
+# A room asked for beside something: room:toilets@near:gp (a room id), @near:entrance, @near:reception.
+NEAR_RE = re.compile(r"near:(entrance|reception|[a-z_]{2,30})")
 
 PLAN_SYSTEM = """You advise a computer player in a multiplayer game of Theme Hospital (CorsixTH).
 Each game week you get a report of its hospital and a menu of projects it can do. Pick what matters most
@@ -107,7 +110,10 @@ will do something themselves, or that you should not do it (also taking back wha
 items from the menu into "leave" and say you leave them to them; otherwise leave it empty. If what they ask for is not on the menu, say kindly that
 you cannot do that yet. In the menu, add:<room>:<object> puts one more of that object into that room (a skeleton
 into the psych room is add:psych:skeleton), bigger:<room> makes that room bigger, and remove:<room> takes that
-room down to free its floor. Never promise anything you
+room down to free its floor. If they want a NEW room at a certain place ("a toilet next to the GP's office", "the
+pharmacy near the entrance", "by the reception"), write the room item with the place after an @: room:toilets@near:gp
+(next to the GP's office; any other room by its id, the part after room: in the menu), room:pharmacy@near:entrance
+or room:pharmacy@near:reception. Use the plain item when they name no place. Never promise anything you
 do not set as the project. If the last message asks YOU for money (cash, a loan, a gift of dollars), set "give" to
 the sum they name in dollars (20000 for "$20k"), or 0 if they name no sum; otherwise -1. Never say in "reply"
 whether you will send money or how much: the game checks your bank and answers that itself. "reply" is your chat
@@ -285,16 +291,21 @@ class Advisor:
         reply = _chat_line(name, str(data.get("reply", "")))
         if reply is None:
             return None
-        def items(key: str) -> list[str]:
+        def items(key: str, places: bool = False) -> list[str]:
             got = data.get(key, [])
             got = got if isinstance(got, list) else [got]
-            return list(dict.fromkeys(str(k) for k in got if str(k) in menu))[:12]
+            out = []
+            for k in got:
+                base, _, place = str(k).partition("@")
+                if base in menu and (not place or (places and base.startswith("room:") and NEAR_RE.fullmatch(place))):
+                    out.append(str(k) if places else base)
+            return list(dict.fromkeys(out))[:12]
         leave = items("leave")
         try:
             give = int(data.get("give", -1))
         except (TypeError, ValueError):
             give = -1
-        return {"text": reply, "wishes": [k for k in items("projects") if k not in leave], "leave": leave,
+        return {"text": reply, "wishes": [k for k in items("projects", True) if k.partition("@")[0] not in leave], "leave": leave,
                 "give": give if 0 <= give <= MAX_GIVE else None}
 
 

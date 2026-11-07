@@ -178,3 +178,18 @@ def test_the_answer_to_a_team_mates_bot_carries_the_sum():
         answer = await bot.expect("ANSWER", id=4)
         assert answer["give"] == "5000"
     run_with_bots(body)
+
+
+def test_a_room_asked_for_beside_something_keeps_its_place():
+    menu = ["room:toilets", "room:pharmacy", "room:gp", "hire:Nurse"]
+
+    def ask(projects, leave=()):
+        a = fake_advisor(json.dumps({"reply": "Ok", "projects": projects, "leave": list(leave), "give": -1}))
+        return asyncio.run(a.team_chat("Bot Agnes", "fine", ["ann: a toilet next to the gp"], menu))["wishes"]
+    # A room may carry @near:<a room id | entrance | reception>; the plain item still works.
+    assert ask(["room:toilets@near:gp", "room:pharmacy@near:entrance", "room:gp@near:reception", "room:toilets"]) == \
+        ["room:toilets@near:gp", "room:pharmacy@near:entrance", "room:gp@near:reception", "room:toilets"]
+    # Nothing odd gets through: other places, other kinds of item, items not on the menu.
+    assert ask(["room:toilets@far:gp", "hire:Nurse@near:gp", "room:ward@near:gp", "room:toilets@near:G P!"]) == []
+    # A room left to them is left, whatever the place.
+    assert ask(["room:toilets@near:gp", "room:pharmacy"], leave=["room:toilets"]) == ["room:pharmacy"]

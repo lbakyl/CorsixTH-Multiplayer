@@ -517,7 +517,15 @@ function M:projects(s)
       if SPECIALISTS[cat] and hosp:countStaffOfCategory(cat, 1) == 0 and not bot:canHire(cat) then return end
     end
     local want, extras = M.roomPlan(id)
-    add("room:" .. id, score, function() return bot:drawRoom(rt, size or want, extras) end, bot:roomCost(rt))
+    add("room:" .. id, score, function()
+      -- (A team mate may have asked for it beside something: "a toilet next
+      -- to the GP's office".)
+      local wish = self.wishes["room:" .. id]
+      local near = wish and wish.near
+      local ok, why = bot:drawRoom(rt, size or want, extras, near)
+      if ok and near and bot.near_missed then wish.near_missed = near end
+      return ok, why
+    end, bot:roomCost(rt))
   end
   local function hire(cat, score)
     if bot:canHire(cat) then add("hire:" .. cat, score, function() return bot:hireCategory(cat) end, 0) end
@@ -1811,11 +1819,20 @@ end
 --! game days: a request for every room takes a while; then it lapses, if it could not be done), unless somebody
 --! does it first.
 function M:wish(key, peer)
+  -- A room may come with a place: "room:toilets@near:gp" (next to the GP's
+  -- office), "@near:entrance", "@near:reception". Other places are ignored.
+  local base, place = key:match("^([^@]+)@near:([%w_]+)$")
+  if base then
+    key = base
+    local known = place == "entrance" or place == "reception"
+    for _, rt in ipairs(TheApp.rooms) do known = known or rt.id == place end
+    if not known or not key:find("^room:") then place = nil end
+  end
   for _, k in ipairs(self:wishMenu()) do
     if k == key then
-      self.wishes[key] = {until_day = self.bot:gameDay() + 60, had = self:howMany(key), peer = peer}
+      self.wishes[key] = {until_day = self.bot:gameDay() + 60, had = self:howMany(key), peer = peer, near = place}
       self.next_project = math.min(self.next_project, self.bot:gameDay())
-      self:note("wish: " .. key)
+      self:note("wish: " .. key .. (place and (" next to the " .. place) or ""))
       return true
     end
   end
@@ -1847,6 +1864,13 @@ local function wish_words(key)
   return (what or key):gsub("_", " ")
 end
 
+--! A place a room was asked to be built beside, in words.
+local function near_words(place)
+  if place == "reception" then return "reception desk" end
+  if place == "entrance" then return "entrance" end
+  return wish_words("room:" .. place)
+end
+
 --! Tell whoever wished for a project how it went (done, no space yet, no
 --! money yet), so a "certainly!" in the chat is not the last word.
 function M:tellWisher(w, kind, key)
@@ -1857,8 +1881,10 @@ function M:tellWisher(w, kind, key)
     if name then
       -- (Something put into a room: "the plant in the GP room is in place".)
       local lines = (kind == "wish_done" and key:find("^add:") and self.lines.wish_done_add) or
-          (kind == "wish_done" and key:find("^remove:") and self.lines.wish_done_remove) or self.lines[kind]
-      local line = self.fill_in(self.pick(lines), {name = name, what = wish_words(key)})
+          (kind == "wish_done" and key:find("^remove:") and self.lines.wish_done_remove) or
+          (kind == "wish_done" and w.near_missed and self.lines.wish_done_far) or self.lines[kind]
+      local line = self.fill_in(self.pick(lines), {name = name, what = wish_words(key),
+          near = w.near_missed and near_words(w.near_missed) or ""})
       bot:say(line, self.typing(line), peer)
     end
   end
