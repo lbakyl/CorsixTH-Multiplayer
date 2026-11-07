@@ -36,7 +36,7 @@ done
 server_args=()
 if [[ -n "$py" ]] && command -v openssl > /dev/null; then
   openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 2 -subj /CN=smoke \
-    -keyout "$work/tls.key" -out "$work/tls.crt" > /dev/null 2>&1
+    -keyout "$work/tls.key" -out "$work/tls.crt" > "$work/openssl.log" 2>&1 || { cat "$work/openssl.log"; exit 1; }
   fingerprint=$(openssl x509 -in "$work/tls.crt" -noout -fingerprint -sha256 | sed 's/^.*=//; s/://g')
   port=$((47900 + RANDOM % 90))
   (cd "$src/mp_server" && exec "$py" -m corsixth_mp --host 127.0.0.1 --port "$port" \
