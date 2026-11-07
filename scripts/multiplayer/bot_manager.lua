@@ -2233,6 +2233,218 @@ function M:askAllies(s)
   end
 end
 
+--------------------------------------------------------------------------------
+-- The level's requirements: who meets them, and what the bot still lacks
+--------------------------------------------------------------------------------
+
+local function sorted_keys(t)
+  local keys = {}
+  for k in pairs(t) do keys[#keys + 1] = k end
+  table.sort(keys, function(a, b)
+    if type(a) == type(b) then return a < b end
+    return type(a) == "number"
+  end)
+  return keys
+end
+
+--! Dollars in the chat: $850, $20k.
+local function money(n)
+  n = math.max(0, math.ceil(n))
+  if n >= 1000 then return string.format("$%dk", math.ceil(n / 1000)) end
+  return string.format("$%d", n)
+end
+
+--! A value of requirement `name` in the chat (money for the bank and the value).
+local function amount(name, v)
+  if name == "balance" or name == "value" then return money(v) end
+  return string.format("%d", math.floor(v + 0.5))
+end
+
+--! Game days from the first (tests, MP_BOT_TEST_WIN).
+local function game_day(world)
+  local d = world:date()
+  return (d:monthOfGame() - 1) * 30 + d:dayOfMonth()
+end
+
+--! How a hospital stands to the level's requirements to win, as the game
+--! counts them (EndConditions): the group of goals it comes closest to,
+--! {group, list = {{name, now, want, ok, progress}}, met, complete (every goal
+--! of the group), loan, ready (complete and no loan: what the game wants for a
+--! win), reached (the game already said so: the flag co-op and teams keep, or a
+--! place won in a race)}. nil if the level has no goals.
+--! (Tests: MP_BOT_TEST_WIN="<hospital index>:<day>;..." makes those hospitals
+--! meet them from that game day on.)
+function M.requirements(world, hosp)
+  local ec = world.endconditions
+  if not (ec and type(ec.win_goals) == "table" and ec.getAttribute) then return nil end
+  local best
+  for _, g in ipairs(sorted_keys(ec.win_goals)) do
+    local list, met = {}, 0
+    local goals = ec.win_goals[g]
+    for _, name in ipairs(sorted_keys(goals)) do
+      local crit = goals[name]
+      if crit.win_value then
+        local ok, now = pcall(ec.getAttribute, ec, hosp, name)
+        now = ok and tonumber(now) or 0
+        -- (max_min 1: at least this much; else at most.)
+        local atleast = crit.max_min == 1
+        local good = atleast and now >= crit.win_value or (not atleast and now <= crit.win_value)
+        local progress
+        if atleast then
+          progress = crit.win_value > 0 and math.min(1, now / crit.win_value) or 1
+        else
+          progress = good and 1 or crit.win_value / math.max(now, 1)
+        end
+        list[#list + 1] = {name = name, now = now, want = crit.win_value, ok = good, progress = progress}
+        if good then met = met + 1 end
+      end
+    end
+    if #list > 0 then
+      local score = met / #list
+      if not best or score > best.score then best = {group = g, list = list, score = score, met = met} end
+    end
+  end
+  if not best then return nil end
+  best.loan = hosp.loan or 0
+  best.complete = best.met == #best.list
+  best.ready = best.complete and best.loan == 0
+  best.reached = hosp.mp_goals_reached == true or (hosp.mp_place ~= nil and hosp.mp_place_how == "won")
+  local forced = os.getenv("MP_BOT_TEST_WIN")
+  if forced then
+    local index = world:getHospitalIndex(hosp)
+    for i, day in forced:gmatch("(%d+):(%d+)") do
+      if tonumber(i) == index and game_day(world) >= tonumber(day) then best.ready, best.reached = true, true end
+    end
+  end
+  return best
+end
+
+--! Does this hospital meet the requirements to win (now, or already said so)?
+function M.meets(world, hosp)
+  local r = M.requirements(world, hosp)
+  return r ~= nil and (r.ready or r.reached) or false
+end
+
+--! How many people can read what the bot says to its team: the people who
+--! share its hospital and those who play allied hospitals.
+function M:sideReaders()
+  local bot = self.bot
+  local n = #bot:hospitalMates()
+  for _, ally in ipairs(self:allies()) do
+    n = n + #bot:peopleOfHospital(ally.index)
+  end
+  return n
+end
+
+--! Is this the bot that speaks for its side when only one should: the allied
+--! bot (itself included) with the lowest hospital number?
+function M:isCaller()
+  local bot = self.bot
+  local mine = bot:hospitalIndex()
+  for _, ally in ipairs(self:allies()) do
+    local _, _, is_bot = bot:playerOfHospital(ally.index)
+    if is_bot and ally.index < mine then return false end
+  end
+  return true
+end
+
+--! Names for the chat: "Ann", "Ann and Bob", "Ann, Bob and Cleo".
+local function join_names(names)
+  if #names <= 1 then return names[1] or "" end
+  return table.concat(names, ", ", 1, #names - 1) .. " and " .. names[#names]
+end
+
+--! The one thing this bot still lacks for the win, in a chat line: the
+--! requirement it has said least about, the furthest from it first.
+function M:needLine(me)
+  local cands = {}
+  for _, c in ipairs(me.list) do
+    if not c.ok then cands[#cands + 1] = c end
+  end
+  local name, c = "loan", nil
+  if #cands > 0 then
+    self.need_said = self.need_said or {}
+    table.sort(cands, function(a, b)
+      local sa, sb = self.need_said[a.name] or 0, self.need_said[b.name] or 0
+      if sa ~= sb then return sa < sb end
+      if a.progress ~= b.progress then return a.progress < b.progress end
+      return a.name < b.name
+    end)
+    c = cands[1]
+    name = c.name
+    self.need_said[name] = (self.need_said[name] or 0) + 1
+  elseif me.loan <= 0 then
+    return nil
+  end
+  local lines = self.lines.win_need[name]
+  if not lines then return nil end
+  local vars = {loan = money(me.loan)}
+  if c then
+    local left = math.max(1, math.ceil(c.want - c.now))
+    vars.now, vars.want, vars.left = amount(name, c.now), amount(name, c.want), tostring(left)
+    vars.short = money(left)
+  end
+  return self.fill_in(self.pick(lines), vars)
+end
+
+--! Once a day: the level's requirements in the team chat (only when a person
+--! on its side can read it). When a person on its side now meets them, the
+--! allied bot with the lowest number says so ("Good job, ..."); a bot that
+--! meets them too says that in a line of its own; and a bot that does not
+--! says what it still needs, one requirement at a time, again every 6 months
+--! while an ally meets them and it does not.
+function M:winChat(s)
+  local bot, world = self.bot, self.bot.world
+  if not (world.mp_coop and world.endconditions) then return end
+  local me = M.requirements(world, s.hosp)
+  if not me then return end
+  local mine = me.ready or me.reached
+  local newly, human_met = {}, false
+  self.ally_met = self.ally_met or {}
+  for _, ally in ipairs(self:allies()) do
+    local meets = M.meets(world, ally.hosp)
+    local peers, names = bot:peopleOfHospital(ally.index)
+    if meets and #peers > 0 then human_met = true end
+    if meets and not self.ally_met[ally.index] then
+      self.ally_met[ally.index] = s.day
+      for _, n in ipairs(names) do newly[#newly + 1] = n end
+    elseif not meets then
+      self.ally_met[ally.index] = nil
+    end
+  end
+  local i_newly = mine and not self.me_met
+  self.me_met = mine
+  local mates = {}
+  for _, peer in ipairs(bot:hospitalMates()) do mates[#mates + 1] = bot:playerName(peer) or "friend" end
+  if self:sideReaders() == 0 then return end
+  local stagger = (bot:botRank() - 1) * 3 -- (several bots: not all at the same moment)
+  local function say(line, extra)
+    bot:say(line, self.typing(line) + stagger + (extra or 0), "team")
+  end
+  local first = 0
+  -- Somebody on its side got there: a good word, from one bot.
+  if #newly > 0 and self:isCaller() then
+    say(self.fill_in(self.pick(self.lines.win_good), {names = join_names(newly)}))
+    first = 3
+  end
+  -- The people who share its hospital got there with it.
+  if i_newly and #mates > 0 then
+    say(self.fill_in(self.pick(self.lines.win_own), {names = join_names(mates)}))
+    first = 3
+  elseif mine and (#newly > 0 or (i_newly and human_met)) then
+    say(self.pick(self.lines.win_me_too), first + 3)
+  end
+  -- Not there yet while an ally is: what is missing, now and every 6 months.
+  if not mine and (human_met or next(self.ally_met)) and (#newly > 0 or s.day >= (self.need_next or 0)) then
+    local line = self:needLine(me)
+    if line then
+      self.need_next = s.day + 180
+      self:note(string.format("day %d: tells the team what it still needs for the win", s.day))
+      say(line, first + 6)
+    end
+  end
+end
+
 --! (MP_BOT_DIAG) Where the GP's offices, their doctors, the patients and
 --! the doctors are, in the log once a month.
 function M:diagnose(s)
@@ -2316,6 +2528,8 @@ function M:think()
   if bot.world.mp_coop then
     self:helpAllies(s)
     if not s.hosp.mp_place then self:askAllies(s) end
+    -- The level's requirements, in the team chat.
+    self:winChat(s)
   end
   if s.hosp.mp_place then return end -- out of the race (or won): no more building
   if not s.hosp.opened and s.staffed_desks > 0 and s.rooms.gp and (s.staff.Doctor or 0) > 0 and

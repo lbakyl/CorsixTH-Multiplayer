@@ -40,6 +40,8 @@
 --                        request (it gives only above the first, and keeps the second)
 --   MP_BOT_STAFF_REVIEW_FROM  tests: the game day (default 720, the 3rd year) from which the bot reviews
 --                        its staff for the training room every month
+--   MP_BOT_TEST_WIN      tests: "<hospital index>:<day>;...": those hospitals meet the level's requirements to
+--                        win from that game day on (the bots' chat about it)
 --   MP_BOT_PLAN          tests: "<action>:<weight>,..." the plan every game week
 --                        instead of the server's advice (buy:drinks_machine:10)
 --   MP_BOT_PACE          game days between its building steps are divided
@@ -340,6 +342,85 @@ local LINES = {
     "Return to sender, %s!",
     "No gifts from rivals, %s. Here it is again.",
     "Your money is back with you, %s.",
+  },
+  -- The level's requirements (Manager:winChat), to the team. {names}: the ally
+  -- who now meets them.
+  win_good = {
+    "Good job, {names}, you now meet the requirements to win.",
+    "Well done, {names}! You now meet everything the level asks for.",
+    "{names}, you did it: all the requirements to win are met on your side.",
+    "Nice work, {names}. Your hospital meets the requirements to win now.",
+    "Great job, {names}! You are ready to win.",
+  },
+  -- (The person who shares its hospital.)
+  win_own = {
+    "Good job, {names}, our hospital now meets the requirements to win.",
+    "{names}, we did it: our hospital meets everything the level asks for.",
+    "Well done, {names}! Our hospital is ready to win.",
+    "{names}, all the requirements are met in our hospital now.",
+  },
+  win_me_too = {
+    "I am also ready to take it to the finish line.",
+    "I'm also in a good spot.",
+    "My hospital meets the requirements too.",
+    "Same here, I'm ready as well.",
+    "I'm there too. Now we only have to wait for the others.",
+  },
+  -- What a bot that is not there yet still needs, one thing at a time, by
+  -- requirement ({now}, {want}, {left}, {short} money, {loan}).
+  win_need = {
+    balance = {
+      "I'm {short} short, could you spare some cash for me to win together sooner?",
+      "I still need {short} more in the bank to win with you. Could someone spare some?",
+      "My bank is the last problem: I'm {short} short. Any chance of a gift?",
+      "{short} more and I'm ready to win. Can somebody send me some cash?",
+    },
+    value = {
+      "My hospital value is below the required amount, what do you suggest I do?",
+      "My hospital is worth {now} and the level wants {want}. Any tips on raising it?",
+      "I need a higher hospital value ({want}). Should I buy land or build more rooms?",
+      "Hospital value is what I'm missing: {now} of {want}. Any ideas?",
+    },
+    reputation = {
+      "My reputation is {now} and the level wants {want}. What would you do?",
+      "I'm short on reputation ({now} of {want}). Any tips?",
+      "Reputation is my last problem: {now} against {want}. How do I raise it?",
+    },
+    num_cured = {
+      "I still need {left} more cured patients. Could you send me some to treat?",
+      "{left} more cures and I'm ready. Any patients to spare?",
+      "I'm {left} cures short of the goal. Could someone refer patients to me?",
+    },
+    percentage_cured = {
+      "My cure rate is {now}% and the level wants {want}%. Any ideas?",
+      "I need a better cure rate ({now}% of {want}%). What helps?",
+      "Too many patients leave uncured: {now}% against {want}%. What would you do?",
+    },
+    percentage_killed = {
+      "Too many of my patients died: {now}% against a limit of {want}%. How do I cut that?",
+      "My death rate ({now}%) is above the limit of {want}%. Any advice?",
+      "I have to keep deaths under {want}% and I'm at {now}%. What would you do?",
+    },
+    staff_happiness = {
+      "My staff are not happy enough ({now}% of {want}%). Any tips?",
+      "Staff happiness is my last problem: {now}% against {want}%. What helps?",
+      "I need happier staff, {now}% now and {want}% to win. Ideas?",
+    },
+    patient_happiness = {
+      "My patients are not happy enough ({now}% of {want}%). Any tips?",
+      "Patient happiness is what I'm missing: {now}% against {want}%. What helps?",
+      "I need happier patients, {now}% now and {want}% to win. Ideas?",
+    },
+    months_played = {
+      "I only have to wait a little longer, the level wants more months played.",
+      "Just time left for me. {left} months to go.",
+      "Only the calendar is in my way now, {left} months more.",
+    },
+    loan = {
+      "I still have a {loan} loan to repay and then I'm ready.",
+      "My loan of {loan} is the last thing in the way. I'll repay it as soon as I can.",
+      "Only my {loan} loan stops me from winning. Paying it back.",
+    },
   },
   trick = {
     "Is it just me, or does it smell funny over at %s's place?",

@@ -92,7 +92,7 @@ export MP_REFEREE_PROBE_SCENARIO="team=none;race=none;trio=none;duel=none;lab=no
 export CORSIXTH_MP_MAX_BOTS=9 # (nine bots in all the rooms)
 # (MP_BOT_AWAY_SECONDS: kay in "afk" counts as away after a game week; the
 # bots' games run faster than real time.)
-MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 MP_BOT_AWAY_SECONDS=3 MP_BOT_GIVE_LIMITS=2000:1000 MP_BOT_TEST_LACK=5:Surgeon:operating_theatre PYTHONPATH="$source_dir/mp_server" \
+MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 MP_BOT_AWAY_SECONDS=3 MP_BOT_GIVE_LIMITS=2000:1000 MP_BOT_TEST_LACK=5:Surgeon:operating_theatre MP_BOT_TEST_WIN="1:10;3:12" PYTHONPATH="$source_dir/mp_server" \
   python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
 server_pid=$!
@@ -358,6 +358,20 @@ notes16 = [l for k, t in bots.items() if k.startswith('team/') for l in t.splitl
 ok16 = bool(asks16) and bool(notes16) and min(s for s, _ in asks16) >= (5 - 1) * 50 + 10 * 50
 print(f"16. Asking for staff:       lines to ann {asks16[:2]}; bot notes {[n.split('] ', 1)[1] for n in notes16][:2]}")
 fail |= not ok16
+# 17. The level's requirements in the team chat (test hook MP_BOT_TEST_WIN:
+# ann's hospital 1 meets them from game day 10, Bertie's hospital 3 from day
+# 12). Agnes (the lower number of the two bots) says "good job" to ann, once;
+# Bertie does not. Bertie says he is also ready once he is; Agnes, who is not,
+# says what she still needs (one requirement).
+win_words = re.compile(r'requirements|ready to win|did it|Good job|Well done|Great job|Nice work|level asks', re.I)
+agnes17, bertie17 = chats_from(a, 'Bot Agnes'), chats_from(a, 'Bot Bertie')
+good17 = [t for st, t in agnes17 if int(st) >= 450 and 'ann' in t and win_words.search(t)]
+good17_bertie = [t for st, t in bertie17 if int(st) >= 450 and 'ann' in t and win_words.search(t)]
+me_too17 = [t for st, t in bertie17 if int(st) >= 550 and re.search(r"also|good spot|requirements too|ready as well|there too", t)]
+need17 = [t for st, t in agnes17 if int(st) >= 450 and re.search(r"short|value|reputation|cure|died|death|happy|months|loan|worth|bank|cash", t)]
+ok17 = len(good17) == 1 and not good17_bertie and bool(me_too17) and len(need17) == 1
+print(f"17. Requirements chat:      Agnes to ann {good17}; Bertie to ann {good17_bertie}; Bertie also ready {me_too17[:1]}; Agnes needs {need17}")
+fail |= not ok17
 for name, text in sorted(bots.items()):
     errors = [l for l in text.splitlines() if 'ERROR' in l or 'could not' in l]
     if errors: print(f"   {name} problems: {errors[:5]}")
