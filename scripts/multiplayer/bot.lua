@@ -231,6 +231,13 @@ local REPLIES = {
     friendly = {"Money's tight here too, %s. Ask me later!", "I'd help, %s, but my budget says no today."},
     fiery = {"Money? From me? Dream on, %s.", "Not a penny, %s."},
   },
+  -- A request from somebody who is not on its side (Bot:isAlly).
+  no_orders = {
+    friendly = {"Sorry %s, I only take requests from my own team.", "That's for my team mates to ask, %s.",
+        "I'm afraid I can't do that for you, %s."},
+    fiery = {"Nice try, %s. I don't take orders from rivals.", "Ask your own staff, %s.",
+        "I only work for my team, %s.", "Not a chance, %s. We're rivals, remember?", "Dream on, %s."},
+  },
   bye = {
     friendly = {"Bye %s, see you soon!", "Take care, %s!"},
     fiery = {"Running away already, %s?", "Bye, %s. One less rival."},
@@ -278,6 +285,30 @@ local function reply_kind(text)
   end
   if text:find("?", 1, true) then return "question" end
   return "other"
+end
+
+-- Words of a request: somebody asks the bot to do something for them (it
+-- only does that for its allies, Bot:isAlly). Lower case; some Czech too.
+local REQUEST_WORDS = {"build", "hire", "buy", "put", "place", "construct", "make", "add", "remove", "demolish",
+    "sell", "send", "give", "lend", "spare", "please", "pls", "plz", "could you", "can you", "would you", "need you",
+    "i need", "i want", "we need", "can u", "could u", "postav", "postavit", "najmi", "kup", "kupit", "pošli",
+    "posli", "poslat", "dej", "dejte", "prosim", "prosím", "pujc", "půjč", "pujcit", "půjčit"}
+-- Lines that talk about giving rather than ask for something.
+local NOT_ASKING = {"i sent", "sent you", "i'll send", "i will send", "i send you", "sending you", "here you go",
+    "thank", "thanks", "thx", "diky", "díky", "poslal jsem"}
+
+local function any_word(text, list)
+  for _, word in ipairs(list) do
+    if has_word(text, word) then return true end
+  end
+  return false
+end
+
+--! Does this chat line ask the bot to do something ("build a toilet", "send
+--! me money")?
+local function is_request(text)
+  text = text:lower()
+  return any_word(text, REQUEST_WORDS) and not any_word(text, NOT_ASKING)
 end
 
 --------------------------------------------------------------------------------
@@ -581,6 +612,20 @@ function Bot:ownLine(list)
   return list[(base + rank - 1) % #list + 1]
 end
 
+--! Is the player of this peer an ally: in the same hospital as this bot, or
+--! on its side (co-op: everybody; a race of teams: the same team; a race
+--! without teams: nobody)? Only allies get what they ask for (rooms, staff,
+--! money, leaving a project to them).
+function Bot:isAlly(peer)
+  local world = self.world
+  local mine = world and world.ui and world.ui.hospital
+  local index = self.lobby.peer_hospital and self.lobby.peer_hospital[peer]
+  local hosp = index and world and world.hospitals[index]
+  if not (hosp and mine) then return false end
+  if hosp == mine then return true end
+  return world.mpMayTrade ~= nil and world:mpMayTrade(mine, hosp) and not world:mpRivals(mine, hosp)
+end
+
 function Bot:hospitalIndex()
   return TheApp.mp_session and TheApp.mp_session.hospital_index or 1
 end
@@ -691,11 +736,10 @@ function Bot:onChat(f)
   local name, is_bot = self:playerName(peer)
   if is_bot or not name then return end -- bots do not chat with each other
   local text = f.text or ""
-  -- (In a race of two teams: friendly to its team mate.)
-  local world, hosp = self.world, self.lobby.peer_hospital and self.lobby.peer_hospital[peer]
-  local mine = world and world.ui and world.ui.hospital
-  local mate = hosp and mine and world:mpTeam(mine) and not world:mpRivals(world.hospitals[hosp], mine)
-  local rival = self.fiery and not mate
+  -- An ally (same hospital, same team, or anybody in a co-op game) may ask
+  -- for things; in a race everybody else is a rival (Bot:isAlly).
+  local ally = self:isAlly(peer)
+  local rival = self.fiery and not ally
   -- A person sharing the hospital says "share": its research may go to
   -- the allies (Manager:shareResearch asks first).
   for _, p in ipairs(self:hospitalMates()) do
@@ -706,7 +750,7 @@ function Bot:onChat(f)
     end
   end
   -- What people on its side say goes into its next plan (wishes, worries).
-  if not rival and text ~= "" then
+  if ally and text ~= "" then
     self.mate_lines = self.mate_lines or {}
     table.insert(self.mate_lines, {day = self:gameDay(), text = name .. ": " .. text:sub(1, 200)})
     if #self.mate_lines > 8 then table.remove(self.mate_lines, 1) end
@@ -733,17 +777,26 @@ function Bot:onChat(f)
   -- it does not answer within a few seconds). The answer goes where the line
   -- came from: the team, that person, or everybody.
   local to = f.team == "1" and "team" or private and peer or nil
+  -- Somebody who is not an ally gets no orders done (and no money): at most
+  -- a short refusal, without asking the model.
+  if (private or named) and not ally and is_request(text) then
+    local refusal = rival and kind == "money" and REPLIES.money.fiery or REPLIES.no_orders[rival and "fiery" or "friendly"]
+    local reply = pick(refusal):format(name)
+    log(string.format("refused a request from %s (not an ally)", name))
+    self:say(reply, typing(reply), to)
+    return
+  end
   if (private or named) and self.ai ~= "off" then
     local report = self.manager and self.manager:report() or ""
     local brief = report:match("^[^\n]*\n[^\n]*") or report
     -- (On the person's side it may also do what it is asked: the projects
     -- it can do now go along.)
-    local menu = not rival and self.manager and table.concat(self.manager:wishMenu(), ",") or nil
+    local menu = ally and self.manager and table.concat(self.manager:wishMenu(), ",") or nil
     local asked = self:ask("chat", {text = brief, lines = table.concat(self.chat_lines, "\n"),
         rival = rival and 1 or nil, menu = menu}, 10, function(answer)
       local reply = answer and answer.text or line
       -- (Several at once: "a plant and a radiator in every room".)
-      if answer and self.manager then
+      if answer and self.manager and ally then
         for key in (answer.wish or ""):gmatch("[^,]+") do self.manager:wish(key, peer) end
         for key in (answer.leave or ""):gmatch("[^,]+") do self.manager:leaveTo(key) end
       end
