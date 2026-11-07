@@ -1128,10 +1128,13 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
   local world = app.world
   assert(world and world ~= old_world, "the shared save could not be loaded")
   -- Windows the referee's screen had open (the level's introduction, which
-  -- nobody closes there) would pop up for every player again.
+  -- nobody closes there) would pop up for every player again; so would a
+  -- question box ("You have chosen to Quit...": every player saw it after
+  -- repairs in Jan's game on eu2, 2026-11-07; the tick then would have
+  -- taken them to the main menu).
   for i = #(app.ui.windows or {}), 1, -1 do
     local window = app.ui.windows[i]
-    if class.is(window, UIInformation) then window:close() end
+    if class.is(window, UIInformation) or class.is(window, UIConfirmDialog) then window:close() end
   end
   -- The save is the referee's: show this player's own hospital again.
   if world.mp_coop then
