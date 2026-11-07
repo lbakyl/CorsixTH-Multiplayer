@@ -98,6 +98,12 @@ jobs:
         run: |
           cmake --install build/%PRESET% --prefix ./artifact --config RelWithDebInfo
 
+      - name: Smoke test (LuaSec and a TLS connection to the multiplayer server)
+        if: env.PRESET != 'win-dev' && env.PRESET != 'win-arm64-rel'
+        run: |
+          ls artifact/CorsixTH/*.dll artifact/CorsixTH/ssl.lua
+          bash scripts/multiplayer/ci_tls_smoke.sh "$PWD/artifact/CorsixTH/CorsixTH.exe"
+
       - name: List the artifact files
         if: env.PRESET != 'win-dev'
         run: |

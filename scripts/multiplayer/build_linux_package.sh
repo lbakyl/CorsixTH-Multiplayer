@@ -6,7 +6,8 @@
 #
 # Players need the same Lua runtime as the Windows builds (Lua 5.5: it is
 # part of the multiplayer build id), so Lua 5.5 and the Lua modules the game
-# loads (LuaFileSystem, LPeg, LuaSocket) are built here and bundled. SDL3,
+# loads (LuaFileSystem, LPeg, LuaSocket, and LuaSec with OpenSSL for the
+# encrypted connections) are built here and bundled. SDL3,
 # SDL3_mixer and the libraries a plain desktop may lack are bundled too; the
 # C library, graphics, X11/Wayland, sound servers and GLib come from the
 # system (as for an AppImage).
@@ -42,7 +43,7 @@ if [[ ! -f "$P/lib/libSDL3_mixer.so" ]]; then
   cmake --install SDL_mixer/build
 fi
 
-# 2. Lua 5.5 with LuaFileSystem, LPeg and LuaSocket (as setup_lua55_linux.sh).
+# 2. Lua 5.5 with LuaFileSystem, LPeg, LuaSocket and LuaSec (as setup_lua55_linux.sh).
 if [[ ! -f "$P/lib/liblua.a" ]]; then
   [[ -f lua-5.5.0.tar.gz ]] || curl -fsSLO https://www.lua.org/ftp/lua-5.5.0.tar.gz
   tar xzf lua-5.5.0.tar.gz
@@ -79,6 +80,14 @@ if [[ ! -f "$mods/socket/core.so" ]]; then
   [[ -d luasocket ]] || git clone -q --depth 1 --branch v3.1.0 https://github.com/lunarmodules/luasocket.git
   make -C luasocket -j"$jobs" linux LUAV=5.5 LUAINC_linux="$inc" MYCFLAGS=-fPIC
   make -C luasocket install LUAV=5.5 prefix="$P" INSTALL_TOP_LDIR="$lmods" INSTALL_TOP_CDIR="$mods"
+fi
+
+# LuaSec (TLS for the multiplayer connections, docs/multiplayer/ENCRYPTION.md)
+# with the system's OpenSSL (libssl-dev); libssl and libcrypto are bundled below.
+if [[ ! -f "$mods/ssl.so" ]]; then
+  [[ -d luasec ]] || git clone -q --depth 1 --branch v1.3.2 https://github.com/lunarmodules/luasec.git
+  make -C luasec linux INC_PATH="-I$inc"
+  make -C luasec install LUAPATH="$lmods" LUACPATH="$mods"
 fi
 
 # 3. CorsixTH, installed into a staging folder. Lua is linked statically and
