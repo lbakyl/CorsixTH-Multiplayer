@@ -30,10 +30,11 @@ import signal
 import time
 from dataclasses import dataclass, field
 
-from . import pacing, stats
+from . import pacing, stats, tls as tlsmod
 from .advisor import Advisor
 from .builds import BuildCheck, DataCheck
 from .referee import RefereeConfig, start_bot, start_referee
+from .tls import TlsConfig
 from .protocol import (MAX_LINE_BYTES, PROTOCOL_VERSION, ProtocolError, command_peer, command_step,
                        decode, encode, is_game_line, parse_step_report)
 
@@ -357,8 +358,12 @@ class Server:
                  max_per_address: int = MAX_PER_ADDRESS,
                  referee: RefereeConfig | None = None, max_bots: int = MAX_BOTS,
                  build_check: BuildCheck | None = None,
-                 data_check: DataCheck | None = None, advisor: Advisor | None = None) -> None:
+                 data_check: DataCheck | None = None, advisor: Advisor | None = None,
+                 tls: TlsConfig | None = None) -> None:
         self.referee_config = referee
+        # Encryption of the player connections (tls.py; None: players cannot
+        # ask for it, and answer STARTTLS with an error they go on after).
+        self.tls = tls
         # Advice for the bots from a language model (advisor.py; None: off).
         self.advisor = advisor
         # Only this game build may connect (None: any; builds.py).
@@ -387,6 +392,10 @@ class Server:
         bound = sock.getsockname()[1]
         self.port = bound
         log.info("listening on %s:%d", host, bound)
+        if self.tls:
+            log.info("TLS on (STARTTLS), certificate sha256 %s%s",
+                     tlsmod.format_fingerprint(self.tls.fingerprint),
+                     "; players in clear are refused" if self.tls.required else "")
         return bound
 
     async def serve_forever(self) -> None:
@@ -439,12 +448,29 @@ class Server:
                                 peername: object) -> None:
         try:
             first = await asyncio.wait_for(reader.readline(), HELLO_TIMEOUT)
+            encrypted = False
+            if first.strip() == b"STARTTLS":
+                # The player asks for TLS (tls.py). Either the connection is
+                # encrypted from here on, or the server has no certificate and
+                # said so: the player may go on in clear, with its HELLO.
+                encrypted = await self._starttls(writer)
+                if encrypted is None:
+                    return
+                first = await asyncio.wait_for(reader.readline(), HELLO_TIMEOUT)
         except (asyncio.TimeoutError, ConnectionError, ValueError):
             await self._close_writer(writer)
             return
         if first.strip() == b"HEALTH":
             # Health check (container HEALTHCHECK); answered quietly.
             writer.write(encode("OK", rooms=len(self.rooms), players=len(self.players)).encode() + b"\n")
+            await self._close_writer(writer)
+            return
+        address = str(peername[0]) if isinstance(peername, tuple) and peername else "?"
+        if self.tls and self.tls.required and not encrypted and address not in self.own_addresses:
+            log.info("refusing %s: TLS is required", address)
+            writer.write(encode("ERROR", code="tls_required",
+                                text="This server only accepts encrypted connections; "
+                                     "update the game").encode() + b"\n")
             await self._close_writer(writer)
             return
         player = Player(pid=self.next_pid, writer=writer)
@@ -454,7 +480,7 @@ class Server:
         if sock is not None:
             import socket as _socket
             sock.setsockopt(_socket.IPPROTO_TCP, _socket.TCP_NODELAY, 1)
-        log.info("connection %d from %s", player.pid, peername)
+        log.info("connection %d from %s%s", player.pid, peername, " (TLS)" if encrypted else "")
         pinger = asyncio.create_task(self._pinger(player))
         try:
             if not first or not self._hello(player, first.decode("utf-8", "replace")):
@@ -480,6 +506,30 @@ class Server:
                 writer.close()
             except RuntimeError:
                 pass
+
+    async def _starttls(self, writer: asyncio.StreamWriter) -> bool | None:
+        """Answer STARTTLS. True: the connection is encrypted now. False: no
+        certificate here; the player was told (`no_tls`) and may go on in
+        clear. None: the handshake failed, the connection is closed."""
+        if self.tls is None:
+            writer.write(encode("ERROR", code="no_tls",
+                                text="This server has no certificate").encode() + b"\n")
+            await writer.drain()
+            return False
+        writer.write(b"STARTTLS ok\n")
+        try:
+            await writer.drain()
+            await writer.start_tls(self.tls.context, ssl_handshake_timeout=tlsmod.HANDSHAKE_TIMEOUT)
+        except (OSError, asyncio.TimeoutError, ValueError, RuntimeError) as exc:
+            # (ssl.SSLError is an OSError.) A scanner or a player that does
+            # not trust us: quiet, one line.
+            log.info("TLS handshake failed: %s", exc.__class__.__name__)
+            try:
+                writer.close()
+            except RuntimeError:
+                pass
+            return None
+        return True
 
     async def _pinger(self, player: Player) -> None:
         try:
@@ -1733,6 +1783,13 @@ def main(argv: list[str] | None = None) -> None:
                         default=int(os.environ.get("CORSIXTH_MP_MAX_PER_ADDRESS", MAX_PER_ADDRESS)))
     parser.add_argument("--max-bots", type=int,
                         default=int(os.environ.get("CORSIXTH_MP_MAX_BOTS", MAX_BOTS)))
+    parser.add_argument("--tls-cert", default=os.environ.get("CORSIXTH_MP_TLS_CERT", ""),
+                        help="PEM certificate: players may encrypt the connection (STARTTLS)")
+    parser.add_argument("--tls-key", default=os.environ.get("CORSIXTH_MP_TLS_KEY", ""),
+                        help="PEM private key of the certificate (default: in the certificate file)")
+    parser.add_argument("--tls-required", action="store_true",
+                        default=os.environ.get("CORSIXTH_MP_TLS_REQUIRED", "") not in ("", "0"),
+                        help="refuse players that do not encrypt (this machine's bots excepted)")
     args = parser.parse_args(argv)
     logging.basicConfig(level=args.log_level.upper(),
                         format="%(asctime)s %(levelname)s %(message)s")
@@ -1748,10 +1805,15 @@ def main(argv: list[str] | None = None) -> None:
         data_check = DataCheck.from_env(referee=referee)
         if data_check:
             log.info("players must have Theme Hospital data %s", data_check.data)
+        tls = None
+        if args.tls_cert:
+            tls = TlsConfig.load(args.tls_cert, args.tls_key or None, args.tls_required)
+        elif args.tls_required:
+            parser.error("--tls-required needs --tls-cert")
         server = Server(motd=args.motd, max_connections=args.max_connections,
                         max_per_address=args.max_per_address, referee=referee,
                         max_bots=args.max_bots, build_check=build_check, data_check=data_check,
-                        advisor=Advisor())
+                        advisor=Advisor(), tls=tls)
         await server.start(args.host, args.port)
         # Stop cleanly on SIGTERM (docker stop) as well as Ctrl+C.
         stop = asyncio.Event()

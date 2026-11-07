@@ -129,11 +129,38 @@ function UIMultiplayer:rebuild(status)
   ui:addWindow(UIMultiplayer(ui, status))
 end
 
+--! What the connection's protection is (the room list's status line, when it
+--! has no message): encrypted or not, and for a plain one why.
+function UIMultiplayer:_securityText()
+  local lobby, S = self.lobby, _S.multiplayer_window
+  if not lobby then return "" end
+  if lobby.encrypted then return S.encrypted end
+  local note = lobby.security_note
+  if note == "local" then return "" end -- a server on this computer
+  if note == "no_ssl" then return S.not_encrypted_build end
+  if note == "server" or note == "old_server" then return S.not_encrypted_server end
+  return S.not_encrypted
+end
+
+--! A password is about to be sent over a connection that is not encrypted
+--! (and not to this computer): the first time, say so and do not send. True
+--! if it must wait for another press.
+function UIMultiplayer:_holdClearPassword(password)
+  local lobby = self.lobby
+  if password == "" or lobby.encrypted or lobby.security_note == "local" then return false end
+  if self.clear_password_warned == password then return false end
+  self.clear_password_warned = password
+  self:setStatus(_S.multiplayer_window.password_clear)
+  return true
+end
+
 function UIMultiplayer:setStatus(text)
   self.status_text = text or ""
   if self.status_panel then
-    self.status_panel:setLabel(self.status_text)
-    self.status_panel:setVisible(self.status_text ~= "")
+    local shown = self.status_text
+    if shown == "" and self.view == "rooms" then shown = self:_securityText() end
+    self.status_panel:setLabel(shown)
+    self.status_panel:setVisible(shown ~= "")
   elseif self.hint_panel then
     self:_updateRoom()
   end
@@ -339,6 +366,7 @@ function UIMultiplayer:buttonJoin()
     self:setStatus(_S.multiplayer_window.select_room)
     return
   end
+  if self:_holdClearPassword(self.password_box.text) then return end
   self.lobby:joinRoom(self.selected_room, self.password_box.text)
 end
 
@@ -443,6 +471,7 @@ function UIMultiplayer:selectContinue(wanted)
 end
 
 function UIMultiplayer:buttonCreate()
+  if self:_holdClearPassword(self.password_box.text) then return end
   self:_rememberForm()
   self.lobby:createRoom({room = self.room_name_box.text, password = self.password_box.text,
       max = self.new_max, mode = self.new_mode, level = self.new_level, difficulty = "full",
@@ -676,7 +705,7 @@ end
 
 function UIMultiplayer:onTick()
   if self.connecting then
-    local lobby, err = MultiplayerLobby.pollConnect(self.connecting)
+    local lobby, err, code = MultiplayerLobby.pollConnect(self.connecting)
     if lobby ~= nil then
       local name = self.connecting.name
       self.connecting = nil
@@ -684,6 +713,11 @@ function UIMultiplayer:onTick()
         self:_connected(lobby, self.connecting_address, name)
       else
         self:setStatus(err)
+        if code == "cert_changed" then
+          -- Not connecting: the server's certificate is another than before.
+          self.ui:addWindow(UIInformation(self.ui, {_S.multiplayer_window.cert_changed_help:format(
+              self.connecting_address, MultiplayerTransport.trustFile() or "mp_known_servers.txt")}))
+        end
       end
     end
   end
