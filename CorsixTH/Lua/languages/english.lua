@@ -155,6 +155,7 @@ tooltip.research_policy.research_progress = "Progress towards the next discovery
 
 menu = {
   player_count = "PLAYER COUNT",
+  map_size = "MAP SIZE",
   cheats_title = "CHEATS",
   cheats       = "  (%1%) CHEATS  ",
 }
@@ -257,6 +258,13 @@ menu_player_count = {
   players_2 = "  2 PLAYERS  ",
   players_3 = "  3 PLAYERS  ",
   players_4 = "  4 PLAYERS  ",
+  players_5 = "  5 PLAYERS  ",
+  players_6 = "  6 PLAYERS  ",
+  players_7 = "  7 PLAYERS  ",
+  players_8 = "  8 PLAYERS  ",
+}
+menu_map_size = {
+  size = "  NEW MAP %d x %d  ",
 }
 
 tooltip.toolbar = {
@@ -1153,6 +1161,9 @@ map_editor_window = {
     heliport_2 = "Heliport 2",
     heliport_3 = "Heliport 3",
     heliport_4 = "Heliport 4",
+    camera_n = "Camera %d",
+    heliport_n = "Heliport %d",
+    player = "Player %d",
     paste = "Paste area",
   },
   checks = {

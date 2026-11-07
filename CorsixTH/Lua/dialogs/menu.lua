@@ -727,7 +727,7 @@ function UIMenuBar:makeMapeditorMenu(app)
   self:addMenu(_S.menu.options, menu)
 
   menu = UIMenu()
-  for i = 1, 4 do
+  for i = 1, 8 do -- (a map for more than 4: th_map.cpp keeps 5 to 8 in spare bytes)
     menu:appendCheckItem(_S.menu_player_count["players_" .. i],
         self.ui.app.map:getPlayerCount() == i,
         function() self.ui.map_editor:setPlayerCount(i) end,
@@ -735,6 +735,17 @@ function UIMenuBar:makeMapeditorMenu(app)
         function () return self.ui.app.map:getPlayerCount() == i end)
   end
   self:addMenu(_S.menu.player_count, menu)
+
+  -- A new blank map of another size (the one being edited is closed).
+  menu = UIMenu()
+  for _, size in ipairs({128, 192, 256}) do
+    menu:appendCheckItem(_S.menu_map_size.size:format(size, size),
+        self.ui.app.map.width == size,
+        function() self.ui.app:mapEdit(size) end,
+        "mapsize",
+        function () return self.ui.app.map.width == size end)
+  end
+  self:addMenu(_S.menu.map_size, menu)
 end
 
 --! Make a menu for the game.

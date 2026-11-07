@@ -49,7 +49,7 @@ class sprite_sheet;
 
 namespace {
 
-constexpr int player_max = 4;
+constexpr int player_max = level_map::max_players;
 
 int l_map_new(lua_State* L) {
   luaT_stdnew<level_map>(L, luaT_environindex, true);
@@ -125,7 +125,10 @@ int l_map_load(lua_State* L) {
 
 int l_map_loadblank(lua_State* L) {
   level_map* pMap = luaT_testuserdata<level_map>(L);
-  if (pMap->load_blank()) {
+  // map:loadBlank([width, height]): 128 x 128 unless given.
+  int iWidth = static_cast<int>(luaL_optinteger(L, 2, 128));
+  int iHeight = static_cast<int>(luaL_optinteger(L, 3, iWidth));
+  if (pMap->load_blank(iWidth, iHeight)) {
     lua_pushboolean(L, 1);
   } else {
     lua_pushboolean(L, 0);
@@ -443,7 +446,7 @@ int l_map_set_player_camera(lua_State* L) {
   int iPlayer = static_cast<int>(luaL_optinteger(L, 4, 1));
 
   if (iPlayer < 1 || iPlayer > player_max) {
-    return luaL_error(L, "Player index out of range: %i", iPlayer);
+    return luaL_error(L, "Player index out of range: %d", iPlayer);
   }
 
   pMap->set_player_camera_tile(iPlayer - 1, iX, iY);
@@ -470,7 +473,7 @@ int l_map_set_player_heliport(lua_State* L) {
   int iPlayer = static_cast<int>(luaL_optinteger(L, 4, 1));
 
   if (iPlayer < 1 || iPlayer > player_max) {
-    return luaL_error(L, "Player index out of range: %i", iPlayer);
+    return luaL_error(L, "Player index out of range: %d", iPlayer);
   }
 
   pMap->set_player_heliport_tile(iPlayer - 1, iX, iY);

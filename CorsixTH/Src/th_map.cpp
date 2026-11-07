@@ -45,9 +45,20 @@ SOFTWARE.
 #include "th_lua.h"
 #include "th_map_overlays.h"
 
-constexpr int max_player_count = 4;
+constexpr int max_player_count = level_map::max_players;
+//! Players in the original map format; the tiles of players 5 to 8 (a map
+//! for more players) come after those of the first four.
+constexpr int th_file_player_count = 4;
 constexpr int default_width = 128;
 constexpr int default_height = 128;
+//! Maps of another size than Theme Hospital's 128 x 128 (up to 256 x 256:
+//! camera and heliport tiles are 16 bit indices) start with this header:
+//! the 8 bytes below, the width and the height (16 bit, low byte first) and
+//! 4 bytes kept for later; the rest is laid out as in Theme Hospital's
+//! format, its offsets following the size.
+constexpr char big_map_magic[8] = {'C', 'T', 'H', 'M', 'A', 'P', '1', '\0'};
+constexpr size_t big_map_header = 16;
+constexpr int max_map_size = 256;
 
 map_tile_flags& map_tile_flags::operator=(uint32_t raw) {
   using flags = map_tile_flags::key;
@@ -352,13 +363,15 @@ void level_map::write_tile_index(uint8_t* pData, int iX, int iY) const {
   pData[1] = static_cast<uint8_t>(iIndex >> 8);
 }
 
-bool level_map::load_blank() {
-  if (!set_size(default_width, default_height)) {
+bool level_map::load_blank(int iWidth, int iHeight) {
+  if (iWidth < 1 || iHeight < 1 || iWidth > max_map_size ||
+      iHeight > max_map_size || !set_size(iWidth, iHeight)) {
     return false;
   }
 
   player_count = 1;
-  initial_camera_x[0] = initial_camera_y[0] = 63;
+  initial_camera_x[0] = iWidth / 2 - 1;
+  initial_camera_y[0] = iHeight / 2 - 1;
   heliport_x[0] = heliport_y[0] = 0;
   parcel_count = 1;
   delete[] plot_owner;
@@ -390,11 +403,31 @@ inline bool is_divider_wall(const uint8_t byte) { return (byte >> 1) == 70; }
 bool level_map::load_from_th_file(const uint8_t* pData, size_t iDataLength,
                                   map_load_object_callback_fn fnObjectCallback,
                                   void* pCallbackToken) {
-  const size_t camera_offset = 163876;
-  const size_t heliport_offset = 163884;
-  const size_t parcel_offset = 131106;
+  // The size: Theme Hospital's 128 x 128, or a bigger map's own (its header).
+  int map_width = default_width;
+  int map_height = default_height;
+  if (iDataLength >= big_map_header &&
+      std::memcmp(pData, big_map_magic, sizeof(big_map_magic)) == 0) {
+    map_width = pData[8] | (pData[9] << 8);
+    map_height = pData[10] | (pData[11] << 8);
+    if (map_width < 1 || map_height < 1 || map_width > max_map_size ||
+        map_height > max_map_size) {
+      return false;
+    }
+    pData += big_map_header;
+    iDataLength -= big_map_header;
+  }
+  const size_t tile_count = static_cast<size_t>(map_width) * map_height;
+  // (128 x 128: parcels at 131106, cameras at 163876, ...)
+  const size_t parcel_offset = 34 + tile_count * 8;
+  const size_t camera_offset = parcel_offset + tile_count * 2 + 2;
+  const size_t heliport_offset = camera_offset + 8;
+  // Players 5 to 8 (in 56 bytes the original maps leave empty): camera tiles,
+  // then heliport tiles.
+  const size_t extra_camera_offset = camera_offset + 16;
+  const size_t extra_heliport_offset = camera_offset + 24;
 
-  if (iDataLength < 163948 || !set_size(default_width, default_height)) {
+  if (iDataLength < camera_offset + 72 || !set_size(map_width, map_height)) {
     return false;
   }
 
@@ -403,10 +436,13 @@ bool level_map::load_from_th_file(const uint8_t* pData, size_t iDataLength,
   if (player_count > max_player_count) player_count = max_player_count;
 
   for (int i = 0; i < player_count; ++i) {
-    read_tile_index(pData + camera_offset + (i * 2), initial_camera_x[i],
-                    initial_camera_y[i]);
-    read_tile_index(pData + heliport_offset + (i * 2), heliport_x[i],
-                    heliport_y[i]);
+    const bool extra = i >= th_file_player_count;
+    const size_t j = (extra ? i - th_file_player_count : i) * 2;
+    read_tile_index(pData + (extra ? extra_camera_offset : camera_offset) + j,
+                    initial_camera_x[i], initial_camera_y[i]);
+    read_tile_index(
+        pData + (extra ? extra_heliport_offset : heliport_offset) + j,
+        heliport_x[i], heliport_y[i]);
   }
   parcel_count = 0;
   delete[] plot_owner;
@@ -541,6 +577,17 @@ void level_map::save(const std::string& filename) {
   int iBufferNext = 0;
   std::ofstream os(filename, std::ios_base::trunc | std::ios_base::binary);
 
+  // A map of another size than 128 x 128: its header first.
+  if (width != default_width || height != default_height) {
+    uint8_t aHeader[big_map_header] = {0};
+    std::memcpy(aHeader, big_map_magic, sizeof(big_map_magic));
+    aHeader[8] = static_cast<uint8_t>(width & 0xFF);
+    aHeader[9] = static_cast<uint8_t>(width >> 8);
+    aHeader[10] = static_cast<uint8_t>(height & 0xFF);
+    aHeader[11] = static_cast<uint8_t>(height >> 8);
+    os.write(reinterpret_cast<char*>(aHeader), big_map_header);
+  }
+
   // Header
   aBuffer[0] = static_cast<uint8_t>(player_count);
   // TODO: Determine correct contents for the next 33 bytes
@@ -619,17 +666,18 @@ void level_map::save(const std::string& filename) {
   os.write(reinterpret_cast<char*>(aBuffer), iBufferNext);
   iBufferNext = 0;
 
-  std::memset(aBuffer, 0, 56);
+  // Cameras and heliports of players 1 to 4, then those of players 5 to 8 in
+  // the first 16 of the 56 bytes after them (empty in the original maps).
+  std::memset(aBuffer, 0, 72);
   for (int i = 0; i < player_count; ++i) {
-    write_tile_index(aBuffer + iBufferNext, initial_camera_x[i],
+    const int base = i < th_file_player_count ? 0 : 16;
+    const int j = (i % th_file_player_count) * 2;
+    write_tile_index(aBuffer + base + j, initial_camera_x[i],
                      initial_camera_y[i]);
-    write_tile_index(aBuffer + iBufferNext + 8, heliport_x[i], heliport_y[i]);
-    iBufferNext += 2;
+    write_tile_index(aBuffer + base + j + 8, heliport_x[i], heliport_y[i]);
   }
-  os.write(reinterpret_cast<char*>(aBuffer), 16);
-  std::memset(aBuffer, 0, 16);
-  // TODO: What are these 56 bytes?
-  os.write(reinterpret_cast<char*>(aBuffer), 56);
+  // TODO: What are the other 40 bytes?
+  os.write(reinterpret_cast<char*>(aBuffer), 72);
   os.close();
 }
 
@@ -824,7 +872,7 @@ bool level_map::is_parcel_purchasable(int iParcelId, int iPlayer) {
 
 void level_map::set_player_count(int count) {
   if (count < 1 || count > max_player_count) {
-    throw std::out_of_range("Player count must be between 1 and 4");
+    throw std::out_of_range("Player count must be between 1 and 8");
   }
 
   player_count = count;
@@ -1418,13 +1466,13 @@ void level_map::update_pathfinding() {
 
       if (iX == 0) {
         pNode->flags.can_travel_w = false;
-      } else if (iX == 127) {
+      } else if (iX == width - 1) {
         pNode->flags.can_travel_e = false;
       }
 
       if (iY == 0) {
         pNode->flags.can_travel_n = false;
-      } else if (iY == 127) {
+      } else if (iY == height - 1) {
         pNode->flags.can_travel_s = false;
       }
 
@@ -1576,6 +1624,10 @@ void level_map::depersist(lua_persist_reader* pReader) {
     luaL_error(L, "Cannot load savegame from a newer version.");
   }
   if (!pReader->read_uint(player_count)) return;
+  if (player_count < 1 || player_count > max_player_count) {
+    pReader->set_error("Bad player count in the map");
+    return;
+  }
   for (int i = 0; i < player_count; ++i) {
     if (!pReader->read_uint(initial_camera_x[i])) return;
     if (!pReader->read_uint(initial_camera_y[i])) return;

@@ -511,14 +511,11 @@ function UIMapEditor:UIMapEditor(ui)
   local text_pages = {
     {name = "paste",    text = _S.map_editor_window.pages.paste},
     {name = "delete_wall", text = _S.map_editor_window.pages.delete_wall},
-    {name = "camera_1", text = _S.map_editor_window.pages.camera_1, camera = 1},
-    {name = "camera_2", text = _S.map_editor_window.pages.camera_2, camera = 2},
-    {name = "camera_3", text = _S.map_editor_window.pages.camera_3, camera = 3},
-    {name = "camera_4", text = _S.map_editor_window.pages.camera_4, camera = 4},
-    {name = "heliport_1", text = _S.map_editor_window.pages.heliport_1, heliport = 1},
-    {name = "heliport_2", text = _S.map_editor_window.pages.heliport_2, heliport = 2},
-    {name = "heliport_3", text = _S.map_editor_window.pages.heliport_3, heliport = 3},
-    {name = "heliport_4", text = _S.map_editor_window.pages.heliport_4, heliport = 4}}
+    -- The camera and heliport of one player at a time (up to 8): the Player
+    -- button picks whose.
+    {name = "camera", text = self:playerPageText("camera", 1), camera = true},
+    {name = "heliport", text = self:playerPageText("heliport", 1), heliport = true},
+    {name = "player", text = _S.map_editor_window.pages.player:format(1), player = true}}
   for i = 0, 9 do
     table.insert(text_pages, { name = "parcel_" .. i, text = _S.map_editor_window.pages.parcel:format(i), parcel = i})
   end
@@ -530,11 +527,17 @@ function UIMapEditor:UIMapEditor(ui)
     end
 
     local name = page.name
-    local p = self:addBevelPanel(xpos, ypos, XSIZE, YSIZE, col_bg)
-                  :setLabel(page.text):makeToggleButton(0, 0, XSIZE, YSIZE, nil,
-                    --[[persistable:map_editor_textpage_clicked]] function() self:pageClicked(name) end)
-    local page_data = {button = p, name = name, data = page}
-    self.page_selectbuttons[#self.page_selectbuttons + 1] = page_data
+    local panel = self:addBevelPanel(xpos, ypos, XSIZE, YSIZE, col_bg):setLabel(page.text)
+    if page.player then
+      -- (A plain button, not a page: the next player.)
+      self.player_button = panel:makeButton(0, 0, XSIZE, YSIZE, nil,
+          --[[persistable:map_editor_next_player]] function() self:nextPlayer() end)
+    else
+      local p = panel:makeToggleButton(0, 0, XSIZE, YSIZE, nil,
+          --[[persistable:map_editor_textpage_clicked]] function() self:pageClicked(name) end)
+      local page_data = {button = p, name = name, data = page}
+      self.page_selectbuttons[#self.page_selectbuttons + 1] = page_data
+    end
     xpos = xpos + XSIZE + 10
   end
 
@@ -600,9 +603,40 @@ end
 function UIMapEditor:setPlayerCount(count)
   local map = self.ui.app.map
   map:setPlayerCount(count)
+  if (self.editor_player or 1) > count then self:setPlayer(1) end
   if self.cursor.state == "camera" or self.cursor.state == "heliport" then
     map:updateDebugOverlay()
   end
+end
+
+--! The text of the camera or heliport button for `player` ("Camera 5").
+--!param kind (string) "camera" or "heliport"
+function UIMapEditor:playerPageText(kind, player)
+  local pages = _S.map_editor_window.pages
+  -- (Players 1 to 4 have texts of their own in every language.)
+  if player <= 4 then return pages[kind .. "_" .. player] end
+  return pages[kind .. "_n"]:format(player)
+end
+
+--! Whose camera and heliport the Camera and Heliport buttons set.
+function UIMapEditor:setPlayer(player)
+  self.editor_player = player
+  for _, pb in ipairs(self.page_selectbuttons) do
+    if pb.name == "camera" or pb.name == "heliport" then
+      pb.button.panel_for_sprite:setLabel(self:playerPageText(pb.name, player))
+    end
+  end
+  if self.player_button then
+    self.player_button.panel_for_sprite:setLabel(_S.map_editor_window.pages.player:format(player))
+  end
+  if self.cursor.state == "camera" then self.cursor.camera = player end
+  if self.cursor.state == "heliport" then self.cursor.heliport = player end
+end
+
+--! The Player button: the next player, up to the map's number of players.
+function UIMapEditor:nextPlayer()
+  local count = self.ui.app.map:getPlayerCount()
+  self:setPlayer((self.editor_player or 1) % count + 1)
 end
 
 -- {{{ function UIMapEditor:pageClicked(name)
@@ -671,14 +705,14 @@ function UIMapEditor:pageClicked(name)
           self.cursor.state = "camera"
           self.cursor.spirte = nil
           self.cursor.is_drag = false
-          self.cursor.camera = pb.data.camera
+          self.cursor.camera = self.editor_player or 1
           map:loadDebugText("camera")
 
         elseif pb.data.heliport then
           self.cursor.state = "heliport"
           self.cursor.spirte = nil
           self.cursor.is_drag = false
-          self.cursor.heliport = pb.data.heliport
+          self.cursor.heliport = self.editor_player or 1
           map:loadDebugText("heliport")
 
         else -- Should be a parcel button.

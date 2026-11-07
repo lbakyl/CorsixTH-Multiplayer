@@ -257,7 +257,8 @@ class level_map {
   ~level_map();
 
   bool set_size(int iWidth, int iHeight);
-  bool load_blank();
+  //! A blank map of this size (128 x 128 unless said; up to 256 x 256).
+  bool load_blank(int iWidth = 128, int iHeight = 128);
   bool load_from_th_file(const uint8_t* pData, size_t iDataLength,
                          map_load_object_callback_fn fnObjectCallback,
                          void* pCallbackToken);
@@ -295,6 +296,11 @@ class level_map {
 
   //! Get the number of plots of land in this map
   inline int get_parcel_count() const { return parcel_count - 1; }
+
+  // Up to 8 players: Theme Hospital's maps have room for 4; a map for more
+  // keeps the others' tiles in bytes the original maps leave empty
+  // (load_from_th_file).
+  static constexpr int max_players = 8;
 
   inline int get_player_count() const { return player_count; }
 
@@ -459,10 +465,10 @@ class level_map {
   int width{};
   int height{};
   int player_count{};
-  int initial_camera_x[4]{};
-  int initial_camera_y[4]{};
-  int heliport_x[4]{};
-  int heliport_y[4]{};
+  int initial_camera_x[max_players]{};
+  int initial_camera_y[max_players]{};
+  int heliport_x[max_players]{};
+  int heliport_y[max_players]{};
   int parcel_count{};
   int current_temperature_index{};
   temperature_theme current_temperature_theme{temperature_theme::red};
