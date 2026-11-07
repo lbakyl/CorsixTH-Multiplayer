@@ -186,6 +186,14 @@ end
 --! runs (on every peer).
 function UIStaffRise:_issueAnswer(accept)
   if not MultiplayerSession.actionsAreCommands() then return false end
+  -- A request that has ended meanwhile (answered by a team mate, or the
+  -- time ran out): nothing to answer. (Argus's game answered such stale
+  -- windows dozens of times in Jan's game on eu2, 2026-11-07.)
+  if self.staff.fired or not self.staff.quitting_in then
+    self.staff.message_callback = nil
+    self:close()
+    return true
+  end
   TheApp.mp_session:issue({kind = "pay_rise", staff = self.staff.mp_id, accept = accept and 1 or 0,
       amount = self.rise_amount})
   self:close()

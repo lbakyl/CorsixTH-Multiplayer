@@ -142,8 +142,11 @@ function UIMessage:openMessage()
     return
   end
   if self.type == "strike" then -- strikes are special cases, as they are not faxes
-    -- (In multiplayer the answer is a command: UIStaffRise:_issueAnswer.)
-    self.ui:addWindow(UIStaffRise(self.ui, self.owner, self.message))
+    -- (In multiplayer the answer is a command: UIStaffRise:_issueAnswer.
+    -- A request already over has nothing to answer.)
+    if not (TheApp.mp_session and (self.owner.fired or not self.owner.quitting_in)) then
+      self.ui:addWindow(UIStaffRise(self.ui, self.owner, self.message))
+    end
     self:removeMessage()
   elseif self.type == "mp_offer" then
     -- Multiplayer co-op: an offer from another player, in its own window.

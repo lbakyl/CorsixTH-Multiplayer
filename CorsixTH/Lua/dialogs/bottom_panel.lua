@@ -729,6 +729,10 @@ function UIBottomPanel:deleteMessage(owner, icon)
 
       if msg_info.owner then
         msg_info.owner.message = nil
+        -- (The icon was made when the message was queued and gave its owner
+        -- a callback that opens it: gone with it, or clicking that person
+        -- later opened a pay rise window for a request long over.)
+        msg_info.owner.message_callback = nil
       end
       return true
     end
