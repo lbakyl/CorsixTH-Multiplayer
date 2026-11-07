@@ -162,7 +162,11 @@ function MultiplayerSession:issue(cmd)
   self.seq = self.seq + 1
   -- The hospital the action is for: this player's (multiplayer co-op).
   if cmd.hospital == nil then cmd.hospital = self.hospital_index or 1 end
-  cmd.step = self.step + self.delay
+  -- For a step no peer has run yet: after a repair of only this game (the
+  -- others agreed and went on) it runs again steps the others have run.
+  local furthest = self.step
+  for _, step in pairs(self.peer_step) do furthest = math.max(furthest, step) end
+  cmd.step = furthest + self.delay
   cmd.peer = self.peer_id
   cmd.seq = self.seq
   local line = MultiplayerSession.encodeCommand(cmd)

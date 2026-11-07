@@ -79,6 +79,11 @@ MAX_DIAG_TOTAL = 8 * 1024 * 1024
 # big, and everybody must have loaded it within the timeout.
 MAX_SAVE_BYTES = 64 * 1024 * 1024
 RECOVERY_TIMEOUT = 60.0
+# A repair of only the games that differ (a quorum agrees): how long to wait
+# for the referee's word on the step, and for a player's save when only the
+# referee differs (an older game cannot send one: then a full repair).
+QUORUM_WAIT = 10.0
+REFEREE_REPAIR_TIMEOUT = 20.0
 # Computer players (bots): the room owner adds them in the lobby; each is a
 # headless game this server starts (like the referee) that joins the room as
 # a player. Names given in this order; a bot that has not joined within the
@@ -196,6 +201,12 @@ class Recovery:
     start: bool = False            # the start of a game for players with another edition's files
     parts: list[str] = field(default_factory=list)
     size: int = 0
+    # A quorum repair: only these players load the referee's game, the
+    # others carry on (None: everybody holds and loads).
+    only: set[int] | None = None
+    quorum_fp: str | None = None   # what the quorum agreed on at `step`
+    waiting_referee: bool = False  # the referee has not reported `step` yet
+    referee_only: bool = False     # every player agrees: only the referee loads a player's game
 
 
 @dataclass(eq=False)
@@ -245,6 +256,7 @@ class Room:
     agreed: dict[int, str] = field(default_factory=dict)      # players agreed, referee not yet
     referee_fps: dict[int, str] = field(default_factory=dict)  # referee reported, players not yet
     verified_step: int = 0  # last step the referee confirmed
+    compare_from: int = 0   # steps before this are not compared (run again after a quorum repair)
     # Everything a peer joining late needs (the referee): every command and
     # LEFT so far, and each player's latest step report.
     command_log: list[str] = field(default_factory=list)
@@ -1275,8 +1287,11 @@ class Server:
             room.speed = speed
 
     def _record_fingerprint(self, room: Room, peer: int, step: int, fp: str) -> None:
-        if room.desync_step is not None or room.recovery is not None:
+        rec = room.recovery
+        if room.desync_step is not None or (rec is not None and not rec.referee_only):
             return
+        if step < room.compare_from:
+            return  # (a step run again after a quorum repair: compared before)
         fps = room.fingerprints.setdefault(step, {})
         fps[peer] = fp
         active = set(room.players)
@@ -1286,14 +1301,45 @@ class Server:
             if len(values) > 1:
                 log.warning("room %r: desync at step %d: %s", room.name, step,
                             {p: fps[p] for p in sorted(active)})
-                self._desync(room, step)
+                if rec is not None:
+                    # (Repairing the referee meanwhile: the players come first.)
+                    room.recovery = None
+                quorum = self._quorum(fps, active) if room.referee_token else None
+                if quorum is not None:
+                    self._quorum_repair(room, step, *quorum)
+                else:
+                    self._desync(room, step)
             elif room.referee_token:
                 # All players agree; the referee checks them too.
                 self._check_with_referee(room, step, values.pop(), None)
 
+    @staticmethod
+    def _quorum(fps: dict[int, str], active: set[int]) -> tuple[str, list[int]] | None:
+        """The fingerprint most players agree on and the players that differ,
+        if at least two players and more than half of them agree."""
+        counts: dict[str, int] = {}
+        for p in sorted(active):
+            counts[fps[p]] = counts.get(fps[p], 0) + 1
+        best = max(counts.values())
+        winners = [v for v, n in counts.items() if n == best]
+        if best < 2 or best * 2 <= len(active) or len(winners) != 1:
+            return None
+        return winners[0], sorted(p for p in active if fps[p] != winners[0])
     def _referee_fingerprint(self, room: Room, step: int, fp: str) -> None:
-        if room.desync_step is not None or room.recovery is not None:
+        rec = room.recovery
+        if rec is not None and rec.waiting_referee:
+            if step == rec.step:
+                # The quorum's word against the referee's.
+                if fp == rec.quorum_fp:
+                    self._start_partial(room, rec)
+                else:
+                    log.warning("room %r: the referee differs from the quorum at step %d too",
+                                room.name, step)
+                    room.recovery = None
+                    self._desync(room, rec.step)
             return
+        if room.desync_step is not None or rec is not None:
+            return  # (repairing the referee: what it says until then is wrong)
         self._check_with_referee(room, step, None, fp)
 
     def _check_with_referee(self, room: Room, step: int, players_fp: str | None,
@@ -1320,6 +1366,10 @@ class Server:
             return
         log.warning("room %r: the players differ from the referee at step %d: players %s, "
                     "referee %s", room.name, step, players_fp, referee_fp)
+        if len(room.players) >= 2 and room.recovery is None:
+            # Every player agrees (a quorum): only the referee is wrong.
+            self._repair_referee(room, step)
+            return
         self._desync(room, step)
 
     # ------------------------------------------------------------ recovery
@@ -1356,8 +1406,70 @@ class Server:
                                               room, rec)
         self._recovery_progress(room)
 
+    # A quorum repair: when most players agree, only the others load the
+    # referee's game (if the referee agrees with the quorum) and everybody
+    # else carries on; when every player agrees and only the referee differs,
+    # only the referee loads a player's game. Anything unusual falls back to
+    # the full repair above.
+
+    def _quorum_repair(self, room: Room, step: int, fp: str, dissenters: list[int]) -> None:
+        names = ", ".join(room.players[p].name for p in dissenters if p in room.players)
+        log.warning("room %r: a quorum agrees at step %d; repairing only %s", room.name, step, names)
+        rec = room.recovery = Recovery(step=step, only=set(dissenters), quorum_fp=fp)
+        referee_fp = room.referee_fps.pop(step, None)
+        if referee_fp is None:
+            # (The referee follows the players: its word on this step comes soon.)
+            rec.waiting_referee = True
+            asyncio.get_running_loop().call_later(QUORUM_WAIT, self._quorum_timeout, room, rec)
+        elif referee_fp == fp:
+            self._start_partial(room, rec)
+        else:
+            log.warning("room %r: the referee differs from the quorum at step %d too",
+                        room.name, step)
+            room.recovery = None
+            self._desync(room, step)
+
+    def _quorum_timeout(self, room: Room, rec: Recovery) -> None:
+        if room.recovery is rec and rec.waiting_referee:
+            log.warning("room %r: no word from the referee on step %d", room.name, rec.step)
+            room.recovery = None
+            self._desync(room, rec.step)
+
+    def _start_partial(self, room: Room, rec: Recovery) -> None:
+        rec.waiting_referee = False
+        assert rec.only is not None
+        for peer in sorted(rec.only):
+            p = room.players.get(peer)
+            if p is not None:
+                p.send(encode("HOLD", step=rec.step, why="desync"))
+        asyncio.get_running_loop().call_later(RECOVERY_TIMEOUT, self._recovery_timeout, room, rec)
+        self._recovery_progress(room)
+
+    def _repair_referee(self, room: Room, step: int) -> None:
+        """Every player agrees and the referee does not: one of them (a bot
+        if there is one, it is next to the server) sends its game, without
+        stopping, and only the referee loads it."""
+        players = sorted(room.players.values(),
+                         key=lambda p: (not p.is_bot, p is not room.owner, p.peer))
+        if room.referee is None or not players:
+            self._desync(room, step)
+            return
+        saver = players[0]
+        log.warning("room %r: only the referee differs at step %d; %r sends its game to it",
+                    room.name, step, saver.name)
+        rec = room.recovery = Recovery(step=step, asked=True, saver=saver, referee_only=True)
+        saver.send(encode("SAVE", step=max(saver.last_step, step), why="referee"))
+        asyncio.get_running_loop().call_later(REFEREE_REPAIR_TIMEOUT, self._recovery_timeout,
+                                              room, rec)
+
     def _recovery_timeout(self, room: Room, rec: Recovery) -> None:
         if room.recovery is rec:
+            if rec.only is not None or rec.referee_only:
+                # (An older game that cannot do its part: everybody, as before.)
+                log.warning("room %r: the quorum repair timed out; repairing everybody", room.name)
+                room.recovery = None
+                self._start_recovery(room, rec.step)
+                return
             log.warning("room %r: desync repair timed out", room.name)
             self._recovery_failed(room)
 
@@ -1380,12 +1492,16 @@ class Server:
         command log), ask the referee for its game as soon as it has run the
         steps all of them have run: nobody goes back further than needed."""
         rec = room.recovery
-        if rec is None or rec.asked or room.referee is None:
+        if rec is None or rec.asked or rec.waiting_referee or room.referee is None:
             return
-        if room.players and set(room.players) <= set(rec.held):
+        targets = set(room.players) if rec.only is None else rec.only & set(room.players)
+        if rec.only is not None and not targets:
+            room.recovery = None  # (the players to repair have left)
+            return
+        if targets and targets <= set(rec.held):
             rec.asked = True
             rec.saver = room.referee
-            steps = [rec.held[p] for p in room.players if rec.held[p] is not None]
+            steps = [rec.held[p] for p in targets if rec.held[p] is not None]
             # Nobody but a rejoining player: the referee saves where it is.
             room.referee.send(encode("SAVE", step=min(steps) if steps else 0))
 
@@ -1412,9 +1528,12 @@ class Server:
             log.warning("room %r: the referee's save is incomplete", room.name)
             self._recovery_failed(room)
             return
+        replay = [line for line in room.command_log if (command_step(line) or 0) > step]
+        if rec.only is not None or rec.referee_only:
+            self._finish_partial(room, rec, step, replay)
+            return
         # Everybody (the referee too) loads the save, then gets every command
         # for the steps after it, then carries on from there.
-        replay = [line for line in room.command_log if (command_step(line) or 0) > step]
         lines = [encode("LOAD", step=step, parts=len(rec.parts),
                         peers=",".join(str(p) for p in sorted(room.players)))]
         lines += [encode("SAVEDATA", d=part) for part in rec.parts]
@@ -1444,6 +1563,45 @@ class Server:
         room.recoveries += 1
         log.info("room %r: repaired: everybody loads the referee's game at step %d "
                  "(%d bytes, %d commands after it)", room.name, step, rec.size, len(replay))
+
+    def _finish_partial(self, room: Room, rec: Recovery, step: int, replay: list[str]) -> None:
+        """A quorum repair's save is here: only the players that differed (or
+        only the referee) load it, then the commands after it, then where
+        the others have got to (their last step reports: they are ahead and
+        wait), then carry on."""
+        if rec.referee_only:
+            targets = [room.referee] if room.referee else []
+        else:
+            assert rec.only is not None
+            targets = [room.players[p] for p in sorted(rec.only) if p in room.players]
+        repaired = {t.peer for t in targets}
+        lines = [encode("LOAD", step=step, parts=len(rec.parts),
+                        peers=",".join(str(p) for p in sorted(room.players)))]
+        lines += [encode("SAVEDATA", d=part) for part in rec.parts]
+        lines.append(encode("LOADEND", step=step))
+        lines += replay
+        lines += [room.last_report[p] for p in sorted(room.last_report)
+                  if p in room.players and p not in repaired]
+        lines.append(encode("RESUME", step=step))
+        for target in targets:
+            for line in lines:
+                target.send(line)
+        room.recovery = None
+        room.recoveries += 1
+        if rec.referee_only:
+            room.referee_fps.clear()  # (its reports from before the load were wrong)
+            room.verified_step = min(room.verified_step, step)
+            log.info("room %r: repaired the referee from %r's game at step %d (%d bytes)",
+                     room.name, rec.saver.name if rec.saver else "?", step, rec.size)
+            return
+        # The repaired players run the steps after the save again: those were
+        # compared already (or skipped during the repair).
+        room.fingerprints.clear()
+        room.compare_from = max([p.last_step for p in room.players.values()] + [step]) + 1
+        for p in targets:
+            p.last_step = step
+        log.info("room %r: repaired only %s from the referee's game at step %d (%d bytes)",
+                 room.name, ", ".join(t.name for t in targets), step, rec.size)
 
     # ------------------------------------------------------------ departures
 

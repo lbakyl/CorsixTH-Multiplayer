@@ -443,15 +443,172 @@ def test_referee_follows_and_checks_the_players():
         a.send("S 1 1 fp-one")
         b.send("S 2 1 fp-one")
         assert await a.expect("S") == "S 2 1 fp-one"
-        # The players agree with each other but not with the referee.
+        # The players agree with each other but not with the referee: a
+        # quorum, so only the referee is repaired, from the host's game; the
+        # players carry on without holding.
         a.send("S 1 2 fp-two")
         b.send("S 2 2 fp-two")
         ref.send("S 0 2 fp-other")
-        # With a referee the server repairs the games instead (see below).
+        save = await a.expect("SAVE")
+        assert save["why"] == "referee" and save["step"] == "2"
+        assert not any(x.startswith("C ") and "peer=0" in x for x in a.inbox + b.inbox)
+        room = server.rooms["r1"]
+        assert room.verified_step == 1
+        # Meanwhile the players are still compared, and the referee's word
+        # (wrong until it loads) is not.
+        a.send("C kind=fire peer=1 seq=2 step=4")
+        a.send("S 1 3 fp-three")
+        b.send("S 2 3 fp-three")
+        ref.send("S 0 3 fp-wrong")
+        while await b.expect("S") != "S 1 3 fp-three":
+            pass
+        a.send(encode("SAVEDATA", d="QUJD"))
+        a.send(encode("SAVED", step=2, parts=1))
+        assert (await ref.expect("LOAD")) == {"step": "2", "parts": "1", "peers": "1,2"}
+        assert (await ref.expect("SAVEDATA"))["d"] == "QUJD"
+        assert (await ref.expect("LOADEND"))["step"] == "2"
+        # The commands after the save, where the players have got to, go on.
+        assert await ref.expect("C") == "C kind=hire peer=1 seq=1 step=3"
+        assert await ref.expect("C") == "C kind=fire peer=1 seq=2 step=4"
+        assert await ref.expect("S") == "S 1 3 fp-three"
+        assert await ref.expect("S") == "S 2 3 fp-three"
+        assert (await ref.expect("RESUME"))["step"] == "2"
+        assert room.recovery is None and room.recoveries == 1
+        # Nobody else loaded anything.
+        assert not any(x.startswith(("HOLD", "LOAD")) for x in a.inbox + b.inbox)
+        # The referee runs step 3 again and now agrees.
+        ref.send("S 0 3 fp-three")
+        for _ in range(50):
+            if room.verified_step == 3:
+                break
+            await asyncio.sleep(0.01)
+        assert room.verified_step == 3
+    run_with_referee(body)
+
+
+def test_referee_repair_falls_back_for_an_older_game(monkeypatch):
+    monkeypatch.setattr(srv, "REFEREE_REPAIR_TIMEOUT", 0.2)
+
+    async def body(server, port, started):
+        a, b = await two_players_in_room(port)
+        await start(a, b)
+        for _ in range(50):
+            if started:
+                break
+            await asyncio.sleep(0.01)
+        ref = await connect_referee(port, "r1", started[0][2])
+        await ref.expect("START")
+        a.send("S 1 2 fp-two")
+        b.send("S 2 2 fp-two")
+        ref.send("S 0 2 fp-other")
+        assert (await a.expect("SAVE"))["why"] == "referee"
+        # (An older game does not send its save: everybody is repaired.)
         assert (await a.expect("HOLD"))["step"] == "2"
         assert (await b.expect("HOLD"))["step"] == "2"
-        assert not any(x.startswith("C ") and "peer=0" in x for x in a.inbox + b.inbox)
-        assert server.rooms["r1"].verified_step == 1
+    run_with_referee(body)
+
+
+async def three_players_started(port):
+    a = await Client.connect(port, "Alice")
+    b = await Client.connect(port, "Bob")
+    a.send(encode("CREATE", room="r1", password="pw", max=3, mode="shared", level=1))
+    await a.expect("JOINED")
+    b.send(encode("JOIN", room="r1", password="pw"))
+    await b.expect("JOINED")
+    c = await Client.connect(port, "Cid")
+    c.send(encode("JOIN", room="r1", password="pw"))
+    assert (await c.expect("JOINED"))["peer"] == "3"
+    b.send(encode("READY", ready=1))
+    c.send(encode("READY", ready=1))
+    a.send(encode("START"))
+    for x in (a, b, c):
+        await x.expect("START")
+    return a, b, c
+
+
+def test_quorum_repairs_only_the_game_that_differs():
+    async def body(server, port, started):
+        a, b, c = await three_players_started(port)
+        for _ in range(50):
+            if started:
+                break
+            await asyncio.sleep(0.01)
+        ref = await connect_referee(port, "r1", started[0][2])
+        await ref.expect("START")
+        a.send("C kind=hire peer=1 seq=1 step=5")
+        # Ann and Bob agree, Cid does not; the referee's word comes last.
+        a.send("S 1 3 fp-good")
+        b.send("S 2 3 fp-good")
+        c.send("S 3 3 fp-bad")
+        await asyncio.sleep(0.05)
+        room = server.rooms["r1"]
+        assert room.recovery is not None and room.recovery.waiting_referee
+        ref.send("S 0 3 fp-good")
+        # Only Cid holds; the others carry on.
+        assert (await c.expect("HOLD"))["step"] == "3"
+        a.send("S 1 4 fp-on")
+        b.send("S 2 4 fp-on")
+        c.send(encode("HELD", step=3))
+        assert (await ref.expect("SAVE"))["step"] == "3"
+        ref.send(encode("SAVEDATA", d="QUJD"))
+        ref.send(encode("SAVED", step=3, parts=1))
+        assert (await c.expect("LOAD")) == {"step": "3", "parts": "1", "peers": "1,2,3"}
+        assert (await c.expect("SAVEDATA"))["d"] == "QUJD"
+        assert (await c.expect("LOADEND"))["step"] == "3"
+        assert await c.expect("C") == "C kind=hire peer=1 seq=1 step=5"
+        # Where the others are (they wait for Cid to catch up).
+        assert await c.expect("S") == "S 1 4 fp-on"
+        assert await c.expect("S") == "S 2 4 fp-on"
+        assert (await c.expect("RESUME"))["step"] == "3"
+        assert not any(x.startswith(("HOLD", "LOAD")) for x in a.inbox + b.inbox + ref.inbox)
+        assert room.recovery is None and room.recoveries == 1
+        # Cid runs step 4 again (not compared twice), then all go on together.
+        c.send("S 3 4 fp-on")
+        for x in (a, b, c):
+            x.send(f"S {x is a and 1 or x is b and 2 or 3} 5 fp-five")
+        ref.send("S 0 5 fp-five")
+        for _ in range(50):
+            if room.verified_step == 5:
+                break
+            await asyncio.sleep(0.01)
+        assert room.verified_step == 5 and room.desync_step is None
+    run_with_referee(body)
+
+
+def test_no_quorum_repairs_everybody():
+    async def body(server, port, started):
+        a, b, c = await three_players_started(port)
+        for _ in range(50):
+            if started:
+                break
+            await asyncio.sleep(0.01)
+        ref = await connect_referee(port, "r1", started[0][2])
+        await ref.expect("START")
+        # Three different games: nobody is right.
+        a.send("S 1 3 fp-a")
+        b.send("S 2 3 fp-b")
+        c.send("S 3 3 fp-c")
+        for x in (a, b, c):
+            assert (await x.expect("HOLD"))["step"] == "3"
+    run_with_referee(body)
+
+
+def test_quorum_against_the_referee_repairs_everybody():
+    async def body(server, port, started):
+        a, b, c = await three_players_started(port)
+        for _ in range(50):
+            if started:
+                break
+            await asyncio.sleep(0.01)
+        ref = await connect_referee(port, "r1", started[0][2])
+        await ref.expect("START")
+        ref.send("S 0 3 fp-ref")  # (the referee first this time)
+        await asyncio.sleep(0.05)
+        a.send("S 1 3 fp-good")
+        b.send("S 2 3 fp-good")
+        c.send("S 3 3 fp-bad")
+        for x in (a, b, c):
+            assert (await x.expect("HOLD"))["step"] == "3"
     run_with_referee(body)
 
 

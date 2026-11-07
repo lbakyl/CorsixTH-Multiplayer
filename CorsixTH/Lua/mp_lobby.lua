@@ -952,7 +952,15 @@ end
 
 function MultiplayerLobby:_onSAVE(f)
   local session = self:_ownSession()
-  if session and self.is_referee then session.save_at = tonumber(f.step) or session.step end
+  if not session then return end
+  if self.is_referee then
+    session.save_at = tonumber(f.step) or session.step
+  elseif f.why == "referee" and not session.observer then
+    -- Every player agrees and only the referee differs: this game goes to
+    -- the referee, and this player carries on (no hold).
+    session.save_at = tonumber(f.step) or session.step
+    session.save_for_referee = true
+  end
 end
 
 function MultiplayerLobby:_onLOAD(f)
@@ -1027,7 +1035,11 @@ function MultiplayerLobby:serviceSaves(session)
       self:send("SAVEDATA", {d = text:sub(i, i + MultiplayerLobby.SAVE_CHUNK - 1)})
     end
     self:send("SAVED", {step = session.step, parts = parts})
-    session.held = true -- until everybody, the referee too, has loaded it
+    if session.save_for_referee then
+      session.save_for_referee = nil -- (only the referee loads it)
+    else
+      session.held = true -- until everybody, the referee too, has loaded it
+    end
     self.log(string.format("multiplayer: sent the save at step %d (%d bytes)", session.step, #data))
   end
   local load = session.load_data
