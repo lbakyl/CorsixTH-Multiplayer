@@ -784,21 +784,40 @@ function MultiplayerLobby:_onLOBBY(f)
   self:_changed("lobby", f)
 end
 
+--! Bots in a game from which their small talk is left out by default.
+MultiplayerLobby.QUIET_BOTS = 3
+
 --! Whether this computer shows a chat line: a bot's only as far as the
---! player's BOT CHAT setting lets it ("all"; "useful": not its small talk,
---! which the bot marks banter=1; "off"). People's lines always.
+--! player's BOT CHAT setting lets it ("auto", the default: everything, but
+--! no small talk with QUIET_BOTS bots or more, Jan: taunts from many bots
+--! drown the chat; "every"; "useful": not its small talk, which the bot
+--! marks banter=1; "off"). People's lines always. ("all" was the default
+--! before "auto": the same.)
 --!param setting (string) the config's multiplayer_bot_chat
 --!param f (table) the CHAT message
 --!param sender (table) the sender in the player list, or nil
-function MultiplayerLobby.chatShown(setting, f, sender)
+--!param bots (number) optional; how many bots the game has
+function MultiplayerLobby.chatShown(setting, f, sender, bots)
   if not (sender and sender.bot == "1") then return true end
   if setting == "off" then return false end
-  return not (setting == "useful" and f.banter == "1")
+  if setting == "every" then return true end
+  if setting == "useful" or (bots or 0) >= MultiplayerLobby.QUIET_BOTS then return f.banter ~= "1" end
+  return true
+end
+
+--! How many bots are in this room's player list.
+function MultiplayerLobby:botCount()
+  local n = 0
+  for _, p in pairs(self.players or {}) do
+    if p.bot == "1" then n = n + 1 end
+  end
+  return n
 end
 
 function MultiplayerLobby:_onCHAT(f)
   local config = TheApp and TheApp.config
-  if not MultiplayerLobby.chatShown(config and config.multiplayer_bot_chat, f, self.players[tonumber(f.peer)]) then
+  if not MultiplayerLobby.chatShown(config and config.multiplayer_bot_chat, f, self.players[tonumber(f.peer)],
+      self:botCount()) then
     return
   end
   self.chat[#self.chat + 1] = f
@@ -1327,9 +1346,12 @@ function MultiplayerLobby:_addMultiplayerMenu(ui, mode)
   end
   -- What the bots say, on this computer only (saved in the config).
   local bot_chat = UIMenu()
-  for _, choice in ipairs({"all", "useful", "off"}) do
-    bot_chat:appendCheckItem(_S.multiplayer_window["menu_bot_chat_" .. choice],
-        (TheApp.config.multiplayer_bot_chat or "all") == choice, function()
+  local labels = {auto = "menu_bot_chat_auto", every = "menu_bot_chat_all", useful = "menu_bot_chat_useful",
+      off = "menu_bot_chat_off"}
+  local setting = TheApp.config.multiplayer_bot_chat
+  if setting == nil or setting == "all" then setting = "auto" end
+  for _, choice in ipairs({"auto", "every", "useful", "off"}) do
+    bot_chat:appendCheckItem(_S.multiplayer_window[labels[choice]], setting == choice, function()
           TheApp.config.multiplayer_bot_chat = choice
           TheApp:saveConfig()
         end, "mp_bot_chat")

@@ -189,7 +189,7 @@ local function new_config_defaults()
     new_machine_extra_info = true,
     player_name = [[]],
     multiplayer_server = [[]],
-    multiplayer_bot_chat = [[all]],
+    multiplayer_bot_chat = [[auto]],
   }
 end
 
@@ -829,9 +829,11 @@ param(config_values, 'player_name') .. '\n' .. [=[
 param(config_values, 'multiplayer_server') .. '\n' .. [=[
 
 -------------------------------------------------------------------------------
--- What bots say in a multiplayer game, on this computer: [[all]], [[useful]]
--- (what they answer and tell their team mates, without greetings and taunts)
--- or [[off]]. Also in the game's MULTIPLAYER menu, BOT CHAT.
+-- What bots say in a multiplayer game, on this computer: [[auto]] (all of
+-- it, but no greetings and taunts in a game with 3 bots or more), [[every]]
+-- (all of it), [[useful]] (what they answer and tell their team mates,
+-- without greetings and taunts) or [[off]]. Also in the game's MULTIPLAYER
+-- menu, BOT CHAT.
 --]=] .. '\n' ..
 param(config_values, 'multiplayer_bot_chat') .. '\n'
 

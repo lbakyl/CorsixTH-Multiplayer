@@ -122,6 +122,14 @@ describe("MultiplayerLobby", function()
     assert.is_false(MultiplayerLobby.chatShown("useful", hello, bot))
     assert.is_true(MultiplayerLobby.chatShown("useful", answer, bot))
     assert.is_false(MultiplayerLobby.chatShown("off", answer, bot))
+    -- The default ("auto", or "all" from before it): no small talk once the
+    -- game has three bots or more; "every" shows it anyway.
+    for _, setting in ipairs({"auto", "all"}) do
+      assert.is_true(MultiplayerLobby.chatShown(setting, hello, bot, 2))
+      assert.is_false(MultiplayerLobby.chatShown(setting, hello, bot, 3))
+      assert.is_true(MultiplayerLobby.chatShown(setting, answer, bot, 3))
+    end
+    assert.is_true(MultiplayerLobby.chatShown("every", hello, bot, 5))
     -- Hidden lines do not reach the chat list.
     local saved = _G.TheApp
     _G.TheApp = {config = {multiplayer_bot_chat = "useful"}}
