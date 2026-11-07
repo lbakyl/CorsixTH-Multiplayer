@@ -112,6 +112,15 @@ local handlers = MultiplayerSession.default_handlers
 
 local function S() return _S.multiplayer_window end
 
+--! The n-th of a list of texts, round and round (a string table: counted
+--! with ipairs, as its length may not be what # says).
+local function nth_text(list, n)
+  local texts = {}
+  for _, text in ipairs(list) do texts[#texts + 1] = text end
+  if #texts == 0 then return "" end
+  return texts[(n - 1) % #texts + 1]
+end
+
 local function log(text)
   local session = TheApp and TheApp.mp_session
   if session then session.log(string.format("sabotage (step %d): %s", session.step, text)) end
@@ -316,8 +325,7 @@ function sabotage.tick(handyman)
   if s.hours % (sabotage.HINT_DAYS * 50) == 0 and handyman.hospital then
     -- (The words: the next of a few, the same on every peer.)
     s.hints = (s.hints or 0) + 1
-    local hints = S().sabotage_handyman_hint
-    MultiplayerSession.tellPlayer(world, handyman.hospital, hints[(s.hints - 1) % #hints + 1])
+    MultiplayerSession.tellPlayer(world, handyman.hospital, nth_text(S().sabotage_handyman_hint, s.hints))
   end
   local x, y = handyman.tile_x, handyman.tile_y
   local hospital = handyman.hospital
@@ -638,9 +646,8 @@ function sabotage.dailyRats(hospital)
     local days = (hospital.mp_rat_days or 0) + 1
     hospital.mp_rat_days = days
     if days % sabotage.RAT_REMINDER_DAYS == 0 then
-      local texts = S().sabotage_rats_reminders
-      local n = days / sabotage.RAT_REMINDER_DAYS
-      MultiplayerSession.tellPlayer(hospital.world, hospital, texts[(n - 1) % #texts + 1]:format(count))
+      local n = math.floor(days / sabotage.RAT_REMINDER_DAYS)
+      MultiplayerSession.tellPlayer(hospital.world, hospital, nth_text(S().sabotage_rats_reminders, n):format(count))
     end
   else
     hospital.mp_rat_days = nil
