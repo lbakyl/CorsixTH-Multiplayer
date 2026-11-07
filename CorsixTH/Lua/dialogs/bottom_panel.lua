@@ -669,6 +669,23 @@ function UIBottomPanel:cancelFax(fax_type, hospital)
 end
 
 -- Opens the last available message. Currently used to open the level completed message.
+--! Open the message numbered `mp_id` (multiplayer), showing it on the bar
+--! first if it still waits in the queue; nothing if it is gone.
+function UIBottomPanel:openMessageById(mp_id)
+  for i, info in ipairs(self.message_queue) do
+    if info.mp_id == mp_id then
+      self:_showMessageIcon(i)
+      break
+    end
+  end
+  for _, icon in ipairs(self.message_windows) do
+    if icon.mp_id == mp_id then
+      if not icon.fax then icon:openMessage() end
+      return
+    end
+  end
+end
+
 function UIBottomPanel:openLastMessage()
   if #self.message_queue > 0 then
     self:_showMessageIcon(#self.message_queue)

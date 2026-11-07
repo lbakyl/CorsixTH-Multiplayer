@@ -1981,11 +1981,52 @@ end
 --! The fax to a hospital that took a place ("won") or is out: back to the
 --! lobby, or watch on. Only that hospital's player sees and answers it; a
 --! win holds the game until they have (MultiplayerSession.startHold).
+--! "A", "A and B", "A, B and C" (localised strings: `..`, not table.concat).
+local function join_names(names)
+  local text = names[1] or ""
+  for i = 2, #names do
+    text = text .. (i == #names and _S.multiplayer_window.race_and or ", ") .. names[i]
+  end
+  return text
+end
+
+--! The words for a hospital that reached the goals: a first place or another,
+--! alone, with allies (the other hospitals of its team, named) or with the
+--! people sharing it. Any level: its name goes in.
+function World:_mpWonText(hosp, place)
+  local S = _S.multiplayer_window
+  local level = tostring(self.map.level_name or "")
+  local allies = {}
+  local team = self:mpTeam(hosp)
+  if team then
+    for _, h in ipairs(self:mpTeamHospitals(team)) do
+      if h ~= hosp then allies[#allies + 1] = h.name end
+    end
+  end
+  local shared = tostring(hosp.name):find(" + ", 1, true) ~= nil
+  local first = hosp.mp_place == 1
+  local cheer
+  if #allies > 0 then
+    cheer = (first and S.race_won_allies_first or S.race_won_allies):format(join_names(allies))
+  elseif shared then
+    cheer = first and S.race_won_together_first or S.race_won_together
+  else
+    cheer = first and S.race_won[1] or S.race_won_well_done
+  end
+  local how
+  if #allies > 0 or shared then
+    how = first and S.race_won_team_first:format(level) or S.race_won_team_place:format(level, place)
+  else
+    how = first and S.race_won_first:format(level) or S.race_won_place:format(level, place)
+  end
+  return {{text = cheer}, {text = how}, {text = S.race_won[3]}}
+end
+
 function World:_mpPlaceFax(hosp, how, place)
   local S = _S.multiplayer_window
   local message
   if how == "won" then
-    message = {{text = S.race_won[1]}, {text = S.race_won[2]:format(place)}, {text = S.race_won[3]}}
+    message = self:_mpWonText(hosp, place)
   else
     message = {{text = S.race_out[1]}, {text = S.race_out[2]:format(place)}, {text = S.race_out[3]}}
   end
@@ -1999,13 +2040,19 @@ function World:_mpPlaceFax(hosp, how, place)
     MultiplayerSession.startHold(self, "win", self.next_message_id, self:getHospitalIndex(hosp))
   end
   if self.ui.hospital == hosp then
-    self.ui.bottom_panel:openLastMessage()
     -- A win: the winning video at once, on this player's screen only (the
     -- game holds for their answer anyway), as the winner of a level sees
-    -- it; it is not shown again when they leave (Jan, eu2). Played after
-    -- this step, from the screen's tick (MultiplayerSession:checkPendingMovie).
+    -- it, and the fax with the words when it ends (opened first, the video
+    -- covered it: Jan saw no words). It is not shown again when they leave
+    -- (Jan, eu2). Played after this step, from the screen's tick
+    -- (MultiplayerSession:checkPendingMovie).
     local session = TheApp.mp_session
-    if how == "won" and session and not session.observer then session.pending_movie = "win" end
+    if how == "won" and session and not session.observer then
+      session.pending_movie = "win"
+      session.pending_movie_fax = self.next_message_id
+    else
+      self.ui.bottom_panel:openLastMessage()
+    end
   end
 end
 

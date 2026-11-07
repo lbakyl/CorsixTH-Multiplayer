@@ -667,6 +667,18 @@ multiplayer_window = {
     "Your hospital has reached this level's goals: %s place.",
     "The others race on for the next places. Go back to the lobby, or watch?",
   },
+  -- The fax for a place in a race, with the winning video (%s: the level's
+  -- name, then the place).
+  race_won_first = "Your hospital is the first to reach every goal of %s. You have won the race!",
+  race_won_place = "Your hospital has reached every goal of %s: %s place.",
+  race_won_well_done = "Well done!",
+  race_won_allies_first = "You and %s did it! Great job!",
+  race_won_allies = "You and %s made it! Well done!",
+  race_won_together_first = "You did it together! Great job!",
+  race_won_together = "You made it together! Well done!",
+  race_won_team_first = "Your team is the first to reach every goal of %s. You have won the race!",
+  race_won_team_place = "Your team has reached every goal of %s: %s place.",
+  race_and = " and ",
   race_out = {
     "Bad news.",
     "Your hospital failed this level's goals two years running: it is out of the race, in %s place.",

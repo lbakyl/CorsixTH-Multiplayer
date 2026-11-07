@@ -2420,9 +2420,18 @@ function MultiplayerSession:checkPendingMovie(app)
   local movie = self.pending_movie
   if not movie then return end
   self.pending_movie = nil
+  local fax = self.pending_movie_fax
+  self.pending_movie_fax = nil
+  -- The fax that goes with it, once the video is over (at once without one).
+  local function open_fax()
+    local panel = app.ui and app.ui.bottom_panel
+    if fax and panel and panel.openMessageById then panel:openMessageById(fax) end
+  end
   if movie == "win" and app.moviePlayer then
     self.win_movie_shown = true
-    app.moviePlayer:playWinLevelMovie()
+    app.moviePlayer:playWinLevelMovie(open_fax)
+  else
+    open_fax()
   end
 end
 
