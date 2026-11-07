@@ -372,6 +372,16 @@ need17 = [t for st, t in agnes17 if int(st) >= 450 and re.search(r"short|value|r
 ok17 = len(good17) == 1 and not good17_bertie and bool(me_too17) and len(need17) == 1
 print(f"17. Requirements chat:      Agnes to ann {good17}; Bertie to ann {good17_bertie}; Bertie also ready {me_too17[:1]}; Agnes needs {need17}")
 fail |= not ok17
+# 18. A warning that an opponent meets the requirements (MP_BOT_TEST_WIN:
+# jon's hospital 1 from game day 10). In "afk" the bot shares hospital 2 with
+# kay, who reads the team chat: one warning, naming jon. In "duel" the bot has
+# nobody on its side to read it: no warning.
+afk_bot = next((n.split('/', 1)[1] for n in bots if n.startswith('afk/')), None)
+warn18 = [(int(st), t) for st, t in chats_from(log('kay'), afk_bot) if 'jon' in t and re.search(r'catch up|speed up', t)] if afk_bot else []
+duel_warn18 = [t for _, t in to_eve if re.search(r'catch up|speed up', t)]
+ok18 = len(warn18) == 1 and warn18[0][0] >= 450 and not duel_warn18
+print(f"18. Warning about a rival:  kay read {warn18}; eve read {duel_warn18}")
+fail |= not ok18
 for name, text in sorted(bots.items()):
     errors = [l for l in text.splitlines() if 'ERROR' in l or 'could not' in l]
     if errors: print(f"   {name} problems: {errors[:5]}")

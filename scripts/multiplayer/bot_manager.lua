@@ -80,6 +80,8 @@ local GIVE_DAYS, ASK_DAYS, ASK_DAYS_EMERGENCY = 20, 20, 7
 -- before an allied bot lends one although the ally could hire (Jan, 2026-11-07:
 -- no bot ever asked).
 local LACK_DAYS, LACK_EMERGENCY_DAYS = 10, 3
+-- Game days between warnings that an opponent can win (4 months).
+local RIVAL_WARN_DAYS = 120
 -- Waiting areas (Jan, 2026-11-03): by each room's door and the reception
 -- benches for the queue, a plant and a radiator, and a drinks machine by
 -- every third, within WAITING_R tiles. Not by rooms nobody queues for.
@@ -2445,6 +2447,40 @@ function M:winChat(s)
   end
 end
 
+--! In a race: an opponent (a bot or a person) that meets all the
+--! requirements to win gets a warning in the team chat, as soon as the bot
+--! sees it and then every 4 months while it is still so. Only one allied bot
+--! says it (M:isCaller), and only when a person on the bot's side can read
+--! it.
+function M:rivalWatch(s)
+  local bot, world = self.bot, self.bot.world
+  if not (world.mp_coop and world.mp_coop.competitive and world.endconditions) then return end
+  local winners, names, fresh = {}, {}, false
+  self.rival_seen = self.rival_seen or {}
+  for index, h in ipairs(world.hospitals) do
+    local _, name = bot:playerOfHospital(index)
+    if h ~= s.hosp and name and world:mpRivals(s.hosp, h) and M.meets(world, h) then
+      winners[#winners + 1] = index
+      names[#names + 1] = name
+      if not self.rival_seen[index] then fresh = true end
+    end
+  end
+  -- (One that stops meeting them is news again when it meets them again.)
+  local now = {}
+  for _, index in ipairs(winners) do now[index] = true end
+  for index in pairs(self.rival_seen) do
+    if not now[index] then self.rival_seen[index] = nil end
+  end
+  if #winners == 0 or not (fresh or s.day >= (self.rival_next or 0)) then return end
+  for _, index in ipairs(winners) do self.rival_seen[index] = true end
+  self.rival_next = s.day + RIVAL_WARN_DAYS
+  if not self:isCaller() or self:sideReaders() == 0 then return end
+  local line = self.fill_in(self.pick(#names > 1 and self.lines.win_rivals or self.lines.win_rival),
+      {names = join_names(names)})
+  self:note(string.format("day %d: warns the team: %s meet the winning conditions", s.day, join_names(names)))
+  bot:say(line, self.typing(line), "team")
+end
+
 --! (MP_BOT_DIAG) Where the GP's offices, their doctors, the patients and
 --! the doctors are, in the log once a month.
 function M:diagnose(s)
@@ -2530,6 +2566,7 @@ function M:think()
     if not s.hosp.mp_place then self:askAllies(s) end
     -- The level's requirements, in the team chat.
     self:winChat(s)
+    self:rivalWatch(s)
   end
   if s.hosp.mp_place then return end -- out of the race (or won): no more building
   if not s.hosp.opened and s.staffed_desks > 0 and s.rooms.gp and (s.staff.Doctor or 0) > 0 and

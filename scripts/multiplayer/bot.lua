@@ -366,6 +366,20 @@ local LINES = {
     "Same here, I'm ready as well.",
     "I'm there too. Now we only have to wait for the others.",
   },
+  -- An opponent meets the requirements to win (Manager:rivalWatch), to the
+  -- team: one name ({names}) or several.
+  win_rival = {
+    "Watch out, {names} has fulfilled the winning conditions, we must catch up!",
+    "Careful, {names} has met all the requirements to win. We have to catch up!",
+    "{names} now meets the winning conditions, so we must speed up!",
+    "Heads up: {names} is ready to win. Time to catch up!",
+  },
+  win_rivals = {
+    "Watch out, {names} have fulfilled the winning conditions, we must catch up!",
+    "Careful, {names} have met all the requirements to win. We have to catch up!",
+    "{names} now meet the winning conditions, so we must speed up!",
+    "Heads up: {names} are ready to win. Time to catch up!",
+  },
   -- What a bot that is not there yet still needs, one thing at a time, by
   -- requirement ({now}, {want}, {left}, {short} money, {loan}).
   win_need = {
