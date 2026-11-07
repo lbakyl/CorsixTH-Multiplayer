@@ -103,6 +103,13 @@ local WISH = 50
 local SIZES = {gp = 5, pharmacy = 5, general_diag = 6, psych = 6, ward = 7, staff_room = 6, toilets = 5,
     research = 6, operating_theatre = 7, x_ray = 7, scanner = 6, decontamination = 6, dna_fixer = 6,
     electrolysis = 6, training = 5}
+-- The training room: lecture chairs (3 to 6 in all, chosen once per bot; a chair
+-- is one student at a time, and more than 3 students at once learn slower
+-- each: 2/(n-1) of the rate), the days between reviews of the teacher (a
+-- year, first in the 2nd month) and, from the 3rd year, of the staff.
+local CHAIRS_MIN, CHAIRS_MAX = 3, 6
+local TEACHER_REVIEW_DAYS, FIRST_TEACHER_REVIEW = 360, 31
+local STAFF_REVIEW_FROM, STAFF_REVIEW_DAYS = tonumber(os.getenv("MP_BOT_STAFF_REVIEW_FROM") or "") or 720, 30
 -- What a player puts into a new room besides what it needs: warmth, a
 -- plant, a bin; comfort in the staff room; more toilets and beds.
 local EXTRAS = {
@@ -529,6 +536,9 @@ function M:projects(s)
       end
     end
     local want, extras = M.roomPlan(id)
+    if id == "training" then
+      want, extras.lecture_chair = self:trainingPlan()
+    end
     add("room:" .. id, score, function()
       -- (A team mate may have asked for it beside something: "a toilet next
       -- to the GP's office".)
@@ -910,13 +920,63 @@ function M:doctorsWhere(test)
   return out
 end
 
---! The training room: its teacher and students. Every 6 months the teacher
---! is chosen again: the consultant with the most special skills (then the
---! most skill), from the staff or, if one there is better, from the hiring
---! list (hired straight into the room). Students: juniors first, then other
+--! The size and the extra chairs of a new training room: this bot's number of
+--! lecture chairs (3 to 6 in all, picked once from its own random numbers)
+--! less the one the room needs. Six chairs want a bigger room.
+function M:trainingPlan()
+  self.training_chairs = self.training_chairs or self.rand(CHAIRS_MIN, CHAIRS_MAX)
+  return self.training_chairs >= 5 and 6 or SIZES.training, self.training_chairs - 1
+end
+
+--! Can this doctor be taken from his work to the training room? Not from a
+--! room with a patient in it or in its queue (a GP's office with patients),
+--! and never the last of a specialism a room needs (the only surgeon of an
+--! operating theatre).
+function M:canSpareDoctor(st)
+  local world, hosp = self.bot.world, self.bot.world.ui.hospital
+  local room = st.tile_x and world:getRoom(st.tile_x, st.tile_y)
+  if room then
+    for h in pairs(room.humanoids or {}) do
+      if class.is(h, Patient) then return false end
+    end
+    local q = room.door and room.door.queue
+    if q and q:reportedSize() > 0 then return false end
+  end
+  for cat in pairs(SPECIALISTS) do
+    if st:fulfillsCriterion(cat) then
+      local need = 0
+      for _, rm in pairs(world.rooms) do
+        if rm.hospital == hosp and rm.is_active and not rm.crashed then
+          need = need + ((rm.room_info.required_staff or {})[cat] or 0)
+        end
+      end
+      if need > 0 and hosp:countStaffOfCategory(cat) - 1 < need then return false end
+    end
+  end
+  return true
+end
+
+--! The training room: its teacher and students.
+--! How training works (rooms/training.lua, Doctor:trainSkills): a doctor
+--! who is not yet a consultant learns only while he sits in a lecture chair
+--! of the training room and a consultant stands at the projector; he does
+--! no work for patients meanwhile, and his pay keeps going. A student gains
+--! general skill every day (juniors become doctors, doctors consultants);
+--! a special skill (surgeon, psychiatrist, researcher) only if the teacher
+--! has it and he has not. More chairs than 3 are filled but slow each
+--! student (2/(n-1) of the rate). The room holds the chairs plus the teacher.
+--!
+--! The teacher is chosen again every TEACHER_REVIEW_DAYS (a year, the first
+--! time in the 2nd month, or when there is none for a month): the
+--! consultant with the most special skills (then the most skill), from the
+--! staff or, if one there is better, from the hiring list (hired straight
+--! into the room). Students fill the chairs: juniors first, then other
 --! doctors not yet consultants, while the other rooms keep their doctors
---! and there are chairs. A student goes back to work once a consultant, or
---! when a room is short of a doctor.
+--! (M:canSpareDoctor). From the 3rd year the staff are reviewed every
+--! STAFF_REVIEW_DAYS and the doctors the hospital can spare (a room with no
+--! patient, the others still enough) go in without the margin kept before.
+--! A student goes back to work once a consultant, or when a room is short
+--! of a doctor.
 function M:training(s)
   local bot = self.bot
   local room = self:roomOf("training")
@@ -933,8 +993,10 @@ function M:training(s)
       if st.last_room == room then teacher = st end
     end
   end
-  if s.day >= (self.teacher_review or 0) or (not teacher and s.day - (self.teacher_sent or -99) > 30) then
-    self.teacher_review = s.day + 180
+  if s.day >= (self.teacher_review or FIRST_TEACHER_REVIEW) or
+      (not teacher and s.day - (self.teacher_sent or -99) > 30) then
+    self.teacher_review = s.day + TEACHER_REVIEW_DAYS
+    self.student_day = nil -- (the chairs are filled again now)
     local best, best_v
     for _, st in ipairs(self:doctorsWhere(function(p) return bot.flag(p, "is_consultant") end)) do
       local v = bot.teacherScore(st.profile)
@@ -997,22 +1059,39 @@ function M:training(s)
       return
     end
   end
+  -- A room with fewer chairs than the 3 it should have (an older game's):
+  -- one more, as a person would add it.
+  if chairs < CHAIRS_MIN and s.balance > 8000 and s.day - (self.chair_day or -99) > 30 and
+      bot:extraAllowed(room, "lecture_chair") then
+    self.chair_day = s.day
+    if bot:editRoom(room, {"buy:lecture_chair", "place", "done"}) then
+      self:note(string.format("day %d: one more lecture chair (%d)", s.day, chairs))
+      return
+    end
+  end
+  -- From the 3rd year the staff are reviewed (every STAFF_REVIEW_DAYS):
+  -- nothing is kept back but the doctors the rooms need.
+  local review = s.day >= STAFF_REVIEW_FROM and s.day - (self.staff_review or -99) >= STAFF_REVIEW_DAYS
   local doctors = #self:doctorsWhere(function() return true end)
   local needed = bot:staffWanted().Doctor
-  if #students < chairs and not short and doctors - #students - (teacher and 1 or 0) - 1 >= needed then
-    -- Juniors first, then the least skilled doctor not yet a consultant.
+  local margin = s.day >= STAFF_REVIEW_FROM and 0 or 1
+  if #students < chairs and not short and doctors - #students - (teacher and 1 or 0) - margin >= needed then
+    -- Juniors first, then the least skilled doctor not yet a consultant,
+    -- among those who can be spared from their work.
     local pick, pick_v
     for _, st in ipairs(self:doctorsWhere(function(p) return not bot.flag(p, "is_consultant") end)) do
-      if not inside(st) and not st.pickup and st.mp_id then
+      if not inside(st) and not st.pickup and st.mp_id and self:canSpareDoctor(st) then
         local v = (bot.flag(st.profile, "is_junior") and 0 or 1) + (st.profile.skill or 0)
         if not pick_v or v < pick_v then pick, pick_v = st, v end
       end
     end
     if pick and bot:moveStaffInto(pick, room) then
       self.student_day = s.day
-      self:note(string.format("day %d: %s to the training room", s.day, tostring(pick.profile:getFullName())))
+      self:note(string.format("day %d: %s to the training room%s", s.day, tostring(pick.profile:getFullName()),
+          review and " (staff review)" or ""))
     end
   end
+  if review and #students >= chairs then self.staff_review = s.day end
 end
 
 --! A room of this hospital with fewer staff of `category` than it needs
