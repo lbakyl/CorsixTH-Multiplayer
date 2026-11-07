@@ -25,7 +25,7 @@
 #      changes only once dee has agreed in the fax
 #   9. research ("lab", co-op on level 2, which has research: frank and one
 #      bot): the bot (it discovers something on day 20, a test command)
-#      offers it to frank for free and tells him; a research room it builds
+#      offers it to frank for free, without a chat line (the fax says it); a research room it builds
 #      has a second desk
 #  11. the hidden monthly bonus: in "team" hospitals 2 and 3 (bots), never
 #      ann's; in "duel" hospital 2 (the bot)
@@ -255,9 +255,9 @@ offer_text = re.findall(r'research offer[^\n]*', f)
 research_lines = [t for _, t in chats_from(f, lab_bot) if 'research' in t] if lab_bot else []
 lab_rooms = re.findall(r'furnishing research #\d+: buying ([^\n]*)', lb)
 desks = all('desk:1' in r for r in lab_rooms)
-ok9 = (any(r == 'ok' for _, r in offers9) and bool(research_lines) and desks
+ok9 = (any(r == 'ok' for _, r in offers9) and not research_lines and desks
        and result('frank').startswith('IN SYNC'))
-print(f"9. Research shared:         offers to frank {offers9}; told: {research_lines[:1]}; "
+print(f"9. Research shared:         offers to frank {offers9}; research chat lines (none expected, the fax says it): {research_lines[:1]}; "
       f"research room furnished with {lab_rooms or 'none built'}; frank {result('frank')}")
 fail |= not ok9
 

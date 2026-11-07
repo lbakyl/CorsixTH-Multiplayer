@@ -137,6 +137,7 @@ function M.new(bot, ctx)
   local self = setmetatable({}, M)
   self.bot, self.log, self.rand, self.pick = bot, ctx.log, ctx.rand, ctx.pick
   self.sabotage, self.lines, self.typing = ctx.sabotage, ctx.lines, ctx.typing
+  self.fill_in = ctx.fill
   self.demand = {}         -- room id -> patients who needed it lately (decaying)
   self.next_project = 0    -- game day of the next project
   self.next_daily = -1
@@ -1857,7 +1858,7 @@ function M:tellWisher(w, kind, key)
       -- (Something put into a room: "the plant in the GP room is in place".)
       local lines = (kind == "wish_done" and key:find("^add:") and self.lines.wish_done_add) or
           (kind == "wish_done" and key:find("^remove:") and self.lines.wish_done_remove) or self.lines[kind]
-      local line = self.pick(lines):format(name, wish_words(key))
+      local line = self.fill_in(self.pick(lines), {name = name, what = wish_words(key)})
       bot:say(line, self.typing(line), peer)
     end
   end
@@ -1921,8 +1922,8 @@ function M:shareResearch(s)
         local _, people = bot:peopleOfHospital(index)
         local list = table.concat(names, ", ", 1, math.min(#names, 4)) .. (#names > 4 and ", ..." or "")
         for _, mate in ipairs(bot:hospitalMates()) do
-          local line = self.pick(self.lines.research_ask):format(bot:playerName(mate),
-              people[1] or world.hospitals[index].name, list)
+          local line = self.fill_in(self.pick(self.lines.research_ask), {name = bot:playerName(mate),
+              ally = people[1] or world.hospitals[index].name, list = list})
           bot:say(line, self.typing(line), mate)
         end
       end
@@ -1931,12 +1932,7 @@ function M:shareResearch(s)
         seen.offered = s.day
         for _, key in ipairs(keys) do seen[key] = s.day end
         self:note(string.format("day %d: research for hospital %d: %s", s.day, index, table.concat(keys, ",")))
-        local peers, people = bot:peopleOfHospital(index)
-        if #peers > 0 then
-          local list = table.concat(names, ", ", 1, math.min(#names, 4)) .. (#names > 4 and ", ..." or "")
-          local line = self.pick(self.lines.research_sent):format(table.concat(people, " and "), list)
-          bot:say(line, self.typing(line), table.concat(peers, ","))
-        end
+        -- (No chat line: the offer arrives as a fax in their messages.)
       end
     end
   end
@@ -1994,8 +1990,9 @@ function M:helpAllies(s)
           self:note(string.format("day %d: offered %s (%s) to hospital %d for its %s", s.day, who, sh.cat, index, sh.room))
           local peers, people = bot:peopleOfHospital(index)
           if #peers > 0 then
-            local line = self.pick(self.lines.staff_sent):format(table.concat(people, " and "), who,
-                sh.cat:lower(), room_name(sh.room), sh.emergency and self.pick(self.lines.staff_for_emergency) or "")
+            local line = self.fill_in(self.pick(self.lines.staff_sent), {names = table.concat(people, " and "),
+                who = who, kind = sh.cat:lower(), room = room_name(sh.room),
+                urgent = sh.emergency and self.pick(self.lines.staff_for_emergency) or ""})
             bot:say(line, self.typing(line), table.concat(peers, ","))
           end
           return -- (one at a time)
@@ -2033,11 +2030,12 @@ function M:askAllies(s)
       local needs = sh.need .. " " .. sh.cat:lower() .. (sh.need > 1 and "s" or "")
       local line, to
       if #spare_peers > 0 then
-        line = self.pick(self.lines.staff_ask_one):format(table.concat(spare_names, " or "), sh.cat:lower(),
-            room_name(sh.room), needs, sh.have, urgent)
+        line = self.fill_in(self.pick(self.lines.staff_ask_one), {names = table.concat(spare_names, " or "),
+            kind = sh.cat:lower(), room = room_name(sh.room), needs = needs, have = sh.have, urgent = urgent})
         to = spare_peers
       else
-        line = self.pick(self.lines.staff_ask_all):format(sh.cat:lower(), room_name(sh.room), needs, sh.have, urgent)
+        line = self.fill_in(self.pick(self.lines.staff_ask_all), {kind = sh.cat:lower(), room = room_name(sh.room),
+            needs = needs, have = sh.have, urgent = urgent})
         to = everybody
       end
       self:note(string.format("day %d: asked the allies for a %s (%s)", s.day, sh.cat, sh.room))
