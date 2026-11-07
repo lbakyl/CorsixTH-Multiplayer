@@ -239,6 +239,23 @@ describe("Selling a plot back", function()
     end)
   end)
 
+  it("takes the doors of an entrance the map put on the plot along, to be made again", function()
+    with_texts(function()
+      local door = {object_type = {id = "entrance_left_door", supports_creation_for_map = true},
+          tile_x = 5, tile_y = 1, direction = "west"}
+      local world, hospitals, owner = make({objects = {[5] = {door}}})
+      local destroyed = {}
+      function world.destroyEntity(_, entity) destroyed[#destroyed + 1] = entity end
+      assert.is_true(handlers.sell_plot(world, {hospital = 1, plot = 4}))
+      assert.same({door}, destroyed)
+      assert.equal(0, owner[4])
+      local again = {}
+      for info, plot in pairs(world.delayed_map_objects) do again[#again + 1] = {info, plot} end
+      assert.same({{{"entrance_left_door", 5, 1, 1, "map object"}, 4}}, again)
+      assert.equal(800, hospitals[1].balance)
+    end)
+  end)
+
   it("lets litter and rat holes go with the plot", function()
     with_texts(function()
       local removed = 0
@@ -264,6 +281,15 @@ describe("Selling a plot back", function()
       assert.equal("joins your land", why)
       ok = handlers.sell_plot(world, {hospital = 1, plot = 5})
       assert.is_true(ok)
+    end)
+  end)
+
+  it("does not count land that was cut off from the hospital already", function()
+    with_texts(function()
+      -- Hospital 1: plot 1 (start) and 4 are joined; 6 is not (7 between).
+      local world = plot_world({1, 4, 7, 6, 2}, {[1] = 1, [2] = 2, [4] = 1, [6] = 1})
+      assert.is_true(handlers.sell_plot(world, {hospital = 1, plot = 4}))
+      assert.is_true(handlers.sell_plot(world, {hospital = 1, plot = 6}))
     end)
   end)
 
@@ -403,5 +429,49 @@ describe("Handing a plot to an ally", function()
       assert.is_true(hospitals[2].loan > 0)
       assert.is_true(hospitals[2].balance >= 0)
     end)
+  end)
+end)
+
+describe("A bot offered a plot", function()
+  local Manager = assert(loadfile("../../scripts/multiplayer/bot_manager.lua"))()
+
+  -- A bot whose hospital has `inside` indoor tiles, `rooms` of them taken by rooms.
+  local function bot_with(inside, rooms, balance)
+    local bot_hospital = {balance = balance, loan = 0, value = 30000, getPlayerIndex = function() return 2 end}
+    local th = {
+      size = function() return inside, 1 end,
+      getCellFlags = function(_, x, _, t)
+        t = t or {}
+        t.hospital, t.owner, t.roomId = true, 2, x <= rooms and 7 or 0
+        return t
+      end,
+    }
+    local world = {map = {th = th}, ui = {hospital = bot_hospital}}
+    local manager = setmetatable({bot = {world = world}, log = function() end,
+        pick = function(list) return list[1] end}, Manager)
+    return manager
+  end
+
+  it("takes it when less than 35 percent of its land is free and it can pay", function()
+    local accept, line = bot_with(100, 70, 20000):plotAnswer({plot = 5, price = 5000})
+    assert.is_true(accept)
+    assert.is_string(line)
+  end)
+
+  it("takes it with a loan when it lacks the money", function()
+    local accept = bot_with(100, 70, 1000):plotAnswer({plot = 5, price = 9000})
+    assert.is_true(accept) -- (the bank lends $10,000 or more)
+  end)
+
+  it("declines when it has plenty of room, or cannot pay even with a loan", function()
+    local accept = bot_with(100, 50, 50000):plotAnswer({plot = 5, price = 0})
+    assert.is_false(accept)
+    accept = bot_with(100, 90, 1000):plotAnswer({plot = 5, price = 50000})
+    assert.is_false(accept)
+  end)
+
+  it("takes a free plot whatever it has in the bank", function()
+    local accept = bot_with(100, 90, 0):plotAnswer({plot = 5})
+    assert.is_true(accept)
   end)
 end)

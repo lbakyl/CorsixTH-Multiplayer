@@ -3611,7 +3611,7 @@ local function person_on_plot(world, plot)
   local flags = {}
   for _, entity in ipairs(world.entities) do
     local queue = entity.action_queue
-    if queue and entity.tile_x then
+    if queue and entity.tile_x and entity.tile_y then
       if th:getCellFlags(entity.tile_x, entity.tile_y, flags).parcelId == plot then return true end
       local action = queue[1]
       local path_x = action and action.name == "walk" and action.path_x
@@ -3637,8 +3637,13 @@ function MultiplayerSession.plotNotEmpty(world, plot)
     if (th:getCellFlags(x, y, flags).roomId or 0) ~= 0 then return "plot not empty" end
     for _, object in ipairs(world:getObjects(x, y) or {}) do
       local id = object.object_type.id
-      -- (Litter that cannot be cleaned up stays an object in the way.)
-      if id ~= "rathole" and not (id == "litter" and object:isCleanable()) then return "plot not empty" end
+      -- (Litter that cannot be cleaned up stays an object in the way. What
+      -- the map put on the plot, the doors of an entrance, belongs to the
+      -- land: release_plot takes it along.)
+      if id ~= "rathole" and not object.object_type.supports_creation_for_map and
+          not (id == "litter" and object:isCleanable()) then
+        return "plot not empty"
+      end
     end
   end
   -- A room still being built has no room number on its tiles yet.
@@ -3654,34 +3659,37 @@ function MultiplayerSession.plotNotEmpty(world, plot)
 end
 
 --! Would the rest of `hospital`'s land still hang together with its
---! starting plot without `plot` (plots joined along an edge)?
+--! starting plot without `plot` (plots joined along an edge)? Land that is
+--! cut off from the starting plot already does not count.
 local function land_stays_whole(world, hospital, plot)
   local th = world.map.th
   local player = hospital:getPlayerIndex()
-  local owned, count = {}, 0
+  local owned = {}
   for p = 1, th:getPlotCount() - 1 do
-    if p ~= plot and th:getPlotOwner(p) == player then
-      owned[p] = true
-      count = count + 1
-    end
+    if th:getPlotOwner(p) == player then owned[p] = true end
   end
   if not owned[player] then return true end -- (no starting plot to measure from)
-  local seen, queue, n = {[player] = true}, {player}, 1
-  local reached = 1
-  local next_index = 1
-  while next_index <= n do
-    local current = queue[next_index]
-    next_index = next_index + 1
-    for q in pairs(MultiplayerSession.plotsTouching(world, current)) do
-      if owned[q] and not seen[q] then
-        seen[q] = true
-        reached = reached + 1
-        n = n + 1
-        queue[n] = q
+  -- How many of the plots reach the starting plot, without `skip`.
+  local function reached(skip)
+    local seen, queue, n = {[player] = true}, {player}, 1
+    local count, next_index = 1, 1
+    while next_index <= n do
+      local current = queue[next_index]
+      next_index = next_index + 1
+      for q in pairs(MultiplayerSession.plotsTouching(world, current)) do
+        if owned[q] and q ~= skip and not seen[q] then
+          seen[q] = true
+          count = count + 1
+          n = n + 1
+          queue[n] = q
+        end
       end
     end
+    return count, seen
   end
-  return reached == count
+  local before, seen = reached(nil)
+  if seen[plot] then before = before - 1 end
+  return reached(plot) >= before
 end
 
 --! Why `hospital` may not sell or hand over `plot` now, or nil when it may.
@@ -3701,10 +3709,11 @@ function MultiplayerSession.plotRefusal(world, hospital, plot, answering)
   return nil
 end
 
---! Take `plot` off `hospital`'s hands: its litter and rat holes go, the
---! handymen who looked after it look after all the land, and the plot
---! belongs to `new_owner` (0: nobody) with the rooms next to it walled in
---! again.
+--! Take `plot` off `hospital`'s hands: its litter, rat holes and the doors
+--! the map gave it (made again for whoever buys or gets the plot next, as
+--! when it was first bought: World:setPlotOwner), the handymen who looked
+--! after it look after all the land, and the plot belongs to `new_owner`
+--! (0: nobody) with the rooms next to it walled in again.
 local function release_plot(world, hospital, plot, new_owner)
   local th = world.map.th
   local tiles = MultiplayerSession.plotTiles(th, plot)
@@ -3716,6 +3725,19 @@ local function release_plot(world, hospital, plot, new_owner)
     end
     for _, object in ipairs(litter) do object:remove() end
   end
+  local doors = {}
+  for i = 1, #tiles, 2 do
+    for _, object in ipairs(world:getObjects(tiles[i], tiles[i + 1]) or {}) do
+      if object.object_type.supports_creation_for_map then doors[#doors + 1] = object end
+    end
+  end
+  world.delayed_map_objects = world.delayed_map_objects or {}
+  for _, door in ipairs(doors) do
+    -- (As the map file gives them: even numbers face north, odd ones west.)
+    world.delayed_map_objects[{door.object_type.id, door.tile_x, door.tile_y, door.direction == "north" and 0 or 1,
+        "map object"}] = plot
+  end
+  for _, door in ipairs(doors) do world:destroyEntity(door) end
   local holes = {}
   for _, hole in ipairs(hospital.ratholes) do
     if th:getCellFlags(hole.x, hole.y, flags).parcelId == plot then holes[#holes + 1] = hole end
@@ -3827,7 +3849,7 @@ function handlers.offer_plot(world, cmd)
   if why then return false, why end
   local panel = world.ui and world.ui.bottom_panel
   if not panel then return false, "no message panel" end
-  local tiles = #MultiplayerSession.plotTiles(world.map.th, plot) / 2
+  local tiles = math.floor(#MultiplayerSession.plotTiles(world.map.th, plot) / 2)
   local message = {
     {text = S.plot_offer_line:format(from.name, plot, tiles)},
     {text = price > 0 and S.plot_offer_price_line:format(price) or S.plot_offer_free_line},
