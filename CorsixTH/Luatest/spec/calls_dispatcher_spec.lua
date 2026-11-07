@@ -50,3 +50,41 @@ describe("CallsDispatcher with a checkpoint without a call", function()
     assert.equal(call, found)
   end)
 end)
+
+-- Multiplayer: the call queue is keyed by tables, so pairs() visits it in an
+-- order that differs between the players' games. Of two calls with the same
+-- score every game must hand the staff member the same one.
+describe("CallsDispatcher:answerCall with tied calls in multiplayer", function()
+  if not rawget(_G, "Handyman") then class "Handyman" end
+
+  local function answer(rooms, mp)
+    local dispatcher = setmetatable({call_queue = {}, world = {app = {mp_session = mp or nil}}},
+        {__index = CallsDispatcher})
+    for _, room in ipairs(rooms) do
+      dispatcher.call_queue[room] = {Doctor = {object = room, key = "Doctor",
+          verification = function() return true end, priority = function() return 5 end}}
+    end
+    local chosen
+    dispatcher.executeCall = function(_, call) chosen = call.object end
+    dispatcher:answerCall({hospital = {}})
+    return chosen
+  end
+
+  it("picks the room with the lowest number, whatever the order", function()
+    for _ = 1, 20 do
+      local a = {room_info = {id = "gp"}, id = 7, x = 1, y = 1}
+      local b = {room_info = {id = "gp"}, id = 3, x = 9, y = 9}
+      local c = {room_info = {id = "gp"}, id = 12, x = 5, y = 5}
+      assert.equal(b, answer({a, b, c}, true))
+      assert.equal(b, answer({c, a, b}, true))
+    end
+  end)
+
+  it("orders people and objects by their multiplayer number", function()
+    local p1 = {mp_id = 40, tile_x = 1, tile_y = 1}
+    local p2 = {mp_id = 9, tile_x = 5, tile_y = 5}
+    assert.equal(p2, answer({p1, p2}, true))
+    assert.is_true(CallsDispatcher.callComesFirst({object = p2, key = "a"}, {object = p1, key = "a"}))
+    assert.is_true(CallsDispatcher.callComesFirst({object = p2, key = "a"}, {object = p2, key = "b"}))
+  end)
+end)

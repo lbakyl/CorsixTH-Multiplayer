@@ -339,6 +339,14 @@ function CallsDispatcher:answerCall(staff)
   end
   -- Find the call with the highest priority (smaller means more urgency)
   --   if the staff satisfy the criteria
+  -- Multiplayer: the call queue is keyed by tables (rooms, objects, patients),
+  -- so pairs() visits it in an order that differs between the players' games.
+  -- Of two calls with the same score each game took the first it met, and a
+  -- doctor walked to different rooms in different games (desyncs in
+  -- Matroftt's hospital of many alike rooms, eu2, 2026-11-07). There a tie
+  -- goes to the call that comes first in a fixed order.
+  local world = self.world
+  local fixed_order = world and world.app and world.app.mp_session
   for _, queue in pairs(self.call_queue) do
     for _, call in pairs(queue) do
       local score = call.verification(staff) and call.priority(staff) or nil
@@ -349,7 +357,8 @@ function CallsDispatcher:answerCall(staff)
             score = nil
           end
         end
-        if score ~= nil and score < min_score then
+        if score ~= nil and (score < min_score or (fixed_order and score == min_score and
+            min_call and CallsDispatcher.callComesFirst(call, min_call))) then
           min_score = score
           min_call = call
         end
@@ -368,6 +377,29 @@ function CallsDispatcher:answerCall(staff)
     return true
   end
   return false
+end
+
+--! A fixed place for a call among the others, the same in every game: rooms
+--! by their number, then people and objects by their multiplayer number
+--! (else their tile), then by the kind of call.
+--!return (number, string) the place and the kind
+function CallsDispatcher.callOrder(call)
+  local o = call.object
+  local n
+  if o.room_info and o.id then
+    n = 1000000000 + o.id
+  else
+    n = o.mp_id or ((o.tile_y or o.y or 0) * 4096 + (o.tile_x or o.x or 0))
+  end
+  return n, tostring(call.key or "")
+end
+
+--! Whether call `a` comes before call `b` in CallsDispatcher.callOrder.
+function CallsDispatcher.callComesFirst(a, b)
+  local na, ka = CallsDispatcher.callOrder(a)
+  local nb, kb = CallsDispatcher.callOrder(b)
+  if na ~= nb then return na < nb end
+  return ka < kb
 end
 
 -- Dump the current call table for debugging
