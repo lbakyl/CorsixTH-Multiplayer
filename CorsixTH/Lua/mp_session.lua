@@ -1137,9 +1137,9 @@ local split_dressed = setmetatable({}, {__mode = "k"})
 -- 0 mustard, 2 white, 4 lavender, 6 salmon), its staff have a bar of it at
 -- their feet, and its player's chat lines a darker version of it
 -- (UIMultiplayerChat.colourOf). Colours 5 to 8 (green, blue, teal, pink:
--- a game for more than 4 hospitals) wear the shirts of colours 1 to 4
--- redrawn in their own colour (setupShirtColours).
-MultiplayerSession.CLOTHES = {0, 6, 4, 2, 0, 6, 4, 2}
+-- a game for more than 4 hospitals) wear the shirts of colours 2 to 4
+-- redrawn in their own colour (setupShirtColours; green the salmon shirt).
+MultiplayerSession.CLOTHES = {0, 6, 4, 2, 6, 6, 4, 2}
 local MARKER_COLOURS = {{232, 186, 52}, {236, 130, 118}, {160, 146, 232}, {236, 236, 236},
     {100, 200, 80}, {70, 120, 235}, {60, 200, 200}, {225, 95, 200}}
 
@@ -1241,20 +1241,20 @@ function MultiplayerSession.dressPatient(patient)
   patient:setLayer(1, MultiplayerSession.CLOTHES[colour])
 end
 
---! Shirts of colours 6 to 8: the game has four shirt colours (CLOTHES), so a
+--! Shirts of colours 5 to 8: the game has four shirt colours (CLOTHES), so a
 --! patient of colour 6 wears colour 2's shirt drawn through a palette map
 --! that turns it blue (7 teal, 8 pink): every sprite of that clothes
 --! variant gets the map (TH.anims:setLayerAltPalette, slot 3), and those
 --! patients are drawn with DrawFlags.AltPalette3 (setFloorMarkers, on this
---! screen only). (Not slot 1, DrawFlags.AltPalette: an object's sprites
---! get their grey ghost there once somebody places one, and a patient
---! drawn with it inside a toilet turned its blue cabin grey.) Each entry
---! keeps its brightness in the new colour, the nearest the game's palette
---! has; near black stays (the outlines). Colour 5:
---! colour 1's mustard shirt is part of the patient's body sprites, not a
---! clothes layer of its own, so those sprites get a second map
---! (DrawFlags.AltPalette2) that turns only the mustard shades green (by
---! hue and saturation: skin and hair keep theirs).
+--! screen only). Colour 5 (green) wears colour 2's shirt too, with its map
+--! in slot 2 (DrawFlags.AltPalette2). (Not slot 1, DrawFlags.AltPalette:
+--! an object's sprites get their grey ghost there once somebody places
+--! one, and a patient drawn with it inside a toilet turned its blue cabin
+--! grey.) Each entry keeps its brightness in the new colour, the nearest
+--! the game's palette has; near black stays (the outlines). Only the shirt
+--! sprites get a map: skin and hair keep their colours. (Green used to turn
+--! the mustard shades of the body sprites green, colour 1's shirt; blonde
+--! hair has the same shades and turned green too: Argus, 2026-11-07.)
 --!return true if the maps are set
 local shirt_colours_set = setmetatable({}, {__mode = "k"}) -- anims -> done (true/false)
 function MultiplayerSession.setupShirtColours(app, anims)
@@ -1280,7 +1280,7 @@ function MultiplayerSession.setupShirtColours(app, anims)
     end
     return best
   end
-  for colour = 6, 8 do
+  for colour = 5, 8 do
     local target = MARKER_COLOURS[colour]
     local t_lum = lum(target)
     local bytes = {}
@@ -1294,37 +1294,10 @@ function MultiplayerSession.setupShirtColours(app, anims)
       end
       bytes[i + 1] = string.char(to)
     end
-    local n = anims:setLayerAltPalette(1, MultiplayerSession.CLOTHES[colour], table.concat(bytes), 0, 3)
+    local slot = colour == 5 and 2 or 3
+    local n = anims:setLayerAltPalette(1, MultiplayerSession.CLOTHES[colour], table.concat(bytes), 0, slot)
     print(string.format("multiplayer: shirts of colour %d: %d sprites recoloured", colour, n))
   end
-  -- Colour 5: the mustard of the body sprites (every element always drawn,
-  -- layer value 0) to green; nothing else.
-  local function hsv(c)
-    local r, g, b = c[1] / 255, c[2] / 255, c[3] / 255
-    local mx, mn = math.max(r, g, b), math.min(r, g, b)
-    local h = 0
-    if mx > mn then
-      if mx == r then h = 60 * (((g - b) / (mx - mn)) % 6)
-      elseif mx == g then h = 60 * ((b - r) / (mx - mn) + 2)
-      else h = 60 * ((r - g) / (mx - mn) + 4) end
-    end
-    return h, mx > 0 and (mx - mn) / mx or 0, mx
-  end
-  local green = MARKER_COLOURS[5]
-  local g_lum = lum(green)
-  local bytes, changed = {}, 0
-  for i = 0, 255 do
-    local to = i
-    local h, sat, v = hsv(pal[i])
-    if i < 255 and h >= 36 and h <= 56 and sat >= 0.55 and v >= 0.3 then
-      local k = lum(pal[i]) / g_lum
-      to = nearest(math.min(255, green[1] * k), math.min(255, green[2] * k), math.min(255, green[3] * k))
-      changed = changed + 1
-    end
-    bytes[i + 1] = string.char(to)
-  end
-  local n = anims:setLayerAltPalette(-1, 0, table.concat(bytes), 0, 2)
-  print(string.format("multiplayer: shirts of colour 5: %d mustard shades, %d sprites", changed, n))
   shirt_colours_set[anims] = true
   return true
 end
@@ -1373,9 +1346,6 @@ function MultiplayerSession.setFloorMarkers(ui)
       -- the patient they treat together in one animation (multi_use_object:
       -- the staff's animation draws both, with the patient's layers); and
       -- the other parts of a big object in use (split_anims) the user's.
-      -- (Not colour 5 for staff: its map turns mustard shades green in
-      -- every body sprite, and the nurse's blonde hair is drawn with them;
-      -- that patient wears colour 1's mustard during the drink.)
       local r
       if class.is(e, Patient) then
         r = shirt_of(e)
@@ -1383,7 +1353,6 @@ function MultiplayerSession.setFloorMarkers(ui)
         local action = e:getCurrentAction()
         local with = action and action.name == "multi_use_object" and action.use_with
         r = with and shirt_of(with) or nil
-        if r == 5 then r = nil end
       end
       dress(e.th, r)
       local object = e.user_of

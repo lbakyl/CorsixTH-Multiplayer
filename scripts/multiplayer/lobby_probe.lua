@@ -2691,6 +2691,18 @@ local function run()
                 session.step, colour and (" " .. tostring(who.humanoid_class) .. " using " ..
                 tostring(who.user_of and who.user_of.object_type.id)) or ""))
             shot("lookat-" .. entry.arg:gsub(":", "-") .. "-" .. session.step)
+            -- (The patients of that colour around it: what they wear.)
+            for _, e in ipairs(colour and world.entities or {}) do
+              if class.is(e, Patient) and e.hospital and e.tile_x and
+                  MultiplayerSession.hospitalColour(world, e.hospital) == colour and
+                  math.abs(e.tile_x - who.tile_x) <= 10 and math.abs(e.tile_y - who.tile_y) <= 10 then
+                local l = e.layers or {}
+                log(string.format("UI:   %s at %d,%d layers %s/%s/%s/%s/%s disease %s action %s",
+                    e.humanoid_class, e.tile_x, e.tile_y, tostring(l[0]), tostring(l[1]), tostring(l[2]),
+                    tostring(l[3]), tostring(l[4]), e.disease and e.disease.id or "?",
+                    e.action_queue and e.action_queue[1] and e.action_queue[1].name or "?"))
+              end
+            end
           else
             log("UI: no " .. entry.arg .. " to look at")
           end

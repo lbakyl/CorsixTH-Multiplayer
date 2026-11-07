@@ -1354,6 +1354,15 @@ function Patient:afterLoad(old, new)
     self.mood_marker = 1
   end
 
+  -- Multiplayer: green (colour 5) patients wear the salmon shirt now, not
+  -- the mustard one (MultiplayerSession.CLOTHES); a save from before has
+  -- them in mustard.
+  local world = self.world
+  if world and world.mp_coop and self.hospital and self.layers and self.layers[1] == 0 and
+      MultiplayerSession.hospitalColour(world, self.hospital) == 5 then
+    MultiplayerSession.dressPatient(self)
+  end
+
   self:updateDynamicInfo()
   Humanoid.afterLoad(self, old, new)
 end
