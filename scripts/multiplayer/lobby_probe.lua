@@ -2679,6 +2679,21 @@ local function run()
           filming = {who = who, left = tonumber(entry.arg) or 40, n = 0}
           log(string.format("UI: filming %s for %d steps (step %d)", who and who.humanoid_class or "nobody",
               filming.left, session.step))
+        elseif a == "lookat" and entry.arg:match("^%d+,%d+$") then
+          -- lookat:x,y: centre the view on that tile, log what is there and
+          -- take a screenshot (of the screen as last drawn: the view before).
+          -- Also anywhere outside this hospital's part of the map.
+          local x, y = entry.arg:match("^(%d+),(%d+)$")
+          world.ui.limit_to_visible_diamond = false -- (anywhere on the map)
+          look_at(tonumber(x), tonumber(y))
+          local sw, sh = TheApp.video:getRenderSize()
+          local cx, cy = world.ui:ScreenToWorld(sw / 2, sh / 2)
+          local f = world.map.th:getCellFlags(tonumber(x), tonumber(y))
+          local floor = world.map.th:getCell(tonumber(x), tonumber(y))
+          log(string.format("UI: looking at %s (step %d), the screen's middle at %d,%d: plot %s, floor %s, %s; level dir %s",
+              entry.arg, session.step, math.floor(cx), math.floor(cy), tostring(f.parcelId), tostring(floor),
+              f.passable and "walkable" or "not walkable", tostring(TheApp.level_dir)))
+          shot("lookat-" .. entry.arg:gsub(",", "-"))
         elseif a == "lookat" then
           -- lookat:rat|evil: centre the view on the first attack rat or evil
           -- handyman (in any hospital) and take a screenshot; looks again
