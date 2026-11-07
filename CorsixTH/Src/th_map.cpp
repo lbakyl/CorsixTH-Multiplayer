@@ -665,7 +665,6 @@ void level_map::save(const std::string& filename) {
   aBuffer[iBufferNext++] = 3;
   aBuffer[iBufferNext++] = 0;
   os.write(reinterpret_cast<char*>(aBuffer), iBufferNext);
-  iBufferNext = 0;
 
   // Cameras and heliports of players 1 to 4, then those of players 5 to 8 in
   // the first 16 of the 56 bytes after them (empty in the original maps).

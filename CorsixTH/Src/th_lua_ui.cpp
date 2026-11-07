@@ -120,6 +120,8 @@ int l_town_map_draw(lua_State* L) {
   // 384 pixels; doors and walls in proportion.
   const int tile = std::max(1, 384 / std::max(iMapWidth, pMap->get_height()));
   const int t = tile * scale;
+  // How far the entrance doors stick out of the hospital, in whole pixels.
+  const int door_shift = (2 * t) / 3;
   int iCanvasY = iCanvasYBase + t;
   for (int iY = 0; iY < pMap->get_height(); ++iY, iCanvasY += t) {
     int iCanvasX = iCanvasXBase;
@@ -195,7 +197,7 @@ int l_town_map_draw(lua_State* L) {
         if (!l.empty() && l.front() == object_type::entrance_right_door) {
           if (pNode->flags.hospital) {
             pCanvas->fill_rect(iColourDoor, iCanvasX - 2 * t,
-                               iCanvasY - (2 * t) / 3, 3 * t, t);
+                               iCanvasY - door_shift, 3 * t, t);
           } else {
             pCanvas->fill_rect(iColourDoor, iCanvasX - 2 * t, iCanvasY, 3 * t,
                                t);
@@ -209,7 +211,7 @@ int l_town_map_draw(lua_State* L) {
         auto l = (pNode - iMapWidth)->objects;
         if (!l.empty() && l.front() == object_type::entrance_right_door) {
           if (pNode->flags.hospital) {
-            pCanvas->fill_rect(iColourDoor, iCanvasX - (2 * t) / 3,
+            pCanvas->fill_rect(iColourDoor, iCanvasX - door_shift,
                                iCanvasY - 2 * t, t, 3 * t);
           } else {
             pCanvas->fill_rect(iColourDoor, iCanvasX, iCanvasY - 2 * t, t,
