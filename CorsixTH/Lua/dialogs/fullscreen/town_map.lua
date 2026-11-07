@@ -144,7 +144,7 @@ function UITownMap:plotButtons()
   local player = hospital:getPlayerIndex()
   local tp = self:tilePixels()
   self.plot_corners = self.plot_corners or {}
-  for plot = 1, th:getPlotCount() - 1 do
+  for plot = 1, th:getPlotCount() do
     if th:getPlotOwner(plot) == player and not MultiplayerSession.isStartingPlot(world, plot) then
       local corner = self.plot_corners[plot]
       if not corner then

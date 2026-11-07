@@ -1520,7 +1520,7 @@ local function run()
           -- another hospital's land), and which it buys outright.
           local th, hospital = world.map.th, world.ui.hospital
           local contested, plain, peek = {}, {}, {}
-          for plot = 1, th:getPlotCount() - 1 do
+          for plot = 1, th:getPlotCount() do
             local bidders = MultiplayerSession.auctionBidders(world, plot, hospital, peek)
             if bidders then
               local t = #bidders > 1 and contested or plain
@@ -1532,7 +1532,7 @@ local function run()
           -- Every plot: its owner and which players may buy it (the game's
           -- rule: it touches their land or the town's own, plot 0).
           local rows = {}
-          for plot = 1, th:getPlotCount() - 1 do
+          for plot = 1, th:getPlotCount() do
             local who = {}
             for player = 1, th:getPlayerCount() do
               if th:isParcelPurchasable(plot, player) then who[#who + 1] = tostring(player) end
@@ -1544,7 +1544,7 @@ local function run()
           -- Ask for the cheapest plot that goes to auction.
           local th, hospital = world.map.th, world.ui.hospital
           local best, peek = nil, {}
-          for plot = 1, th:getPlotCount() - 1 do
+          for plot = 1, th:getPlotCount() do
             local bidders = MultiplayerSession.auctionBidders(world, plot, hospital, peek)
             if bidders and #bidders > 1 and (not best or
                 world.map:getParcelPrice(plot) < world.map:getParcelPrice(best)) then
@@ -1991,7 +1991,7 @@ local function run()
           elseif named then
             best = named
           else
-            for plot = 1, th:getPlotCount() - 1 do
+            for plot = 1, th:getPlotCount() do
               if th:isParcelPurchasable(plot, me) then
                 local near = false
                 for q in pairs(MultiplayerSession.plotsTouching(world, plot)) do
@@ -2013,7 +2013,7 @@ local function run()
           -- Every plot: owner, price, which players may buy it, what it touches.
           local th = world.map.th
           local rows = {}
-          for plot = 1, th:getPlotCount() - 1 do
+          for plot = 1, th:getPlotCount() do
             local who, touch = {}, {}
             for player = 1, th:getPlayerCount() do
               if th:isParcelPurchasable(plot, player) then who[#who + 1] = tostring(player) end

@@ -3310,7 +3310,7 @@ end
 
 function MultiplayerSession.auctionBidders(world, plot, hospital, peek)
   local th = world.map.th
-  if not world.mp_coop or world.free_build_mode or plot < 1 or plot >= th:getPlotCount() or
+  if not world.mp_coop or world.free_build_mode or plot < 1 or plot > th:getPlotCount() or
       not th:isParcelPurchasable(plot, hospital:getPlayerIndex()) then
     return nil
   end
@@ -3678,7 +3678,7 @@ local function land_stays_whole(world, hospital, plot)
   local th = world.map.th
   local player = hospital:getPlayerIndex()
   local owned = {}
-  for p = 1, th:getPlotCount() - 1 do
+  for p = 1, th:getPlotCount() do
     if th:getPlotOwner(p) == player then owned[p] = true end
   end
   if not owned[player] then return true end -- (no starting plot to measure from)
@@ -3712,7 +3712,7 @@ end
 --! on does not matter then: it would only void the offer)
 function MultiplayerSession.plotRefusal(world, hospital, plot, answering)
   local th = world.map.th
-  if not plot or plot < 1 or plot >= th:getPlotCount() then return "no such plot" end
+  if not plot or plot < 1 or plot > th:getPlotCount() then return "no such plot" end
   if th:getPlotOwner(plot) ~= hospital:getPlayerIndex() then return "not your plot" end
   if MultiplayerSession.isStartingPlot(world, plot) then return "starting plot" end
   if world.mp_auction and not answering then return "an auction is on" end
