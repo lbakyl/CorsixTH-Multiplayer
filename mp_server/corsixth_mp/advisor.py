@@ -45,6 +45,7 @@ PRICES = {
 }
 MAX_REPORT = 6000  # characters of a hospital report
 MAX_CHAT_OUT = 200  # characters of an answer in the chat
+MAX_GIVE = 10_000_000  # dollars: a sum asked for above this is no sum
 
 PLAN_SYSTEM = """You advise a computer player in a multiplayer game of Theme Hospital (CorsixTH).
 Each game week you get a report of its hospital and a menu of projects it can do. Pick what matters most
@@ -107,7 +108,10 @@ items from the menu into "leave" and say you leave them to them; otherwise leave
 you cannot do that yet. In the menu, add:<room>:<object> puts one more of that object into that room (a skeleton
 into the psych room is add:psych:skeleton), bigger:<room> makes that room bigger, and remove:<room> takes that
 room down to free its floor. Never promise anything you
-do not set as the project. "reply" is your chat line."""
+do not set as the project. If the last message asks YOU for money (cash, a loan, a gift of dollars), set "give" to
+the sum they name in dollars (20000 for "$20k"), or 0 if they name no sum; otherwise -1. Never say in "reply"
+whether you will send money or how much: the game checks your bank and answers that itself. "reply" is your chat
+line."""
 
 TEAM_CHAT_SCHEMA = {
     "type": "object",
@@ -115,8 +119,9 @@ TEAM_CHAT_SCHEMA = {
         "reply": {"type": "string"},
         "projects": {"type": "array", "items": {"type": "string"}},
         "leave": {"type": "array", "items": {"type": "string"}},
+        "give": {"type": "integer"},
     },
-    "required": ["reply", "projects", "leave"],
+    "required": ["reply", "projects", "leave", "give"],
     "additionalProperties": False,
 }
 
@@ -265,7 +270,8 @@ class Advisor:
     async def team_chat(self, name: str, context: str, lines: list[str], menu: list[str]) -> dict | None:
         """A team mate's bot answers, and names the projects from the menu
         they asked for, and those they keep for themselves (or take back):
-        {"text": str, "wishes": [str], "leave": [str]}."""
+        {"text": str, "wishes": [str], "leave": [str], "give": int or None}: give is the sum
+        in dollars an ally asks for (0: no sum named), None when they do not ask for money."""
         system = CHAT_SYSTEM.format(name=name, stance=STANCES["friendly"]) + TEAM_CHAT_EXTRA
         text = (f"Your hospital: {context[:1500]}\n\nMenu of projects: {', '.join(menu)}\n\nChat so far:\n" +
                 "\n".join(line[:300] for line in lines[-8:]))
@@ -284,7 +290,12 @@ class Advisor:
             got = got if isinstance(got, list) else [got]
             return list(dict.fromkeys(str(k) for k in got if str(k) in menu))[:12]
         leave = items("leave")
-        return {"text": reply, "wishes": [k for k in items("projects") if k not in leave], "leave": leave}
+        try:
+            give = int(data.get("give", -1))
+        except (TypeError, ValueError):
+            give = -1
+        return {"text": reply, "wishes": [k for k in items("projects") if k not in leave], "leave": leave,
+                "give": give if 0 <= give <= MAX_GIVE else None}
 
 
 def _chat_line(name: str, answer: str) -> str | None:

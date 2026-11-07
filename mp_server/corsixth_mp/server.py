@@ -1028,7 +1028,8 @@ class Server:
                     return
                 player.send(encode("ANSWER", id=qid, text=answer["text"],
                                    wish=",".join(answer["wishes"]) or None,
-                                   leave=",".join(answer["leave"]) or None))
+                                   leave=",".join(answer["leave"]) or None,
+                                   give=answer["give"]))
             else:
                 lines = [line for line in f.get("lines", "").split("\n") if line]
                 text = await advisor.chat(player.name, f.get("rival") == "1", f.get("text", ""), lines)

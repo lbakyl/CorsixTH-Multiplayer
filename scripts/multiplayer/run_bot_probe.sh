@@ -78,7 +78,7 @@ export MP_REFEREE_PROBE_SCENARIO="team=none;race=none;trio=none;duel=none;lab=no
 export CORSIXTH_MP_MAX_BOTS=9 # (nine bots in all the rooms)
 # (MP_BOT_AWAY_SECONDS: kay in "afk" counts as away after a game week; the
 # bots' games run faster than real time.)
-MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 MP_BOT_AWAY_SECONDS=3 PYTHONPATH="$source_dir/mp_server" \
+MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 MP_BOT_AWAY_SECONDS=3 MP_BOT_GIVE_LIMITS=2000:1000 PYTHONPATH="$source_dir/mp_server" \
   python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
 server_pid=$!
@@ -116,10 +116,10 @@ EOF
 pids=()
 run_probe ann MP_ROLE=host MP_ROOM=team MP_MODE=coop MP_PLAYERS=3 MP_ADD_BOTS=2 MP_SCENARIO=none \
   MP_STEPS=3000 MP_STALL_LIMIT=120 \
-  MP_UI_SCRIPT="20:openhospital;40:hire:Doctor;60:hire:Doctor;400:chat:0:Hello Agnes, how are you?;700:sendstaff:Doctor;900:givemoney:2000;1000:hospitals;2000:hospitals;2900:speedother;2990:hospitals" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;40:hire:Doctor;60:hire:Doctor;400:chat:0:Hello Agnes, how are you?;700:sendstaff:Doctor;900:givemoney:2000;1000:hospitals;1100:chat:1:Agnes, please send me \$1000;1300:chat:2:Agnes, could you lend me \$9,000,000?;1500:chat:2:Agnes, please send me some cash;2000:hospitals;2900:speedother;2990:hospitals" & pids+=($!)
 run_probe bob MP_ROLE=host MP_ROOM=race MP_MODE=competitive MP_PLAYERS=2 MP_ADD_BOTS=1 MP_SCENARIO=none \
   MP_STEPS=3000 MP_STALL_LIMIT=120 \
-  MP_UI_SCRIPT="20:openhospital;40:hire:Doctor;60:hire:Doctor;500:chat:0:I will crush you;700:sendstaff:Doctor;900:givemoney:2000;1000:hospitals;2000:hospitals;2990:hospitals" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;40:hire:Doctor;60:hire:Doctor;500:chat:0:I will crush you;600:chat:1:Please send me \$1000;800:chat:1:Could you build a toilet for me?;700:sendstaff:Doctor;900:givemoney:2000;1000:hospitals;2000:hospitals;2990:hospitals" & pids+=($!)
 run_probe eve MP_ROLE=host MP_ROOM=duel MP_MODE=competitive MP_PLAYERS=2 MP_ADD_BOTS=1 MP_SCENARIO=none \
   MP_STEPS=3000 MP_STALL_LIMIT=120 \
   MP_UI_SCRIPT="20:openhospital;320:sabotage:handyman:3:2;340:sabotage:smear:1:2;900:sabotage:rats:1:2;1500:sabotage:boiler:1:2;2990:hospitals" & pids+=($!)
@@ -314,6 +314,27 @@ said14 = any('leaves the rooms and corridors to the person' in t for t in hands)
 ok14 = ('game option helpers=0' in lv and not built14 and said14 and result('liv').startswith('IN SYNC'))
 print(f"14. Allied bots build: off: bot commands {sorted(set(bot_cmds14))}; built {built14[:5]}; said so: {said14}; {result('liv')}")
 fail |= not ok14
+# 15. Orders only from allies; money on request. In "team" (co-op) ann asks
+# Agnes (a bot, her ally) for $1000 (to the allies), then for $9,000,000 and for some cash (to her)
+# with no sum: the bot checks its own bank (limits 2000:1000 here) and says
+# what it did. In "race" bob (a rival) asks the bot for money and for a room:
+# a refusal, no money sent before the bounce of his gift (step 900).
+gives15 = [(int(st), r) for st, r in applied(a, 2, 'give_money')]
+to_ann15 = [(int(st), t) for st, t in agnes if int(st) >= 1100 and 'ann' in t]
+sent_log15 = [l for k, t in bots.items() if k.startswith('team/') for l in t.splitlines() if 'money for ann' in l]
+sent_lines15 = [t for _, t in to_ann15 if re.search(r'\$\d', t)]
+declined15 = [l for l in sent_log15 if 'declined' in l]
+sent15 = [l for l in sent_log15 if ': sent $' in l]
+rb_lines15 = [t for st, t in rb if int(st) < 800 and 'bob' in t]
+early_money15 = [st for st, r in applied(b, 2, 'give_money') if int(st) < 900]
+refused15 = [l for l in (bots.get('race/' + race_bot, '') if race_bot else '').splitlines() if 'refused a request from bob' in l]
+ok15 = (len(sent15) >= 2 and any(r == 'ok' for _, r in gives15) and len(gives15) == len(sent15)
+        and bool(declined15) and len(sent_lines15) >= 2 and len(refused15) >= 2 and not early_money15
+        and len(rb_lines15) >= 2)
+print(f"15. Money and orders:       Agnes sent {[l.split(': ',1)[1] for l in sent15]}, declined {[l.split(': ',1)[1] for l in declined15]}; "
+      f"give_money commands {gives15}; her lines {sent_lines15}; the race bot refused bob {len(refused15)} times "
+      f"({rb_lines15[:2]}), money sent to him early: {early_money15}")
+fail |= not ok15
 for name, text in sorted(bots.items()):
     errors = [l for l in text.splitlines() if 'ERROR' in l or 'could not' in l]
     if errors: print(f"   {name} problems: {errors[:5]}")

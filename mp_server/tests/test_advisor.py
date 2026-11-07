@@ -66,18 +66,18 @@ def test_a_team_mate_asks_for_a_room():
     a = fake_advisor(json.dumps({"reply": "Bot Agnes:  On it,\nboss!", "projects": ["room:psych"], "leave": []}))
     menu = ["room:gp", "room:psych", "hire:Nurse"]
     answer = asyncio.run(a.team_chat("Bot Agnes", "fine", ["ann: build a psychiatry please"], menu))
-    assert answer == {"text": "On it, boss!", "wishes": ["room:psych"], "leave": []}
+    assert answer == {"text": "On it, boss!", "wishes": ["room:psych"], "leave": [], "give": None}
     call = a.client.messages.calls[0]
     assert call["output_config"]["format"]["type"] == "json_schema"
     assert "room:psych" in call["messages"][0]["content"] and "same team" in call["system"]
     # Only projects from the menu.
     b = fake_advisor(json.dumps({"reply": "Sure.", "projects": ["loan:100000"], "leave": []}))
     assert asyncio.run(b.team_chat("Bot Agnes", "fine", ["ann: take a loan"], menu)) == \
-        {"text": "Sure.", "wishes": [], "leave": []}
+        {"text": "Sure.", "wishes": [], "leave": [], "give": None}
     # "I'll build it myself": left to them, never both.
     c = fake_advisor(json.dumps({"reply": "All yours.", "projects": ["room:psych"], "leave": ["room:psych"]}))
     assert asyncio.run(c.team_chat("Bot Agnes", "fine", ["ann: no, I build the psychiatry"], menu)) == \
-        {"text": "All yours.", "wishes": [], "leave": ["room:psych"]}
+        {"text": "All yours.", "wishes": [], "leave": ["room:psych"], "give": None}
     # Several at once.
     d = fake_advisor(json.dumps({"reply": "Will do.", "projects": ["room:gp", "hire:Nurse", "room:gp"], "leave": []}))
     assert asyncio.run(d.team_chat("Bot Agnes", "fine", ["ann: a gp and a nurse"], menu))["wishes"] == \
@@ -143,3 +143,38 @@ def test_the_key_stays_with_the_server(tmp_path, monkeypatch):
     config = srv.RefereeConfig(binary="x", source="s", data="d", workdir=str(tmp_path))
     asyncio.run(referee.start_bot(config, 1, "r", "t" * 16, "Bot Agnes", "coop"))
     assert "ANTHROPIC_API_KEY" not in seen and seen["MP_BOT_NAME"] == "Bot Agnes"
+
+
+def test_a_request_for_money_comes_back_as_a_sum():
+    menu = ["room:gp"]
+
+    def ask(**fields):
+        a = fake_advisor(json.dumps({"reply": "Of course!", "projects": [], "leave": [], **fields}))
+        return asyncio.run(a.team_chat("Bot Agnes", "fine", ["ann: send me $20k please"], menu))
+    # The sum asked for (0: no sum named); -1, a missing or silly value: no request for money.
+    assert ask(give=20000)["give"] == 20000
+    assert ask(give=0)["give"] == 0
+    assert ask(give=-1)["give"] is None
+    assert ask(give=10**12)["give"] is None
+    assert ask(give="a lot")["give"] is None
+    a = fake_advisor(json.dumps({"reply": "Yes", "projects": [], "leave": [], "give": 0}))
+    asyncio.run(a.team_chat("Bot Agnes", "fine", ["ann: money?"], menu))
+    call = a.client.messages.calls[0]
+    assert "give" in call["output_config"]["format"]["schema"]["required"]
+    assert "never say" in call["system"].lower() or "Never say" in call["system"]
+
+
+def test_the_answer_to_a_team_mates_bot_carries_the_sum():
+    async def body(server, port, bots):
+        server.advisor = fake_advisor(json.dumps({"reply": "Sure.", "projects": [], "leave": [], "give": 5000}))
+        ann = await Client.connect(port, "Ann")
+        ann.send(encode("CREATE", room="r", password="", max=2, mode="coop", level=1))
+        await ann.expect("JOINED")
+        ann.send(encode("BOT", add=1))
+        await started_bots(bots, 1)
+        bot = await connect_bot(port, bots[0])
+        await bot.expect("JOINED")
+        bot.send(encode("ASK", id=4, kind="chat", text="x", lines="ann: send me 5000", menu="room:gp"))
+        answer = await bot.expect("ANSWER", id=4)
+        assert answer["give"] == "5000"
+    run_with_bots(body)
