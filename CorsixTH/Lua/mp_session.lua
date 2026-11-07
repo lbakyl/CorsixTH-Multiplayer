@@ -633,6 +633,15 @@ MultiplayerSession.rejection_texts = {
                ["people on the plot"] = "You can only sell this plot when nobody is on it. Try again in a moment.",
                ["joins your land"] = "You cannot sell this plot: the rest of your land is joined to your hospital through it.",
                ["an auction is on"] = "Wait until the auction is over."},
+  offer_plot = {["not your plot"] = "That plot is not yours.",
+                ["starting plot"] = "Your starting plot cannot be handed over.",
+                ["plot not empty"] = "You can only hand over this plot when it is emptied of any items.",
+                ["people on the plot"] = "You can only hand over this plot when nobody is on it. Try again in a moment.",
+                ["joins your land"] = "You cannot hand over this plot: the rest of your land is joined to your hospital through it.",
+                ["does not touch their land"] = "That plot does not touch the other player's land.",
+                ["already offered"] = "That plot has already been offered.",
+                ["an auction is on"] = "Wait until the auction is over.",
+                ["invalid price"] = "That price is not allowed."},
   auction_bid = {["outbid"] = "Somebody bid first. Try again.",
                  ["not enough money"] = "You cannot afford that bid.",
                  ["the auction is over"] = "The auction is over."},
@@ -2890,6 +2899,10 @@ function MultiplayerSession.resolveOffer(world, offer, accept)
     if from and to then resolve_money(world, offer, from, to, accept) end
     return
   end
+  if offer.kind == "plot" then
+    if from and to then MultiplayerSession.resolvePlotOffer(world, offer, from, to, accept) end
+    return
+  end
   local entity = world:getEntityById(offer.entity)
   if entity and entity.mp_offer then entity.mp_offer = nil end
   if not (from and to) then return end
@@ -3392,16 +3405,9 @@ local function end_auction(world)
   local ui = world.ui
   -- A bot that bid with borrowed money borrows it now (in steps of $5000,
   -- keeping its reserve, as far as the bank lets it).
-  local bots = world.mp_coop and world.mp_coop.bot_hospitals or {}
-  if winner and bots[auction.leader] and winner.balance - auction.bid < MultiplayerSession.BOT_AUCTION_RESERVE then
-    local short = auction.bid + MultiplayerSession.BOT_AUCTION_RESERVE - winner.balance
-    local room = MultiplayerSession.maxLoan(world, winner) - winner.loan
-    local amount = math.min(math.ceil(short / 5000) * 5000, math.floor(room / 5000) * 5000)
-    if amount > 0 then
-      winner.loan = winner.loan + amount
-      winner:receiveMoney(amount, _S.transactions.bank_loan)
-      auction_log(string.format("auction %d: bot hospital %d borrows $%d", auction.id, auction.leader, amount))
-    end
+  local borrowed = MultiplayerSession.botBorrow(world, auction.leader, winner, auction.bid)
+  if borrowed > 0 then
+    auction_log(string.format("auction %d: bot hospital %d borrows $%d", auction.id, auction.leader, borrowed))
   end
   -- (purchasePlot gives cost advice through the UI; only to that player.)
   local adviser = ui and ui.adviser
@@ -3681,12 +3687,14 @@ end
 --! Why `hospital` may not sell or hand over `plot` now, or nil when it may.
 --! The reasons: "no such plot", "not your plot", "starting plot", "an auction
 --! is on", "plot not empty", "people on the plot", "joins your land".
-function MultiplayerSession.plotRefusal(world, hospital, plot)
+--!param answering (bool) optional; an offer being answered (an auction going
+--! on does not matter then: it would only void the offer)
+function MultiplayerSession.plotRefusal(world, hospital, plot, answering)
   local th = world.map.th
   if not plot or plot < 1 or plot >= th:getPlotCount() then return "no such plot" end
   if th:getPlotOwner(plot) ~= hospital:getPlayerIndex() then return "not your plot" end
   if MultiplayerSession.isStartingPlot(world, plot) then return "starting plot" end
-  if world.mp_auction then return "an auction is on" end
+  if world.mp_auction and not answering then return "an auction is on" end
   local why = MultiplayerSession.plotNotEmpty(world, plot)
   if why then return why end
   if not land_stays_whole(world, hospital, plot) then return "joins your land" end
@@ -3769,6 +3777,143 @@ function handlers.sell_plot(world, cmd)
     MultiplayerSession.tellOthers(world, hospital, S.plot_sold_others_note:format(hospital.name, plot))
   end
   return true
+end
+
+--------------------------------------------------------------------------------
+-- Handing a plot to an ally. The owner offers an empty plot (the same rules
+-- as for selling it back, and not the starting plot) for a price of $0 to
+-- PLOT_MAX_PRICE; the other player gets a fax and accepts or declines it
+-- (an offer left alone lapses after OFFER_DAYS: declined). Both games check
+-- it again when it is answered: the plot must still be the giver's, empty,
+-- and the receiver must be able to pay (a bot takes a loan for it). The plot
+-- must touch land the receiver owns, so that it is not cut off from their
+-- hospital: this is the sides rule for a gift, where "sides" (plotSide) only
+-- tell whose plot the bank sells first. The plot keeps its original price:
+-- selling it back to the bank pays 80 percent of that, to whoever owns it.
+--------------------------------------------------------------------------------
+
+MultiplayerSession.PLOT_MAX_PRICE = 50000
+MultiplayerSession.PLOT_PRICE_STEP = 500
+
+--! Why `hospital` may not take `plot` (it touches none of its land), or nil.
+function MultiplayerSession.plotHandoverRefusal(world, hospital, plot)
+  local th = world.map.th
+  local player = hospital:getPlayerIndex()
+  for q in pairs(MultiplayerSession.plotsTouching(world, plot)) do
+    if th:getPlotOwner(q) == player then return nil end
+  end
+  return "does not touch their land"
+end
+
+--! Is a fax offering `plot` still waiting for an answer?
+local function plot_offer_pending(world, plot)
+  local id = world.mp_plot_offers and world.mp_plot_offers[plot]
+  local panel = world.ui and world.ui.bottom_panel
+  return id ~= nil and panel ~= nil and panel:findMessageIcon(id) ~= nil
+end
+
+--! Offer a plot to an ally: {to, plot, price (0 to PLOT_MAX_PRICE)}.
+function handlers.offer_plot(world, cmd)
+  local S = _S.multiplayer_window
+  local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
+  if not from or not to or from == to then return false, "no such hospital" end
+  if not world:mpMayTrade(from, to) or world:mpRivals(from, to) then return false, "not on your team" end
+  local price = math.floor(tonumber(cmd.price) or 0)
+  if price < 0 or price > MultiplayerSession.PLOT_MAX_PRICE then return false, "invalid price" end
+  local plot = math.floor(tonumber(cmd.plot) or 0)
+  local why = MultiplayerSession.plotRefusal(world, from, plot)
+  if not why then why = MultiplayerSession.plotHandoverRefusal(world, to, plot) end
+  if not why and plot_offer_pending(world, plot) then why = "already offered" end
+  if why then return false, why end
+  local panel = world.ui and world.ui.bottom_panel
+  if not panel then return false, "no message panel" end
+  local tiles = #MultiplayerSession.plotTiles(world.map.th, plot) / 2
+  local message = {
+    {text = S.plot_offer_line:format(from.name, plot, tiles)},
+    {text = price > 0 and S.plot_offer_price_line:format(price) or S.plot_offer_free_line},
+    choices = {
+      {text = price > 0 and S.offer_accept_price:format(price) or S.offer_accept, choice = "mp_offer_accept"},
+      {text = S.offer_decline, choice = "mp_offer_decline"},
+    },
+    mp_offer = {kind = "plot", from = world:getHospitalIndex(from), to = world:getHospitalIndex(to),
+        plot = plot, price = price > 0 and price or nil, name = "plot " .. plot},
+  }
+  panel:queueMessage("mp_money", message, nil, Date.hoursPerDay() * MultiplayerSession.OFFER_DAYS, 2, nil, to)
+  world.mp_plot_offers = world.mp_plot_offers or {}
+  world.mp_plot_offers[plot] = world.next_message_id
+  MultiplayerSession.tellPlayer(world, from, price > 0 and S.plot_offer_sent_price_note:format(plot, to.name, price)
+      or S.plot_offer_sent_note:format(plot, to.name))
+  cmd.resolved = "plot " .. plot .. " for $" .. price
+  return true
+end
+
+--! A plot offer was answered (or lapsed): on acceptance the plot, and the
+--! price if there is one, change hands if all is as it was offered.
+function MultiplayerSession.resolvePlotOffer(world, offer, from, to, accept)
+  local S = _S.multiplayer_window
+  local plot, price = offer.plot, offer.price or 0
+  if world.mp_plot_offers then world.mp_plot_offers[plot] = nil end
+  local session = world.app.mp_session
+  local function log(outcome)
+    if session then
+      session.log(string.format("offer of plot %s to hospital %d: %s", tostring(plot), offer.to, outcome))
+    end
+  end
+  if not accept then
+    log("declined")
+    MultiplayerSession.tellPlayer(world, from, S.plot_offer_declined_note:format(to.name, plot))
+    return
+  end
+  local why = MultiplayerSession.plotRefusal(world, from, plot, true)
+  if not why then why = MultiplayerSession.plotHandoverRefusal(world, to, plot) end
+  if why then
+    log("void: " .. why)
+    MultiplayerSession.tellPlayer(world, from, S.plot_offer_gone_note:format(plot))
+    MultiplayerSession.tellPlayer(world, to, S.plot_offer_gone_note:format(plot))
+    return
+  end
+  -- (A bot borrows what it lacks, as it does at an auction.)
+  if price > 0 and to.balance < price then
+    MultiplayerSession.botBorrow(world, offer.to, to, price)
+  end
+  if price > 0 and to.balance < price then
+    log("no money")
+    MultiplayerSession.tellPlayer(world, to, S.plot_offer_no_money_note:format(price, plot))
+    MultiplayerSession.tellPlayer(world, from, S.plot_offer_no_money_sender_note:format(to.name, plot))
+    return
+  end
+  local paid = MultiplayerSession.plotPaid(world, plot)
+  release_plot(world, from, plot, to:getPlayerIndex())
+  table.insert(to.ownedPlots, plot)
+  if not world.free_build_mode then
+    -- The plot's worth moves with it.
+    from.value = from.value - paid
+    to.value = to.value + paid
+  end
+  if price > 0 then
+    to:spendMoney(price, S.plot_bought_transaction:format(from.name, plot))
+    from:receiveMoney(price, S.plot_given_transaction:format(to.name, plot))
+  end
+  log(price > 0 and ("handed over for $" .. price) or "handed over")
+  MultiplayerSession.tellPlayer(world, to, S.plot_received_note:format(plot, from.name))
+  MultiplayerSession.tellPlayer(world, from, price > 0 and S.plot_offer_accepted_price_note:format(to.name, plot, price)
+      or S.plot_offer_accepted_note:format(to.name, plot))
+end
+
+--! A bot hospital that must pay `cost` and would be left with less than its
+--! reserve borrows the difference (in steps of $5000, as far as the bank
+--! lets it). Returns the amount borrowed (0: none). The same on every peer.
+function MultiplayerSession.botBorrow(world, index, hospital, cost)
+  local bots = world.mp_coop and world.mp_coop.bot_hospitals or {}
+  local reserve = MultiplayerSession.BOT_AUCTION_RESERVE
+  if not (hospital and bots[index]) or hospital.balance - cost >= reserve then return 0 end
+  local short = cost + reserve - hospital.balance
+  local room = MultiplayerSession.maxLoan(world, hospital) - hospital.loan
+  local amount = math.min(math.ceil(short / 5000) * 5000, math.floor(room / 5000) * 5000)
+  if amount <= 0 then return 0 end
+  hospital.loan = hospital.loan + amount
+  hospital:receiveMoney(amount, _S.transactions.bank_loan)
+  return amount
 end
 
 --------------------------------------------------------------------------------

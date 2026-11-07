@@ -773,7 +773,14 @@ function Bot:answerOffers()
       -- (From a team mate in a race of two teams: welcome.)
       local accept = not self.world:mpRivals(self.world.hospitals[offer.from], mine)
       local line
-      if accept then
+      if accept and offer.kind == "plot" then
+        -- (A plot from an ally: its manager decides, a loan for it is fine.)
+        if self.manager then
+          accept, line = self.manager:plotAnswer(offer)
+        else
+          accept, line = false, pick(LINES.refuse)
+        end
+      elseif accept then
         local cost = offer.kind == "money" and offer.amount or offer.price or 0
         if cost > 0 and mine.balance - cost < RESERVE then
           accept = false

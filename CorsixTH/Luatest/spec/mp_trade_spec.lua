@@ -20,6 +20,7 @@ SOFTWARE. --]]
 
 require("corsixth")
 require("class_test_base")
+require("date")
 require("mp_session")
 
 local MultiplayerSession = _G["MultiplayerSession"]
@@ -28,7 +29,8 @@ local handlers = MultiplayerSession.default_handlers
 -- Texts the handlers format for their notes (shown to nobody here).
 local function with_texts(fn)
   local old_S = rawget(_G, "_S")
-  rawset(_G, "_S", {multiplayer_window = setmetatable({}, {__index = function() return "%s" end})})
+  rawset(_G, "_S", {multiplayer_window = setmetatable({}, {__index = function() return "%s" end}),
+      transactions = {bank_loan = "loan"}})
   local ok, err = pcall(fn)
   rawset(_G, "_S", old_S)
   if not ok then error(err, 0) end
@@ -148,6 +150,7 @@ local function plot_world(layout, owners, extra)
   for i = 1, 2 do
     local h = {ownedPlots = {}, ratholes = {}, staff = {}, balance = 0, name = "H" .. i, value = 0}
     function h.getPlayerIndex() return i end
+    function h.spendMoney(self, amount) self.balance = self.balance - amount end
     function h.receiveMoney(self, amount, _, value)
       self.balance = self.balance + amount
       self.value = self.value - (value or 0)
@@ -271,6 +274,134 @@ describe("Selling a plot back", function()
       local ok, why = handlers.sell_plot(world, {hospital = 1, plot = 4})
       assert.is_false(ok)
       assert.equal("an auction is on", why)
+    end)
+  end)
+end)
+
+describe("Handing a plot to an ally", function()
+  -- plots by position: 3 1 4 2 5; hospital 1 has 1, 3 and 4, hospital 2 has 2.
+  local function make(extra)
+    local world, hospitals, owner = plot_world({3, 1, 4, 2, 5}, {[1] = 1, [2] = 2, [3] = 1, [4] = 1}, extra)
+    local queued = {}
+    local panel = {
+      queueMessage = function(_, kind, message, _, timeout, choice, _, to)
+        world.next_message_id = (world.next_message_id or 0) + 1
+        queued[#queued + 1] = {kind = kind, message = message, id = world.next_message_id, timeout = timeout}
+        assert.equal(2, choice)
+        assert.is_not_nil(to)
+      end,
+      findMessageIcon = function(_, id)
+        for _, m in ipairs(queued) do if m.id == id and not m.answered then return m end end
+      end,
+    }
+    world.ui = {bottom_panel = panel}
+    world.app = {}
+    world.mpMayTrade = function() return true end
+    world.mpRivals = function() return false end
+    world.getHospitalIndex = function(_, h) return h == hospitals[1] and 1 or 2 end
+    for _, h in ipairs(hospitals) do h.loan = 0 end
+    return world, hospitals, owner, queued
+  end
+
+  it("offers an empty plot that touches the ally's land, once", function()
+    with_texts(function()
+      local world, hospitals, owner, queued = make()
+      hospitals[1].ownedPlots = {1, 3, 4}
+      -- Plot 4 touches plot 2, the ally's.
+      assert.is_true(handlers.offer_plot(world, {hospital = 1, to = 2, plot = 4, price = 2500}))
+      assert.equal(1, #queued)
+      assert.equal(2500, queued[1].message.mp_offer.price)
+      assert.equal(4, queued[1].message.mp_offer.plot)
+      assert.equal(1, owner[4]) -- nothing changes before the answer
+      local ok, why = handlers.offer_plot(world, {hospital = 1, to = 2, plot = 4, price = 0})
+      assert.is_false(ok)
+      assert.equal("already offered", why)
+      -- A plot that does not touch the ally's land.
+      ok, why = handlers.offer_plot(world, {hospital = 1, to = 2, plot = 3, price = 0})
+      assert.is_false(ok)
+      assert.equal("does not touch their land", why)
+    end)
+  end)
+
+  it("checks price, ally, starting plot and emptiness", function()
+    with_texts(function()
+      local world = make({objects = {[5] = {{object_type = {id = "bench"}}}}})
+      local function why_not(cmd)
+        local ok, why = handlers.offer_plot(world, cmd)
+        assert.is_false(ok)
+        return why
+      end
+      assert.equal("invalid price", why_not({hospital = 1, to = 2, plot = 4, price = 50001}))
+      assert.equal("invalid price", why_not({hospital = 1, to = 2, plot = 4, price = -1}))
+      assert.equal("no such hospital", why_not({hospital = 1, to = 1, plot = 4, price = 0}))
+      assert.equal("starting plot", why_not({hospital = 1, to = 2, plot = 1, price = 0}))
+      assert.equal("plot not empty", why_not({hospital = 1, to = 2, plot = 4, price = 0}))
+      world.mpRivals = function() return true end
+      assert.equal("not on your team", why_not({hospital = 1, to = 2, plot = 4, price = 0}))
+    end)
+  end)
+
+  it("moves the plot and the price when the ally accepts", function()
+    with_texts(function()
+      local world, hospitals, owner, queued = make({paid = {[4] = 3000}})
+      hospitals[1].ownedPlots = {1, 3, 4}
+      hospitals[1].value, hospitals[2].value = 10000, 10000
+      hospitals[2].balance = 4000
+      assert.is_true(handlers.offer_plot(world, {hospital = 1, to = 2, plot = 4, price = 2500}))
+      local offer = queued[1].message.mp_offer
+      MultiplayerSession.resolveOffer(world, offer, true)
+      assert.equal(2, owner[4])
+      assert.same({1, 3}, hospitals[1].ownedPlots)
+      assert.same({4}, hospitals[2].ownedPlots)
+      assert.equal(1500, hospitals[2].balance)
+      assert.equal(2500, hospitals[1].balance)
+      assert.equal(7000, hospitals[1].value)
+      assert.equal(13000, hospitals[2].value)
+      assert.is_nil(world.mp_plot_offers[4])
+      -- The price paid to the bank stays with the plot.
+      assert.equal(3000, MultiplayerSession.plotPaid(world, 4))
+    end)
+  end)
+
+  it("changes nothing when declined or when the ally cannot pay", function()
+    with_texts(function()
+      local world, hospitals, owner, queued = make()
+      hospitals[2].balance = 100
+      assert.is_true(handlers.offer_plot(world, {hospital = 1, to = 2, plot = 4, price = 2500}))
+      MultiplayerSession.resolveOffer(world, queued[1].message.mp_offer, false)
+      assert.equal(1, owner[4])
+      assert.is_true(handlers.offer_plot(world, {hospital = 1, to = 2, plot = 4, price = 2500}))
+      MultiplayerSession.resolveOffer(world, queued[2].message.mp_offer, true)
+      assert.equal(1, owner[4])
+      assert.equal(100, hospitals[2].balance)
+      -- A free plot needs no money.
+      assert.is_true(handlers.offer_plot(world, {hospital = 1, to = 2, plot = 4}))
+      MultiplayerSession.resolveOffer(world, queued[3].message.mp_offer, true)
+      assert.equal(2, owner[4])
+    end)
+  end)
+
+  it("is void when the plot is no longer empty", function()
+    with_texts(function()
+      local extra = {}
+      local world, _, owner, queued = make(extra)
+      assert.is_true(handlers.offer_plot(world, {hospital = 1, to = 2, plot = 4}))
+      extra.objects = {[5] = {{object_type = {id = "bench"}}}}
+      MultiplayerSession.resolveOffer(world, queued[1].message.mp_offer, true)
+      assert.equal(1, owner[4])
+    end)
+  end)
+
+  it("lets a bot borrow what it lacks, and only a bot", function()
+    with_texts(function()
+      local world, hospitals, owner, queued = make()
+      hospitals[2].balance, hospitals[2].value = 1000, 30000
+      world.mp_coop = {players = 2, bot_hospitals = {[2] = true}}
+      assert.is_true(handlers.offer_plot(world, {hospital = 1, to = 2, plot = 4, price = 6000}))
+      MultiplayerSession.resolveOffer(world, queued[1].message.mp_offer, true)
+      assert.equal(2, owner[4])
+      assert.is_true(hospitals[2].loan > 0)
+      assert.is_true(hospitals[2].balance >= 0)
     end)
   end)
 end)

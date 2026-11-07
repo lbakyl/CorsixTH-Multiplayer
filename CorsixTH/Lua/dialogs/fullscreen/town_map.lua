@@ -241,7 +241,11 @@ function UITownMap:onMouseUp(button, x, y)
   local s = TheApp.gfx:getUIScale()
   local plot_button = button == "left" and self:buttonAt(x, y)
   if plot_button then
-    if plot_button.kind == "sell" then self:askToSell(plot_button.plot) end
+    if plot_button.kind == "sell" then
+      self:askToSell(plot_button.plot)
+    else
+      UIMultiplayerGivePlot.open(self.ui, plot_button.plot)
+    end
     return true
   elseif button == "left" then
     local tx = math.floor((x - 227 * s) / (self:tilePixels() * s))
