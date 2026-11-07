@@ -34,6 +34,8 @@
 --                        (test command probe_learn), research to share
 --   MP_BOT_WISHES        tests: "<day>:<project>;..." a team mate's wishes on those game
 --                        days, as if asked in the chat (add:psych:skeleton, bigger:gp)
+--   MP_BOT_PLAN          tests: "<action>:<weight>,..." the plan every game week
+--                        instead of the server's advice (buy:drinks_machine:10)
 --   MP_BOT_PACE          game days between its building steps are divided
 --                        by this (default 1: like a person)
 --   MP_BOT_FAST          1: run the game as fast as the others allow and
@@ -332,6 +334,8 @@ local BONUS_DAYS, BONUS_BELOW, BONUS_FLOOR = 7, 0.5, 2000
 -- A person sharing the hospital answers pay rises; the bot steps in when
 -- they have not and the member of staff would quit within this many hours.
 local RISE_LAST_HOURS = 5 * 24
+-- No drinks machine closer than this many tiles to another (Bot:buyCorridor).
+local DRINKS_APART = 5
 -- Corridor furniture once the hospital is open: id -> how many.
 local EXTRAS = {{"bench", 3}, {"plant", 2}, {"drinks_machine", 1}, {"bench", 5}, {"extinguisher", 1},
     {"plant", 4}}
@@ -629,6 +633,16 @@ function Bot:askPlan()
   local manager = self.manager
   local report = manager and manager:report()
   if not report then return false end
+  -- (Tests: a fixed plan, as the model would send it.)
+  local fixed = os.getenv("MP_BOT_PLAN")
+  if fixed and fixed ~= "" then
+    local plan = {priorities = {}}
+    for action, weight in fixed:gmatch("([%w_:]+):(%d+)") do
+      plan.priorities[#plan.priorities + 1] = {action = action, weight = tonumber(weight)}
+    end
+    manager:applyPlan(plan)
+    return true
+  end
   if self.last_plan and self:now() - self.last_plan < 25 then return false end
   local said = {}
   for _, l in ipairs(self.mate_lines or {}) do
@@ -1595,7 +1609,20 @@ function Bot:buyCorridor(object_id, near_x, near_y)
     return not hosp:isInHospital(tx, ty) or world:getRoom(tx, ty) ~= nil or
         not world.map.th:getCellFlags(tx, ty).passable
   end
+  -- Drinks machines spread out: none within DRINKS_APART tiles of another of
+  -- this hospital's (Matroftt, 2026-11-07: rows of them by the reception).
+  local apart = {}
+  if object_id == "drinks_machine" then
+    for _, e in ipairs(world.entities) do
+      if e.object_type and e.object_type.id == object_id and e.tile_x and hosp:isInHospital(e.tile_x, e.tile_y) then
+        apart[#apart + 1] = e
+      end
+    end
+  end
   local function fits(tx, ty)
+    for _, e in ipairs(apart) do
+      if math.abs(e.tile_x - tx) <= DRINKS_APART and math.abs(e.tile_y - ty) <= DRINKS_APART then return false end
+    end
     if world:anyHumanoidObscuringArea(tx, ty) then return false end
     for _, facing in ipairs(facings) do
       place:setOrientation(facing)

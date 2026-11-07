@@ -101,7 +101,9 @@ local function meander_action_start(action, humanoid)
   local x, y = world.pathfinder:findIdleTile(humanoid.tile_x,
       humanoid.tile_y, math.random(1, 24), meander_parcel, owner)
 
-  if x == humanoid.tile_x and y == humanoid.tile_y then
+  -- (No idle tile found at all: nil. A patient in Matroftt's game, 2026-11-07,
+  -- walked to nil and its tick failed.)
+  if not x or (x == humanoid.tile_x and y == humanoid.tile_y) then
     -- Nowhere to walk to - go idle instead, or go onto the next action
     if #humanoid.action_queue == 1 then
       humanoid:queueAction(IdleAction())

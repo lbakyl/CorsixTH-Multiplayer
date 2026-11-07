@@ -710,8 +710,12 @@ function M:projects(s)
     -- Drinks machines: one per 25 patients (one at least), each by the
     -- busiest waiting place with none within DRINKS_R tiles. (Before, every
     -- third place wanted one within 4 tiles, and which places were third
-    -- changed with the queues: machines everywhere, side by side.)
+    -- changed with the queues: machines everywhere, side by side.) A plan
+    -- naming buy:drinks_machine only raises this rule's score: before, it
+    -- bought one by the reception every week (Matroftt, 2026-11-07: 76
+    -- machines in eight hospitals of about 30 patients, in rows).
     local drinks_now = s.objects.drinks_machine or 0
+    local drinks_boost = self.boost["buy:drinks_machine"] or 0
     if s.patients >= 8 and drinks_now < 1 + s.patients / 25 then
       local covered = false
       for _, d in ipairs(s.doors) do
@@ -723,7 +727,15 @@ function M:projects(s)
             end
           end
           if near == 0 then
-            place("drinks_machine", d, 2 + s.thirst * 4)
+            -- (The plan never makes it urgent: no loan for it. The first
+            -- machine goes anywhere if nothing fits by the door.)
+            local score = math.min(URGENT - 5, 2 + s.thirst * 4 + drinks_boost)
+            local ok, cost = pcall(hosp.getObjectBuildCost, hosp, "drinks_machine")
+            if ok then
+              add("buy:drinks_machine@" .. d.key, score, function()
+                return bot:buyCorridor("drinks_machine", d.x, d.y) or (drinks_now == 0 and bot:buyCorridor("drinks_machine"))
+              end, cost or 0)
+            end
             covered = true
           end
         end
@@ -784,7 +796,7 @@ function M:projects(s)
         if hosp:countStaffOfCategory(base) < math.min(cap[base] or 99, need[base] or 0) then hire(what, score) end
       elseif kind == "room" then
         if (s.rooms[what] or 0) < (COPIES[what] or 1) then room(what, score) end
-      elseif kind == "buy" then
+      elseif kind == "buy" and what ~= "drinks_machine" then -- (drinks: the rule above)
         buy(what, score)
       end
     end
@@ -977,6 +989,7 @@ function M:doProject(s)
         if p.key == "buy:land" or p.key == "edit:shrink" then self.no_space = {} end
         self.no_space[p.key] = nil
         self.boost[p.key] = nil
+        self.boost[(p.key:gsub("@.*$", ""))] = nil -- (buy:bench@desk... was the plan's buy:bench)
         if self.wishes[p.key] then self:tellWisher(self.wishes[p.key], "wish_done", p.key) end
         self.wishes[p.key] = nil
         -- Rooms take a few days to build; staff and objects less.
