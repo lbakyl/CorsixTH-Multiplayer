@@ -656,6 +656,17 @@ def test_private_chat_reaches_only_the_addressee(run):
         a.send(encode("CHAT", text="after"))
         await b.expect("CHAT", text="after")
         assert not any("team only" in line for line in b.inbox)
+        # A private line to several (a bot's note to a hospital's players)
+        # reaches only those; one to somebody who has left reaches nobody
+        # (it went to everybody before).
+        a.send(encode("CHAT", text="to two", to="2,3"))
+        assert (await b.expect("CHAT", text="to two"))["to"] == "2"
+        assert (await c.expect("CHAT", text="to two"))["to"] == "3"
+        a.send(encode("CHAT", text="to the gone", to="9"))
+        a.send(encode("CHAT", text="last"))
+        await b.expect("CHAT", text="last")
+        await c.expect("CHAT", text="last")
+        assert not any("to the gone" in line for line in b.inbox + c.inbox)
     run(body)
 
 

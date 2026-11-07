@@ -855,12 +855,19 @@ class Server:
                 room.players[p].send(line)
             player.send(line)
             return
-        if to.isdigit() and int(to) in room.players:
-            # A private line: only that player, and the sender sees it sent.
-            line = encode("CHAT", peer=player.peer, name=player.name, text=text, to=int(to), **extra)
-            room.players[int(to)].send(line)
-            if int(to) != player.peer:
-                player.send(line)
+        if to:
+            # A private line: only those players (a bot may name several,
+            # "3,5"), and the sender sees it sent. Nobody of them here any
+            # more: dropped (it went to everybody: Jan got Bot Clive's
+            # research note meant for matroftt after he left, eu2).
+            peers = sorted({int(p) for p in to.split(",") if p.isdigit()} & set(room.players))
+            if not peers:
+                return
+            for p in peers:
+                line = encode("CHAT", peer=player.peer, name=player.name, text=text, to=p, **extra)
+                room.players[p].send(line)
+                if p != player.peer:
+                    player.send(line)
             return
         room.broadcast(encode("CHAT", peer=player.peer, name=player.name, text=text, **extra))
 
