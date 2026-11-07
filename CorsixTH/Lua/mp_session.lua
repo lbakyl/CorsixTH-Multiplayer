@@ -624,6 +624,9 @@ MultiplayerSession.rejection_texts = {
               ["cannot buy this plot"] = "That land cannot be bought now.",
               ["an auction is on"] = "Wait until the auction is over.",
               ["not enough money"] = "You cannot afford that land."},
+  give_reputation = {["reputation too low"] = "Your reputation is too low to give any away.",
+                     ["their reputation is full"] = "Their reputation cannot go any higher.",
+                     ["monthly limit"] = "You have given as much reputation as you may this month."},
   auction_bid = {["outbid"] = "Somebody bid first. Try again.",
                  ["not enough money"] = "You cannot afford that bid.",
                  ["the auction is over"] = "The auction is over."},
@@ -2235,6 +2238,61 @@ function handlers.give_money(world, cmd)
   to:receiveMoney(amount, _S.multiplayer_window.money_received:format(from.name))
   MultiplayerSession.tellPlayer(world, to,
       _S.multiplayer_window.money_received_note:format(from.name, amount))
+  return true
+end
+
+-- Vouching for an ally: reputation points move from one hospital to another
+-- (the giver loses what the receiver gains), so a player who trails behind
+-- can be lifted by the others. The giver keeps REP_FLOOR points (the game
+-- warns below 200 and is lost below 100), gives at most REP_MAX_GIVE points
+-- at a time and REP_MONTH_LIMIT in a game month, so that the points cannot be
+-- passed back and forth for ever. The receiver stops at the game's top.
+MultiplayerSession.REP_MAX_GIVE = 100
+MultiplayerSession.REP_FLOOR = 200
+MultiplayerSession.REP_MONTH_LIMIT = 200
+
+--! How many reputation points `from` may still give in this game month.
+function MultiplayerSession.reputationLeft(world, from)
+  local given = from.mp_rep_given
+  local used = given and given.month == world:date():monthOfGame() and given.points or 0
+  return math.max(0, MultiplayerSession.REP_MONTH_LIMIT - used)
+end
+
+--! How many points `from` can give `to` now (0 to REP_MAX_GIVE), and why not
+--! more: "reputation too low" (the giver's floor), "their reputation is
+--! full" (the receiver's top) or "monthly limit".
+function MultiplayerSession.reputationRoom(world, from, to)
+  local keep = math.floor(from.reputation or 0) - MultiplayerSession.REP_FLOOR
+  local top = math.floor((to.reputation_max or 1000) - (to.reputation or 0))
+  local left = MultiplayerSession.reputationLeft(world, from)
+  local room = math.min(MultiplayerSession.REP_MAX_GIVE, keep, top, left)
+  if room >= 1 then return room end
+  if keep < 1 then return 0, "reputation too low" end
+  if top < 1 then return 0, "their reputation is full" end
+  return 0, "monthly limit"
+end
+
+--! Give reputation points to an ally: {hospital (giver), to, amount} (1 to
+--! REP_MAX_GIVE; less if the floor, the limit or the top stops it).
+function handlers.give_reputation(world, cmd)
+  local S = _S.multiplayer_window
+  local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
+  if not from or not to or from == to then return false, "no such hospital" end
+  if not world:mpMayTrade(from, to) or world:mpRivals(from, to) then return false, "not on your team" end
+  local amount = math.floor(tonumber(cmd.amount) or 0)
+  if amount < 1 or amount > MultiplayerSession.REP_MAX_GIVE then return false, "invalid amount" end
+  local room, why = MultiplayerSession.reputationRoom(world, from, to)
+  if room < 1 then return false, why end
+  amount = math.min(amount, room)
+  local month = world:date():monthOfGame()
+  local given = from.mp_rep_given
+  local used = given and given.month == month and given.points or 0
+  from:unconditionalChangeReputation(-amount)
+  to:unconditionalChangeReputation(amount)
+  from.mp_rep_given = {month = month, points = used + amount}
+  cmd.resolved = amount .. " points"
+  MultiplayerSession.tellPlayer(world, from, S.rep_given_note:format(to.name, amount))
+  MultiplayerSession.tellPlayer(world, to, S.rep_received_note:format(from.name, amount))
   return true
 end
 

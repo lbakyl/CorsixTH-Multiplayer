@@ -19,8 +19,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
 --! Multiplayer co-op: send money or offer a member of staff (free or for a
---! price) to another player's hospital. Every action is a lockstep command
---! (give_money, offer_staff).
+--! price) to another player's hospital, or vouch for an ally (give
+--! reputation). Every action is a lockstep command (give_money, offer_staff,
+--! give_reputation).
 class "UIMultiplayerTrade" (UIResizable)
 
 ---@class UIMultiplayerTrade: UIResizable
@@ -39,11 +40,19 @@ local col = {
 local WIDTH = 380
 local STAFF_ROWS = 8
 local AMOUNTS = {1000, 5000, 20000}
+-- The room for the reputation rows: two lines of text, the amount, the button.
+local REP_HEIGHT = 124
 
 --!param target (Hospital) optional: the player to trade with
 --!param staff (Staff) optional: this member of staff selected
 function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
-  local height = 120 + STAFF_ROWS * 25 + 36 + 34 + 70
+  local world = ui.app.world
+  self.world = world
+  self.hospital = ui.hospital
+  self.target = target or self:_nextTarget(nil)
+  -- (Reputation only between allies: not between rivals in a race.)
+  local vouch = self.target and not world:mpRivals(self.hospital, self.target)
+  local height = 120 + STAFF_ROWS * 25 + 36 + 34 + 70 + (vouch and REP_HEIGHT or 0)
   self:UIResizable(ui, WIDTH, height, col.bg)
   self.esc_closes = true
   self.resizable = false
@@ -51,12 +60,9 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
   self:setDefaultPosition(0.5, 0.2)
   self.default_button_sound = "selectx.wav"
   local S = _S.multiplayer_window
-  local world = ui.app.world
-  self.world = world
-  self.hospital = ui.hospital
-  self.target = target or self:_nextTarget(nil)
   self.selected = nil
   self.price = 0
+  self.reputation = 10
 
   local title = self.target and S.trade_caption:format(self.target.name) or S.trade_alone
   self:addBevelPanel(20, 10, WIDTH - 40, 20, col.title):setLabel(title).lowered = true
@@ -125,6 +131,26 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
       :makeButton(0, 0, 180, 30, nil, self.sendStaff)
   self:addBevelPanel(210, y, WIDTH - 230, 30, col.button):setLabel(S.trade_next_player)
       :makeButton(0, 0, WIDTH - 230, 30, nil, self.nextPlayer)
+  if vouch then
+    -- Vouch for the ally: points of reputation (1 to 100) from this hospital
+    -- to theirs.
+    local ry = y + 44
+    self:addBevelPanel(20, ry, WIDTH - 40, 20, col.caption):setLabel(S.rep_caption:format(self.target.name))
+        .lowered = true
+    self:addBevelPanel(20, ry + 22, WIDTH - 40, 20, col.caption):setLabel(S.rep_caption_2).lowered = true
+    ry = ry + 46
+    self.rep_panel = self:addBevelPanel(20, ry, 120, 28, col.caption)
+    self.rep_panel.lowered = true
+    for i, points in ipairs({-10, -1, 1, 10}) do
+      self:addBevelPanel(150 + (i - 1) * 52, ry, 46, 28, col.button)
+          :setLabel((points > 0 and "+" or "") .. points)
+          :makeRepeatButton(0, 0, 46, 28, nil, function(window) window:setReputation(window.reputation + points) end)
+    end
+    self:setReputation(self.reputation)
+    self:addBevelPanel(20, ry + 34, WIDTH - 40, 30, col.button):setLabel(S.rep_button)
+        :makeButton(0, 0, WIDTH - 40, 30, nil, self.sendReputation)
+    y = y + REP_HEIGHT
+  end
   self.status_panel = self:addBevelPanel(20, y + 40, WIDTH - 160, 25, col.bg)
   self.status_panel:setLabel("")
   self.status_panel.lowered = true
@@ -157,6 +183,19 @@ function UIMultiplayerTrade:sendMoney(amount)
   if not session then return end
   session:issue({kind = "give_money", to = self.world:getHospitalIndex(self.target), amount = amount})
   self:setStatus(_S.multiplayer_window.trade_sent)
+end
+
+--! Set the reputation points to give, 1 to MultiplayerSession.REP_MAX_GIVE.
+function UIMultiplayerTrade:setReputation(points)
+  self.reputation = math.max(1, math.min(MultiplayerSession.REP_MAX_GIVE, points))
+  self.rep_panel:setLabel(_S.multiplayer_window.rep_amount:format(self.reputation))
+end
+
+function UIMultiplayerTrade:sendReputation()
+  local session = TheApp.mp_session
+  if not session then return end
+  session:issue({kind = "give_reputation", to = self.world:getHospitalIndex(self.target), amount = self.reputation})
+  self:setStatus(_S.multiplayer_window.rep_sent)
 end
 
 --! Set the price asked for the member of staff, $0 to STAFF_MAX_PRICE.
@@ -219,11 +258,12 @@ function UIMultiplayerTrade:nextPlayer()
   local ui = self.ui
   local target = self:_nextTarget(self.target)
   local staff = self.selected and self.selected.staff
-  local price = self.price
+  local price, rep = self.price, self.reputation
   self:close()
   local window = UIMultiplayerTrade(ui, target, staff)
   ui:addWindow(window)
   if window.price_panel then window:setPrice(price) end
+  if window.rep_panel then window:setReputation(rep) end
 end
 
 --! Draw the purple "send to another player" icon (w x h, default 24 x 28,
