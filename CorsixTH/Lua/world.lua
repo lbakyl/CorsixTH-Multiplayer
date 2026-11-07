@@ -1970,12 +1970,23 @@ function World:_mpPlace(hosp, how)
   hosp.mp_failing_since = nil
   local place = place_text(hosp.mp_place)
   if how == "last" then return end -- the race is over: the standings say it
-  local message
   if how == "won" then
     MultiplayerSession.tellOthers(self, hosp, S.race_placed_other:format(hosp.name, place))
-    message = {{text = S.race_won[1]}, {text = S.race_won[2]:format(place)}, {text = S.race_won[3]}}
   else
     MultiplayerSession.tellOthers(self, hosp, S.race_out_other:format(hosp.name, place))
+  end
+  self:_mpPlaceFax(hosp, how, place)
+end
+
+--! The fax to a hospital that took a place ("won") or is out: back to the
+--! lobby, or watch on. Only that hospital's player sees and answers it; a
+--! win holds the game until they have (MultiplayerSession.startHold).
+function World:_mpPlaceFax(hosp, how, place)
+  local S = _S.multiplayer_window
+  local message
+  if how == "won" then
+    message = {{text = S.race_won[1]}, {text = S.race_won[2]:format(place)}, {text = S.race_won[3]}}
+  else
     message = {{text = S.race_out[1]}, {text = S.race_out[2]:format(place)}, {text = S.race_out[3]}}
   end
   message.choices = {
@@ -2151,6 +2162,9 @@ function World:_mpTeamPlace(team, how)
     local S = _S.multiplayer_window
     local text = how == "won" and S.race_placed_other or S.race_out_other
     MultiplayerSession.tellOthers(self, nil, text:format(self:mpTeamName(team), place_text(place)))
+    -- And the team's own players get the fax a hospital alone gets (Argus's
+    -- team won 1st place on eu2 and saw nothing but the line for everybody).
+    for _, hosp in ipairs(self:mpTeamHospitals(team)) do self:_mpPlaceFax(hosp, how, place_text(place)) end
   end
 end
 

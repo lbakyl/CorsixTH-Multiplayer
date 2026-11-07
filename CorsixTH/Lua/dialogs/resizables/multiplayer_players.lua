@@ -37,8 +37,9 @@ local col = {
 }
 
 -- Columns: key, width (all of them fit a 640 pixel wide screen).
+-- (The hospital column takes "BOT BERTIE (team 2)": at 75 it was cut off.)
 local COLUMNS = {
-  {"name", 95}, {"hospital", 75}, {"ping", 50}, {"status", 115},
+  {"name", 80}, {"hospital", 110}, {"ping", 50}, {"status", 100},
   {"value", 65}, {"balance", 65}, {"reputation", 70}, {"goals", 60},
 }
 local WIDTH = 20 * 2 + (#COLUMNS - 1) * 4
