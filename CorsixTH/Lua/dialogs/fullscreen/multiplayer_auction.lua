@@ -471,13 +471,15 @@ class "UIMultiplayerHoldWait" (UIResizable)
 local UIMultiplayerHoldWait = _G["UIMultiplayerHoldWait"] ---@type UIMultiplayerHoldWait
 
 function UIMultiplayerHoldWait:UIMultiplayerHoldWait(ui)
-  self:UIResizable(ui, 400, 64, wait_col.bg)
+  -- (Two lines: with several names the text ran out of the box.)
+  self:UIResizable(ui, 400, 84, wait_col.bg)
   self.esc_closes = false
   self.resizable = false
   self.on_top = true
   self:setDefaultPosition(0.5, 0.35)
-  self.text_panel = self:addBevelPanel(20, 19, 360, 26, wait_col.text)
+  self.text_panel = self:addBevelPanel(20, 14, 360, 56, wait_col.text)
   self.text_panel.lowered = true
+  self.text_panel.wrap_text = true
   self:onTick()
 end
 

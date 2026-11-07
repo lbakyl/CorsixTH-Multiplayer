@@ -631,54 +631,43 @@ function UIAnnualReport:drawStatisticsScreen(canvas, x, y)
   local col_x = 190 * s
   local row_no_y = 106 * s
 
-  for i, hospital in ipairs(world.hospitals) do
-    local name = hospital.name
-
+  -- Each chart has room for 4 rows. With more hospitals (multiplayer: up to
+  -- 8) the top 3 are shown, then the 4th, or this player's hospital with its
+  -- place ("6. JAN") when it is further down; the rows ran into the next
+  -- chart's title (Jan's game of 6 on eu2).
+  local MAX_ROWS = 4
+  local count = #world.hospitals
+  local mine = world:getUIHospital()
+  local function row(sorted, index, hospital)
+    if count <= MAX_ROWS or index < MAX_ROWS then return index, hospital.name:upper() end
+    local mine_index
+    for ind, entry in ipairs(sorted) do
+      if world.hospitals[entry.hosp_index] == mine then mine_index = ind end
+    end
+    if not mine_index or mine_index <= MAX_ROWS then
+      if index == MAX_ROWS then return index, hospital.name:upper() end
+      return nil
+    end
+    if hospital == mine then return MAX_ROWS, index .. ". " .. hospital.name:upper() end
+    return nil
+  end
+  local function draw_chart(sorted, index, hospital, dx, dy)
+    local r, name = row(sorted, index, hospital)
+    if not r then return end
+    font:draw(canvas, name, x + 140 * s + dx, y + row_y + dy + row_dy * (r - 1))
     -- Note: Each 'value' is wrapped by string.format("%.0f", x) to persist integer notation
-    -- Most Money
-    local index_m = getindex(self.money_sort, i)
-    -- index_* is the returned value of the sorted place for this player.
-    -- However there might be many players with the same value, so each iteration a
-    -- duplicate has been found, one additional row lower is the right place to be.
-    font:draw(canvas, name:upper(), x + 140 * s,
-        y + row_y + row_dy * (index_m - 1))
-    font:draw(canvas, string.format("%.0f", self.money_sort[index_m].value), x + 240 * s,
-        y + row_y + row_dy * (index_m - 1), 70 * s, 0, "right")
+    font:draw(canvas, string.format("%.0f", sorted[index].value), x + 240 * s + dx,
+        y + row_y + dy + row_dy * (r - 1), 70 * s, 0, "right")
+  end
 
-    -- Highest Salary
-    local index_s = getindex(self.salary_sort, i)
-    font:draw(canvas, name:upper(), x + 140 * s + col_x,
-        y + row_y + row_dy * (index_s - 1))
-    font:draw(canvas, string.format("%.0f", self.salary_sort[index_s].value), x + 240 * s + col_x,
-        y + row_y + row_dy * (index_s - 1), 70 * s, 0, "right")
-
-    -- Most Cures
-    local index_c = getindex(self.cures_sort, i)
-    font:draw(canvas, name:upper(), x + 140 * s,
-        y + row_y + row_no_y + row_dy * (index_c - 1))
-    font:draw(canvas, string.format("%.0f", self.cures_sort[index_c].value), x + 240 * s,
-        y + row_y + row_no_y + row_dy * (index_c - 1), 70 * s, 0, "right")
-
-    -- Most Deaths
-    local index_d = getindex(self.deaths_sort, i)
-    font:draw(canvas, name:upper(), x + 140 * s + col_x,
-        y + row_y + row_no_y + row_dy * (index_d - 1))
-    font:draw(canvas, string.format("%.0f", self.deaths_sort[index_d].value), x + 240 * s + col_x,
-        y + row_y + row_no_y + row_dy * (index_d - 1), 70 * s, 0, "right")
-
-    -- Most Visitors
-    local index_v = getindex(self.visitors_sort, i)
-    font:draw(canvas, name:upper(), x + 140 * s,
-        y + row_y + row_no_y * 2 + row_dy * (index_v - 1))
-    font:draw(canvas, string.format("%.0f", self.visitors_sort[index_v].value), x + 240 * s,
-        y + row_y + row_no_y * 2 + row_dy * (index_v - 1), 70 * s, 0, "right")
-
-    -- Highest Value
-    local index_v2 = getindex(self.value_sort, i)
-    font:draw(canvas, name:upper(), x + 140 * s + col_x,
-        y + row_y + row_no_y * 2 + row_dy * (index_v2 - 1))
-    font:draw(canvas, string.format("%.0f", self.value_sort[index_v2].value), x + 240 * s + col_x,
-        y + row_y + row_no_y * 2 + row_dy * (index_v2 - 1), 70 * s, 0, "right")
+  for i, hospital in ipairs(world.hospitals) do
+    -- index_* is the sorted place of this hospital in each chart.
+    draw_chart(self.money_sort, getindex(self.money_sort, i), hospital, 0, 0) -- Most Money
+    draw_chart(self.salary_sort, getindex(self.salary_sort, i), hospital, col_x, 0) -- Highest Salary
+    draw_chart(self.cures_sort, getindex(self.cures_sort, i), hospital, 0, row_no_y) -- Most Cures
+    draw_chart(self.deaths_sort, getindex(self.deaths_sort, i), hospital, col_x, row_no_y) -- Most Deaths
+    draw_chart(self.visitors_sort, getindex(self.visitors_sort, i), hospital, 0, row_no_y * 2) -- Most Visitors
+    draw_chart(self.value_sort, getindex(self.value_sort, i), hospital, col_x, row_no_y * 2) -- Highest Value
   end
 end
 

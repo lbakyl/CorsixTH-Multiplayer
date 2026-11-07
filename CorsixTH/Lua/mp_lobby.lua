@@ -1143,6 +1143,11 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
     -- differently): each player's hospital is the one named after them.
     if session.rejoining and world.mp_coop.teams then self:_seatsFromSave(world, session) end
     world.mp_local_index = session.hospital_index
+    -- The hospitals only bots play are this game's (START), not the saved
+    -- game's: continued with a bot in a person's place, the year end waited
+    -- for that person ("waits for MATROFTT", Jan's game on eu2). Every peer
+    -- has the same START, so all set the same.
+    if app.mp_coop then world.mp_coop.bot_hospitals = app.mp_coop.bot_hospitals end
     app.ui.hospital = world:getUIHospital()
     -- (and this player's messages and countdowns, not the referee's)
     if app.ui.bottom_panel then app.ui.bottom_panel:showOwnMessages() end
