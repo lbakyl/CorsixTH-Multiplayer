@@ -130,10 +130,10 @@ EOF
 pids=()
 run_probe ann MP_ROLE=host MP_ROOM=team MP_MODE=coop MP_PLAYERS=3 MP_ADD_BOTS=2 MP_SCENARIO=none \
   MP_STEPS=3000 MP_STALL_LIMIT=120 \
-  MP_UI_SCRIPT="20:openhospital;40:hire:Doctor;60:hire:Doctor;400:chat:0:Hello Agnes, how are you?;700:sendstaff:Doctor;900:givemoney:2000;1000:hospitals;1100:chat:1:Agnes, please send me \$1000;1300:chat:2:Agnes, could you lend me \$9,000,000?;1500:chat:2:Agnes, please send me some cash;2000:hospitals;2900:speedother;2990:hospitals" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;40:hire:Doctor;60:hire:Doctor;400:chat:0:Hello Agnes, how are you?;700:sendstaff:Doctor;900:givemoney:2000;1000:hospitals;1100:chat:1:Agnes, please send me \$1000;1300:chat:1:Agnes, could you lend me \$9,000,000?;1500:chat:0:Agnes, please send me some cash;2000:hospitals;2900:speedother;2990:hospitals" & pids+=($!)
 run_probe bob MP_ROLE=host MP_ROOM=race MP_MODE=competitive MP_PLAYERS=2 MP_ADD_BOTS=1 MP_SCENARIO=none \
   MP_STEPS=3000 MP_STALL_LIMIT=120 \
-  MP_UI_SCRIPT="20:openhospital;40:hire:Doctor;60:hire:Doctor;500:chat:0:I will crush you;600:chat:1:Please send me \$1000;800:chat:1:Could you build a toilet for me?;700:sendstaff:Doctor;900:givemoney:2000;1000:hospitals;2000:hospitals;2990:hospitals" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;40:hire:Doctor;60:hire:Doctor;500:chat:0:I will crush you;600:chat:1:Please send me \$1000;800:chat:0:Could you build a toilet for me?;700:sendstaff:Doctor;900:givemoney:2000;1000:hospitals;2000:hospitals;2990:hospitals" & pids+=($!)
 run_probe eve MP_ROLE=host MP_ROOM=duel MP_MODE=competitive MP_PLAYERS=2 MP_ADD_BOTS=1 MP_SCENARIO=none \
   MP_STEPS=3000 MP_STALL_LIMIT=120 \
   MP_UI_SCRIPT="20:openhospital;320:sabotage:handyman:3:2;340:sabotage:smear:1:2;900:sabotage:rats:1:2;1500:sabotage:boiler:1:2;2990:hospitals" & pids+=($!)
@@ -329,12 +329,14 @@ ok14 = ('game option helpers=0' in lv and not built14 and said14 and result('liv
 print(f"14. Allied bots build: off: bot commands {sorted(set(bot_cmds14))}; built {built14[:5]}; said so: {said14}; {result('liv')}")
 fail |= not ok14
 # 15. Orders only from allies; money on request. In "team" (co-op) ann asks
-# Agnes (a bot, her ally) for $1000 (to the allies), then for $9,000,000 and for some cash (to her)
+# Agnes (a bot, her ally) for $1000 (to the allies), then for $9,000,000 and for some cash (to her; the chat remembers who it was for)
 # with no sum: the bot checks its own bank (limits 2000:1000 here) and says
 # what it did. In "race" bob (a rival) asks the bot for money and for a room:
 # a refusal, no money sent before the bounce of his gift (step 900).
-gives15 = [(int(st), r) for st, r in applied(a, 2, 'give_money')]
-to_ann15 = [(int(st), t) for st, t in agnes if int(st) >= 1100 and 'ann' in t]
+# (Which bot is "Agnes" and which peer it is varies from run to run: any bot of the room.)
+gives15 = [(int(st), r) for st, p, r in re.findall(r'step (\d+): peer ([2-9]) #\d+ give_money -> (\S+)', a)]
+to_ann15 = [(int(st), t) for who in ('Bot Agnes', 'Bot Bertie') for st, t in chats_from(a, who)
+            if int(st) >= 1100 and 'ann' in t]
 sent_log15 = [l for k, t in bots.items() if k.startswith('team/') for l in t.splitlines() if 'money for ann' in l]
 sent_lines15 = [t for _, t in to_ann15 if re.search(r'\$\d', t)]
 declined15 = [l for l in sent_log15 if 'declined' in l]
@@ -360,11 +362,14 @@ print(f"16. Asking for staff:       lines to ann {asks16[:2]}; bot notes {[n.spl
 fail |= not ok16
 # 17. The level's requirements in the team chat (test hook MP_BOT_TEST_WIN:
 # ann's hospital 1 meets them from game day 10, Bertie's hospital 3 from day
-# 12). Agnes (the lower number of the two bots) says "good job" to ann, once;
-# Bertie does not. Bertie says he is also ready once he is; Agnes, who is not,
-# says what she still needs (one requirement).
+# 12). The bot of hospital 2 (the lower number) says "good job" to ann, once;
+# the bot of hospital 3 does not. That one says it is also ready once it is;
+# the first, which is not, says what it still needs (one requirement).
 win_words = re.compile(r'requirements|ready to win|did it|Good job|Well done|Great job|Nice work|level asks', re.I)
-agnes17, bertie17 = chats_from(a, 'Bot Agnes'), chats_from(a, 'Bot Bertie')
+last_a = last_hospitals(a)
+low17 = re.search(r'\[2 (.*?) opened', last_a[2]).group(1) if last_a else 'Bot Agnes'
+high17 = re.search(r'\[3 (.*?) opened', last_a[2]).group(1) if last_a else 'Bot Bertie'
+agnes17, bertie17 = chats_from(a, low17), chats_from(a, high17)
 good17 = [t for st, t in agnes17 if int(st) >= 450 and 'ann' in t and win_words.search(t)]
 good17_bertie = [t for st, t in bertie17 if int(st) >= 450 and 'ann' in t and win_words.search(t)]
 me_too17 = [t for st, t in bertie17 if int(st) >= 550 and re.search(r"also|good spot|requirements too|ready as well|there too", t)]
@@ -378,15 +383,10 @@ fail |= not ok17
 # nobody on its side to read it: no warning.
 afk_bot = next((n.split('/', 1)[1] for n in bots if n.startswith('afk/')), None)
 warn18 = [(int(st), t) for st, t in chats_from(log('kay'), afk_bot) if 'jon' in t and re.search(r'catch up|speed up', t)] if afk_bot else []
-duel_warn18 = [t for _, t in to_eve if re.search(r'catch up|speed up', t)]
+duel_warn18 = [t for t in to_eve if re.search(r'catch up|speed up', t)]
 ok18 = len(warn18) == 1 and warn18[0][0] >= 450 and not duel_warn18
 print(f"18. Warning about a rival:  kay read {warn18}; eve read {duel_warn18}")
 fail |= not ok18
-for name, text in sorted(bots.items()):
-    errors = [l for l in text.splitlines() if 'ERROR' in l or 'could not' in l]
-    if errors: print(f"   {name} problems: {errors[:5]}")
-sys.exit(1 if fail else 0)
-PY
 # 19. A failing hospital asks its team for help (test hook MP_BOT_TEST_FAIL:
 # both bots of "team" count as failing from game day 20): each says in the
 # team chat that it is failing its objectives and asks ann for an amount, once
@@ -400,3 +400,8 @@ ok19 = (sorted(w for _, w, _ in help19) == ['Bot Agnes', 'Bot Bertie'] and len(n
         and min(st for st, _, _ in help19) >= 20 * 50 - 50)
 print(f"19. Failing, asks for help: {[(st, w, t) for st, w, t in help19]}; notes {[n.split('] ', 1)[1] for n in notes19]}")
 fail |= not ok19
+for name, text in sorted(bots.items()):
+    errors = [l for l in text.splitlines() if 'ERROR' in l or 'could not' in l]
+    if errors: print(f"   {name} problems: {errors[:5]}")
+sys.exit(1 if fail else 0)
+PY
