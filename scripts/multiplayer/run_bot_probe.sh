@@ -25,7 +25,7 @@
 #      changes only once dee has agreed in the fax
 #   9. research ("lab", co-op on level 2, which has research: frank and one
 #      bot): the bot (it discovers something on day 20, a test command)
-#      offers it to frank for free and tells him; a research room it builds
+#      offers it to frank for free, without a chat line (the fax says it); a research room it builds
 #      has a second desk
 #  11. the hidden monthly bonus: in "team" hospitals 2 and 3 (bots), never
 #      ann's; in "duel" hospital 2 (the bot)
@@ -41,6 +41,20 @@
 #  14. "Allied bots build: off" ("hands", one shared hospital on level 2: liv
 #      and a bot, the game option helpers=0): the bot builds no room and
 #      buys nothing for the corridors (land, staff and the rest it may)
+#  15. orders only from allies, money on request: in "team" ann asks a bot for
+#      $1000 (sent), $9,000,000 (declined, it says what it could spare) and some
+#      cash (half of its spare money); in "race" bob, a rival, asks it for money
+#      and a room (refused, no money sent). The bots' limits are 2000:1000 here
+#      (MP_BOT_GIVE_LIMITS) instead of $20,000 and $15,000
+#  16. asking for staff: from game day 5 the bots lack a surgeon (MP_BOT_TEST_LACK);
+#      after 10 days they ask the allies in the team chat
+#  17. the level's requirements (MP_BOT_TEST_WIN: ann's hospital meets them from day
+#      10, the others from day 12): the bot of hospital 2 says "good job" to ann, and
+#      each bot says what it still needs, then that it is ready too
+#  18. a warning that an opponent meets them: in "afk" the bot tells the person it shares with, in
+#      "duel" nobody is there to read it
+#  19. failing its objectives (MP_BOT_TEST_FAIL): both bots of "team" ask ann for
+#      an amount, once
 #  10. tricks on a bot ("duel", competitive: eve and one bot): eve sends
 #      rats, an evil handyman (level 3), a smear campaign and a broken
 #      boiler. The bot shoots the rats and throws the handyman out, each at
@@ -78,7 +92,7 @@ export MP_REFEREE_PROBE_SCENARIO="team=none;race=none;trio=none;duel=none;lab=no
 export CORSIXTH_MP_MAX_BOTS=9 # (nine bots in all the rooms)
 # (MP_BOT_AWAY_SECONDS: kay in "afk" counts as away after a game week; the
 # bots' games run faster than real time.)
-MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 MP_BOT_AWAY_SECONDS=3 PYTHONPATH="$source_dir/mp_server" \
+MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 MP_BOT_AWAY_SECONDS=3 MP_BOT_GIVE_LIMITS=2000:1000 MP_BOT_TEST_LACK=5:Surgeon:operating_theatre MP_BOT_TEST_WIN="1:10;2:12;3:12" MP_BOT_TEST_FAIL=20 PYTHONPATH="$source_dir/mp_server" \
   python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
 server_pid=$!
@@ -116,10 +130,10 @@ EOF
 pids=()
 run_probe ann MP_ROLE=host MP_ROOM=team MP_MODE=coop MP_PLAYERS=3 MP_ADD_BOTS=2 MP_SCENARIO=none \
   MP_STEPS=3000 MP_STALL_LIMIT=120 \
-  MP_UI_SCRIPT="20:openhospital;40:hire:Doctor;60:hire:Doctor;400:chat:0:Hello Agnes, how are you?;700:sendstaff:Doctor;900:givemoney:2000;1000:hospitals;2000:hospitals;2900:speedother;2990:hospitals" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;40:hire:Doctor;60:hire:Doctor;400:chat:0:Hello Agnes, how are you?;700:sendstaff:Doctor;900:givemoney:2000;1000:hospitals;1100:chat:1:Agnes, please send me \$1000;1300:chat:1:Agnes, could you lend me \$9,000,000?;1500:chat:0:Agnes, please send me some cash;2000:hospitals;2900:speedother;2990:hospitals" & pids+=($!)
 run_probe bob MP_ROLE=host MP_ROOM=race MP_MODE=competitive MP_PLAYERS=2 MP_ADD_BOTS=1 MP_SCENARIO=none \
   MP_STEPS=3000 MP_STALL_LIMIT=120 \
-  MP_UI_SCRIPT="20:openhospital;40:hire:Doctor;60:hire:Doctor;500:chat:0:I will crush you;700:sendstaff:Doctor;900:givemoney:2000;1000:hospitals;2000:hospitals;2990:hospitals" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;40:hire:Doctor;60:hire:Doctor;500:chat:0:I will crush you;600:chat:1:Please send me \$1000;800:chat:0:Could you build a toilet for me?;700:sendstaff:Doctor;900:givemoney:2000;1000:hospitals;2000:hospitals;2990:hospitals" & pids+=($!)
 run_probe eve MP_ROLE=host MP_ROOM=duel MP_MODE=competitive MP_PLAYERS=2 MP_ADD_BOTS=1 MP_SCENARIO=none \
   MP_STEPS=3000 MP_STALL_LIMIT=120 \
   MP_UI_SCRIPT="20:openhospital;320:sabotage:handyman:3:2;340:sabotage:smear:1:2;900:sabotage:rats:1:2;1500:sabotage:boiler:1:2;2990:hospitals" & pids+=($!)
@@ -255,9 +269,9 @@ offer_text = re.findall(r'research offer[^\n]*', f)
 research_lines = [t for _, t in chats_from(f, lab_bot) if 'research' in t] if lab_bot else []
 lab_rooms = re.findall(r'furnishing research #\d+: buying ([^\n]*)', lb)
 desks = all('desk:1' in r for r in lab_rooms)
-ok9 = (any(r == 'ok' for _, r in offers9) and bool(research_lines) and desks
+ok9 = (any(r == 'ok' for _, r in offers9) and not research_lines and desks
        and result('frank').startswith('IN SYNC'))
-print(f"9. Research shared:         offers to frank {offers9}; told: {research_lines[:1]}; "
+print(f"9. Research shared:         offers to frank {offers9}; research chat lines (none expected, the fax says it): {research_lines[:1]}; "
       f"research room furnished with {lab_rooms or 'none built'}; frank {result('frank')}")
 fail |= not ok9
 
@@ -314,6 +328,89 @@ said14 = any('leaves the rooms and corridors to the person' in t for t in hands)
 ok14 = ('game option helpers=0' in lv and not built14 and said14 and result('liv').startswith('IN SYNC'))
 print(f"14. Allied bots build: off: bot commands {sorted(set(bot_cmds14))}; built {built14[:5]}; said so: {said14}; {result('liv')}")
 fail |= not ok14
+# 15. Orders only from allies; money on request. In "team" (co-op) ann asks
+# Agnes (a bot, her ally) for $1000 (to the allies), then for $9,000,000 and for some cash (to her; the chat remembers who it was for)
+# with no sum: the bot checks its own bank (limits 2000:1000 here) and says
+# what it did. In "race" bob (a rival) asks the bot for money and for a room:
+# a refusal, no money sent before the bounce of his gift (step 900).
+# (Which bot is "Agnes" and which peer it is varies from run to run: any bot of the room.)
+gives15 = [(int(st), r) for st, p, r in re.findall(r'step (\d+): peer ([2-9]) #\d+ give_money -> (\S+)', a)]
+to_ann15 = [(int(st), t) for who in ('Bot Agnes', 'Bot Bertie') for st, t in chats_from(a, who)
+            if int(st) >= 1100 and 'ann' in t]
+sent_log15 = [l for k, t in bots.items() if k.startswith('team/') for l in t.splitlines() if 'money for ann' in l]
+sent_lines15 = [t for _, t in to_ann15 if re.search(r'\$\d', t)]
+declined15 = [l for l in sent_log15 if 'declined' in l]
+sent15 = [l for l in sent_log15 if ': sent $' in l]
+rb_lines15 = [t for st, t in rb if int(st) < 800 and 'bob' in t]
+early_money15 = [st for st, r in applied(b, 2, 'give_money') if int(st) < 900]
+refused15 = [l for l in (bots.get('race/' + race_bot, '') if race_bot else '').splitlines() if 'refused a request from bob' in l]
+ok15 = (len(sent15) >= 2 and any(r == 'ok' for _, r in gives15) and len(gives15) == len(sent15)
+        and bool(declined15) and len(sent_lines15) >= 2 and len(refused15) >= 2 and not early_money15
+        and len(rb_lines15) >= 2)
+print(f"15. Money and orders:       Agnes sent {[l.split(': ',1)[1] for l in sent15]}, declined {[l.split(': ',1)[1] for l in declined15]}; "
+      f"give_money commands {gives15}; her lines {sent_lines15}; the race bot refused bob {len(refused15)} times "
+      f"({rb_lines15[:2]}), money sent to him early: {early_money15}")
+fail |= not ok15
+# 16. Asking for staff. From game day 5 every bot "lacks" a surgeon for an
+# operating theatre (test hook MP_BOT_TEST_LACK); after 10 days it asks its
+# allies in the team's chat, which ann reads.
+asks16 = [(int(st), t) for who in ('Bot Agnes', 'Bot Bertie') for st, t in chats_from(a, who) if 'urgeon' in t]
+notes16 = [l for k, t in bots.items() if k.startswith('team/') for l in t.splitlines()
+           if 'asked the allies for a Surgeon' in l]
+ok16 = bool(asks16) and bool(notes16) and min(s for s, _ in asks16) >= (5 - 1) * 50 + 10 * 50
+print(f"16. Asking for staff:       lines to ann {asks16[:2]}; bot notes {[n.split('] ', 1)[1] for n in notes16][:2]}")
+fail |= not ok16
+# 17. The level's requirements in the team chat (test hook MP_BOT_TEST_WIN:
+# ann's hospital 1 meets them from game day 10, hospitals 2 and 3 from day
+# 12). The bot of hospital 2 (the lower number) says "good job" to ann, once;
+# the bot of hospital 3 does not. Until day 12 each says what it still needs
+# (one requirement), then that it is ready too.
+win_words = re.compile(r'requirements|ready to win|did it|Good job|Well done|Great job|Nice work|level asks', re.I)
+last_a = last_hospitals(a)
+low17 = re.search(r'\[2 (.*?) opened', last_a[2]).group(1) if last_a else 'Bot Agnes'
+high17 = re.search(r'\[3 (.*?) opened', last_a[2]).group(1) if last_a else 'Bot Bertie'
+low_lines, high_lines = chats_from(a, low17), chats_from(a, high17)
+too_re = re.compile(r"also|good spot|requirements too|ready as well|there too")
+need_re = re.compile(r"short|value|reputation|cure|died|death|happy|months|loan|worth|bank|cash")
+def needs17(lines):
+    return [t for st, t in lines if 450 <= int(st) < 900 and not too_re.search(t) and not win_words.search(t)
+            and not re.search(r'objectives|Sent \$|Thanks|thank', t) and need_re.search(t)]
+good17 = [t for st, t in low_lines if int(st) >= 450 and 'ann' in t and win_words.search(t)]
+good17_high = [t for st, t in high_lines if int(st) >= 450 and 'ann' in t and win_words.search(t)]
+too17 = [[t for st, t in lines if int(st) >= 550 and too_re.search(t)] for lines in (low_lines, high_lines)]
+ok17 = (len(good17) == 1 and not good17_high and all(too17) and len(needs17(low_lines)) == 1
+        and len(needs17(high_lines)) == 1)
+print(f"17. Requirements chat:      hospital 2 to ann {good17}; hospital 3 to ann {good17_high}; both also ready {[x[:1] for x in too17]}; "
+      f"needs {needs17(low_lines)} / {needs17(high_lines)}")
+fail |= not ok17
+
+# 18. A warning that an opponent meets the requirements (MP_BOT_TEST_WIN:
+# hospital 1 from game day 10, hospital 2 from day 12). In "afk" the bot shares
+# its hospital with jon or with kay (it varies) and so warns that person
+# about the other, once. In "duel" the bot has nobody on its side to read it:
+# no warning.
+afk_bot = next((n.split('/', 1)[1] for n in bots if n.startswith('afk/')), None)
+warn18 = [(who, int(st), t) for who in ('jon', 'kay') for st, t in chats_from(log(who), afk_bot)
+          if re.search(r'catch up|speed up', t)] if afk_bot else []
+duel_warn18 = [t for t in to_eve if re.search(r'catch up|speed up', t)]
+ok18 = (len(warn18) == 1 and warn18[0][1] >= 450 and ('kay' in warn18[0][2] if warn18[0][0] == 'jon' else 'jon' in warn18[0][2])
+        and not duel_warn18)
+print(f"18. Warning about a rival:  read by {warn18}; eve read {duel_warn18}")
+fail |= not ok18
+
+# 19. A failing hospital asks its team for help (test hook MP_BOT_TEST_FAIL:
+# both bots of "team" count as failing from game day 20): each says in the
+# team chat that it is failing its objectives and asks ann for an amount, once
+# (the next ask is 3 months later). The advice is off in this test, so no model
+# review comes first.
+help19 = [(int(st), who, t) for who in ('Bot Agnes', 'Bot Bertie') for st, t in chats_from(a, who)
+          if re.search(r'objectives|falling behind|struggling', t) and re.search(r'\$\d', t)]
+notes19 = [l for k, t in bots.items() if k.startswith('team/') for l in t.splitlines()
+           if 'asked the team for $' in l]
+ok19 = (sorted(w for _, w, _ in help19) == ['Bot Agnes', 'Bot Bertie'] and len(notes19) == 2
+        and min(st for st, _, _ in help19) >= 20 * 50 - 50)
+print(f"19. Failing, asks for help: {[(st, w, t) for st, w, t in help19]}; notes {[n.split('] ', 1)[1] for n in notes19]}")
+fail |= not ok19
 for name, text in sorted(bots.items()):
     errors = [l for l in text.splitlines() if 'ERROR' in l or 'could not' in l]
     if errors: print(f"   {name} problems: {errors[:5]}")

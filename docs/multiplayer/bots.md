@@ -76,14 +76,28 @@ best project it can afford is done, one every one to four game days.
   or rooms (no reception desk either) and takes no room in, unless the person
   asks for it in the chat (a wish). Staff, bonuses, research, auctions, land
   and the rest it still does (`Bot:leavesBuilding`).
-- **Training**: a training room (5x5, three lecture chairs) once it has two
-  juniors, five doctors and $30,000, and a consultant to teach. Every 6 months
-  it picks the teacher again: the consultant with the most special skills
-  (surgeon, psychiatrist, researcher: each one the students can learn), then
-  skill, from its staff, or hired from the list straight into the room when a
-  consultant there has a special skill more. Juniors go in as students while
-  the other rooms keep their doctors; a student who is no longer a junior goes
-  back to a room short of a doctor.
+- **Training**: a training room once it has two juniors, five doctors and
+  $20,000, and a consultant to teach. It has 3 to 6 lecture chairs (each bot
+  picks a number once from its own random numbers; 5 or 6 want a 6x6 room; an
+  older room with fewer than 3 gets one more). How training works in the game
+  (`rooms/training.lua`, `Doctor:trainSkills`): a doctor who is not a
+  consultant learns only while he sits in a chair and a consultant stands at
+  the projector; he does no work for patients meanwhile and keeps his pay. He
+  gains general skill every day (a junior becomes a doctor, a doctor a
+  consultant); a special skill (surgeon, psychiatrist, researcher) only if the
+  teacher has it and he has not. With more than 3 students at once each learns
+  at 2/(n-1) of the rate, so the extra chairs fill but slow each other down.
+  Every 12 months, the first time in the 2nd month, it picks the teacher
+  again (also when there is none for a month): the consultant with the most
+  special skills, then skill, from its staff, or hired from the list straight
+  into the room when a consultant there has a special skill more. Students
+  fill the chairs: juniors first, then the least skilled doctor not yet a
+  consultant, but never from a room with a patient in it or in its queue, never
+  the last doctor with a skill a room needs, and only while the other rooms
+  keep their doctors (one doctor more than they need in the first two years,
+  exactly enough from the 3rd year on, when it also reviews its staff every
+  30 days, `MP_BOT_STAFF_REVIEW_FROM` in tests). A student who becomes a
+  consultant, or who is needed because a room lacks a doctor, goes back to work.
 - **Every day**: a handyman to each machine with three uses or fewer, the
   heating up or down for cold or hot patients, a $5,000 loan before the money
   runs out, the faxes (a patient it cannot treat yet: wait if the room is
@@ -149,9 +163,12 @@ environment):
   would. A wish is over once anybody has done it, and lapses after 60 game
   days if it cannot be done. What a team mate says they will do themselves, or
   takes back, the bot leaves alone for 60 game days ("leave").
+- `ASK kind=rescue`: like a plan, for a hospital that is failing its objectives
+  (see above); its own prompt, at most every 30 seconds per bot.
 - `ANSWER id=...` with `actions` ("action:weight,..."), `note`, or
-  `text` (and `wish`, a menu item); `error=off|busy|none|failed`. Only bots
-  may ask, a plan at most every 20 seconds and a chat line every 3 seconds per bot.
+  `text` (and `wish`, a menu item, a room with a place `room:x@near:y`; `give`,
+  the sum an ally asks for, 0 for none named); `error=off|busy|none|failed`. Only
+  bots may ask, a plan at most every 20 seconds and a chat line every 3 seconds per bot.
 - A daily budget (`CORSIXTH_MP_AI_DAILY_USD`, default $3; kept in
   `/var/lib/corsixth/ai-spend.json` across restarts) stops the advice for the
   rest of the day (UTC). Without a key, or over the budget, the bots play on
@@ -185,10 +202,40 @@ environment):
   spare (more than its own rooms need) offers its least skilled one for
   free, at most once in 20 game days per ally and kind; people accept it in
   their messages, bots accept by themselves. A bot short of one itself, with
-  none to hire, asks in the chat: by name the people who have one to spare,
-  else every person on its side (once in 20 days, 7 in an emergency);
-  nothing when an allied bot has one to spare (that bot offers it). A bot
-  sharing a person's hospital lends nobody.
+  none to hire, or none hired for 10 game days (3 in an emergency), lends one
+  as well. A bot that has lacked one for 10 days (3 in an emergency) for a room
+  it has, is building, or one patients ask for, whether or not one is on the
+  hiring list, asks in the chat: by name the people who have one to spare, else
+  the team chat for everybody on its side (once in 20 days, 7 in an emergency);
+  nothing when an allied bot has one to spare for a room that stands (that bot
+  offers it) or when nobody on its side is a person. (Before 2026-11-08 it asked
+  only when none was on the hiring list, which almost never happens: a bot
+  builds a room for a specialist only when one is on the list.) A bot sharing a
+  person's hospital lends nobody.
+- **The level's requirements**: once a day it works out, as the game does
+  (`EndConditions`, the group of goals it is closest to, and no loan), which
+  hospitals meet the requirements to win (`Manager.requirements`). When a
+  person on its side newly meets them, the allied bot with the lowest hospital
+  number says "Good job, X, you now meet the requirements to win." in the team
+  chat; a bot that meets them too says so in a line of its own ("I'm also in a
+  good spot."); a bot that does not names one thing it still lacks (money
+  short, hospital value, reputation, cures, deaths, happiness, the loan),
+  with the amount, again every 6 months while an ally meets them and it does
+  not. In a race, when an opponent (person or bot) meets them, one allied bot
+  (the lowest hospital number) tells its team "Watch out, X has fulfilled the
+  winning conditions, we must catch up!" as soon as it sees it and every 4
+  months after. Nothing is said when no person is on its side to read it.
+- **Failing its objectives**: a bot counts as failing when it is close to a way
+  of losing the level (every goal of a lose group past the game's warning and
+  half the way to the limit), failed the goals at the last year end
+  (`mp_failing_since`), is under 30% of the way on the goals after a year, has
+  no money and no loan left for 20 days, or has a reputation under 250 that
+  fell by 50 in 3 months. At most every 3 months it then asks the advisor
+  (`ASK kind=rescue`: the report, the reasons and the menu; the plan that comes
+  back stays in force for a month) and asks its team in the chat for one
+  concrete thing: an amount and what it is for, from the project it wants most
+  and cannot pay ("Could you send me $20,000 to build a new X-Ray room and raise
+  the value of my hospital?"). `MP_BOT_TEST_FAIL=<day>` forces it in tests.
 - **Opens** the hospital once it has a staffed desk, a GP's office and a
   doctor; then buys some benches, plants, a drinks machine and an
   extinguisher for its corridors.
@@ -205,10 +252,32 @@ environment):
   `banter=1`; each player chooses in MULTIPLAYER > BOT CHAT whether to see
   all, everything but the small talk, or nothing from bots
   (`multiplayer_bot_chat` in the config: `all`, `useful`, `off`).
+- **Only allies give orders**: wishes, "leave it to me", money and a word to share
+  research are done only for an ally (`Bot:isAlly`: the same hospital, the same
+  team, or anybody in a co-op game; in a race without teams nobody). Anybody
+  else who asks for something gets a short refusal, without a question to the
+  advisor.
+- **Money on request**: an ally who asks a bot for money (keywords in English
+  and Czech, or the advisor's `give` field) gets it if the bot holds more than
+  $20,000 and keeps $15,000 or more afterwards; if the sum is too big the bot
+  says what it could spare; with nothing to spare it says so. With no sum named it
+  sends half of what is above $15,000 (whole thousands, $2,000 to $10,000). The
+  bot decides and sends it (`give_money`), the line says only what it did, never
+  what the model thought. In the team chat (which every bot of the team gets)
+  only the bot named answers, or else the richest allied bot.
+  `MP_BOT_GIVE_LIMITS=above:keep` sets other limits in tests.
+- **A room at a place**: an ally may ask for a room "next to the GP's office",
+  "near the entrance" or "by the reception"; the advisor returns it as
+  `room:toilets@near:gp` (or `@near:entrance`, `@near:reception`, any room id).
+  The bot's layout search then takes the spot within 8 tiles of that place (the
+  rooms of that kind, the entrance doors, the reception desks) that is nearest,
+  and tells the ally if nothing fits there and it used its normal place.
 - **Offers** (staff, patients, research, money requests): after 3 to 8
   seconds it accepts in co-op (unless it cannot pay and keep its reserve) and
-  declines in a race, each with a chat line to the sender. Money sent to it is
-  thanked for in co-op and sent straight back in a race.
+  declines in a race, each with a chat line to the sender (its own lines for
+  staff, research and patients). Money sent to it is thanked for in co-op and
+  sent straight back in a race. When it offers its own research there is no chat
+  line: the offer arrives as a fax.
 - **Dirty tricks** (race only): the first one, an evil handyman, some time in
   months 7 to 12 on a person's open hospital (never on another bot); then one
   of the four tricks every 60 to 120 days, at a level it can afford while
@@ -221,11 +290,20 @@ environment):
 
 `scripts/multiplayer/run_bot_probe.sh BIN DATA`: a co-op room with two bots
 and a race with one, the bots running 20 times faster (`MP_BOT_PACE=20`,
-`MP_BOT_FAST=1` in the server's environment). Seven checks: lobby, building,
-co-op offers accepted, race offers refused and money returned, chat, a dirty
-trick, everything in sync with the referee. Lobby probe: `MP_ADD_BOTS=n` (the
+`MP_BOT_FAST=1` in the server's environment). The checks (see the top of the
+script): lobby, building, co-op offers accepted, race offers refused and money
+returned, chat, a dirty trick, everything in sync with the referee, speed
+votes, research, tricks on a bot, the bonus, auctions, hands off, and since
+2026-11-08 money and orders (15), asking for staff (16), the requirements chat
+(17), the warning about a rival (18) and a failing hospital asking for help
+(19), with test hooks `MP_BOT_GIVE_LIMITS`, `MP_BOT_TEST_LACK`,
+`MP_BOT_TEST_WIN` and `MP_BOT_TEST_FAIL`. Lobby probe: `MP_ADD_BOTS=n` (the
 host clicks empty places), action `hospitals` (every hospital's rooms and
 staff), and chat lines received are logged (`CHAT IN`).
+Two small checks need no game, only Lua: `lua scripts/multiplayer/bot_text_test.lua
+scripts/multiplayer/bot.lua` (requests, sums, what a bank gives) and
+`lua scripts/multiplayer/bot_manager_test.lua scripts/multiplayer/bot_manager.lua`
+(who meets the requirements, what a bot says it lacks, when it is failing).
 
 ## Not done
 

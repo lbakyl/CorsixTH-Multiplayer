@@ -2,7 +2,7 @@
 Anthropic API).
 
 A bot (scripts/multiplayer/bot.lua) asks the server, never the API itself:
-the API key stays with the server and never reaches a game. Two kinds of
+the API key stays with the server and never reaches a game. Three kinds of
 question (ASK lines, see server.py):
 
   * plan: once per game week the bot sends a report of its hospital (its
@@ -10,6 +10,9 @@ question (ASK lines, see server.py):
     to six priorities from that menu (with weights) and a short note on
     why. The bot still checks and does everything itself. (No prices: bots
     keep the normal treatment prices, Argus 2026-11-07.)
+  * rescue: a bot whose hospital is failing the level's objectives sends the
+    report with the reasons; the model answers like a plan (priorities from
+    the menu, with weights), aimed at reviving the hospital.
   * chat: a player wrote to the bot; the model writes its answer in the
     bot's voice (friendly in co-op, a good-natured rival in a race).
 
@@ -30,6 +33,7 @@ import json
 import logging
 import os
 import pathlib
+import re
 import time
 
 from . import stats
@@ -45,6 +49,9 @@ PRICES = {
 }
 MAX_REPORT = 6000  # characters of a hospital report
 MAX_CHAT_OUT = 200  # characters of an answer in the chat
+MAX_GIVE = 10_000_000  # dollars: a sum asked for above this is no sum
+# A room asked for beside something: room:toilets@near:gp (a room id), @near:entrance, @near:reception.
+NEAR_RE = re.compile(r"near:(entrance|reception|[a-z_]{2,30})")
 
 PLAN_SYSTEM = """You advise a computer player in a multiplayer game of Theme Hospital (CorsixTH).
 Each game week you get a report of its hospital and a menu of projects it can do. Pick what matters most
@@ -65,6 +72,18 @@ they asked for and has not been done yet comes first, after the problems. Only n
 Weights are 1 (nice to have) to 10 (do it first): a weight of 9 or 10 is done before the bot's own ideas, and
 it borrows for it if the money is short; 3 or less only tips the balance. The note is one short sentence on the main reason, as the player would
 say it in the chat (no numbers needed)."""
+
+RESCUE_SYSTEM = """You advise a computer player in a multiplayer game of Theme Hospital (CorsixTH) whose hospital is
+FAILING the level's objectives: the report ends with why. Work out what would revive it, as a good player would.
+First what loses the level: money running out (no big spending, patients cured and paying, a loan), destroyed or
+worn machines (repair:<room> and replace:<room>), long queues and rooms without staff, patients dying or leaving
+uncured (the rooms and doctors their diseases need). Then what the goals ask: the hospital value is its land, rooms and
+what is in them (buy:land and new rooms raise it, cash does not count); reputation and happiness need toilets, a
+staff room, benches, plants, a drinks machine and warmth; cures need treatment rooms with their doctors. The report
+may say what its team mates asked for. Only name projects from the menu. Weights are 1 (nice to have) to 10 (do it
+first): a weight of 9 or 10 is done before the bot's own ideas and borrows if the money is short; use that for the
+few things that matter most, and list them in the order a good player would do them. The note is one short sentence
+on the main thing to fix."""
 
 PLAN_SCHEMA = {
     "type": "object",
@@ -106,8 +125,14 @@ will do something themselves, or that you should not do it (also taking back wha
 items from the menu into "leave" and say you leave them to them; otherwise leave it empty. If what they ask for is not on the menu, say kindly that
 you cannot do that yet. In the menu, add:<room>:<object> puts one more of that object into that room (a skeleton
 into the psych room is add:psych:skeleton), bigger:<room> makes that room bigger, and remove:<room> takes that
-room down to free its floor. Never promise anything you
-do not set as the project. "reply" is your chat line."""
+room down to free its floor. If they want a NEW room at a certain place ("a toilet next to the GP's office", "the
+pharmacy near the entrance", "by the reception"), write the room item with the place after an @: room:toilets@near:gp
+(next to the GP's office; any other room by its id, the part after room: in the menu), room:pharmacy@near:entrance
+or room:pharmacy@near:reception. Use the plain item when they name no place. Never promise anything you
+do not set as the project. If the last message asks YOU for money (cash, a loan, a gift of dollars), set "give" to
+the sum they name in dollars (20000 for "$20k"), or 0 if they name no sum; otherwise -1. Never say in "reply"
+whether you will send money or how much: the game checks your bank and answers that itself. "reply" is your chat
+line."""
 
 TEAM_CHAT_SCHEMA = {
     "type": "object",
@@ -115,8 +140,9 @@ TEAM_CHAT_SCHEMA = {
         "reply": {"type": "string"},
         "projects": {"type": "array", "items": {"type": "string"}},
         "leave": {"type": "array", "items": {"type": "string"}},
+        "give": {"type": "integer"},
     },
-    "required": ["reply", "projects", "leave"],
+    "required": ["reply", "projects", "leave", "give"],
     "additionalProperties": False,
 }
 
@@ -231,12 +257,12 @@ class Advisor:
             return None
         return next((b.text for b in response.content if b.type == "text"), None)
 
-    async def plan(self, report: str, menu: list[str]) -> dict | None:
+    async def plan(self, report: str, menu: list[str], system: str = PLAN_SYSTEM) -> dict | None:
         """Priorities from the menu for this hospital: {"actions": [(action, weight)],
-        "note": str}."""
+        "note": str}. `system` is the prompt (PLAN_SYSTEM; RESCUE_SYSTEM for a failing hospital)."""
         text = (f"Report:\n{report[:MAX_REPORT]}\n\nMenu of projects: {', '.join(menu)}\n\n"
                 "Choose up to six priorities.")
-        answer = await self._ask(PLAN_SYSTEM, text, 4000, PLAN_SCHEMA)
+        answer = await self._ask(system, text, 4000, PLAN_SCHEMA)
         if not answer:
             return None
         try:
@@ -253,6 +279,10 @@ class Advisor:
         note = " ".join(str(data.get("note", "")).split())[:MAX_CHAT_OUT]
         return {"actions": actions, "note": note}
 
+    async def rescue(self, report: str, menu: list[str]) -> dict | None:
+        """A plan to revive a hospital that is failing its objectives (see plan)."""
+        return await self.plan(report, menu, RESCUE_SYSTEM)
+
     async def chat(self, name: str, rival: bool, context: str, lines: list[str]) -> str | None:
         """The bot's answer to the last chat line."""
         system = CHAT_SYSTEM.format(name=name, stance=STANCES["rival" if rival else "friendly"])
@@ -265,7 +295,8 @@ class Advisor:
     async def team_chat(self, name: str, context: str, lines: list[str], menu: list[str]) -> dict | None:
         """A team mate's bot answers, and names the projects from the menu
         they asked for, and those they keep for themselves (or take back):
-        {"text": str, "wishes": [str], "leave": [str]}."""
+        {"text": str, "wishes": [str], "leave": [str], "give": int or None}: give is the sum
+        in dollars an ally asks for (0: no sum named), None when they do not ask for money."""
         system = CHAT_SYSTEM.format(name=name, stance=STANCES["friendly"]) + TEAM_CHAT_EXTRA
         text = (f"Your hospital: {context[:1500]}\n\nMenu of projects: {', '.join(menu)}\n\nChat so far:\n" +
                 "\n".join(line[:300] for line in lines[-8:]))
@@ -279,12 +310,22 @@ class Advisor:
         reply = _chat_line(name, str(data.get("reply", "")))
         if reply is None:
             return None
-        def items(key: str) -> list[str]:
+        def items(key: str, places: bool = False) -> list[str]:
             got = data.get(key, [])
             got = got if isinstance(got, list) else [got]
-            return list(dict.fromkeys(str(k) for k in got if str(k) in menu))[:12]
+            out = []
+            for k in got:
+                base, _, place = str(k).partition("@")
+                if base in menu and (not place or (places and base.startswith("room:") and NEAR_RE.fullmatch(place))):
+                    out.append(str(k) if places else base)
+            return list(dict.fromkeys(out))[:12]
         leave = items("leave")
-        return {"text": reply, "wishes": [k for k in items("projects") if k not in leave], "leave": leave}
+        try:
+            give = int(data.get("give", -1))
+        except (TypeError, ValueError):
+            give = -1
+        return {"text": reply, "wishes": [k for k in items("projects", True) if k.partition("@")[0] not in leave], "leave": leave,
+                "give": give if 0 <= give <= MAX_GIVE else None}
 
 
 def _chat_line(name: str, answer: str) -> str | None:

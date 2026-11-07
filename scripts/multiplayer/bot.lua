@@ -34,6 +34,15 @@
 --                        (test command probe_learn), research to share
 --   MP_BOT_WISHES        tests: "<day>:<project>;..." a team mate's wishes on those game
 --                        days, as if asked in the chat (add:psych:skeleton, bigger:gp)
+--   MP_BOT_TEST_LACK     tests: "<day>:<Category>:<room>": from that game day the bot lacks a
+--                        specialist (Surgeon) for that room, so it asks its allies
+--   MP_BOT_GIVE_LIMITS   tests: "<above>:<keep>" replaces the $20000 and $15000 of a money
+--                        request (it gives only above the first, and keeps the second)
+--   MP_BOT_STAFF_REVIEW_FROM  tests: the game day (default 720, the 3rd year) from which the bot reviews
+--                        its staff for the training room every month
+--   MP_BOT_TEST_WIN      tests: "<hospital index>:<day>;...": those hospitals meet the level's requirements to
+--                        win from that game day on (the bots' chat about it)
+--   MP_BOT_TEST_FAIL     tests: from this game day the bot counts as failing its objectives
 --   MP_BOT_PLAN          tests: "<action>:<weight>,..." the plan every game week
 --                        instead of the server's advice (buy:drinks_machine:10)
 --   MP_BOT_PACE          game days between its building steps are divided
@@ -78,6 +87,12 @@ local function rand(a, b)
 end
 local function pick(list) return list[rand(1, #list)] end
 
+--! A line with {name}, {amount}... filled in from `vars` (where the words come
+--! in a different order in each variant, which format cannot do).
+local function fill_in(line, vars)
+  return (line:gsub("{(%w+)}", function(k) return vars[k] ~= nil and tostring(vars[k]) or nil end))
+end
+
 --------------------------------------------------------------------------------
 -- What it says. %s is the other player's name.
 --------------------------------------------------------------------------------
@@ -87,48 +102,105 @@ local LINES = {
   -- name when it is known or there is only one rival, else to everybody.
   tricked = {
     handyman = {"Nice try, %s. Your handyman is on his way back to you.",
-        "Caught your handyman, %s. He's all yours again."},
-    rats = {"Pest control is done, %s. Were those your rats?", "All the rats are shot, %s. Very funny."},
+        "Caught your handyman, %s. He's all yours again.",
+        "Your handyman has been shown the door, %s. Better luck next time.",
+        "Sneaking a handyman in, %s? He's on his way home."},
+    rats = {"Pest control is done, %s. Were those your rats?", "All the rats are shot, %s. Very funny.",
+        "Squeak squeak, bang. The rats are gone, %s.",
+        "Nice rats, %s. Shame about their aim."},
     boiler = {"Somebody broke my boiler. Very funny, %s. My handymen are on it.",
-        "A broken boiler, %s? We have blankets."},
-    smear = {"Bad press, %s? My patients will be back.", "Nice smear campaign, %s. Mine will be better."},
-    espionage = {"Enjoy my research files, %s.", "A spy in my research department, %s? Cheeky."},
+        "A broken boiler, %s? We have blankets.",
+        "Cold hospital? Warm hearts, %s. The boiler is being fixed.",
+        "Ha, %s, a cold snap. My handymen love a challenge."},
+    smear = {"Bad press, %s? My patients will be back.", "Nice smear campaign, %s. Mine will be better.",
+        "Tabloids, %s? Cheap. My patients know better.",
+        "Gossip won't cure anybody, %s. My doctors will."},
+    espionage = {"Enjoy my research files, %s.", "A spy in my research department, %s? Cheeky.",
+        "Hope you can read my handwriting, %s.",
+        "Copy my homework all you like, %s. I'll still be ahead."},
     headhunter_kept = {"You wanted my doctor, %s? They're staying with me.",
-        "Hands off my staff, %s. They got their pay rise."},
-    headhunter_lost = {"Take them, %s. I'll find somebody better.", "Fine, %s, keep them. Good luck with that one."},
+        "Hands off my staff, %s. They got their pay rise.",
+        "Nice offer, %s, but my doctor prefers our coffee.",
+        "No poaching, %s. My staff are staying."},
+    headhunter_lost = {"Take them, %s. I'll find somebody better.", "Fine, %s, keep them. Good luck with that one.",
+        "You win that one, %s. I'll hire again.",
+        "Enjoy my old doctor, %s. I hope they snore."},
   },
   tricked_unknown = {
-    rats = {"The rats are gone. Whoever sent them: nice try.", "All rats shot. Next time send cheese."},
-    boiler = {"Somebody broke my boiler. Whoever it was: we have blankets."},
-    smear = {"Somebody is spreading lies about my hospital. Patients will see the truth."},
-    espionage = {"Somebody copied my research. I hope you can read my handwriting."},
-    headhunter_kept = {"Somebody tried to poach my doctor. They're staying."},
-    headhunter_lost = {"Somebody poached my doctor. Fine, I'll train another."},
+    rats = {"The rats are gone. Whoever sent them: nice try.", "All rats shot. Next time send cheese.",
+        "Pest control is done. Somebody has a funny sense of humour.",
+        "No more rats here. Whoever sent them, thanks for the exercise."},
+    boiler = {"Somebody broke my boiler. Whoever it was: we have blankets.",
+        "My boiler is broken. Whoever did that: very funny.",
+        "A cold hospital for a day or two. Whoever did it, my handymen are on it."},
+    smear = {"Somebody is spreading lies about my hospital. Patients will see the truth.",
+        "Bad press from nowhere. My patients will be back.",
+        "Whoever is gossiping about my hospital: my doctors will answer."},
+    espionage = {"Somebody copied my research. I hope you can read my handwriting.",
+        "A spy in my research department. Cheeky, whoever you are.",
+        "Somebody peeked at my research. Enjoy it."},
+    headhunter_kept = {"Somebody tried to poach my doctor. They're staying.",
+        "A headhunter came for my doctor. No luck for them.",
+        "My doctor said no to a headhunter. Loyal."},
+    headhunter_lost = {"Somebody poached my doctor. Fine, I'll train another.",
+        "A headhunter got my doctor. I'll find a new one.",
+        "I lost a doctor to a headhunter. Back to the hiring list."},
   },
   -- Specialists lent to an ally and asked for (Manager:helpAllies,
   -- Manager:askAllies): names, who, kind, room, then the emergency's words.
-  staff_sent = {"%s, you can have %s, a %s, for your %s: free, accept my offer in your messages.%s",
-      "%s: I'm offering you %s, a %s for your %s. No charge, just accept the fax.%s"},
-  staff_for_emergency = {" It's for the emergency!", " Hurry, the emergency won't wait."},
+  staff_sent = {"{names}, you can have {who}, a {kind}, for your {room}: free, accept my offer in your messages.{urgent}",
+      "{names}: I'm offering you {who}, a {kind} for your {room}. No charge, just accept the fax.{urgent}",
+      "{names}, {who} (a {kind}) is yours for your {room}, for nothing. Accept the offer in your messages.{urgent}",
+      "Here you go, {names}: {who}, a {kind}, for your {room}. Free of charge, just say yes in the fax.{urgent}"},
+  staff_for_emergency = {" It's for the emergency!", " Hurry, the emergency won't wait.",
+      " The emergency is on, so please hurry.", " Quick, there is an emergency!"},
   -- (names, kind, room, how many it needs ("2 surgeons"), has, emergency)
-  staff_ask_one = {"%s, could you spare me a %s? My %s needs %s and I have %d, and there are none to hire.%s"},
-  staff_ask_all = {"Has anybody got a %s to spare, or one on their hiring list? My %s needs %s and I have %d.%s"},
-  -- To an ally it sent its research (Manager:shareResearch).
-  research_sent = {"I've sent you my research for free, %s: %s.", "Some research for you, %s: %s. On the house."},
-  -- To a person sharing the hospital, before sharing its research.
-  -- To whoever asked for a project in the chat (Manager:tellWisher).
-  wish_done = {"%s, your %s is ready.", "Done, %s: the %s is up and running."},
-  wish_done_add = {"%s, the %s is in place.", "Done, %s: I put the %s in."},
+  staff_ask_one = {"{names}, could you spare me a {kind}? My {room} needs {needs} and I have {have}.{urgent}",
+      "{names}, do you have a {kind} to spare? My {room} is waiting for {needs}, and I have {have}.{urgent}",
+      "Could you lend me a {kind}, {names}? My {room} needs {needs} and I have {have}.{urgent}",
+      "{names}, I'm short of a {kind} for my {room} (it needs {needs}, I have {have}). Can you help?{urgent}"},
+  staff_ask_all = {"Has anybody got a {kind} to spare? My {room} needs {needs} and I have {have}.{urgent}",
+      "I'm looking for a {kind} for my {room}. It needs {needs} and I have {have}. Can anybody help?{urgent}",
+      "My {room} is stuck without a {kind}: it needs {needs} and I have {have}. Anyone got one to spare?{urgent}",
+      "Does anybody have a {kind} they could send me? My {room} needs {needs} and I have {have}.{urgent}"},
+  -- To an ally it sent its research (Manager:shareResearch): the offer in
+  -- the fax says it, so the bot says nothing in the chat.
+  -- To whoever asked for a project in the chat (Manager:tellWisher): {name},
+  -- {what}, and for a room not built beside what was asked, {near}.
+  wish_done = {"{name}, your {what} is ready.", "Done, {name}: the {what} is up and running.",
+      "All set, {name}. The {what} is ready.", "{name}, the {what} is finished. Enjoy!",
+      "Your {what} is done, {name}."},
+  wish_done_add = {"{name}, the {what} is in place.", "Done, {name}: I put the {what} in.",
+      "The {what} is in, {name}.", "All done, {name}: there is a {what} now."},
   -- (A room taken down: remove:<room>; said once the walls are coming down.)
-  wish_done_remove = {"%s, the %s is coming down: its floor will be free.", "On it, %s: the %s goes, the floor is yours."},
-  wish_no_space = {"Sorry %s, there is no space for the %s yet. I'll buy more land first."},
-  wish_no_money = {"%s, the %s has to wait a little: not enough money yet."},
-  research_ask = {"%s, shall I send %s our research for free (%s)? Say \"share\" and I will."},
+  wish_done_remove = {"{name}, the {what} is coming down: its floor will be free.",
+      "On it, {name}: the {what} goes, the floor is yours.",
+      "The {what} is coming down, {name}. The floor is free soon.", "{name}, the {what} is gone in a moment."},
+  wish_no_space = {"Sorry {name}, there is no space for the {what} yet. I'll buy more land first.",
+      "{name}, the {what} has no room to go yet. Land first, then the {what}.",
+      "No floor left for the {what}, {name}. I'll get some land and try again.",
+      "{name}, my land is full. The {what} waits until I have more floor."},
+  wish_no_money = {"{name}, the {what} has to wait a little: not enough money yet.",
+      "Sorry {name}, I can't afford the {what} just yet.",
+      "The {what} costs more than I have, {name}. I'll build it as soon as the money is there.",
+      "{name}, my bank is too low for the {what} right now. Soon."},
+  research_ask = {"{name}, shall I send {ally} our research for free ({list})? Say \"share\" and I will.",
+      "{name}, want me to send {ally} our research ({list})? Say \"share\" and it's theirs.",
+      "I could give {ally} our research ({list}), {name}. Just say \"share\".",
+      "{name}, should I share our research with {ally} ({list})? Say \"share\" if so."},
   -- To a person sharing the hospital (Bot:sharesWithPerson).
-  mate_away = {"You seem to be away, %s. I'll run the whole hospital until you're back."},
-  mate_back = {"Welcome back, %s! Prices, loans and the faxes are yours again."},
+  mate_away = {"You seem to be away, %s. I'll run the whole hospital until you're back.",
+      "%s, you're quiet. I'll take over everything until you're back.",
+      "Taking the wheel while you're away, %s. Come back whenever.",
+      "Away, %s? No problem, I'll keep the hospital running."},
+  mate_back = {"Welcome back, %s! Prices, loans and the faxes are yours again.",
+      "Good to see you again, %s. Prices, loans and faxes are back with you.",
+      "You're back, %s! I'll leave the prices, loans and faxes to you.",
+      "Welcome back, %s. The hospital's decisions are yours again."},
   -- To a person sharing the hospital: what the weekly bonuses cost.
-  bonuses = {"I gave %d unhappy staff a double bonus ($%d), %s."},
+  bonuses = {"I gave {n} unhappy staff a double bonus (${spent}), {name}.",
+      "{n} unhappy staff got a double bonus, {name}. That was ${spent}.",
+      "A bonus for {n} unhappy staff (${spent}), {name}. They needed it."},
   greet = {
     friendly = {
       "Hi everyone! Building my hospital nice and slowly over here.",
@@ -151,6 +223,48 @@ local LINES = {
       "I've already hired the best doctors in town. Sorry!",
     },
   },
+  -- An ally asked for money (Bot:answerMoneyRequest); {name}, {amount} (sent
+  -- or asked), {spare} are filled in by `fill_in`.
+  gift_sent = {
+    "Sent you ${amount}, {name}. That's what allies are for.",
+    "On its way, {name}: ${amount}. Spend it wisely!",
+    "Done, {name}. ${amount} is in your account.",
+    "${amount} coming up, {name}. Good luck with it.",
+    "There you go, {name}: ${amount}, as asked.",
+  },
+  -- No amount named: half of what is above the bank's floor.
+  gift_sent_auto = {
+    "I sent you ${amount}, {name}: half of what I can spare above my $15,000 floor.",
+    "{name}, I put ${amount} your way. That's half of my spare cash; I keep $15,000 for emergencies.",
+    "Here's ${amount}, {name}. It's half of what I can spare, I keep a cushion of $15,000.",
+    "Sent ${amount}, {name}. You didn't name a sum, so I took half of my spare cash.",
+  },
+  -- Too much asked.
+  gift_spare = {
+    "Sorry {name}, ${amount} is too much for me. I could spare ${spare}.",
+    "{name}, I can't do ${amount} and still pay my bills. ${spare} is what I could manage.",
+    "Not ${amount}, {name}, my bank would be too low. I could send ${spare}, though.",
+    "That's more than I can spare, {name}. Ask for ${spare} and it's yours.",
+  },
+  -- Nothing to spare.
+  gift_none = {
+    "Sorry {name}, I have nothing to spare right now.",
+    "I'd love to, {name}, but my bank is too low to give anything away.",
+    "Not today, {name}. I'm keeping my cash for my own hospital.",
+    "My bank is nearly empty, {name}. Ask me again when business picks up.",
+  },
+  -- It cannot send now (the game is held).
+  gift_later = {
+    "Ask me again in a moment, {name}.",
+    "Give me a minute, {name}, and ask once more.",
+    "Not right now, {name}. Try again in a bit.",
+  },
+  -- The asker plays the same hospital.
+  gift_same_bank = {
+    "We share one bank account, {name}. Just spend what you need.",
+    "It's our hospital's money anyway, {name}. Go ahead and spend it.",
+    "No need to send anything, {name}, we use the same bank.",
+  },
   accept = {
     "Thank you, %s!",
     "Much appreciated, %s.",
@@ -159,6 +273,11 @@ local LINES = {
     "Got it, thanks %s!",
     "That's very kind of you, %s.",
   },
+  -- A room built, but not beside what was asked ({near}).
+  wish_done_far = {"{name}, the {what} is ready, but nothing fit next to the {near}, so I put it where there was room.",
+      "Done, {name}: the {what} is up. There was no space beside the {near}, so it went elsewhere.",
+      "{name}, your {what} is built. Sorry, the {near} had no free floor around it, so it stands a bit further away.",
+      "The {what} is ready, {name}, though not next to the {near}: nothing fit there."},
   refuse = {
     "Not on my watch, %s!",
     "Nice try, %s. No thanks.",
@@ -167,43 +286,187 @@ local LINES = {
     "Ha! What's the catch, %s?",
     "Do I look that gullible, %s?",
   },
+  -- Thanks for what an ally offers, by kind (Bot:answerOffers).
+  accept_staff = {
+    "A new colleague! Thank you, %s.",
+    "Welcome aboard to the new hire, and thanks %s!",
+    "Just what I needed, %s. Thank you for the staff!",
+    "Great, I could use the help. Thanks %s!",
+    "%s, you're a lifesaver. I'll look after them.",
+  },
+  accept_research = {
+    "Thanks for the research, %s!",
+    "Brilliant, %s, now we're getting somewhere. Thanks for the research.",
+    "More research for me, %s? You spoil me. Thank you!",
+    "Got your research, %s. Much appreciated.",
+    "That saves me a lot of lab time, %s. Thanks!",
+  },
+  accept_patient = {
+    "Send them over, %s. Happy to help!",
+    "We'll take care of that patient, %s. Thanks.",
+    "A new patient for us, %s? Welcome.",
+    "Glad to help, %s. The patient is in good hands.",
+    "Sure thing, %s. Our doctors will look after them.",
+  },
   pay = {
     "Here you go, %s.",
     "Sent, %s. Spend it wisely!",
     "Of course, %s. That's what friends are for.",
+    "No problem, %s. It's yours.",
+    "Money is on its way, %s.",
   },
   broke = {
     "Sorry %s, I'm broke right now.",
     "I'd love to, %s, but my bank manager says no.",
+    "Not this time, %s. My bank is nearly empty.",
+    "My wallet is empty, %s. Ask me later.",
+    "I'd help if I could, %s, but I'm low on cash myself.",
   },
   -- A referred patient this hospital cannot treat (no room for it).
   cannot_treat = {
     "Sorry, %s, we can't treat that one here. Better keep them.",
     "We have no room for that, %s. Not this time.",
     "I'd only have to send them home, %s. Thanks anyway.",
+    "We lack the right room for that one, %s. Sorry.",
+    "Not our department, %s. Keep them for now.",
   },
   money_thanks = {
     "Thanks for the cash, %s!",
     "Wow, thank you %s! Straight into new equipment.",
     "%s, you're too generous. Thanks!",
+    "Cash from %s! I'll put it to good use.",
+    "Much appreciated, %s. That helps a lot.",
   },
   money_back = {
     "Keep your money, %s. You'll need it.",
     "I don't want your charity, %s. Sent it back.",
     "Return to sender, %s!",
+    "No gifts from rivals, %s. Here it is again.",
+    "Your money is back with you, %s.",
+  },
+  -- The level's requirements (Manager:winChat), to the team. {names}: the ally
+  -- who now meets them.
+  win_good = {
+    "Good job, {names}, you now meet the requirements to win.",
+    "Well done, {names}! You now meet everything the level asks for.",
+    "{names}, you did it: all the requirements to win are met on your side.",
+    "Nice work, {names}. Your hospital meets the requirements to win now.",
+    "Great job, {names}! You are ready to win.",
+  },
+  -- (The person who shares its hospital.)
+  win_own = {
+    "Good job, {names}, our hospital now meets the requirements to win.",
+    "{names}, we did it: our hospital meets everything the level asks for.",
+    "Well done, {names}! Our hospital is ready to win.",
+    "{names}, all the requirements are met in our hospital now.",
+  },
+  win_me_too = {
+    "I am also ready to take it to the finish line.",
+    "I'm also in a good spot.",
+    "My hospital meets the requirements too.",
+    "Same here, I'm ready as well.",
+    "I'm there too. Now we only have to wait for the others.",
+  },
+  -- A bot that is failing its objectives asks its team for help (Manager:askForHelp):
+  -- {amount}, what it would {purpose} and {goal} with it.
+  rescue_ask = {
+    "I seem to be failing my objectives. Could you send me ${amount} to {purpose} and {goal}? After all, we are on the same boat here. Thanks.",
+    "I'm falling behind on the level's goals. Could someone send me ${amount} so I can {purpose} and {goal}? We're in this together.",
+    "My hospital is struggling with its objectives. ${amount} would let me {purpose} and {goal}. Can you spare it? Thanks a lot.",
+    "Help, I'm failing my objectives! Could you send me ${amount}? I would {purpose} and {goal}. We win or lose together.",
+  },
+  -- (When no project is waiting for money.)
+  rescue_ask_plain = {
+    "I seem to be failing my objectives. Could you send me ${amount} so I can {goal}? After all, we are on the same boat here. Thanks.",
+    "I'm falling behind on the level's goals. Could someone spare ${amount} to help me {goal}? We're in this together.",
+    "My hospital is struggling with its objectives. ${amount} would help me {goal}. Can you spare it? Thanks a lot.",
+  },
+  -- An opponent meets the requirements to win (Manager:rivalWatch), to the
+  -- team: one name ({names}) or several.
+  win_rival = {
+    "Watch out, {names} has fulfilled the winning conditions, we must catch up!",
+    "Careful, {names} has met all the requirements to win. We have to catch up!",
+    "{names} now meets the winning conditions, so we must speed up!",
+    "Heads up: {names} is ready to win. Time to catch up!",
+  },
+  win_rivals = {
+    "Watch out, {names} have fulfilled the winning conditions, we must catch up!",
+    "Careful, {names} have met all the requirements to win. We have to catch up!",
+    "{names} now meet the winning conditions, so we must speed up!",
+    "Heads up: {names} are ready to win. Time to catch up!",
+  },
+  -- What a bot that is not there yet still needs, one thing at a time, by
+  -- requirement ({now}, {want}, {left}, {short} money, {loan}).
+  win_need = {
+    balance = {
+      "I'm {short} short, could you spare some cash for me to win together sooner?",
+      "I still need {short} more in the bank to win with you. Could someone spare some?",
+      "My bank is the last problem: I'm {short} short. Any chance of a gift?",
+      "{short} more and I'm ready to win. Can somebody send me some cash?",
+    },
+    value = {
+      "My hospital value is below the required amount, what do you suggest I do?",
+      "My hospital is worth {now} and the level wants {want}. Any tips on raising it?",
+      "I need a higher hospital value ({want}). Should I buy land or build more rooms?",
+      "Hospital value is what I'm missing: {now} of {want}. Any ideas?",
+    },
+    reputation = {
+      "My reputation is {now} and the level wants {want}. What would you do?",
+      "I'm short on reputation ({now} of {want}). Any tips?",
+      "Reputation is my last problem: {now} against {want}. How do I raise it?",
+    },
+    num_cured = {
+      "I still need {left} more cured patients. Could you send me some to treat?",
+      "{left} more cures and I'm ready. Any patients to spare?",
+      "I'm {left} cures short of the goal. Could someone refer patients to me?",
+    },
+    percentage_cured = {
+      "My cure rate is {now}% and the level wants {want}%. Any ideas?",
+      "I need a better cure rate ({now}% of {want}%). What helps?",
+      "Too many patients leave uncured: {now}% against {want}%. What would you do?",
+    },
+    percentage_killed = {
+      "Too many of my patients died: {now}% against a limit of {want}%. How do I cut that?",
+      "My death rate ({now}%) is above the limit of {want}%. Any advice?",
+      "I have to keep deaths under {want}% and I'm at {now}%. What would you do?",
+    },
+    staff_happiness = {
+      "My staff are not happy enough ({now}% of {want}%). Any tips?",
+      "Staff happiness is my last problem: {now}% against {want}%. What helps?",
+      "I need happier staff, {now}% now and {want}% to win. Ideas?",
+    },
+    patient_happiness = {
+      "My patients are not happy enough ({now}% of {want}%). Any tips?",
+      "Patient happiness is what I'm missing: {now}% against {want}%. What helps?",
+      "I need happier patients, {now}% now and {want}% to win. Ideas?",
+    },
+    months_played = {
+      "I only have to wait a little longer, the level wants more months played.",
+      "Just time left for me. {left} months to go.",
+      "Only the calendar is in my way now, {left} months more.",
+    },
+    loan = {
+      "I still have a {loan} loan to repay and then I'm ready.",
+      "My loan of {loan} is the last thing in the way. I'll repay it as soon as I can.",
+      "Only my {loan} loan stops me from winning. Paying it back.",
+    },
   },
   trick = {
     "Is it just me, or does it smell funny over at %s's place?",
     "Hope your handymen are well rested, %s.",
     "Having a quiet day, %s? Not for long.",
     "Oh dear, %s. Busy, busy, busy.",
+    "Watch your back, %s. Rumour has it, things are about to happen.",
+    "Sleep well tonight, %s?",
   },
 }
 
 local REPLIES = {
   bot = {
-    friendly = {"Yes, I'm a bot, %s. Beep boop!", "Guilty, %s. Computer player, at your service."},
-    fiery = {"A bot, %s, and a better manager than you.", "Beep boop, %s. Prepare to lose."},
+    friendly = {"Yes, I'm a bot, %s. Beep boop!", "Guilty, %s. Computer player, at your service.",
+        "Part of me is silicon, %s. The rest is coffee.", "A computer player, %s, and proud of it."},
+    fiery = {"A bot, %s, and a better manager than you.", "Beep boop, %s. Prepare to lose.",
+        "Yes, a bot. Beaten by a bot yet, %s?", "Silicon and steel, %s. Hard to beat."},
   },
   greet = {
     friendly = {"Hi %s!", "Hello %s, how's the hospital?", "Hey %s! Busy day here.", "Hi %s, good to see you."},
@@ -219,21 +482,34 @@ local REPLIES = {
     fiery = {"Don't get used to it, %s.", "Hmph. You're welcome, %s."},
   },
   insult = {
-    friendly = {"Hey, be nice, %s!", "Ouch, %s. I have feelings. Probably."},
-    fiery = {"Big words, %s. Let's see the scoreboard.", "Keep talking, %s. I'll keep winning."},
+    friendly = {"Hey, be nice, %s!", "Ouch, %s. I have feelings. Probably.", "That's not very kind, %s.",
+        "Easy, %s. We're all just curing patients here."},
+    fiery = {"Big words, %s. Let's see the scoreboard.", "Keep talking, %s. I'll keep winning.",
+        "Is that all you've got, %s?", "Sticks and stones, %s. I have a hospital to run."},
   },
   race = {
-    friendly = {"We're in this together, %s!", "Teamwork, %s. That's how we win."},
+    friendly = {"We're in this together, %s!", "Teamwork, %s. That's how we win.",
+        "Side by side, %s. We'll get there.", "One hospital at a time, %s. We can do it."},
     fiery = {"We'll see who's laughing at the year end, %s.", "First place is mine, %s.",
         "You'll be watching my victory from the waiting room, %s."},
   },
   money = {
-    friendly = {"Money's tight here too, %s. Ask me later!", "I'd help, %s, but my budget says no today."},
-    fiery = {"Money? From me? Dream on, %s.", "Not a penny, %s."},
+    friendly = {"Money's tight here too, %s. Ask me later!", "I'd help, %s, but my budget says no today.",
+        "Ask me for a sum, %s, and I'll check my bank.", "Cash is king, %s. Name an amount and I'll see."},
+    fiery = {"Money? From me? Dream on, %s.", "Not a penny, %s.", "Earn your own, %s.",
+        "My money stays in my hospital, %s."},
+  },
+  -- A request from somebody who is not on its side (Bot:isAlly).
+  no_orders = {
+    friendly = {"Sorry %s, I only take requests from my own team.", "That's for my team mates to ask, %s.",
+        "I'm afraid I can't do that for you, %s."},
+    fiery = {"Nice try, %s. I don't take orders from rivals.", "Ask your own staff, %s.",
+        "I only work for my team, %s.", "Not a chance, %s. We're rivals, remember?", "Dream on, %s."},
   },
   bye = {
-    friendly = {"Bye %s, see you soon!", "Take care, %s!"},
-    fiery = {"Running away already, %s?", "Bye, %s. One less rival."},
+    friendly = {"Bye %s, see you soon!", "Take care, %s!", "See you later, %s!", "Bye for now, %s. Good luck!"},
+    fiery = {"Running away already, %s?", "Bye, %s. One less rival.", "Leaving, %s? Smart move.",
+        "Don't hurry back, %s."},
   },
   question = {
     friendly = {"Good question, %s. I'm just a humble bot.", "No idea, %s, I'm busy curing Bloaty Head.",
@@ -278,6 +554,65 @@ local function reply_kind(text)
   end
   if text:find("?", 1, true) then return "question" end
   return "other"
+end
+
+-- Words of a request: somebody asks the bot to do something for them (it
+-- only does that for its allies, Bot:isAlly). Lower case; some Czech too.
+local REQUEST_WORDS = {"build", "hire", "buy", "put", "place", "construct", "make", "add", "remove", "demolish",
+    "sell", "send", "give", "lend", "spare", "please", "pls", "plz", "could you", "can you", "would you", "need you",
+    "i need", "i want", "we need", "can u", "could u", "can i have", "can i get", "could i have", "may i have", "postav", "postavit", "najmi", "kup", "kupit", "pošli",
+    "posli", "poslat", "dej", "dejte", "prosim", "prosím", "pujc", "půjč", "pujcit", "půjčit"}
+-- Lines that talk about giving rather than ask for something.
+local NOT_ASKING = {"i sent", "sent you", "i'll send", "i will send", "i send you", "sending you", "here you go",
+    "thank", "thanks", "thx", "diky", "díky", "poslal jsem"}
+
+local function any_word(text, list)
+  for _, word in ipairs(list) do
+    if has_word(text, word) then return true end
+  end
+  return false
+end
+
+--! Does this chat line ask the bot to do something ("build a toilet", "send
+--! me money")?
+local function is_request(text)
+  text = text:lower()
+  return any_word(text, REQUEST_WORDS) and not any_word(text, NOT_ASKING)
+end
+
+-- Words for money in a request (and not just talk about it).
+local MONEY_WORDS = {"money", "cash", "broke", "loan", "dollar", "dollars", "funds", "bucks", "penize", "peníze", "prachy",
+    "korun", "pujcku", "půjčku", "dolaru", "dolarů"}
+
+--! Does this chat line ask the bot for money?
+local function is_money_request(text)
+  text = text:lower()
+  if any_word(text, NOT_ASKING) then return false end
+  local money = any_word(text, MONEY_WORDS) or text:find("$", 1, true) ~= nil or text:find("%d%s*k%f[%W]") ~= nil
+  return money and (any_word(text, REQUEST_WORDS) or any_word(text, {"help", "short"})) or false
+end
+
+--! The amount of money a chat line names, in dollars, or nil: "$20,000",
+--! "20k", "2.5k", "20 000", "5000 dollars". Between $100 and $10,000,000.
+local function parse_amount(text)
+  text = text:lower()
+  local function ok(v)
+    v = v and math.floor(v + 0.5)
+    if v and v >= 100 and v <= 10000000 then return v end
+  end
+  local function number(str)
+    str = str:gsub(",", "")
+    if str:match("^%d+%.%d%d%d$") then str = str:gsub("%.", "") end -- (20.000)
+    return tonumber(str)
+  end
+  local k = text:match("(%d[%d%.,]*)%s*k%f[%W]")
+  if k and number(k) then return ok(number(k) * 1000) end
+  local thousands, rest = text:match("(%d%d?%d?)[ ](%d%d%d)%f[%D]")
+  if thousands then return ok(tonumber(thousands .. rest)) end
+  local v = text:match("%$%s*(%d[%d%.,]*)") or text:match("(%d[%d%.,]*)%s*%$") or
+      text:match("(%d[%d%.,]*)%s*dollars?") or text:match("(%d[%d%.,]*)%s*bucks") or
+      text:match("(%d[%d%.,]*)%s*usd") or text:match("(%d[%d%.,]*)%s*kc") or text:match("(%d%d%d%d+)")
+  return v and ok(number((v:gsub("[%.,]+$", "")))) or nil
 end
 
 --------------------------------------------------------------------------------
@@ -365,7 +700,7 @@ function Bot.new(lobby)
   self.world = nil
   self.brain = brain_of(my_name)
   if self.brain ~= "script" then
-    self.manager = Manager.new(self, {log = log, rand = rand, pick = pick, sabotage = sabotage, lines = LINES,
+    self.manager = Manager.new(self, {log = log, rand = rand, pick = pick, sabotage = sabotage, lines = LINES, fill = fill_in,
         typing = function(text) return 1.5 + #text * 0.06 + rand() * 2 end})
   end
   -- "manager": the same brain, without the language model's advice.
@@ -581,6 +916,20 @@ function Bot:ownLine(list)
   return list[(base + rank - 1) % #list + 1]
 end
 
+--! Is the player of this peer an ally: in the same hospital as this bot, or
+--! on its side (co-op: everybody; a race of teams: the same team; a race
+--! without teams: nobody)? Only allies get what they ask for (rooms, staff,
+--! money, leaving a project to them).
+function Bot:isAlly(peer)
+  local world = self.world
+  local mine = world and world.ui and world.ui.hospital
+  local index = self.lobby.peer_hospital and self.lobby.peer_hospital[peer]
+  local hosp = index and world and world.hospitals[index]
+  if not (hosp and mine) then return false end
+  if hosp == mine then return true end
+  return world.mpMayTrade ~= nil and world:mpMayTrade(mine, hosp) and not world:mpRivals(mine, hosp)
+end
+
 function Bot:hospitalIndex()
   return TheApp.mp_session and TheApp.mp_session.hospital_index or 1
 end
@@ -674,6 +1023,21 @@ function Bot:askPlan()
   end)
 end
 
+--! A hospital failing its objectives: the server's model reviews it (ASK
+--! kind=rescue, answered like a weekly plan). `done(plan)` gets the plan
+--! ({priorities = {{action, weight}}, note}) or nil if none came within a
+--! minute. False if it did not ask (no advice on this server).
+function Bot:askRescue(report, menu, done)
+  return self:ask("rescue", {text = report, menu = menu}, 60, function(f)
+    if not f then return done(nil) end
+    local plan = {priorities = {}, note = f.note}
+    for action, weight in (f.actions or ""):gmatch("([%w_:]+):(%d+)") do
+      plan.priorities[#plan.priorities + 1] = {action = action, weight = tonumber(weight)}
+    end
+    done(plan)
+  end)
+end
+
 --------------------------------------------------------------------------------
 -- Chat
 --------------------------------------------------------------------------------
@@ -691,11 +1055,10 @@ function Bot:onChat(f)
   local name, is_bot = self:playerName(peer)
   if is_bot or not name then return end -- bots do not chat with each other
   local text = f.text or ""
-  -- (In a race of two teams: friendly to its team mate.)
-  local world, hosp = self.world, self.lobby.peer_hospital and self.lobby.peer_hospital[peer]
-  local mine = world and world.ui and world.ui.hospital
-  local mate = hosp and mine and world:mpTeam(mine) and not world:mpRivals(world.hospitals[hosp], mine)
-  local rival = self.fiery and not mate
+  -- An ally (same hospital, same team, or anybody in a co-op game) may ask
+  -- for things; in a race everybody else is a rival (Bot:isAlly).
+  local ally = self:isAlly(peer)
+  local rival = self.fiery and not ally
   -- A person sharing the hospital says "share": its research may go to
   -- the allies (Manager:shareResearch asks first).
   for _, p in ipairs(self:hospitalMates()) do
@@ -706,7 +1069,7 @@ function Bot:onChat(f)
     end
   end
   -- What people on its side say goes into its next plan (wishes, worries).
-  if not rival and text ~= "" then
+  if ally and text ~= "" then
     self.mate_lines = self.mate_lines or {}
     table.insert(self.mate_lines, {day = self:gameDay(), text = name .. ": " .. text:sub(1, 200)})
     if #self.mate_lines > 8 then table.remove(self.mate_lines, 1) end
@@ -722,7 +1085,7 @@ function Bot:onChat(f)
     if p.bot == "1" then bots = bots + 1 end
   end
   if private or named then
-    if self:now() - self.last_reply < 10 then return end
+    if self:now() - self.last_reply < (fast and 0.2 or 10) then return end
   else
     if self:now() - self.last_reply < 180 or rand() > 0.15 / math.max(1, bots) then return end
   end
@@ -733,19 +1096,49 @@ function Bot:onChat(f)
   -- it does not answer within a few seconds). The answer goes where the line
   -- came from: the team, that person, or everybody.
   local to = f.team == "1" and "team" or private and peer or nil
+  -- Somebody who is not an ally gets no orders done (and no money): at most
+  -- a short refusal, without asking the model.
+  if (private or named) and not ally and is_request(text) then
+    local refusal = rival and kind == "money" and REPLIES.money.fiery or REPLIES.no_orders[rival and "fiery" or "friendly"]
+    local reply = pick(refusal):format(name)
+    log(string.format("refused a request from %s (not an ally)", name))
+    self:say(reply, typing(reply), to)
+    return
+  end
+  -- An ally asks for money, with or without a sum: the bank decides (the
+  -- model is not asked: it could promise what the bank cannot do).
+  -- Asked in the team's chat, which every bot of the team gets, only the one
+  -- named answers, or else the one with the most money.
+  local function money_turn()
+    return named or (private and f.team ~= "1") or
+        (not self:namesOtherBot(text) and self:isBestDonor(self.lobby.peer_hospital and self.lobby.peer_hospital[peer]))
+  end
+  if (private or named) and ally and self.world and is_money_request(text) then
+    if money_turn() then self:answerMoneyRequest(peer, name, parse_amount(text), to) end
+    return
+  end
   if (private or named) and self.ai ~= "off" then
     local report = self.manager and self.manager:report() or ""
     local brief = report:match("^[^\n]*\n[^\n]*") or report
     -- (On the person's side it may also do what it is asked: the projects
     -- it can do now go along.)
-    local menu = not rival and self.manager and table.concat(self.manager:wishMenu(), ",") or nil
+    local menu = ally and self.manager and table.concat(self.manager:wishMenu(), ",") or nil
     local asked = self:ask("chat", {text = brief, lines = table.concat(self.chat_lines, "\n"),
         rival = rival and 1 or nil, menu = menu}, 10, function(answer)
       local reply = answer and answer.text or line
       -- (Several at once: "a plant and a radiator in every room".)
-      if answer and self.manager then
+      if answer and self.manager and ally then
         for key in (answer.wish or ""):gmatch("[^,]+") do self.manager:wish(key, peer) end
         for key in (answer.leave or ""):gmatch("[^,]+") do self.manager:leaveTo(key) end
+      end
+      -- (The model says whether the ally asked for money, and how much: -1
+      -- no, 0 no sum named. What the bot does and says about it is its own
+      -- doing, not the model's reply.)
+      local give = answer and ally and tonumber(answer.give)
+      if give and give >= 0 then
+        local amount = give > 0 and give >= 100 and give <= 10000000 and give or parse_amount(text)
+        if money_turn() then self:answerMoneyRequest(peer, name, amount, to) end
+        return
       end
       self:say(reply, typing(reply), to)
     end)
@@ -792,7 +1185,8 @@ function Bot:answerOffers()
         elseif offer.kind == "money" then
           line = pick(LINES.pay)
         else
-          line = pick(LINES.accept)
+          line = pick(offer.kind == "staff" and LINES.accept_staff or offer.kind == "research" and
+              LINES.accept_research or offer.kind == "patient" and LINES.accept_patient or LINES.accept)
         end
       else
         line = pick(LINES.refuse)
@@ -865,6 +1259,97 @@ function Bot:answerEmergencies()
       end)
     end
   end
+end
+
+-- An ally's request for money is met when the bank stays above this (and
+-- only when it holds more than GIVE_ABOVE) (Jan, 2026-11-07). Tests: the
+-- limits "above:keep" in MP_BOT_GIVE_LIMITS.
+local GIVE_ABOVE, GIVE_KEEP = 20000, 15000
+do
+  local above, keep = (os.getenv("MP_BOT_GIVE_LIMITS") or ""):match("^(%d+):(%d+)$")
+  if above then GIVE_ABOVE, GIVE_KEEP = tonumber(above), tonumber(keep) end
+end
+
+--! What a bank of `balance` dollars gives to an ally who asks for `amount`
+--! (nil: no sum named): the amount to send (0: none) and what it could
+--! spare. It sends only when it holds more than GIVE_ABOVE and keeps
+--! GIVE_KEEP afterwards. With no sum named it sends half of what is above
+--! GIVE_KEEP (in whole thousands, between $2,000 and $10,000): enough to
+--! help, and the bank stays well above its floor.
+function Bot.giftFor(balance, amount)
+  balance = math.floor(balance)
+  if balance <= GIVE_ABOVE then return 0, 0 end
+  local spare = math.max(0, math.floor((balance - GIVE_KEEP) / 1000) * 1000)
+  if amount then
+    if balance - amount >= GIVE_KEEP then return amount, spare end
+    return 0, spare
+  end
+  local give = math.min(10000, math.max(2000, math.floor(spare / 2000) * 1000))
+  if give > spare then return 0, spare end
+  return give, spare
+end
+
+--! Does this chat line name another bot of the room (not this one)?
+function Bot:namesOtherBot(text)
+  local low = text:lower()
+  local me = TheApp.mp_session.peer_id
+  for peer, p in pairs(self.lobby.players or {}) do
+    local first = p.bot == "1" and peer ~= me and p.name and p.name:lower():match("(%a+)$")
+    if first and low:find(first, 1, true) then return true end
+  end
+  return false
+end
+
+--! Is this bot the one among the asker's allied bots with the most money
+--! (ties: the lower hospital)? The asker's own hospital does not count. All
+--! bots see the same banks, so exactly one is.
+function Bot:isBestDonor(asker_index)
+  local world, mine = self.world, self.world.ui.hospital
+  local best, best_balance
+  for peer, p in pairs(self.lobby.players or {}) do
+    local index = p.bot == "1" and self.lobby.peer_hospital and self.lobby.peer_hospital[peer]
+    local h = index and world.hospitals[index]
+    if h and index ~= asker_index and
+        (h == mine or (world:mpMayTrade(mine, h) and not world:mpRivals(mine, h))) then
+      local balance = math.floor(h.balance)
+      if not best_balance or balance > best_balance or (balance == best_balance and index < best) then
+        best, best_balance = index, balance
+      end
+    end
+  end
+  return best == nil or best == self:hospitalIndex()
+end
+
+--! An ally asked in the chat for money (`amount`: the sum named, or nil):
+--! the bot decides by its own bank (Bot.giftFor), sends it as a person would
+--! (a give_money command) and says what it did, never more. `to` is where
+--! the answer goes (the team, the asker, or everybody).
+function Bot:answerMoneyRequest(peer, name, amount, to)
+  local world, session = self.world, TheApp.mp_session
+  local mine = world.ui.hospital
+  local index = self.lobby.peer_hospital and self.lobby.peer_hospital[peer]
+  local line
+  if not index or world.hospitals[index] == mine then
+    line = fill_in(pick(LINES.gift_same_bank), {name = name})
+  else
+    local give, spare = Bot.giftFor(mine.balance, amount)
+    if (give > 0 or spare >= 1000) and (not session or session.held) then
+      line = fill_in(pick(LINES.gift_later), {name = name})
+    elseif give > 0 then
+      session:issue({kind = "give_money", to = index, amount = give})
+      log(string.format("money for %s: sent $%d (asked %s, bank $%d)", name, give, tostring(amount),
+          math.floor(mine.balance)))
+      line = fill_in(pick(amount and LINES.gift_sent or LINES.gift_sent_auto), {name = name, amount = give})
+    elseif amount and spare >= 1000 then
+      log(string.format("money for %s: declined $%d, could spare $%d", name, amount, spare))
+      line = fill_in(pick(LINES.gift_spare), {name = name, amount = amount, spare = spare})
+    else
+      log(string.format("money for %s: declined (asked %s, bank $%d)", name, tostring(amount),
+          math.floor(mine.balance)))
+      line = fill_in(pick(LINES.gift_none), {name = name})
+    end
+  end
+  self:say(line, typing(line), to)
 end
 
 --! Money arrived from another player (give_money, seen as it happens).
@@ -982,13 +1467,20 @@ function Bot:roomFits(x, y, w, h)
   return true
 end
 
+-- A room asked for "next to" something is built within this many tiles of it,
+-- else the normal place is used and the person told.
+local NEAR_MAX_GAP = 8
+
 --! Where a player would put a w x h room (squares from `size` down to
 --! `min`, and one tile shorter): against the building's walls and the other
 --! rooms, in rows, with a corridor in front of the door (the row below it;
 --! two rows if possible), without thin gaps that nothing fits into, near the
 --! reception, and never on the reception's or the entrances' floor.
+--! With `near` (a list of {x0, y0, x1, y1} rectangles: the room, desk or door
+--! a person asked to build beside) only spots within NEAR_MAX_GAP tiles of one
+--! of them count, and the nearer the better.
 --!return x, y, w, h or nil
-function Bot:layoutSpot(min, size)
+function Bot:layoutSpot(min, size, near)
   local world = self.world
   local hosp = world.ui.hospital
   local th = world.map.th
@@ -1060,7 +1552,20 @@ function Bot:layoutSpot(min, size)
             if f(x + w, ty) and solid(x + w + 1, ty) then score = score - 1.5 end
           end
           score = score - 0.12 * (math.abs(x + w / 2 - ax) + math.abs(y + h / 2 - ay))
-          spots[#spots + 1] = {score, x, y, w, h}
+          if near then
+            -- Tiles between the spot and the nearest anchor (0: they touch).
+            local gap
+            for _, r in ipairs(near) do
+              local g = math.max(0, r[1] - (x + w - 1), x - r[3]) + math.max(0, r[2] - (y + h - 1), y - r[4])
+              if not gap or g < gap then gap = g end
+            end
+            if gap and gap <= NEAR_MAX_GAP then
+              score = score - 1.5 * gap
+              spots[#spots + 1] = {score, x, y, w, h}
+            end
+          else
+            spots[#spots + 1] = {score, x, y, w, h}
+          end
         end
       end
     end
@@ -1168,7 +1673,39 @@ local SMALLEST = {staff_room = 5}
 -- Game days a spot the room editor refused is left alone.
 local REFUSED_SPOT_DAYS = 90
 
-function Bot:drawRoom(room_type, size, extras)
+--! The tiles a person means by "next to the <place>": rectangles {x0, y0,
+--! x1, y1} of the reception desks, the entrance doors, or the rooms of that
+--! type (`place`: "reception", "entrance" or a room id), in a fixed order.
+function Bot:nearRects(place)
+  local world, hosp = self.world, self.world.ui.hospital
+  local out = {}
+  if place == "reception" then
+    for _, desk in ipairs(hosp:getReceptionDesks()) do
+      if desk.tile_x then out[#out + 1] = {desk.tile_x, desk.tile_y, desk.tile_x, desk.tile_y} end
+    end
+  elseif place == "entrance" then
+    for _, e in ipairs(world.entities) do
+      local id = e.object_type and e.object_type.id
+      if id and id:find("entrance", 1, true) and e.tile_x and hosp:isInHospital(e.tile_x, e.tile_y) then
+        out[#out + 1] = {e.tile_x, e.tile_y, e.tile_x, e.tile_y}
+      end
+    end
+    table.sort(out, function(a, b) return a[2] < b[2] or (a[2] == b[2] and a[1] < b[1]) end)
+  else
+    for _, rm in pairs(world.rooms) do
+      if rm.hospital == hosp and rm.is_active and not rm.crashed and rm.room_info.id == place then
+        out[#out + 1] = {rm.x, rm.y, rm.x + rm.width - 1, rm.y + rm.height - 1, rm.id}
+      end
+    end
+    table.sort(out, function(a, b) return a[5] < b[5] end)
+  end
+  return out
+end
+
+--!param near (string) optional: "reception", "entrance" or a room id: build the
+--! room as close to that as it fits (within NEAR_MAX_GAP tiles). When nothing
+--! fits there, the normal place is used and `self.near_missed` is set.
+function Bot:drawRoom(room_type, size, extras, near)
   local hospital = self.world.ui.hospital
   if self.furnishing then return nil, "busy" end
   if hospital.balance - self:roomCost(room_type) < RESERVE then return nil, "money" end
@@ -1185,12 +1722,30 @@ function Bot:drawRoom(room_type, size, extras)
     return day and today - day < REFUSED_SPOT_DAYS
   end
   local x, y, w, h
+  -- Beside what a person asked for, if it fits within reach.
+  self.near_missed = nil
+  if near then
+    local rects = self:nearRects(near)
+    local ok_near, nx, ny, nw, nh = true
+    if #rects > 0 then ok_near, nx, ny, nw, nh = pcall(self.layoutSpot, self, min, size, rects) end
+    if ok_near and nx and not refused(nx, ny, nw, nh or nw) then
+      x, y, w, h = nx, ny, nw, nh
+      log(string.format("%s next to the %s (%d anchors, the first at %d,%d-%d,%d): %dx%d at %d,%d", room_type.id, near,
+          #rects, rects[1][1], rects[1][2], rects[1][3], rects[1][4], nw, nh or nw, nx, ny))
+    else
+      if not ok_near then log("layout: " .. tostring(nx)) end
+      self.near_missed = near
+      log(string.format("no place for a %s next to the %s: the normal place", room_type.id, near))
+    end
+  end
   -- Where a player would put it (against walls and rooms, in rows).
-  local ok_layout, lx, ly, lw, lh = pcall(self.layoutSpot, self, min, size)
-  if ok_layout and lx and not refused(lx, ly, lw, lh or lw) then
-    x, y, w, h = lx, ly, lw, lh
-  elseif not ok_layout then
-    log("layout: " .. tostring(lx))
+  if not x then
+    local ok_layout, lx, ly, lw, lh = pcall(self.layoutSpot, self, min, size)
+    if ok_layout and lx and not refused(lx, ly, lw, lh or lw) then
+      x, y, w, h = lx, ly, lw, lh
+    elseif not ok_layout then
+      log("layout: " .. tostring(lx))
+    end
   end
   -- Else a free tile more below and to the right (where the door goes), so
   -- the corridor in front of it is two tiles wide.
@@ -2023,7 +2578,7 @@ function Bot:careForStaff(day)
     log(string.format("day %d: double bonus for %d unhappy staff ($%d)", day, given, spent))
     if person then
       for _, peer in ipairs(self:hospitalMates()) do
-        local line = pick(LINES.bonuses):format(given, spent, self:playerName(peer))
+        local line = fill_in(pick(LINES.bonuses), {n = given, spent = spent, name = self:playerName(peer)})
         self:say(line, typing(line), peer)
       end
     end

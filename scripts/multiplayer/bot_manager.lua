@@ -75,6 +75,16 @@ local SHARE_DAYS = 21
 -- Game days between specialists sent to the same ally (of one kind), and
 -- between asking the allies for one (an emergency: sooner).
 local GIVE_DAYS, ASK_DAYS, ASK_DAYS_EMERGENCY = 20, 20, 7
+-- Game days a specialist must be missing (a room waits for one, or cannot work
+-- without one) before the allies are asked for one (an emergency: sooner), and
+-- before an allied bot lends one although the ally could hire (Jan, 2026-11-07:
+-- no bot ever asked).
+local LACK_DAYS, LACK_EMERGENCY_DAYS = 10, 3
+-- Game days between warnings that an opponent can win (4 months).
+local RIVAL_WARN_DAYS = 120
+-- A failing hospital is looked at from this game day (a year in, a quarter of
+-- it for the first quarter's start-up), and at most every RESCUE_DAYS (3 months).
+local RESCUE_FROM, RESCUE_DAYS = 150, 90
 -- Waiting areas (Jan, 2026-11-03): by each room's door and the reception
 -- benches for the queue, a plant and a radiator, and a drinks machine by
 -- every third, within WAITING_R tiles. Not by rooms nobody queues for.
@@ -98,6 +108,13 @@ local WISH = 50
 local SIZES = {gp = 5, pharmacy = 5, general_diag = 6, psych = 6, ward = 7, staff_room = 6, toilets = 5,
     research = 6, operating_theatre = 7, x_ray = 7, scanner = 6, decontamination = 6, dna_fixer = 6,
     electrolysis = 6, training = 5}
+-- The training room: lecture chairs (3 to 6 in all, chosen once per bot; a chair
+-- is one student at a time, and more than 3 students at once learn slower
+-- each: 2/(n-1) of the rate), the days between reviews of the teacher (a
+-- year, first in the 2nd month) and, from the 3rd year, of the staff.
+local CHAIRS_MIN, CHAIRS_MAX = 3, 6
+local TEACHER_REVIEW_DAYS, FIRST_TEACHER_REVIEW = 360, 31
+local STAFF_REVIEW_FROM, STAFF_REVIEW_DAYS = tonumber(os.getenv("MP_BOT_STAFF_REVIEW_FROM") or "") or 720, 30
 -- What a player puts into a new room besides what it needs: warmth, a
 -- plant, a bin; comfort in the staff room; more toilets and beds.
 local EXTRAS = {
@@ -137,6 +154,7 @@ function M.new(bot, ctx)
   local self = setmetatable({}, M)
   self.bot, self.log, self.rand, self.pick = bot, ctx.log, ctx.rand, ctx.pick
   self.sabotage, self.lines, self.typing = ctx.sabotage, ctx.lines, ctx.typing
+  self.fill_in = ctx.fill
   self.demand = {}         -- room id -> patients who needed it lately (decaying)
   self.next_project = 0    -- game day of the next project
   self.next_daily = -1
@@ -160,6 +178,9 @@ function M.new(bot, ctx)
   self.shared = {}         -- ally hospital index -> {item key -> game day offered}
   self.gave = {}           -- "<ally index>:<category>" -> game day a specialist was sent
   self.asked_for = {}      -- category -> game day the allies were asked for one
+  self.lacking = {}        -- specialist category -> game day it was first missing for a room
+  self.ally_lack = {}      -- "<ally index>:<category>" -> game day an ally was first missing one
+  self.blocked_spec = {}   -- category -> {day, room}: a room patients need waits for this specialist
   return self
 end
 
@@ -513,10 +534,25 @@ function M:projects(s)
     -- until one is on the staff or on the hiring list: an empty room helps
     -- nobody.
     for cat in pairs(rt.required_staff or {}) do
-      if SPECIALISTS[cat] and hosp:countStaffOfCategory(cat, 1) == 0 and not bot:canHire(cat) then return end
+      if SPECIALISTS[cat] and hosp:countStaffOfCategory(cat, 1) == 0 and not bot:canHire(cat) then
+        -- (Patients ask for the room, or an ally wished for it: the allies are asked, M:askAllies.)
+        if (self.demand[id] or 0) >= 2 or self.wishes["room:" .. id] then self.blocked_spec[cat] = {day = s.day, room = id} end
+        return
+      end
     end
     local want, extras = M.roomPlan(id)
-    add("room:" .. id, score, function() return bot:drawRoom(rt, size or want, extras) end, bot:roomCost(rt))
+    if id == "training" then
+      want, extras.lecture_chair = self:trainingPlan()
+    end
+    add("room:" .. id, score, function()
+      -- (A team mate may have asked for it beside something: "a toilet next
+      -- to the GP's office".)
+      local wish = self.wishes["room:" .. id]
+      local near = wish and wish.near
+      local ok, why = bot:drawRoom(rt, size or want, extras, near)
+      if ok and near and bot.near_missed then wish.near_missed = near end
+      return ok, why
+    end, bot:roomCost(rt))
   end
   local function hire(cat, score)
     if bot:canHire(cat) then add("hire:" .. cat, score, function() return bot:hireCategory(cat) end, 0) end
@@ -889,13 +925,63 @@ function M:doctorsWhere(test)
   return out
 end
 
---! The training room: its teacher and students. Every 6 months the teacher
---! is chosen again: the consultant with the most special skills (then the
---! most skill), from the staff or, if one there is better, from the hiring
---! list (hired straight into the room). Students: juniors first, then other
+--! The size and the extra chairs of a new training room: this bot's number of
+--! lecture chairs (3 to 6 in all, picked once from its own random numbers)
+--! less the one the room needs. Six chairs want a bigger room.
+function M:trainingPlan()
+  self.training_chairs = self.training_chairs or self.rand(CHAIRS_MIN, CHAIRS_MAX)
+  return self.training_chairs >= 5 and 6 or SIZES.training, self.training_chairs - 1
+end
+
+--! Can this doctor be taken from his work to the training room? Not from a
+--! room with a patient in it or in its queue (a GP's office with patients),
+--! and never the last of a specialism a room needs (the only surgeon of an
+--! operating theatre).
+function M:canSpareDoctor(st)
+  local world, hosp = self.bot.world, self.bot.world.ui.hospital
+  local room = st.tile_x and world:getRoom(st.tile_x, st.tile_y)
+  if room then
+    for h in pairs(room.humanoids or {}) do
+      if class.is(h, Patient) then return false end
+    end
+    local q = room.door and room.door.queue
+    if q and q:reportedSize() > 0 then return false end
+  end
+  for cat in pairs(SPECIALISTS) do
+    if st:fulfillsCriterion(cat) then
+      local need = 0
+      for _, rm in pairs(world.rooms) do
+        if rm.hospital == hosp and rm.is_active and not rm.crashed then
+          need = need + ((rm.room_info.required_staff or {})[cat] or 0)
+        end
+      end
+      if need > 0 and hosp:countStaffOfCategory(cat) - 1 < need then return false end
+    end
+  end
+  return true
+end
+
+--! The training room: its teacher and students.
+--! How training works (rooms/training.lua, Doctor:trainSkills): a doctor
+--! who is not yet a consultant learns only while he sits in a lecture chair
+--! of the training room and a consultant stands at the projector; he does
+--! no work for patients meanwhile, and his pay keeps going. A student gains
+--! general skill every day (juniors become doctors, doctors consultants);
+--! a special skill (surgeon, psychiatrist, researcher) only if the teacher
+--! has it and he has not. More chairs than 3 are filled but slow each
+--! student (2/(n-1) of the rate). The room holds the chairs plus the teacher.
+--!
+--! The teacher is chosen again every TEACHER_REVIEW_DAYS (a year, the first
+--! time in the 2nd month, or when there is none for a month): the
+--! consultant with the most special skills (then the most skill), from the
+--! staff or, if one there is better, from the hiring list (hired straight
+--! into the room). Students fill the chairs: juniors first, then other
 --! doctors not yet consultants, while the other rooms keep their doctors
---! and there are chairs. A student goes back to work once a consultant, or
---! when a room is short of a doctor.
+--! (M:canSpareDoctor). From the 3rd year the staff are reviewed every
+--! STAFF_REVIEW_DAYS and the doctors the hospital can spare (a room with no
+--! patient, the others still enough) go in without the margin kept before.
+--! A student goes back to work once a consultant, or when a room is short
+--! of a doctor.
 function M:training(s)
   local bot = self.bot
   local room = self:roomOf("training")
@@ -912,8 +998,10 @@ function M:training(s)
       if st.last_room == room then teacher = st end
     end
   end
-  if s.day >= (self.teacher_review or 0) or (not teacher and s.day - (self.teacher_sent or -99) > 30) then
-    self.teacher_review = s.day + 180
+  if s.day >= (self.teacher_review or FIRST_TEACHER_REVIEW) or
+      (not teacher and s.day - (self.teacher_sent or -99) > 30) then
+    self.teacher_review = s.day + TEACHER_REVIEW_DAYS
+    self.student_day = nil -- (the chairs are filled again now)
     local best, best_v
     for _, st in ipairs(self:doctorsWhere(function(p) return bot.flag(p, "is_consultant") end)) do
       local v = bot.teacherScore(st.profile)
@@ -976,22 +1064,39 @@ function M:training(s)
       return
     end
   end
+  -- A room with fewer chairs than the 3 it should have (an older game's):
+  -- one more, as a person would add it.
+  if chairs < CHAIRS_MIN and s.balance > 8000 and s.day - (self.chair_day or -99) > 30 and
+      bot:extraAllowed(room, "lecture_chair") then
+    self.chair_day = s.day
+    if bot:editRoom(room, {"buy:lecture_chair", "place", "done"}) then
+      self:note(string.format("day %d: one more lecture chair (%d)", s.day, chairs))
+      return
+    end
+  end
+  -- From the 3rd year the staff are reviewed (every STAFF_REVIEW_DAYS):
+  -- nothing is kept back but the doctors the rooms need.
+  local review = s.day >= STAFF_REVIEW_FROM and s.day - (self.staff_review or -99) >= STAFF_REVIEW_DAYS
   local doctors = #self:doctorsWhere(function() return true end)
   local needed = bot:staffWanted().Doctor
-  if #students < chairs and not short and doctors - #students - (teacher and 1 or 0) - 1 >= needed then
-    -- Juniors first, then the least skilled doctor not yet a consultant.
+  local margin = s.day >= STAFF_REVIEW_FROM and 0 or 1
+  if #students < chairs and not short and doctors - #students - (teacher and 1 or 0) - margin >= needed then
+    -- Juniors first, then the least skilled doctor not yet a consultant,
+    -- among those who can be spared from their work.
     local pick, pick_v
     for _, st in ipairs(self:doctorsWhere(function(p) return not bot.flag(p, "is_consultant") end)) do
-      if not inside(st) and not st.pickup and st.mp_id then
+      if not inside(st) and not st.pickup and st.mp_id and self:canSpareDoctor(st) then
         local v = (bot.flag(st.profile, "is_junior") and 0 or 1) + (st.profile.skill or 0)
         if not pick_v or v < pick_v then pick, pick_v = st, v end
       end
     end
     if pick and bot:moveStaffInto(pick, room) then
       self.student_day = s.day
-      self:note(string.format("day %d: %s to the training room", s.day, tostring(pick.profile:getFullName())))
+      self:note(string.format("day %d: %s to the training room%s", s.day, tostring(pick.profile:getFullName()),
+          review and " (staff review)" or ""))
     end
   end
+  if review and #students >= chairs then self.staff_review = s.day end
 end
 
 --! A room of this hospital with fewer staff of `category` than it needs
@@ -1843,11 +1948,20 @@ end
 --! game days: a request for every room takes a while; then it lapses, if it could not be done), unless somebody
 --! does it first.
 function M:wish(key, peer)
+  -- A room may come with a place: "room:toilets@near:gp" (next to the GP's
+  -- office), "@near:entrance", "@near:reception". Other places are ignored.
+  local base, place = key:match("^([^@]+)@near:([%w_]+)$")
+  if base then
+    key = base
+    local known = place == "entrance" or place == "reception"
+    for _, rt in ipairs(TheApp.rooms) do known = known or rt.id == place end
+    if not known or not key:find("^room:") then place = nil end
+  end
   for _, k in ipairs(self:wishMenu()) do
     if k == key then
-      self.wishes[key] = {until_day = self.bot:gameDay() + 60, had = self:howMany(key), peer = peer}
+      self.wishes[key] = {until_day = self.bot:gameDay() + 60, had = self:howMany(key), peer = peer, near = place}
       self.next_project = math.min(self.next_project, self.bot:gameDay())
-      self:note("wish: " .. key)
+      self:note("wish: " .. key .. (place and (" next to the " .. place) or ""))
       return true
     end
   end
@@ -1879,6 +1993,13 @@ local function wish_words(key)
   return (what or key):gsub("_", " ")
 end
 
+--! A place a room was asked to be built beside, in words.
+local function near_words(place)
+  if place == "reception" then return "reception desk" end
+  if place == "entrance" then return "entrance" end
+  return wish_words("room:" .. place)
+end
+
 --! Tell whoever wished for a project how it went (done, no space yet, no
 --! money yet), so a "certainly!" in the chat is not the last word.
 function M:tellWisher(w, kind, key)
@@ -1889,8 +2010,10 @@ function M:tellWisher(w, kind, key)
     if name then
       -- (Something put into a room: "the plant in the GP room is in place".)
       local lines = (kind == "wish_done" and key:find("^add:") and self.lines.wish_done_add) or
-          (kind == "wish_done" and key:find("^remove:") and self.lines.wish_done_remove) or self.lines[kind]
-      local line = self.pick(lines):format(name, wish_words(key))
+          (kind == "wish_done" and key:find("^remove:") and self.lines.wish_done_remove) or
+          (kind == "wish_done" and w.near_missed and self.lines.wish_done_far) or self.lines[kind]
+      local line = self.fill_in(self.pick(lines), {name = name, what = wish_words(key),
+          near = w.near_missed and near_words(w.near_missed) or ""})
       bot:say(line, self.typing(line), peer)
     end
   end
@@ -1919,6 +2042,10 @@ function M:applyPlan(plan)
       self.boost[p.action] = w * w / 2
       taken[#taken + 1] = p.action
     end
+  end
+  -- (A plan to revive a failing hospital stays in force for a month, M:rescue.)
+  if self.rescue_until and self.bot:gameDay() <= self.rescue_until then
+    for key, b in pairs(self.rescue_boost or {}) do self.boost[key] = math.max(self.boost[key] or 0, b) end
   end
   -- (No price: bots keep the normal prices, M:monthly.)
   self:note("plan: " .. table.concat(taken, ", "))
@@ -1954,8 +2081,8 @@ function M:shareResearch(s)
         local _, people = bot:peopleOfHospital(index)
         local list = table.concat(names, ", ", 1, math.min(#names, 4)) .. (#names > 4 and ", ..." or "")
         for _, mate in ipairs(bot:hospitalMates()) do
-          local line = self.pick(self.lines.research_ask):format(bot:playerName(mate),
-              people[1] or world.hospitals[index].name, list)
+          local line = self.fill_in(self.pick(self.lines.research_ask), {name = bot:playerName(mate),
+              ally = people[1] or world.hospitals[index].name, list = list})
           bot:say(line, self.typing(line), mate)
         end
       end
@@ -1964,12 +2091,7 @@ function M:shareResearch(s)
         seen.offered = s.day
         for _, key in ipairs(keys) do seen[key] = s.day end
         self:note(string.format("day %d: research for hospital %d: %s", s.day, index, table.concat(keys, ",")))
-        local peers, people = bot:peopleOfHospital(index)
-        if #peers > 0 then
-          local list = table.concat(names, ", ", 1, math.min(#names, 4)) .. (#names > 4 and ", ..." or "")
-          local line = self.pick(self.lines.research_sent):format(table.concat(people, " and "), list)
-          bot:say(line, self.typing(line), table.concat(peers, ","))
-        end
+        -- (No chat line: the offer arrives as a fax in their messages.)
       end
     end
   end
@@ -1998,21 +2120,37 @@ local function room_name(id)
   return rt and rt.name and plain(rt.name) or id:gsub("_", " ")
 end
 
---! A specialist an ally needs and cannot hire (an operating theatre with one
---! surgeon, none on their hiring list): one of its own it can spare is
---! offered for free (they accept in their messages, as any offer of staff;
---! a bot accepts an ally's), at most once in GIVE_DAYS per ally and kind.
---! (A bot sharing a person's hospital leaves its staff to the person.)
+--! A specialist an ally needs and cannot get (an operating theatre with one
+--! surgeon, none on their hiring list, or none hired for LACK_DAYS): one of
+--! its own it can spare is offered for free (they accept in their messages,
+--! as any offer of staff; a bot accepts an ally's), at most once in
+--! GIVE_DAYS per ally and kind. (A bot sharing a person's hospital leaves
+--! its staff to the person.)
 function M:helpAllies(s)
   local bot, world = self.bot, self.bot.world
   local mine = s.hosp
   if bot:sharesWithPerson() then return end
   for _, ally in ipairs(self:allies()) do
     local h, index = ally.hosp, ally.index
-    for _, sh in ipairs(M.shortStaff(world, h, M.emergencyRooms(world, h))) do
+    local short = M.shortStaff(world, h, M.emergencyRooms(world, h))
+    -- How long each kind has been missing there (the same days they count).
+    local missing = {}
+    for _, sh in ipairs(short) do
+      if lends(sh) and (sh.built or sh.building) then
+        local key = index .. ":" .. sh.cat
+        missing[key] = true
+        self.ally_lack[key] = self.ally_lack[key] or s.day
+      end
+    end
+    for key in pairs(self.ally_lack) do
+      if key:find("^" .. index .. ":") and not missing[key] then self.ally_lack[key] = nil end
+    end
+    for _, sh in ipairs(short) do
       local key = index .. ":" .. sh.cat
+      local lacking = self.ally_lack[key] and s.day - self.ally_lack[key] >= (sh.emergency and LACK_EMERGENCY_DAYS or LACK_DAYS)
       if lends(sh) and (sh.built or sh.building) and s.day - (self.gave[key] or -999) >= GIVE_DAYS and
-          not bot:canHire(sh.cat, h) and M.spareStaff(world, mine, sh.cat, s.emergency and s.emergency.rooms) > 0 then
+          (lacking or not bot:canHire(sh.cat, h)) and
+          M.spareStaff(world, mine, sh.cat, s.emergency and s.emergency.rooms) > 0 then
         -- (The least skilled of them: it keeps its best.)
         local pick
         for _, st in ipairs(mine.staff) do
@@ -2027,8 +2165,9 @@ function M:helpAllies(s)
           self:note(string.format("day %d: offered %s (%s) to hospital %d for its %s", s.day, who, sh.cat, index, sh.room))
           local peers, people = bot:peopleOfHospital(index)
           if #peers > 0 then
-            local line = self.pick(self.lines.staff_sent):format(table.concat(people, " and "), who,
-                sh.cat:lower(), room_name(sh.room), sh.emergency and self.pick(self.lines.staff_for_emergency) or "")
+            local line = self.fill_in(self.pick(self.lines.staff_sent), {names = table.concat(people, " and "),
+                who = who, kind = sh.cat:lower(), room = room_name(sh.room),
+                urgent = sh.emergency and self.pick(self.lines.staff_for_emergency) or ""})
             bot:say(line, self.typing(line), table.concat(peers, ","))
           end
           return -- (one at a time)
@@ -2038,46 +2177,534 @@ function M:helpAllies(s)
   end
 end
 
---! A specialist its own room needs and nobody is on the hiring list: the
---! allies are asked (at most once in ASK_DAYS per kind; an emergency
---! sooner). An allied bot with one to spare sends one by itself
---! (M:helpAllies, an offer): no need to ask. People with one to spare are asked by
---! name, else every person on its side.
+--! The specialists this hospital lacks for a room (it has, or is building,
+--! or patients ask for): {room, cat, need, have, built, building, emergency}.
+--! A room it cannot build for want of one (M:projects) counts when patients
+--! need it, or an ally wished for it. (Tests: MP_BOT_TEST_LACK="day:Cat:room"
+--! makes it lack one from that game day.)
+function M:lackedStaff(s)
+  local lacks = {}
+  local have_cat = {}
+  for _, sh in ipairs(s.short) do
+    if lends(sh) and (sh.built or sh.building) then
+      lacks[#lacks + 1] = sh
+      have_cat[sh.cat] = true
+    end
+  end
+  local cats = {}
+  for cat in pairs(self.blocked_spec) do cats[#cats + 1] = cat end
+  table.sort(cats)
+  for _, cat in ipairs(cats) do
+    local b = self.blocked_spec[cat]
+    if s.day - b.day <= 5 and not have_cat[cat] and SPECIALISTS[cat] then
+      local need = 1
+      for _, rt in ipairs(TheApp.rooms) do
+        if rt.id == b.room then need = (rt.required_staff or {})[cat] or 1 end
+      end
+      lacks[#lacks + 1] = {room = b.room, cat = cat, need = need, have = s.hosp:countStaffOfCategory(cat),
+          built = false, building = false, emergency = false}
+      have_cat[cat] = true
+    end
+  end
+  local test_day, test_cat, test_room = (os.getenv("MP_BOT_TEST_LACK") or ""):match("^(%d+):(%a+):([%w_]+)$")
+  if test_day and s.day >= tonumber(test_day) and not have_cat[test_cat] then
+    lacks[#lacks + 1] = {room = test_room, cat = test_cat, need = 1, have = 0, built = false, building = false,
+        emergency = false}
+  end
+  return lacks
+end
+
+--! A specialist its own room needs (or patients ask a room for) and it has
+--! lacked for LACK_DAYS (an emergency: sooner), whether or not one is on the
+--! hiring list: the allies are asked (at most once in ASK_DAYS per kind; an
+--! emergency sooner). Before, it asked only when none was on the hiring
+--! list, which hardly ever happens: a room waits for its specialist to be on
+--! the list before it is built. An allied bot with one to spare sends one by
+--! itself (M:helpAllies, an offer): no need to ask. People with one to spare
+--! are asked by name, else the team's chat asks everybody on its side.
 function M:askAllies(s)
   local bot, world = self.bot, self.bot.world
-  for _, sh in ipairs(s.short) do
+  local lacks = self:lackedStaff(s)
+  -- Since when each kind is missing (and forgotten once it is not).
+  local now = {}
+  for _, sh in ipairs(lacks) do
+    now[sh.cat] = true
+    self.lacking[sh.cat] = self.lacking[sh.cat] or s.day
+  end
+  for cat in pairs(self.lacking) do
+    if not now[cat] then self.lacking[cat] = nil end
+  end
+  for _, sh in ipairs(lacks) do
     local wait = sh.emergency and ASK_DAYS_EMERGENCY or ASK_DAYS
-    if lends(sh) and (sh.built or sh.building) and not bot:canHire(sh.cat) and
+    local days = s.day - self.lacking[sh.cat]
+    if days >= (sh.emergency and LACK_EMERGENCY_DAYS or LACK_DAYS) and
         s.day - (self.asked_for[sh.cat] or -999) >= wait then
       local bot_spares, spare_peers, spare_names, everybody = false, {}, {}, {}
       for _, ally in ipairs(self:allies()) do
         local spare = M.spareStaff(world, ally.hosp, sh.cat, M.emergencyRooms(world, ally.hosp)) > 0
         local peers, names = bot:peopleOfHospital(ally.index)
         local _, _, is_bot = bot:playerOfHospital(ally.index)
-        if spare and #peers == 0 and is_bot then bot_spares = true end
+        -- (An allied bot lends one by itself only for a room that stands or is being built.)
+        if spare and #peers == 0 and is_bot and (sh.built or sh.building) then bot_spares = true end
         for i, peer in ipairs(peers) do
           everybody[#everybody + 1] = peer
           if spare then spare_peers[#spare_peers + 1], spare_names[#spare_names + 1] = peer, names[i] end
         end
       end
-      if bot_spares or #everybody == 0 then return end
-      self.asked_for[sh.cat] = s.day
-      local urgent = sh.emergency and self.pick(self.lines.staff_for_emergency) or ""
-      local needs = sh.need .. " " .. sh.cat:lower() .. (sh.need > 1 and "s" or "")
-      local line, to
-      if #spare_peers > 0 then
-        line = self.pick(self.lines.staff_ask_one):format(table.concat(spare_names, " or "), sh.cat:lower(),
-            room_name(sh.room), needs, sh.have, urgent)
-        to = spare_peers
-      else
-        line = self.pick(self.lines.staff_ask_all):format(sh.cat:lower(), room_name(sh.room), needs, sh.have, urgent)
-        to = everybody
+      -- (Nobody to read it, or an allied bot sends one anyway.)
+      if not bot_spares and #everybody > 0 then
+        self.asked_for[sh.cat] = s.day
+        local urgent = sh.emergency and self.pick(self.lines.staff_for_emergency) or ""
+        local needs = sh.need .. " " .. sh.cat:lower() .. (sh.need > 1 and "s" or "")
+        local line, to
+        if #spare_peers > 0 then
+          line = self.fill_in(self.pick(self.lines.staff_ask_one), {names = table.concat(spare_names, " or "),
+              kind = sh.cat:lower(), room = room_name(sh.room), needs = needs, have = sh.have, urgent = urgent})
+          to = table.concat(spare_peers, ",")
+        else
+          line = self.fill_in(self.pick(self.lines.staff_ask_all), {kind = sh.cat:lower(), room = room_name(sh.room),
+              needs = needs, have = sh.have, urgent = urgent})
+          to = "team"
+        end
+        self:note(string.format("day %d: asked the allies for a %s (%s), missing for %d days", s.day, sh.cat,
+            sh.room, days))
+        bot:say(line, self.typing(line), to)
+        return
       end
-      self:note(string.format("day %d: asked the allies for a %s (%s)", s.day, sh.cat, sh.room))
-      bot:say(line, self.typing(line), table.concat(to, ","))
-      return
     end
   end
+end
+
+--------------------------------------------------------------------------------
+-- The level's requirements: who meets them, and what the bot still lacks
+--------------------------------------------------------------------------------
+
+local function sorted_keys(t)
+  local keys = {}
+  for k in pairs(t) do keys[#keys + 1] = k end
+  table.sort(keys, function(a, b)
+    if type(a) == type(b) then return a < b end
+    return type(a) == "number"
+  end)
+  return keys
+end
+
+--! Dollars in the chat: $850, $20k.
+local function money(n)
+  n = math.max(0, math.ceil(n))
+  if n >= 1000 then return string.format("$%dk", math.ceil(n / 1000)) end
+  return string.format("$%d", n)
+end
+
+--! A value of requirement `name` in the chat (money for the bank and the value).
+local function amount(name, v)
+  if name == "balance" or name == "value" then return money(v) end
+  return string.format("%d", math.floor(v + 0.5))
+end
+
+--! Game days from the first (tests, MP_BOT_TEST_WIN).
+local function game_day(world)
+  local d = world:date()
+  return (d:monthOfGame() - 1) * 30 + d:dayOfMonth()
+end
+
+--! How a hospital stands to the level's requirements to win, as the game
+--! counts them (EndConditions): the group of goals it comes closest to,
+--! {group, list = {{name, now, want, ok, progress}}, met, complete (every goal
+--! of the group), loan, ready (complete and no loan: what the game wants for a
+--! win), reached (the game already said so: the flag co-op and teams keep, or a
+--! place won in a race)}. nil if the level has no goals.
+--! (Tests: MP_BOT_TEST_WIN="<hospital index>:<day>;..." makes those hospitals
+--! meet them from that game day on.)
+function M.requirements(world, hosp)
+  local ec = world.endconditions
+  if not (ec and type(ec.win_goals) == "table" and ec.getAttribute) then return nil end
+  local best
+  for _, g in ipairs(sorted_keys(ec.win_goals)) do
+    local list, met = {}, 0
+    local goals = ec.win_goals[g]
+    for _, name in ipairs(sorted_keys(goals)) do
+      local crit = goals[name]
+      if crit.win_value then
+        local ok, now = pcall(ec.getAttribute, ec, hosp, name)
+        now = ok and tonumber(now) or 0
+        -- (max_min 1: at least this much; else at most.)
+        local atleast = crit.max_min == 1
+        local good = atleast and now >= crit.win_value or (not atleast and now <= crit.win_value)
+        local progress
+        if atleast then
+          progress = crit.win_value > 0 and math.min(1, now / crit.win_value) or 1
+        else
+          progress = good and 1 or crit.win_value / math.max(now, 1)
+        end
+        list[#list + 1] = {name = name, now = now, want = crit.win_value, ok = good, progress = progress}
+        if good then met = met + 1 end
+      end
+    end
+    if #list > 0 then
+      local score = met / #list
+      if not best or score > best.score then best = {group = g, list = list, score = score, met = met} end
+    end
+  end
+  if not best then return nil end
+  best.loan = hosp.loan or 0
+  best.complete = best.met == #best.list
+  best.ready = best.complete and best.loan == 0
+  best.reached = hosp.mp_goals_reached == true or (hosp.mp_place ~= nil and hosp.mp_place_how == "won")
+  local forced = os.getenv("MP_BOT_TEST_WIN")
+  if forced then
+    local index = world:getHospitalIndex(hosp)
+    for i, day in forced:gmatch("(%d+):(%d+)") do
+      if tonumber(i) == index and game_day(world) >= tonumber(day) then best.ready, best.reached = true, true end
+    end
+  end
+  return best
+end
+
+--! Does this hospital meet the requirements to win (now, or already said so)?
+function M.meets(world, hosp)
+  local r = M.requirements(world, hosp)
+  return r ~= nil and (r.ready or r.reached) or false
+end
+
+--! How many people can read what the bot says to its team: the people who
+--! share its hospital and those who play allied hospitals.
+function M:sideReaders()
+  local bot = self.bot
+  local n = #bot:hospitalMates()
+  for _, ally in ipairs(self:allies()) do
+    n = n + #bot:peopleOfHospital(ally.index)
+  end
+  return n
+end
+
+--! Is this the bot that speaks for its side when only one should: the allied
+--! bot (itself included) with the lowest hospital number?
+function M:isCaller()
+  local bot = self.bot
+  local mine = bot:hospitalIndex()
+  for _, ally in ipairs(self:allies()) do
+    local _, _, is_bot = bot:playerOfHospital(ally.index)
+    if is_bot and ally.index < mine then return false end
+  end
+  return true
+end
+
+--! Names for the chat: "Ann", "Ann and Bob", "Ann, Bob and Cleo".
+local function join_names(names)
+  if #names <= 1 then return names[1] or "" end
+  return table.concat(names, ", ", 1, #names - 1) .. " and " .. names[#names]
+end
+
+--! The one thing this bot still lacks for the win, in a chat line: the
+--! requirement it has said least about, the furthest from it first.
+function M:needLine(me)
+  local cands = {}
+  for _, c in ipairs(me.list) do
+    if not c.ok then cands[#cands + 1] = c end
+  end
+  local name, c = "loan", nil
+  if #cands > 0 then
+    self.need_said = self.need_said or {}
+    table.sort(cands, function(a, b)
+      local sa, sb = self.need_said[a.name] or 0, self.need_said[b.name] or 0
+      if sa ~= sb then return sa < sb end
+      if a.progress ~= b.progress then return a.progress < b.progress end
+      return a.name < b.name
+    end)
+    c = cands[1]
+    name = c.name
+    self.need_said[name] = (self.need_said[name] or 0) + 1
+  elseif me.loan <= 0 then
+    return nil
+  end
+  local lines = self.lines.win_need[name]
+  if not lines then return nil end
+  local vars = {loan = money(me.loan)}
+  if c then
+    local left = math.max(1, math.ceil(c.want - c.now))
+    vars.now, vars.want, vars.left = amount(name, c.now), amount(name, c.want), tostring(left)
+    vars.short = money(left)
+  end
+  return self.fill_in(self.pick(lines), vars)
+end
+
+--! Once a day: the level's requirements in the team chat (only when a person
+--! on its side can read it). When a person on its side now meets them, the
+--! allied bot with the lowest number says so ("Good job, ..."); a bot that
+--! meets them too says that in a line of its own; and a bot that does not
+--! says what it still needs, one requirement at a time, again every 6 months
+--! while an ally meets them and it does not.
+function M:winChat(s)
+  local bot, world = self.bot, self.bot.world
+  if not (world.mp_coop and world.endconditions) then return end
+  local me = M.requirements(world, s.hosp)
+  if not me then return end
+  local mine = me.ready or me.reached
+  local newly, human_met = {}, false
+  self.ally_met = self.ally_met or {}
+  for _, ally in ipairs(self:allies()) do
+    local meets = M.meets(world, ally.hosp)
+    local peers, names = bot:peopleOfHospital(ally.index)
+    if meets and #peers > 0 then human_met = true end
+    if meets and not self.ally_met[ally.index] then
+      self.ally_met[ally.index] = s.day
+      for _, n in ipairs(names) do newly[#newly + 1] = n end
+    elseif not meets then
+      self.ally_met[ally.index] = nil
+    end
+  end
+  local i_newly = mine and not self.me_met
+  self.me_met = mine
+  local mates = {}
+  for _, peer in ipairs(bot:hospitalMates()) do mates[#mates + 1] = bot:playerName(peer) or "friend" end
+  if self:sideReaders() == 0 then return end
+  local stagger = (bot:botRank() - 1) * 3 -- (several bots: not all at the same moment)
+  local function say(line, extra)
+    bot:say(line, self.typing(line) + stagger + (extra or 0), "team")
+  end
+  local first = 0
+  -- Somebody on its side got there: a good word, from one bot.
+  if #newly > 0 and self:isCaller() then
+    say(self.fill_in(self.pick(self.lines.win_good), {names = join_names(newly)}))
+    first = 3
+  end
+  -- The people who share its hospital got there with it.
+  if i_newly and #mates > 0 then
+    say(self.fill_in(self.pick(self.lines.win_own), {names = join_names(mates)}))
+    first = 3
+  elseif mine and (#newly > 0 or (i_newly and human_met)) then
+    say(self.pick(self.lines.win_me_too), first + 3)
+  end
+  -- Not there yet while an ally is: what is missing, now and every 6 months.
+  if not mine and (human_met or next(self.ally_met)) and (#newly > 0 or s.day >= (self.need_next or 0)) then
+    local line = self:needLine(me)
+    if line then
+      self.need_next = s.day + 180
+      self:note(string.format("day %d: tells the team what it still needs for the win", s.day))
+      say(line, first + 6)
+    end
+  end
+end
+
+--! In a race: an opponent (a bot or a person) that meets all the
+--! requirements to win gets a warning in the team chat, as soon as the bot
+--! sees it and then every 4 months while it is still so. Only one allied bot
+--! says it (M:isCaller), and only when a person on the bot's side can read
+--! it.
+function M:rivalWatch(s)
+  local bot, world = self.bot, self.bot.world
+  if not (world.mp_coop and world.mp_coop.competitive and world.endconditions) then return end
+  local winners, names, fresh = {}, {}, false
+  self.rival_seen = self.rival_seen or {}
+  for index, h in ipairs(world.hospitals) do
+    local _, name = bot:playerOfHospital(index)
+    if h ~= s.hosp and name and world:mpRivals(s.hosp, h) and M.meets(world, h) then
+      winners[#winners + 1] = index
+      names[#names + 1] = name
+      if not self.rival_seen[index] then fresh = true end
+    end
+  end
+  -- (One that stops meeting them is news again when it meets them again.)
+  local now = {}
+  for _, index in ipairs(winners) do now[index] = true end
+  for index in pairs(self.rival_seen) do
+    if not now[index] then self.rival_seen[index] = nil end
+  end
+  if #winners == 0 or not (fresh or s.day >= (self.rival_next or 0)) then return end
+  for _, index in ipairs(winners) do self.rival_seen[index] = true end
+  self.rival_next = s.day + RIVAL_WARN_DAYS
+  if not self:isCaller() or self:sideReaders() == 0 then return end
+  local line = self.fill_in(self.pick(#names > 1 and self.lines.win_rivals or self.lines.win_rival),
+      {names = join_names(names)})
+  self:note(string.format("day %d: warns the team: %s meet the winning conditions", s.day, join_names(names)))
+  bot:say(line, self.typing(line), "team")
+end
+
+--------------------------------------------------------------------------------
+-- A hospital that is failing its objectives: review with the model, ask the allies
+--------------------------------------------------------------------------------
+
+--! Dollars with thousands separators: 20,000.
+local function dollars(n)
+  local text = string.format("%d", math.max(0, math.floor(n + 0.5)))
+  local out = text:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+  return (out:gsub("^,", ""))
+end
+
+--! Why this hospital is failing its objectives, as a list of reasons (empty:
+--! it is not): close to a way of losing the level, failing at the last year
+--! end (a race, or co-op), far behind the goals a year in, out of money and
+--! loans, or a low reputation that keeps falling. (Tests: MP_BOT_TEST_FAIL
+--! makes it fail from that game day.)
+function M:failing(s)
+  local world, hosp = self.bot.world, s.hosp
+  local reasons = {}
+  local forced = tonumber(os.getenv("MP_BOT_TEST_FAIL") or "")
+  if forced and s.day >= forced then reasons[#reasons + 1] = "(a test) the objectives are not met" end
+  -- A group of lose goals all past the point where the game warns, and half
+  -- the way to the limit or more (as EndConditions:generateReportTable counts it).
+  local ec = world.endconditions
+  if ec and type(ec.lose_goals) == "table" and ec.getAttribute then
+    for _, g in ipairs(sorted_keys(ec.lose_goals)) do
+      local total, near, worst, names = 0, 0, 1, {}
+      for _, name in ipairs(sorted_keys(ec.lose_goals[g])) do
+        local crit = ec.lose_goals[g][name]
+        total = total + 1
+        local ok, now = pcall(ec.getAttribute, ec, hosp, name)
+        local mm = crit.max_min == 1 and 1 or -1
+        if ok and tonumber(now) and crit.boundary and crit.lose_value and crit.boundary ~= crit.lose_value and
+            (tonumber(now) - crit.boundary) * mm > 0 then
+          near = near + 1
+          names[#names + 1] = name
+          worst = math.min(worst, 1 - (tonumber(now) - crit.lose_value) / (crit.boundary - crit.lose_value))
+        end
+      end
+      if total > 0 and near == total and worst >= 0.5 then
+        reasons[#reasons + 1] = "close to losing the level (" .. table.concat(names, ", ") .. ")"
+      end
+    end
+  end
+  if hosp.mp_failing_since then
+    reasons[#reasons + 1] = "it failed the goals at the last year end and fails the level at the next"
+  end
+  -- A year in and far from the goals.
+  local me = s.month >= 12 and M.requirements(world, hosp)
+  if me and not (me.ready or me.reached) then
+    local sum, n = 0, 0
+    for _, c in ipairs(me.list) do
+      if c.name ~= "months_played" then sum, n = sum + c.progress, n + 1 end
+    end
+    if n > 0 and sum / n < 0.3 then
+      reasons[#reasons + 1] = string.format("far behind on the goals after %d months (%d%% of the way)", s.month,
+          math.floor(100 * sum / n + 0.5))
+    end
+  end
+  -- No money, no loan left.
+  if hosp.opened and s.balance < 2000 and s.loan >= s.max_loan - 5000 then
+    self.broke_since = self.broke_since or s.day
+    if s.day - self.broke_since >= 20 then reasons[#reasons + 1] = "out of money with the loan used up" end
+  else
+    self.broke_since = nil
+  end
+  -- A low reputation that fell by 50 or more in the last 3 months.
+  self.rep_hist = self.rep_hist or {}
+  if self.rep_hist.month ~= s.month then
+    self.rep_hist.month = s.month
+    table.insert(self.rep_hist, s.reputation)
+    if #self.rep_hist > 4 then table.remove(self.rep_hist, 1) end
+  end
+  if #self.rep_hist >= 4 and s.reputation < 250 and s.reputation <= self.rep_hist[1] - 50 then
+    reasons[#reasons + 1] = string.format("reputation %d and falling (it was %d three months ago)",
+        math.floor(s.reputation), math.floor(self.rep_hist[1]))
+  end
+  return reasons
+end
+
+--! What the weakest of the level's goals needs, in words after "to": raise the
+--! value of my hospital, cure more patients...
+function M:goalWords(s)
+  local me = M.requirements(self.bot.world, s.hosp)
+  local worst
+  for _, c in ipairs(me and me.list or {}) do
+    if not c.ok and c.name ~= "months_played" and (not worst or c.progress < worst.progress) then worst = c end
+  end
+  local words = {value = "raise the value of my hospital", reputation = "improve my reputation",
+      num_cured = "cure more patients", percentage_cured = "cure more patients",
+      percentage_killed = "keep more patients alive", staff_happiness = "make my staff happier",
+      patient_happiness = "make my patients happier", balance = "get my finances back in order"}
+  return words[worst and worst.name or ""] or "get back on track"
+end
+
+--! A project in words after "to": build a new X-Ray room, hire a surgeon...
+local function purpose_words(key)
+  local kind, what = key:match("^(%a+):([^:@]+)")
+  if kind == "room" then
+    return "build a new " .. wish_words(key)
+  elseif kind == "hire" then
+    return "hire " .. wish_words(key)
+  elseif key == "buy:land" then
+    return "buy more land"
+  elseif kind == "buy" then
+    return "buy a " .. what:gsub("_", " ")
+  elseif kind == "repair" then
+    return "repair the " .. wish_words("room:" .. what)
+  elseif kind == "replace" then
+    return "replace the machine in the " .. wish_words("room:" .. what)
+  end
+  return nil
+end
+
+--! The bot is failing its objectives: it asks its allies, in the team chat,
+--! for one concrete thing: money for the project it cannot afford that now
+--! matters most (the top of its list that the bank cannot pay), and what for.
+function M:askForHelp(s, reasons)
+  if self:sideReaders() == 0 then return end
+  local list = self:projects(s)
+  local pick
+  -- The top project the bank cannot pay, else the top one that costs anything.
+  for i = 1, math.min(#list, 8) do
+    local p = list[i]
+    if not pick and p.cost > 0 and s.balance - p.cost < RESERVE and purpose_words(p.key) then pick = p end
+  end
+  for i = 1, math.min(#list, 8) do
+    local p = list[i]
+    if not pick and p.cost > 0 and purpose_words(p.key) then pick = p end
+  end
+  local vars = {goal = self:goalWords(s)}
+  local line
+  if pick then
+    local need = pick.cost + RESERVE - s.balance
+    vars.amount = dollars(math.min(30000, math.max(2000, math.ceil(math.max(need, pick.cost) / 1000) * 1000)))
+    vars.purpose = purpose_words(pick.key)
+    line = self.fill_in(self.pick(self.lines.rescue_ask), vars)
+    -- (The server cuts a chat line at 200 letters: a long room name takes the short form.)
+    if #line > 195 then pick = nil end
+  end
+  if not pick then
+    vars.amount = dollars(math.min(30000, math.max(5000, math.ceil((2 * RESERVE - s.balance) / 1000) * 1000)))
+    line = self.fill_in(self.pick(self.lines.rescue_ask_plain), vars)
+  end
+  self:note(string.format("day %d: asked the team for $%s (%s)", s.day, vars.amount, pick and pick.key or "no project"))
+  self.bot:say(line, self.typing(line), "team")
+end
+
+--! Once a day: is the hospital failing its objectives (M:failing)? Then, at
+--! most every RESCUE_DAYS, the model reviews it (a "rescue" question to the
+--! server, its answer a plan like the weekly one that stays in force for a
+--! month) and the allies are asked for help (M:askForHelp), after the answer
+--! or a minute without one.
+function M:rescue(s)
+  local bot = self.bot
+  if s.hosp.mp_place then
+    self.rescue_wait = nil
+    return
+  end
+  local wait = self.rescue_wait
+  if wait then
+    if wait.done or bot:now() - wait.at > 70 then
+      self.rescue_wait = nil
+      self:askForHelp(s, wait.reasons)
+    end
+    return
+  end
+  local reasons = self:failing(s)
+  local first = tonumber(os.getenv("MP_BOT_TEST_FAIL") or "") or RESCUE_FROM
+  if #reasons == 0 or s.day < math.max(first, self.rescue_next or 0) then return end
+  self.rescue_next = s.day + RESCUE_DAYS
+  self:note(string.format("day %d: failing its objectives: %s", s.day, table.concat(reasons, "; ")))
+  wait = {at = bot:now(), reasons = reasons}
+  self.rescue_wait = wait
+  local text = (self:report() or "") .. "\nFAILING ITS OBJECTIVES: " .. table.concat(reasons, "; ") .. "."
+  local asked = bot:askRescue(text, table.concat(self:planMenu(), ","), function(plan)
+    if plan then
+      self:applyPlan(plan)
+      self.rescue_boost, self.rescue_until = {}, s.day + 30
+      for key, b in pairs(self.boost) do self.rescue_boost[key] = b end
+    end
+    wait.done = true
+  end)
+  if not asked then wait.done = true end
 end
 
 --! (MP_BOT_DIAG) Where the GP's offices, their doctors, the patients and
@@ -2163,7 +2790,12 @@ function M:think()
   if bot.world.mp_coop then
     self:helpAllies(s)
     if not s.hosp.mp_place then self:askAllies(s) end
+    -- The level's requirements, in the team chat.
+    self:winChat(s)
+    self:rivalWatch(s)
   end
+  -- Failing its objectives: a review by the model, and a word to the allies.
+  self:rescue(s)
   if s.hosp.mp_place then return end -- out of the race (or won): no more building
   if not s.hosp.opened and s.staffed_desks > 0 and s.rooms.gp and (s.staff.Doctor or 0) > 0 and
       not bot:sharesWithPerson() then
