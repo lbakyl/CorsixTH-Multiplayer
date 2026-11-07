@@ -311,7 +311,10 @@ function UIFax:choice(choice_number)
     -- lobby); the others race on. (The server's referee never leaves.)
     local session = TheApp.mp_session
     if session and not session.observer and self.ui.app.world:getUIHospital() == hospital then
-      session:finish({_S.multiplayer_window.race_left_end}, self.ui.app.world:mpEndMovie(hospital))
+      -- (A winner saw the video when the fax came, not again now.)
+      local movie = self.ui.app.world:mpEndMovie(hospital)
+      if movie == "win" and session.win_movie_shown then movie = nil end
+      session:finish({_S.multiplayer_window.race_left_end}, movie)
     end
   elseif choice == "stay_on_level" then
     hospital.win_declined = true

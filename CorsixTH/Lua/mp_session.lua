@@ -2410,6 +2410,18 @@ function MultiplayerSession:finishGame()
   end
 end
 
+--! Once per frame (App:onTick): a video a game step asked for on this
+--! player's screen (a race won: World:_mpPlaceFax), played outside the step.
+function MultiplayerSession:checkPendingMovie(app)
+  local movie = self.pending_movie
+  if not movie then return end
+  self.pending_movie = nil
+  if movie == "win" and app.moviePlayer then
+    self.win_movie_shown = true
+    app.moviePlayer:playWinLevelMovie()
+  end
+end
+
 --------------------------------------------------------------------------------
 -- Co-op offers: a member of staff or a patient offered to another player's
 -- hospital. The offer is a message (type "mp_offer", the purple icon) that

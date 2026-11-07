@@ -1998,7 +1998,15 @@ function World:_mpPlaceFax(hosp, how, place)
   if how == "won" then
     MultiplayerSession.startHold(self, "win", self.next_message_id, self:getHospitalIndex(hosp))
   end
-  if self.ui.hospital == hosp then self.ui.bottom_panel:openLastMessage() end
+  if self.ui.hospital == hosp then
+    self.ui.bottom_panel:openLastMessage()
+    -- A win: the winning video at once, on this player's screen only (the
+    -- game holds for their answer anyway), as the winner of a level sees
+    -- it; it is not shown again when they leave (Jan, eu2). Played after
+    -- this step, from the screen's tick (MultiplayerSession:checkPendingMovie).
+    local session = TheApp.mp_session
+    if how == "won" and session and not session.observer then session.pending_movie = "win" end
+  end
 end
 
 --! Competitive: is the race over (at most one hospital still racing)? Then
