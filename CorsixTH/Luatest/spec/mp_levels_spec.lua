@@ -223,6 +223,29 @@ describe("Multiplayer levels", function()
     assert.is_nil(plain.mp_events)
   end)
 
+  it("has earthquakes on every level whose map or campaign level has them", function()
+    local map_quakes = {[0] = {StartMonth = 4, EndMonth = 8, Severity = 2}}
+    local campaign_quakes = {[0] = {StartMonth = 13, EndMonth = 16, Severity = 4}}
+    local campaign = {quake_control = campaign_quakes, objects = {}}
+    -- The map's own earthquakes stay.
+    local config = {quake_control = map_quakes}
+    levels.apply(config, campaign, 3, 3)
+    assert.equal(map_quakes, config.quake_control)
+    -- A map without any (TEAM TOWN, map 0): the campaign level's.
+    config = {}
+    levels.apply(config, campaign, 8, 4)
+    assert.equal(campaign_quakes, config.quake_control)
+    -- CROSSROADS: its own, one every half year from month 7, each stronger.
+    config = {}
+    levels.apply(config, campaign, 9, 6)
+    local quakes = config.quake_control
+    assert.equal(7, quakes[0].StartMonth)
+    for i = 1, #quakes do
+      assert.truthy(quakes[i].StartMonth > quakes[i - 1].EndMonth)
+      assert.truthy(quakes[i].Severity > quakes[i - 1].Severity)
+    end
+  end)
+
   -- The level's random emergencies, and the May slack tongue ones apart.
   local function split(world)
     local random, slack = {}, {}

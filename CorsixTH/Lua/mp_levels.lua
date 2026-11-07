@@ -88,7 +88,10 @@ levels.LEVELS = {
     map_files = {[2] = "crossroads8.map", [3] = "crossroads8.map", [4] = "crossroads8.map",
       [8] = "crossroads8.map"},
     -- (Value: the bigger plots start every hospital about $21,500 higher.)
-    goals = {reputation = 650, balance = 150000, value = 170000, cured = 300, cure_rate = 55}},
+    goals = {reputation = 650, balance = 150000, value = 170000, cured = 300, cure_rate = 55},
+    -- Map 0's settings have no earthquakes, and campaign level 8's first
+    -- comes in month 13: one every half year instead, each stronger.
+    quakes = {{7, 9, 2}, {13, 16, 3}, {19, 22, 4}, {26, 30, 5}, {34, 38, 6}}},
 }
 levels.COUNT = #levels.LEVELS
 
@@ -280,6 +283,17 @@ function levels.apply(config, campaign, level, players)
   local def = levels.LEVELS[levels.clamp(level)]
   for _, key in ipairs(FROM_CAMPAIGN) do
     config[key] = campaign[key]
+  end
+  -- Earthquakes: the level's own ({start month, end month, severity}), else
+  -- the map's, else the campaign level's (the multiplayer maps 0 and 1 have
+  -- none, so TEAM TOWN and CROSSROADS had no earthquake at all).
+  if def.quakes then
+    config.quake_control = {}
+    for n, quake in ipairs(def.quakes) do
+      config.quake_control[n - 1] = {StartMonth = quake[1], EndMonth = quake[2], Severity = quake[3]}
+    end
+  elseif not (config.quake_control and config.quake_control[0]) and campaign.quake_control then
+    config.quake_control = campaign.quake_control
   end
   -- Every level but the first has the training room from the start (with
   -- its projector, lecture chairs, skeleton and bookcase): the staff to hire
