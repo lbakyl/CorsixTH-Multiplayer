@@ -470,6 +470,21 @@ end
 --! Despawn the humanoid.
 function Humanoid:despawn()
   local spawn_point = self.world.spawn_points[math.random(1, #self.world.spawn_points)]
+  -- An edge it cannot walk to (a map whose roads an unowned plot cuts): the
+  -- nearest one it can, else it leaves where it stands. (Otherwise it would
+  -- try the walk again every tick, for ever.)
+  local x, y = self.tile_x, self.tile_y
+  if x and y and (x ~= spawn_point.x or y ~= spawn_point.y) and
+      not self.world:getPathDistance(x, y, spawn_point.x, spawn_point.y) then
+    local best, best_distance
+    for _, point in ipairs(self.world.spawn_points) do
+      local distance = self.world:getPathDistance(x, y, point.x, point.y)
+      if distance and (not best_distance or distance < best_distance) then
+        best, best_distance = point, distance
+      end
+    end
+    spawn_point = best or {x = x, y = y, direction = spawn_point.direction}
+  end
   local SpawnAction = _G["SpawnAction"] ---@type SpawnAction
   self:setNextAction(SpawnAction("despawn", spawn_point):setMustHappen(true))
 end

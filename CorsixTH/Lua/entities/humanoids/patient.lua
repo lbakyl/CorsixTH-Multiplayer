@@ -577,6 +577,12 @@ function Patient:goHome(reason, disease_id)
     self:setDynamicInfo('text', {"", _S.dynamic_info.patient.actions.epidemic_sent_home})
     self:setMood("exit","activate")
 
+  elseif reason == "no_path" then
+    -- (Could not reach the hospital at all: it never came in, so it counts
+    -- for nobody, and nobody's reputation suffers.)
+    self:clearDynamicInfo()
+    self:setMood("exit", "activate")
+
   else
     TheApp.world:gameLog("Error: unknown reason " .. reason .. "!")
   end

@@ -29,6 +29,13 @@ local SeekReceptionAction = _G["SeekReceptionAction"] ---@type SeekReceptionActi
 -- Distance from queue that patient can join a reception desk queue.
 local can_join_queue_distance = 6
 
+--! A patient with no path to the hospital (on a map whose roads an unowned
+--! plot cuts) tries again once a day instead of every tick, each try a failed
+--! path search for every desk, and after this many days leaves for good
+--! (Patient:goHome "no_path": nobody loses reputation).
+local no_path_days = 3
+local hours_per_day = 50
+
 function SeekReceptionAction:SeekReceptionAction()
   self:HumanoidAction("seek_reception")
 end
@@ -73,7 +80,9 @@ local function action_seek_reception_start(action, humanoid)
   assert(humanoid.hospital, "humanoid must be associated with a hospital to seek reception")
 
   -- Go through all receptions desks.
+  local any_desk = false
   for _, desk in ipairs(humanoid.hospital:getReceptionDesks(true)) do
+    any_desk = true
     -- Ok, so we found one with staff at it or on the way.
     -- Is this one better than the last one?
     -- A lower score is better.
@@ -94,6 +103,7 @@ local function action_seek_reception_start(action, humanoid)
     end
   end
   if best_desk then
+    humanoid.no_path_days = nil
     -- We found a desk to go to!
     local orientation = best_desk.object_type.orientations[best_desk.direction]
     local x = best_desk.tile_x + orientation.use_position[1]
@@ -138,8 +148,22 @@ local function action_seek_reception_start(action, humanoid)
         humanoid.waiting = 5
       end
     else
-      local _, hosp_x, hosp_y = world.pathfinder:isReachableFromHospital(humanoid.tile_x, humanoid.tile_y)
-      procrastination = WalkAction(hosp_x, hosp_y):setMustHappen(action.must_happen)
+      local reachable, hosp_x, hosp_y = world.pathfinder:isReachableFromHospital(humanoid.tile_x, humanoid.tile_y)
+      -- Cut off: a staffed desk none of whose queues it can reach, or no
+      -- hospital at all to walk to (a walk to where it stands).
+      local cut_off = any_desk or not reachable or (hosp_x == humanoid.tile_x and hosp_y == humanoid.tile_y)
+      if cut_off and class.is(humanoid, Patient) and not class.is(humanoid, Vip) then
+        humanoid.no_path_days = (humanoid.no_path_days or 0) + 1
+        if humanoid.no_path_days > no_path_days then
+          humanoid:goHome("no_path")
+          return
+        end
+        procrastination = IdleAction():setCount(hours_per_day):setMustHappen(action.must_happen)
+      elseif reachable then
+        procrastination = WalkAction(hosp_x, hosp_y):setMustHappen(action.must_happen)
+      else
+        procrastination = IdleAction():setCount(hours_per_day):setMustHappen(action.must_happen)
+      end
     end
     humanoid:queueAction(procrastination, 0)
   end
