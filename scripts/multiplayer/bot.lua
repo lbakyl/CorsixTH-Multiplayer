@@ -174,6 +174,12 @@ local LINES = {
     "Sorry %s, I'm broke right now.",
     "I'd love to, %s, but my bank manager says no.",
   },
+  -- A referred patient this hospital cannot treat (no room for it).
+  cannot_treat = {
+    "Sorry, %s, we can't treat that one here. Better keep them.",
+    "We have no room for that, %s. Not this time.",
+    "I'd only have to send them home, %s. Thanks anyway.",
+  },
   money_thanks = {
     "Thanks for the cash, %s!",
     "Wow, thank you %s! Straight into new equipment.",
@@ -770,6 +776,10 @@ function Bot:answerOffers()
         if cost > 0 and mine.balance - cost < RESERVE then
           accept = false
           line = pick(LINES.broke)
+        elseif offer.kind == "patient" and not self:canTreat(self.world:getEntityById(offer.entity)) then
+          -- (Taking them in only to send them home helps nobody: Jan, eu2.)
+          accept = false
+          line = pick(LINES.cannot_treat)
         elseif offer.kind == "money" then
           line = pick(LINES.pay)
         else
@@ -793,6 +803,21 @@ function Bot:answerOffers()
       self:say(line, delay + typing(line), not self.world:mpRivals(self.world.hospitals[offer.from], mine) and "team" or nil)
     end
   end
+end
+
+--! Can this hospital treat a patient another player refers? A diagnosed
+--! patient needs every treatment room of the disease here, one not yet
+--! diagnosed a GP's office.
+function Bot:canTreat(patient)
+  local mine = self.world.ui.hospital
+  if not patient or not patient.disease then return true end
+  if patient.diagnosed then
+    for _, id in ipairs(patient.disease.treatment_rooms or {}) do
+      if mine:countRoomOfType(id, 1) == 0 then return false end
+    end
+    return true
+  end
+  return mine:countRoomOfType("gp", 1) > 0
 end
 
 --! Answer this hospital's emergency faxes: accept if it has the treatment
@@ -1131,6 +1156,8 @@ end
 -- staff room has no place for the sofa beside the pool table and TV (Bot
 -- Agnes drew one four times in a game, and pulled each down again).
 local SMALLEST = {staff_room = 5}
+-- Game days a spot the room editor refused is left alone.
+local REFUSED_SPOT_DAYS = 90
 
 function Bot:drawRoom(room_type, size, extras)
   local hospital = self.world.ui.hospital
@@ -1140,10 +1167,18 @@ function Bot:drawRoom(room_type, size, extras)
   local ax, ay = self:anchor()
   size = math.max(min, size or min + 1) -- (one more than the smallest: room for a plant)
   self.reserved = self:reservedTiles()
+  -- Spots the room editor refused lately (it would cut off part of the
+  -- hospital): the same search found the same spot every time, and Bot Agnes
+  -- drew a hair restoration room there six times in 60 days (eu2).
+  local today = self:gameDay()
+  local function refused(fx, fy, fw, fh)
+    local day = self.refused_spots and self.refused_spots[string.format("%d,%d,%d,%d", fx, fy, fw, fh)]
+    return day and today - day < REFUSED_SPOT_DAYS
+  end
   local x, y, w, h
   -- Where a player would put it (against walls and rooms, in rows).
   local ok_layout, lx, ly, lw, lh = pcall(self.layoutSpot, self, min, size)
-  if ok_layout and lx then
+  if ok_layout and lx and not refused(lx, ly, lw, lh or lw) then
     x, y, w, h = lx, ly, lw, lh
   elseif not ok_layout then
     log("layout: " .. tostring(lx))
@@ -1152,7 +1187,7 @@ function Bot:drawRoom(room_type, size, extras)
   -- the corridor in front of it is two tiles wide.
   -- (Each only if it leaves the corridor in one piece.)
   local function try(s, fx, fy)
-    if x or not fx then return end
+    if x or not fx or refused(fx, fy, s, s) then return end
     for ty = fy, fy + s - 1 do
       for tx = fx, fx + s - 1 do
         if self.reserved[ty * 1000 + tx] then return end -- (a room being edited, an outline)
@@ -1183,6 +1218,8 @@ function Bot:drawRoom(room_type, size, extras)
     if by_hand then self.furnishing = {extras = extras, room_id = room_type.id} end
     return true
   end
+  self.refused_spots = self.refused_spots or {}
+  self.refused_spots[string.format("%d,%d,%d,%d", x, y, w, h or w)] = today
   return nil, "refused"
 end
 

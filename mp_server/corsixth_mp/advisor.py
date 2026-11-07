@@ -101,7 +101,8 @@ may do something, or saying they will do it themselves, is not a request to you.
 will do something themselves, or that you should not do it (also taking back what they asked before), put those
 items from the menu into "leave" and say you leave them to them; otherwise leave it empty. If what they ask for is not on the menu, say kindly that
 you cannot do that yet. In the menu, add:<room>:<object> puts one more of that object into that room (a skeleton
-into the psych room is add:psych:skeleton), and bigger:<room> makes that room bigger. Never promise anything you
+into the psych room is add:psych:skeleton), bigger:<room> makes that room bigger, and remove:<room> takes that
+room down to free its floor. Never promise anything you
 do not set as the project. "reply" is your chat line."""
 
 TEAM_CHAT_SCHEMA = {

@@ -39,6 +39,21 @@ local SKIP_ROOMS = {}
 local SPECIALISTS = {Psychiatrist = true, Surgeon = true, Researcher = true}
 -- Kept in the bank for wages and repairs.
 local RESERVE = 3000
+-- A patient it has no room for (and cannot build one now): this share is
+-- referred to a team mate with the rooms, the rest sent home; and at most one
+-- referral to the same hospital in this many game days (the person there
+-- gets a fax for each one, Jan on eu2).
+local REFER_SHARE = 0.5
+local REFER_GAP_DAYS = 3
+-- A room nobody has used for this many game days (about 5 months) is taken
+-- down for its floor (Jan, eu2), and none of the kind is built again for
+-- REMOVED_REBUILD_DAYS unless patients keep asking for it.
+local VACANT_DAYS = 150
+local REMOVED_REBUILD_DAYS = 180
+-- Rooms used by staff, not patients: used while staff are in them.
+local STAFF_ROOMS = {staff_room = true, training = true, research = true}
+-- Never taken down for being empty (a hospital without them is no hospital).
+local KEEP_ROOMS = {gp = true}
 -- Rooms worth a second (third) copy when their queues grow.
 local COPIES = {gp = 6, pharmacy = 2, general_diag = 3, psych = 2, ward = 2, toilets = 3, staff_room = 2,
     cardiogram = 2, scanner = 2, ultrascan = 2, blood_machine = 2, x_ray = 2, inflation = 2,
@@ -128,6 +143,9 @@ function M.new(bot, ctx)
   self.next_monthly = -1
   self.called = {}         -- machine entity id -> day a handyman was sent
   self.answered = {}       -- message number -> true
+  self.referred_day = {}   -- hospital index -> game day this hospital last referred a patient there
+  self.room_used = {}      -- room id -> last game day somebody used it (a patient; staff in staff-only rooms)
+  self.removed_type = {}   -- room type id -> game day a room of it was removed for being empty
   self.noticed = {}        -- saboteur entity id -> day it was noticed
   self.boost = {}          -- project key -> extra score from the model's plan
   self.wishes = {}         -- project key -> {until = last game day, had = how many then} (a team mate's wish)
@@ -459,6 +477,13 @@ function M:projects(s)
     end
     -- (Not what a team mate said they would do themselves.)
     if self.hands_off[key] and s.day <= self.hands_off[key] then return end
+    -- (Not a room just taken down for standing empty, unless patients ask
+    -- for it now or a team mate wants it.)
+    local room_kind = key:match("^room:(.+)$")
+    if room_kind and self.removed_type[room_kind] and s.day - self.removed_type[room_kind] < REMOVED_REBUILD_DAYS and
+        (self.demand[room_kind] or 0) < 3 and not self.wishes[key] then
+      return
+    end
     -- (Only the basics of an opening hospital are done without the money
     -- for them; not what a plan or a wish lifted that high.)
     local basic = score >= 90
@@ -671,6 +696,23 @@ function M:projects(s)
   if wanted and land_price then
     add("buy:land", 10 + wanted * 6, function() return bot:buyPlot() end, land_price)
   end
+  -- A room nobody has used for about five months: taken down for its floor.
+  -- (Not in a hospital a person plays in too: the rooms are theirs as well.)
+  if #bot:hospitalMates() == 0 then
+    local rm = self:vacantRoom(s)
+    if rm then
+      local kind = rm.room_info.id
+      add("edit:remove", 14 + (wanted or 0) * 6, function()
+        local ok, why = bot:editRoom(rm, {"delete"})
+        if ok then
+          self.removed_type[kind] = s.day
+          self.room_used[rm.id] = nil
+          self:note(string.format("day %d: removing %s #%d: nobody used it for %d days", s.day, kind, rm.id, VACANT_DAYS))
+        end
+        return ok, why
+      end, 0)
+    end
+  end
 
   -- Reception: another desk and receptionist when the queue grows.
   if s.desks < 2 and s.reception_queue > 10 then buy("reception_desk", (s.reception_queue - 8) * 0.6) end
@@ -767,6 +809,16 @@ function M:projects(s)
         hire(what, 0)
       elseif kind == "buy" then
         buy(what, 0)
+      elseif kind == "remove" then
+        -- A team mate asks for a room to go (its floor for something else).
+        local rm = self:roomOf(what)
+        if rm then
+          add(key, 0, function()
+            local ok, why = bot:editRoom(rm, {"delete"})
+            if ok then self.removed_type[what] = s.day end
+            return ok, why
+          end, 0)
+        end
       elseif kind == "add" or kind == "bigger" then
         -- An object more in a room, or the room bigger: edit it as a person
         -- would (Bot:editRoom).
@@ -1040,6 +1092,7 @@ function M:daily(s)
   local bot = self.bot
   local hosp = s.hosp
   local helper = bot:sharesWithPerson()
+  self:noteRoomUse(s)
   -- Machines half worn: a handyman to each (once in a while per machine).
   -- Repaired early, a machine seldom loses strength (the game takes it
   -- with the share used up) and does not explode while the handyman walks.
@@ -1181,7 +1234,7 @@ function M:answerFaxes(s)
       for i, c in ipairs(choices) do
         if c.enabled ~= false then index[c.choice] = i end
       end
-      local pick, why
+      local pick, why, refer_to
       local diagnosis = false
       for _, c in ipairs(choices) do
         if c.choice == "guess_cure" then diagnosis = true end
@@ -1226,7 +1279,16 @@ function M:answerFaxes(s)
         elseif buildable and s.balance > 15000 then
           pick, why = index.wait, "building the room"
         else
-          pick, why = index.send_home, "no room for it"
+          -- About half go to a team mate whose hospital has the rooms (not
+          -- every one: the person there gets a fax for each), the rest home.
+          local mate, mate_index = self:referTarget(patient, rooms, s.day)
+          if mate and index.wait and self.rand() < REFER_SHARE then
+            pick, why = index.wait, "referred to " .. tostring(mate.name)
+            refer_to = mate_index
+            self.referred_day[mate_index] = s.day
+          else
+            pick, why = index.send_home, "no room for it"
+          end
         end
       elseif index.accept_vip or index.refuse_vip then
         local good = s.reputation >= 450 and s.room_count >= 5 and s.litter < 10
@@ -1238,13 +1300,73 @@ function M:answerFaxes(s)
         self.answered[icon.mp_id] = true
         local id = icon.mp_id
         local choice_name = choices[pick].choice
+        local patient_id = refer_to and icon.owner and icon.owner.mp_id
         self.bot:say(nil, 2 + self.rand() * 4, nil, function()
+          -- (A referral as a person makes it: the offer, then "wait" so the
+          -- patient stays until the team mate answers, UIMultiplayerChooseHospital.)
+          if patient_id then self:issue({kind = "offer_patient", to = refer_to, patient = patient_id}) end
           self:issue({kind = "fax_choice", msg = id, choice = pick})
         end)
         self:note(string.format("day %d: fax #%d (%s): %s, %s", s.day, id, tostring(icon.type), choice_name, why))
       end
     end
   end
+end
+
+--! Once a day: the rooms in use (a patient inside; staff in a staff-only
+--! room). A room first seen today counts as used today.
+function M:noteRoomUse(s)
+  local world = self.bot.world
+  for _, rm in pairs(world.rooms) do
+    if rm.hospital == s.hosp and rm.is_active then
+      local used = not self.room_used[rm.id]
+      for h in pairs(rm.humanoids or {}) do
+        if class.is(h, Patient) or (STAFF_ROOMS[rm.room_info.id] and class.is(h, Staff)) then used = true end
+      end
+      if used then self.room_used[rm.id] = s.day end
+    end
+  end
+end
+
+--! A room of its own nobody has used for VACANT_DAYS game days (the one
+--! empty longest), or nil.
+function M:vacantRoom(s)
+  local world = self.bot.world
+  local best, best_day
+  for _, rm in pairs(world.rooms) do
+    local day = self.room_used[rm.id]
+    if rm.hospital == s.hosp and rm.built and rm.is_active and not rm.crashed and day and
+        not KEEP_ROOMS[rm.room_info.id] and s.day - day >= VACANT_DAYS and
+        (not best_day or day < best_day or (day == best_day and rm.id < best.id)) then
+      best, best_day = rm, day
+    end
+  end
+  return best
+end
+
+--! A team mate's hospital to refer a patient to: one that has every room in
+--! `rooms`, is still in the race and had no referral from this hospital in
+--! the last REFER_GAP_DAYS game days. Its index, or nil.
+function M:referTarget(patient, rooms, day)
+  local world = self.bot.world
+  local mine = world.ui.hospital
+  if not (patient and patient.mp_id and MultiplayerSession.referable(patient)) then return nil end
+  local n = world.mp_coop and world.mp_coop.players or 0
+  for i = 1, n do
+    local h = world.hospitals[i]
+    local last = self.referred_day[i]
+    -- (Allies only: in a race everyone for themselves the rivals may trade,
+    -- but a bot does not hand its patients to them.)
+    if h and h ~= mine and not h.mp_place and world:mpMayTrade(mine, h) and not world:mpRivals(mine, h) and
+        not (last and day - last < REFER_GAP_DAYS) then
+      local has = true
+      for _, r in ipairs(rooms) do
+        if h:countRoomOfType(r, 1) == 0 then has = false break end
+      end
+      if has then return h, i end
+    end
+  end
+  return nil
 end
 
 --! A race: throw out evil handymen once noticed, shoot attack rats.
@@ -1548,6 +1670,7 @@ function M:wishMenu()
     if rm.hospital == world.ui.hospital and rm.is_active and not seen[id] then
       seen[id] = true
       items[#items + 1] = "bigger:" .. id
+      items[#items + 1] = "remove:" .. id
       for _, obj in ipairs(rm.room_info.objects_additional or {}) do
         if self.bot:extraAllowed(rm, obj) then items[#items + 1] = "add:" .. id .. ":" .. obj end
       end
@@ -1591,6 +1714,11 @@ function M:howMany(key)
           if o.object_type and o.object_type.id == obj then n = n + 1 end
         end
       end
+    end
+  elseif kind == "remove" then
+    -- (Counted down: one room fewer is one more, so the wish is over.)
+    for _, r in pairs(world.rooms) do
+      if r.hospital == hosp and r.room_info.id == what and not r.crashed then n = n - 1 end
     end
   elseif kind == "bigger" then
     for _, rm in pairs(world.rooms) do
