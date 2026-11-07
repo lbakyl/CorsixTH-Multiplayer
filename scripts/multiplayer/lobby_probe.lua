@@ -304,6 +304,9 @@ local function run_lobby()
   wait_for("the connection", function() return TheApp.mp_lobby or not w.connecting end)
   local lobby = assert(TheApp.mp_lobby, "not connected: " .. tostring(w.status_text))
   log("connected as " .. lobby.build)
+  log("connection encrypted: " .. tostring(lobby.encrypted) .. " (" .. tostring(lobby.security_note) .. ")")
+  -- (CORSIXTH_MP_TLS=require: a connection in clear would have failed.)
+  assert(lobby.encrypted or os.getenv("CORSIXTH_MP_TLS") ~= "require", "the connection is not encrypted")
   wait_for("room list", function() return lobby.state == "connected" and lobby_window() and lobby_window().view == "rooms" end)
 
   if role == "host" then

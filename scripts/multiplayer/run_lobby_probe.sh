@@ -121,6 +121,13 @@
 # Exits 0 only if all checks behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
+#
+# MP_TLS=1: the same run with encrypted connections (docs/multiplayer/
+# ENCRYPTION.md). A throwaway certificate is made with the openssl command,
+# the server gets it, and every player connects with CORSIXTH_MP_TLS=require
+# (LuaSec needed: ssl.so in the LuaSocket tree), so a player that cannot
+# encrypt fails. Check 0 then also asks that every player's connection was
+# encrypted and that the server saw TLS connections.
 set -euo pipefail
 if [[ $# -ne 2 ]]; then
   echo "Usage: $0 BINARY GAME_DATA" >&2
@@ -136,6 +143,13 @@ out=$(mktemp -d "${TMPDIR:-/tmp}/corsixth-lobby.XXXXXXXX")
 echo "Probe output: $out"
 
 export CORSIXTH_SOURCE="$source_dir"
+tls_env=()
+if [[ "${MP_TLS:-0}" == 1 ]]; then
+  command -v openssl > /dev/null || { echo "MP_TLS=1 needs the openssl command" >&2; exit 2; }
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 2 -subj /CN=probe -keyout "$out/tls.key" -out "$out/tls.crt" > /dev/null 2>&1
+  export CORSIXTH_MP_TLS_CERT="$out/tls.crt" CORSIXTH_MP_TLS_KEY="$out/tls.key"
+  tls_env=(CORSIXTH_MP_TLS=require "CORSIXTH_MP_TRUST_FILE=$out/known_servers.txt")
+fi
 export USER="${USER:-corsixth-probe}"
 export SDL_VIDEODRIVER=dummy SDL_AUDIO_DRIVER=dummy SDL_RENDER_DRIVER=software
 export MP_LUA_CPATH="$LUASOCKET_TREE/lib/lua/$lua_ver/?.so"
@@ -189,7 +203,7 @@ play_intro = false
 play_demo = false
 grant_wage_increase = false
 EOF
-  env XDG_CONFIG_HOME="$dir/config" MP_NAME="$name" "$@" timeout 280 "$binary" \
+  env XDG_CONFIG_HOME="$dir/config" MP_NAME="$name" ${tls_env[@]+"${tls_env[@]}"} "$@" timeout 280 "$binary" \
     "--interpreter=$source_dir/scripts/multiplayer/lobby_probe.lua" \
     "--config-file=$dir/config.txt" > "$dir/log.txt" 2>&1 || true
   grep -q 'PROBE: DONE' "$dir/log.txt" || { echo "$name failed:"; tail -20 "$dir/log.txt"; return 1; }
@@ -403,10 +417,11 @@ if [[ ! -f "$out/server.log" ]]; then
   : > "$out/server.log"
 fi
 
-python3 - "$out" "${MP_REFEREE:-0}" <<'PY'
+python3 - "$out" "${MP_REFEREE:-0}" "${MP_TLS:-0}" <<'PY'
 import pathlib, re, sys
 out = pathlib.Path(sys.argv[1])
 with_referee = sys.argv[2] == '1' 
+with_tls = sys.argv[3] == '1'
 def log(n): return (out / n / 'log.txt').read_text()
 def result(n):
     m = re.search(r'RESULT: (.*)', log(n)); return m.group(1) if m else 'no result'
@@ -417,6 +432,16 @@ def is_ok(line):
     return re.search(r'-> ok( \(.*\))?$', line) is not None
 server = (out / 'server.log').read_text()
 fail = False
+
+if with_tls:
+    # Every player that got to the lobby says how its connection was made; the
+    # server counts the encrypted ones.
+    players = [d.name for d in out.iterdir() if (d / 'log.txt').exists()]
+    plain = [n for n in players if 'connection encrypted: true' not in log(n) and 'connected as' in log(n)]
+    tls_conns = len(re.findall(r'connection \d+ from .* \(TLS\)', server))
+    ok0 = not plain and tls_conns >= 8 and 'connection encrypted: false' not in ''.join(log(n) for n in players)
+    print(f"0. Encryption (TLS):        every player encrypted: {not plain} {plain}; encrypted connections at the server: {tls_conns}")
+    fail |= not ok0
 
 a, b = log('alice'), log('bob')
 lobby = re.search(r'lobby: .*', a)

@@ -69,7 +69,12 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
    ends), your choices are still there for the next room, until you
    **Disconnect**.
 3. **To join:** pick the room in the list, type its password, **Join**, then
-   **Ready**.
+   **Ready**. The line at the bottom of the room list says whether your
+   connection is encrypted (TLS). If it is not, the game asks you to press
+   **Join** or **Create** twice before it sends a password. The first time
+   you connect to a server, the game remembers its certificate; if it ever
+   changes, the game refuses to connect and tells you what to do
+   (docs/multiplayer/ENCRYPTION.md).
 4. **Who plays where, and with whom:** each player's line in the room has
    two buttons. The **colour** is your hospital: players with the same
    colour build one hospital together. The **team** is who you win with:
