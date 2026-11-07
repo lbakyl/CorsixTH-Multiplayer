@@ -70,7 +70,8 @@ function UIBankManager:UIBankManager(ui)
   self.close_panel = self:addPanel(0, 607, 448)
   self.close_button = self.close_panel:makeButton(0, 0, 26, 26, 4, self.close):setTooltip(_S.tooltip.bank_manager.close)
 
-  self:addPanel(0, 250, 390):makeButton(0, 0, 200, 50, 0, self.openTownMap):setTooltip(_S.tooltip.toolbar.town_map)
+  self:addPanel(0, 250, 390):makeButton(0, 0, 200, 50, 0, self.openTownMap):setTooltip(_S.tooltip.toolbar.town_map
+      :format(hotkey_value_label("ingame_panel_townMap", ui.app.hotkeys)))
   -- Multiplayer co-op: ask another player for money (above the left card).
   if TheApp.mp_session and self.world.mp_coop then
     self.ask_button = self:addPanel(0, 58, 52)
