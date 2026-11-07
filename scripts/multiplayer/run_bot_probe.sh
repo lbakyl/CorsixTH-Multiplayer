@@ -49,9 +49,9 @@
 #  16. asking for staff: from game day 5 the bots lack a surgeon (MP_BOT_TEST_LACK);
 #      after 10 days they ask the allies in the team chat
 #  17. the level's requirements (MP_BOT_TEST_WIN: ann's hospital meets them from day
-#      10, the third from day 12): one bot says "good job" to ann, the third
-#      hospital's bot says it is ready too, the other says what it still needs
-#  18. a warning that an opponent meets them: in "afk" the bot tells kay, in
+#      10, the others from day 12): the bot of hospital 2 says "good job" to ann, and
+#      each bot says what it still needs, then that it is ready too
+#  18. a warning that an opponent meets them: in "afk" the bot tells the person it shares with, in
 #      "duel" nobody is there to read it
 #  19. failing its objectives (MP_BOT_TEST_FAIL): both bots of "team" ask ann for
 #      an amount, once
@@ -92,7 +92,7 @@ export MP_REFEREE_PROBE_SCENARIO="team=none;race=none;trio=none;duel=none;lab=no
 export CORSIXTH_MP_MAX_BOTS=9 # (nine bots in all the rooms)
 # (MP_BOT_AWAY_SECONDS: kay in "afk" counts as away after a game week; the
 # bots' games run faster than real time.)
-MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 MP_BOT_AWAY_SECONDS=3 MP_BOT_GIVE_LIMITS=2000:1000 MP_BOT_TEST_LACK=5:Surgeon:operating_theatre MP_BOT_TEST_WIN="1:10;3:12" MP_BOT_TEST_FAIL=20 PYTHONPATH="$source_dir/mp_server" \
+MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 MP_BOT_AWAY_SECONDS=3 MP_BOT_GIVE_LIMITS=2000:1000 MP_BOT_TEST_LACK=5:Surgeon:operating_theatre MP_BOT_TEST_WIN="1:10;2:12;3:12" MP_BOT_TEST_FAIL=20 PYTHONPATH="$source_dir/mp_server" \
   python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
 server_pid=$!
@@ -361,32 +361,43 @@ ok16 = bool(asks16) and bool(notes16) and min(s for s, _ in asks16) >= (5 - 1) *
 print(f"16. Asking for staff:       lines to ann {asks16[:2]}; bot notes {[n.split('] ', 1)[1] for n in notes16][:2]}")
 fail |= not ok16
 # 17. The level's requirements in the team chat (test hook MP_BOT_TEST_WIN:
-# ann's hospital 1 meets them from game day 10, Bertie's hospital 3 from day
+# ann's hospital 1 meets them from game day 10, hospitals 2 and 3 from day
 # 12). The bot of hospital 2 (the lower number) says "good job" to ann, once;
-# the bot of hospital 3 does not. That one says it is also ready once it is;
-# the first, which is not, says what it still needs (one requirement).
+# the bot of hospital 3 does not. Until day 12 each says what it still needs
+# (one requirement), then that it is ready too.
 win_words = re.compile(r'requirements|ready to win|did it|Good job|Well done|Great job|Nice work|level asks', re.I)
 last_a = last_hospitals(a)
 low17 = re.search(r'\[2 (.*?) opened', last_a[2]).group(1) if last_a else 'Bot Agnes'
 high17 = re.search(r'\[3 (.*?) opened', last_a[2]).group(1) if last_a else 'Bot Bertie'
-agnes17, bertie17 = chats_from(a, low17), chats_from(a, high17)
-good17 = [t for st, t in agnes17 if int(st) >= 450 and 'ann' in t and win_words.search(t)]
-good17_bertie = [t for st, t in bertie17 if int(st) >= 450 and 'ann' in t and win_words.search(t)]
-me_too17 = [t for st, t in bertie17 if int(st) >= 550 and re.search(r"also|good spot|requirements too|ready as well|there too", t)]
-need17 = [t for st, t in agnes17 if int(st) >= 450 and re.search(r"short|value|reputation|cure|died|death|happy|months|loan|worth|bank|cash", t)]
-ok17 = len(good17) == 1 and not good17_bertie and bool(me_too17) and len(need17) == 1
-print(f"17. Requirements chat:      Agnes to ann {good17}; Bertie to ann {good17_bertie}; Bertie also ready {me_too17[:1]}; Agnes needs {need17}")
+low_lines, high_lines = chats_from(a, low17), chats_from(a, high17)
+too_re = re.compile(r"also|good spot|requirements too|ready as well|there too")
+need_re = re.compile(r"short|value|reputation|cure|died|death|happy|months|loan|worth|bank|cash")
+def needs17(lines):
+    return [t for st, t in lines if 450 <= int(st) < 900 and not too_re.search(t) and not win_words.search(t)
+            and not re.search(r'objectives|Sent \$|Thanks|thank', t) and need_re.search(t)]
+good17 = [t for st, t in low_lines if int(st) >= 450 and 'ann' in t and win_words.search(t)]
+good17_high = [t for st, t in high_lines if int(st) >= 450 and 'ann' in t and win_words.search(t)]
+too17 = [[t for st, t in lines if int(st) >= 550 and too_re.search(t)] for lines in (low_lines, high_lines)]
+ok17 = (len(good17) == 1 and not good17_high and all(too17) and len(needs17(low_lines)) == 1
+        and len(needs17(high_lines)) == 1)
+print(f"17. Requirements chat:      hospital 2 to ann {good17}; hospital 3 to ann {good17_high}; both also ready {[x[:1] for x in too17]}; "
+      f"needs {needs17(low_lines)} / {needs17(high_lines)}")
 fail |= not ok17
+
 # 18. A warning that an opponent meets the requirements (MP_BOT_TEST_WIN:
-# jon's hospital 1 from game day 10). In "afk" the bot shares hospital 2 with
-# kay, who reads the team chat: one warning, naming jon. In "duel" the bot has
-# nobody on its side to read it: no warning.
+# hospital 1 from game day 10, hospital 2 from day 12). In "afk" the bot shares
+# its hospital with jon or with kay (it varies) and so warns that person
+# about the other, once. In "duel" the bot has nobody on its side to read it:
+# no warning.
 afk_bot = next((n.split('/', 1)[1] for n in bots if n.startswith('afk/')), None)
-warn18 = [(int(st), t) for st, t in chats_from(log('kay'), afk_bot) if 'jon' in t and re.search(r'catch up|speed up', t)] if afk_bot else []
+warn18 = [(who, int(st), t) for who in ('jon', 'kay') for st, t in chats_from(log(who), afk_bot)
+          if re.search(r'catch up|speed up', t)] if afk_bot else []
 duel_warn18 = [t for t in to_eve if re.search(r'catch up|speed up', t)]
-ok18 = len(warn18) == 1 and warn18[0][0] >= 450 and not duel_warn18
-print(f"18. Warning about a rival:  kay read {warn18}; eve read {duel_warn18}")
+ok18 = (len(warn18) == 1 and warn18[0][1] >= 450 and ('kay' in warn18[0][2] if warn18[0][0] == 'jon' else 'jon' in warn18[0][2])
+        and not duel_warn18)
+print(f"18. Warning about a rival:  read by {warn18}; eve read {duel_warn18}")
 fail |= not ok18
+
 # 19. A failing hospital asks its team for help (test hook MP_BOT_TEST_FAIL:
 # both bots of "team" count as failing from game day 20): each says in the
 # team chat that it is failing its objectives and asks ann for an amount, once
