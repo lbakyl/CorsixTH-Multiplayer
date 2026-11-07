@@ -303,11 +303,22 @@ local function walk_to(handyman, x, y)
 end
 
 --! One game hour of an evil handyman's mischief (from Staff:tick).
+--! Days an evil handyman works in a hospital before its adviser wonders
+--! aloud about him (and again after as many more), so that a player who
+--! never looks at their handymen gets a hint (Jan: Argus had no idea).
+sabotage.HINT_DAYS = 30
+
 function sabotage.tick(handyman)
   local s = handyman.mp_saboteur
   local world = handyman.world
   s.hours = s.hours + 1
   if s.hours >= sabotage.STAY_DAYS[s.level] * 50 then return sabotage.goHome(handyman) end
+  if s.hours % (sabotage.HINT_DAYS * 50) == 0 and handyman.hospital then
+    -- (The words: the next of a few, the same on every peer.)
+    s.hints = (s.hints or 0) + 1
+    local hints = S().sabotage_handyman_hint
+    MultiplayerSession.tellPlayer(world, handyman.hospital, hints[(s.hints - 1) % #hints + 1])
+  end
   local x, y = handyman.tile_x, handyman.tile_y
   local hospital = handyman.hospital
   local action = handyman:getCurrentAction()
@@ -589,8 +600,12 @@ function sabotage.ratAttack(world, target, level)
   if spawned == 0 then return false, "no walls for rat holes" end
   log(string.format("%d rats let loose in hospital %d", spawned, world:getHospitalIndex(target)))
   MultiplayerSession.tellPlayer(world, target, S().sabotage_rats_notice)
+  target.mp_rat_days = 0
   return true
 end
+
+-- Days between reminders while attack rats run about.
+sabotage.RAT_REMINDER_DAYS = 14
 
 -- Days an attack rat keeps running before it goes back into a hole for good.
 local RAT_DAYS = 30
@@ -618,9 +633,17 @@ function sabotage.dailyRats(hospital)
   local count = sabotage.countRats(hospital.world, hospital)
   if count > 0 then
     hospital:unconditionalChangeReputation(-sabotage.ratPoints(count))
-    if hospital.world.game_date:dayOfMonth() == 1 then
-      MultiplayerSession.tellPlayer(hospital.world, hospital, S().sabotage_rats_reminder:format(count))
+    -- Every two weeks the adviser reminds the player (the attack's notice is
+    -- easy to miss: Jan and Argus never saw one), each time in other words.
+    local days = (hospital.mp_rat_days or 0) + 1
+    hospital.mp_rat_days = days
+    if days % sabotage.RAT_REMINDER_DAYS == 0 then
+      local texts = S().sabotage_rats_reminders
+      local n = days / sabotage.RAT_REMINDER_DAYS
+      MultiplayerSession.tellPlayer(hospital.world, hospital, texts[(n - 1) % #texts + 1]:format(count))
     end
+  else
+    hospital.mp_rat_days = nil
   end
 end
 

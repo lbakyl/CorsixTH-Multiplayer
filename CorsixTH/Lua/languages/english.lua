@@ -808,6 +808,19 @@ multiplayer_window = {
   level7_rat_bounty = "Rat bounty",
   sabotage_rats_notice = "Rats! A swarm has moved into the hospital. While they run about they cost reputation every day: click them to shoot them.",
   sabotage_rats_reminder = "%d rats are still running about the hospital, costing reputation every day.",
+  -- Every two weeks while attack rats run about (%d: how many), in turn.
+  sabotage_rats_reminders = {
+    "%d rats are still running about the hospital, costing reputation every day. Click them to shoot them.",
+    "The rats are still here, %d of them, and the patients are talking about it. Shoot them!",
+    "Your hospital still has %d rats. Every day they stay costs you reputation.",
+  },
+  -- A month after an evil handyman (from a rival) started in this hospital,
+  -- and every month he stays, in turn.
+  sabotage_handyman_hint = {
+    "Your equipment has been breaking a lot lately. Could there be an evil handyman in your hospital?",
+    "Things keep going wrong around here. Is every one of your handymen really yours? Sack one who is not.",
+    "A handyman nobody remembers hiring is wandering your corridors. Look at your handymen: a stranger can be thrown out.",
+  },
   sabotage_headhunter_notice = "%s has been offered a better job at another hospital and asks for a $%d pay rise. Agree within 10 days, or they leave.",
   sabotage_headhunter_left = "%s has left for a better offer.",
   sabotage_headhunter_won = "%s left their hospital and is on the hiring list: hire them within %d days, before anybody else may.",
@@ -854,6 +867,7 @@ multiplayer_window = {
   menu_colours_off = "  OFF  ",
   menu_bot_chat = "  BOT CHAT  ",
   menu_bot_chat_all = "  ALL  ",
+  menu_bot_chat_auto = "  NO SMALL TALK FROM 3 BOTS ON  ",
   menu_bot_chat_useful = "  NO SMALL TALK  ",
   menu_bot_chat_off = "  OFF  ",
   menu_chat = "  SEND A MESSAGE (%1%)  ",
