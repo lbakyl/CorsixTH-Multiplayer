@@ -1038,6 +1038,39 @@ function M:landWanted(s)
   return wanted
 end
 
+-- A plot an ally offers is taken when less than this much of its own land is
+-- free (its rooms take more than 65% of the indoor floor).
+local PLOT_TAKE_FREE = 0.35
+local PLOT_LINES = {
+  take = {"Thanks, %s, I'll take the plot. I was running out of room.",
+      "A plot, %s? Yes please, my hospital is getting cramped."},
+  roomy = {"Thanks, %s, but I still have plenty of room.", "No thanks, %s, my land is mostly empty still."},
+  broke = {"Sorry %s, I cannot afford that plot right now.", "I'd love it, %s, but I cannot pay for the plot."},
+}
+
+--! An ally offers a plot (offer.plot, offer.price): take it when little of
+--! its own land is free (under PLOT_TAKE_FREE, by MultiplayerSession.landFill)
+--! and it can pay, with a loan if need be (the loan is taken when the plot
+--! changes hands: MultiplayerSession.botBorrow).
+--!return (bool, string) accept, and the line to say (%s: the other player's name)
+function M:plotAnswer(offer)
+  local world = self.bot.world
+  local hosp = world.ui.hospital
+  local free = 1 - MultiplayerSession.landFill(world, hosp)
+  local price = offer.price or 0
+  local borrow = math.max(0, MultiplayerSession.maxLoan(world, hosp) - (hosp.loan or 0))
+  local verdict, why = true, "take"
+  if free >= PLOT_TAKE_FREE then
+    verdict, why = false, "roomy"
+  elseif price > 0 and hosp.balance + borrow - price < MultiplayerSession.BOT_AUCTION_RESERVE then
+    verdict, why = false, "broke"
+  end
+  self.log(string.format("plot %s offered for $%d: %d%% of its land free, balance $%d, may borrow $%d: %s",
+      tostring(offer.plot), price, math.floor(free * 100 + 0.5), math.floor(hosp.balance), borrow,
+      verdict and "accepts" or ("declines (" .. why .. ")")))
+  return verdict, self.pick(PLOT_LINES[why])
+end
+
 --! Do the most urgent project it can afford (one at a time, like a person).
 function M:doProject(s)
   local bot = self.bot

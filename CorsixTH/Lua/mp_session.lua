@@ -600,7 +600,7 @@ end
 
 --! Sounds for this player's own actions that only count once every peer has
 --! done them (the click itself could still be turned down).
-MultiplayerSession.success_sounds = {buy_plot = "cashreg.wav"}
+MultiplayerSession.success_sounds = {buy_plot = "cashreg.wav", sell_plot = "cashreg.wav"}
 
 --! What the player is told when one of their own actions is turned down
 --! (by command kind, then by reason); the reason is shown otherwise.
@@ -628,6 +628,24 @@ MultiplayerSession.rejection_texts = {
               ["cannot buy this plot"] = "That land cannot be bought now.",
               ["an auction is on"] = "Wait until the auction is over.",
               ["not enough money"] = "You cannot afford that land."},
+  give_reputation = {["reputation too low"] = "Your reputation is too low to give any away.",
+                     ["their reputation is full"] = "Their reputation cannot go any higher.",
+                     ["monthly limit"] = "You have given as much reputation as you may this month."},
+  sell_plot = {["not your plot"] = "That plot is not yours.",
+               ["starting plot"] = "Your starting plot cannot be sold.",
+               ["plot not empty"] = "You can only sell this plot when it is emptied of any items.",
+               ["people on the plot"] = "You can only sell this plot when nobody is on it. Try again in a moment.",
+               ["joins your land"] = "You cannot sell this plot: the rest of your land is joined to your hospital through it.",
+               ["an auction is on"] = "Wait until the auction is over."},
+  offer_plot = {["not your plot"] = "That plot is not yours.",
+                ["starting plot"] = "Your starting plot cannot be handed over.",
+                ["plot not empty"] = "You can only hand over this plot when it is emptied of any items.",
+                ["people on the plot"] = "You can only hand over this plot when nobody is on it. Try again in a moment.",
+                ["joins your land"] = "You cannot hand over this plot: the rest of your land is joined to your hospital through it.",
+                ["does not touch their land"] = "That plot does not touch the other player's land.",
+                ["already offered"] = "That plot has already been offered.",
+                ["an auction is on"] = "Wait until the auction is over.",
+                ["invalid price"] = "That price is not allowed."},
   auction_bid = {["outbid"] = "Somebody bid first. Try again.",
                  ["not enough money"] = "You cannot afford that bid.",
                  ["the auction is over"] = "The auction is over."},
@@ -2242,6 +2260,61 @@ function handlers.give_money(world, cmd)
   return true
 end
 
+-- Vouching for an ally: reputation points move from one hospital to another
+-- (the giver loses what the receiver gains), so a player who trails behind
+-- can be lifted by the others. The giver keeps REP_FLOOR points (the game
+-- warns below 200 and is lost below 100), gives at most REP_MAX_GIVE points
+-- at a time and REP_MONTH_LIMIT in a game month, so that the points cannot be
+-- passed back and forth for ever. The receiver stops at the game's top.
+MultiplayerSession.REP_MAX_GIVE = 100
+MultiplayerSession.REP_FLOOR = 200
+MultiplayerSession.REP_MONTH_LIMIT = 200
+
+--! How many reputation points `from` may still give in this game month.
+function MultiplayerSession.reputationLeft(world, from)
+  local given = from.mp_rep_given
+  local used = given and given.month == world:date():monthOfGame() and given.points or 0
+  return math.max(0, MultiplayerSession.REP_MONTH_LIMIT - used)
+end
+
+--! How many points `from` can give `to` now (0 to REP_MAX_GIVE), and why not
+--! more: "reputation too low" (the giver's floor), "their reputation is
+--! full" (the receiver's top) or "monthly limit".
+function MultiplayerSession.reputationRoom(world, from, to)
+  local keep = math.floor(from.reputation or 0) - MultiplayerSession.REP_FLOOR
+  local top = math.floor((to.reputation_max or 1000) - (to.reputation or 0))
+  local left = MultiplayerSession.reputationLeft(world, from)
+  local room = math.min(MultiplayerSession.REP_MAX_GIVE, keep, top, left)
+  if room >= 1 then return room end
+  if keep < 1 then return 0, "reputation too low" end
+  if top < 1 then return 0, "their reputation is full" end
+  return 0, "monthly limit"
+end
+
+--! Give reputation points to an ally: {hospital (giver), to, amount} (1 to
+--! REP_MAX_GIVE; less if the floor, the limit or the top stops it).
+function handlers.give_reputation(world, cmd)
+  local S = _S.multiplayer_window
+  local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
+  if not from or not to or from == to then return false, "no such hospital" end
+  if not world:mpMayTrade(from, to) or world:mpRivals(from, to) then return false, "not on your team" end
+  local amount = math.floor(tonumber(cmd.amount) or 0)
+  if amount < 1 or amount > MultiplayerSession.REP_MAX_GIVE then return false, "invalid amount" end
+  local room, why = MultiplayerSession.reputationRoom(world, from, to)
+  if room < 1 then return false, why end
+  amount = math.min(amount, room)
+  local month = world:date():monthOfGame()
+  local given = from.mp_rep_given
+  local used = given and given.month == month and given.points or 0
+  from:unconditionalChangeReputation(-amount)
+  to:unconditionalChangeReputation(amount)
+  from.mp_rep_given = {month = month, points = used + amount}
+  cmd.resolved = amount .. " points"
+  MultiplayerSession.tellPlayer(world, from, S.rep_given_note:format(to.name, amount))
+  MultiplayerSession.tellPlayer(world, to, S.rep_received_note:format(from.name, amount))
+  return true
+end
+
 --! Staff member `index` of a hospital, if their profile still has `key`.
 --! The member of staff a command names: by entity id (cmd.staff), else by
 --! position and key (wage and skill; a skill grows while training, so the
@@ -2839,6 +2912,10 @@ function MultiplayerSession.resolveOffer(world, offer, accept)
     if from and to then resolve_money(world, offer, from, to, accept) end
     return
   end
+  if offer.kind == "plot" then
+    if from and to then MultiplayerSession.resolvePlotOffer(world, offer, from, to, accept) end
+    return
+  end
   local entity = world:getEntityById(offer.entity)
   if entity and entity.mp_offer then entity.mp_offer = nil end
   if not (from and to) then return end
@@ -3341,16 +3418,9 @@ local function end_auction(world)
   local ui = world.ui
   -- A bot that bid with borrowed money borrows it now (in steps of $5000,
   -- keeping its reserve, as far as the bank lets it).
-  local bots = world.mp_coop and world.mp_coop.bot_hospitals or {}
-  if winner and bots[auction.leader] and winner.balance - auction.bid < MultiplayerSession.BOT_AUCTION_RESERVE then
-    local short = auction.bid + MultiplayerSession.BOT_AUCTION_RESERVE - winner.balance
-    local room = MultiplayerSession.maxLoan(world, winner) - winner.loan
-    local amount = math.min(math.ceil(short / 5000) * 5000, math.floor(room / 5000) * 5000)
-    if amount > 0 then
-      winner.loan = winner.loan + amount
-      winner:receiveMoney(amount, _S.transactions.bank_loan)
-      auction_log(string.format("auction %d: bot hospital %d borrows $%d", auction.id, auction.leader, amount))
-    end
+  local borrowed = MultiplayerSession.botBorrow(world, auction.leader, winner, auction.bid)
+  if borrowed > 0 then
+    auction_log(string.format("auction %d: bot hospital %d borrows $%d", auction.id, auction.leader, borrowed))
   end
   -- (purchasePlot gives cost advice through the UI; only to that player.)
   local adviser = ui and ui.adviser
@@ -3471,6 +3541,414 @@ function MultiplayerSession:syncAuction(world)
   elseif waiting then
     waiting:close()
   end
+end
+
+--------------------------------------------------------------------------------
+-- Selling a plot back to the bank. A player may undo a purchase at any time,
+-- except for their starting plot, once the plot is empty: no room (not one
+-- being built either), no object (the walls are the rooms' walls), nobody on
+-- it or about to walk over it (people are not moved: the sale is refused
+-- until they have gone). Litter and rat holes do not count; they go with the
+-- plot. The bank pays back PLOT_SELL_PERCENT of what the plot cost (an
+-- auction's price, not the list price; a plot bought before this was kept
+-- track of counts at the list price). The plot belongs to nobody then, and
+-- can be bought (or auctioned) again. A plot is also refused when the rest
+-- of the player's land hangs together with their hospital through it.
+--------------------------------------------------------------------------------
+
+MultiplayerSession.PLOT_SELL_PERCENT = 80
+
+-- Each plot's tiles, flat {x1, y1, x2, y2, ...}, per map (the plots never change).
+local plot_tile_lists = setmetatable({}, {__mode = "k"})
+
+--! The tiles of a plot, flat {x1, y1, x2, y2, ...}, in map order.
+function MultiplayerSession.plotTiles(th, plot)
+  local lists = plot_tile_lists[th]
+  if not lists then
+    lists = {}
+    local w, h = th:size()
+    local flags = {}
+    for y = 1, h do
+      for x = 1, w do
+        local p = th:getCellFlags(x, y, flags).parcelId
+        if p and p ~= 0 then
+          local list = lists[p]
+          if not list then
+            list = {}
+            lists[p] = list
+          end
+          list[#list + 1] = x
+          list[#list + 1] = y
+        end
+      end
+    end
+    plot_tile_lists[th] = lists
+  end
+  return lists[plot] or {}
+end
+
+--! The tile in the top right corner of a plot (the one furthest that way),
+--! for the town map's buttons.
+function MultiplayerSession.plotCorner(th, plot)
+  local tiles = MultiplayerSession.plotTiles(th, plot)
+  local bx, by, best
+  for i = 1, #tiles, 2 do
+    local score = tiles[i] - tiles[i + 1]
+    if not best or score > best then bx, by, best = tiles[i], tiles[i + 1], score end
+  end
+  return bx, by
+end
+
+--! What `plot` cost its owner (kept when it was bought; the list price for
+--! land bought before that was kept).
+function MultiplayerSession.plotPaid(world, plot)
+  local paid = world.mp_plot_paid and world.mp_plot_paid[plot]
+  if paid then return paid end
+  if world.free_build_mode then return 0 end
+  return world.map:getParcelPrice(plot)
+end
+
+--! What the bank pays back for `plot`.
+function MultiplayerSession.plotRefund(world, plot)
+  return math.floor(MultiplayerSession.plotPaid(world, plot) * MultiplayerSession.PLOT_SELL_PERCENT / 100)
+end
+
+--! Is `plot` one of the starting plots (every player starts with one)?
+function MultiplayerSession.isStartingPlot(world, plot)
+  return plot <= world.map.th:getPlayerCount()
+end
+
+--! Is there a person on `plot`, or one whose walk crosses it?
+local function person_on_plot(world, plot)
+  local th = world.map.th
+  local flags = {}
+  for _, entity in ipairs(world.entities) do
+    local queue = entity.action_queue
+    if queue and entity.tile_x and entity.tile_y then
+      if th:getCellFlags(entity.tile_x, entity.tile_y, flags).parcelId == plot then return true end
+      local action = queue[1]
+      local path_x = action and action.name == "walk" and action.path_x
+      local path_y = action and action.path_y
+      if path_x and path_y then
+        for i = action.path_index or 1, #path_x do
+          if th:getCellFlags(path_x[i], path_y[i], flags).parcelId == plot then return true end
+        end
+      end
+    end
+  end
+  return false
+end
+
+--! Why `plot` is not empty: "plot not empty" (a room, or an object other than
+--! litter and rat holes), "people on the plot", or nil when it is empty.
+function MultiplayerSession.plotNotEmpty(world, plot)
+  local th = world.map.th
+  local tiles = MultiplayerSession.plotTiles(th, plot)
+  local flags = {}
+  for i = 1, #tiles, 2 do
+    local x, y = tiles[i], tiles[i + 1]
+    if (th:getCellFlags(x, y, flags).roomId or 0) ~= 0 then return "plot not empty" end
+    for _, object in ipairs(world:getObjects(x, y) or {}) do
+      local id = object.object_type.id
+      -- (Litter that cannot be cleaned up stays an object in the way. What
+      -- the map put on the plot, the doors of an entrance, belongs to the
+      -- land: release_plot takes it along.)
+      if id ~= "rathole" and not object.object_type.supports_creation_for_map and
+          not (id == "litter" and object:isCleanable()) then
+        return "plot not empty"
+      end
+    end
+  end
+  -- A room still being built has no room number on its tiles yet.
+  for _, room in pairs(world.rooms) do
+    for ry = room.y, room.y + room.height - 1 do
+      for rx = room.x, room.x + room.width - 1 do
+        if th:getCellFlags(rx, ry, flags).parcelId == plot then return "plot not empty" end
+      end
+    end
+  end
+  if person_on_plot(world, plot) then return "people on the plot" end
+  return nil
+end
+
+--! Would the rest of `hospital`'s land still hang together with its
+--! starting plot without `plot` (plots joined along an edge)? Land that is
+--! cut off from the starting plot already does not count.
+local function land_stays_whole(world, hospital, plot)
+  local th = world.map.th
+  local player = hospital:getPlayerIndex()
+  local owned = {}
+  for p = 1, th:getPlotCount() - 1 do
+    if th:getPlotOwner(p) == player then owned[p] = true end
+  end
+  if not owned[player] then return true end -- (no starting plot to measure from)
+  -- How many of the plots reach the starting plot, without `skip`.
+  local function reached(skip)
+    local seen, queue, n = {[player] = true}, {player}, 1
+    local count, next_index = 1, 1
+    while next_index <= n do
+      local current = queue[next_index]
+      next_index = next_index + 1
+      for q in pairs(MultiplayerSession.plotsTouching(world, current)) do
+        if owned[q] and q ~= skip and not seen[q] then
+          seen[q] = true
+          count = count + 1
+          n = n + 1
+          queue[n] = q
+        end
+      end
+    end
+    return count, seen
+  end
+  local before, seen = reached(nil)
+  if seen[plot] then before = before - 1 end
+  return reached(plot) >= before
+end
+
+--! Why `hospital` may not sell or hand over `plot` now, or nil when it may.
+--! The reasons: "no such plot", "not your plot", "starting plot", "an auction
+--! is on", "plot not empty", "people on the plot", "joins your land".
+--!param answering (bool) optional; an offer being answered (an auction going
+--! on does not matter then: it would only void the offer)
+function MultiplayerSession.plotRefusal(world, hospital, plot, answering)
+  local th = world.map.th
+  if not plot or plot < 1 or plot >= th:getPlotCount() then return "no such plot" end
+  if th:getPlotOwner(plot) ~= hospital:getPlayerIndex() then return "not your plot" end
+  if MultiplayerSession.isStartingPlot(world, plot) then return "starting plot" end
+  if world.mp_auction and not answering then return "an auction is on" end
+  local why = MultiplayerSession.plotNotEmpty(world, plot)
+  if why then return why end
+  if not land_stays_whole(world, hospital, plot) then return "joins your land" end
+  return nil
+end
+
+--! Take `plot` off `hospital`'s hands: its litter, rat holes and the doors
+--! the map gave it (made again for whoever buys or gets the plot next, as
+--! when it was first bought: World:setPlotOwner), the handymen who looked
+--! after it look after all the land, and the plot belongs to `new_owner`
+--! (0: nobody) with the rooms next to it walled in again.
+local function release_plot(world, hospital, plot, new_owner)
+  local th = world.map.th
+  local tiles = MultiplayerSession.plotTiles(th, plot)
+  local flags = {}
+  for i = 1, #tiles, 2 do
+    local litter = {}
+    for _, object in ipairs(world:getObjects(tiles[i], tiles[i + 1]) or {}) do
+      if object.object_type.id == "litter" then litter[#litter + 1] = object end
+    end
+    for _, object in ipairs(litter) do object:remove() end
+  end
+  local doors = {}
+  for i = 1, #tiles, 2 do
+    for _, object in ipairs(world:getObjects(tiles[i], tiles[i + 1]) or {}) do
+      if object.object_type.supports_creation_for_map then doors[#doors + 1] = object end
+    end
+  end
+  world.delayed_map_objects = world.delayed_map_objects or {}
+  for _, door in ipairs(doors) do
+    -- (As the map file gives them: even numbers face north, odd ones west.)
+    world.delayed_map_objects[{door.object_type.id, door.tile_x, door.tile_y, door.direction == "north" and 0 or 1,
+        "map object"}] = plot
+  end
+  for _, door in ipairs(doors) do world:destroyEntity(door) end
+  local holes = {}
+  for _, hole in ipairs(hospital.ratholes) do
+    if th:getCellFlags(hole.x, hole.y, flags).parcelId == plot then holes[#holes + 1] = hole end
+  end
+  for _, hole in ipairs(holes) do hospital:removeRathole(hole) end
+  for i, owned in ipairs(hospital.ownedPlots) do
+    if owned == plot then
+      table.remove(hospital.ownedPlots, i)
+      break
+    end
+  end
+  for _, member in ipairs(hospital.staff) do
+    if member.parcelNr == plot then member.parcelNr = 0 end
+  end
+  world:setPlotOwner(plot, new_owner)
+  -- The plot's border tiles and the tiles across it: the engine puts a fence
+  -- over the wall of a room that stands next to land of another owner.
+  local width, height = th:size()
+  local border, seen = {}, {}
+  local function add(x, y)
+    local key = y * (width + 2) + x
+    if not seen[key] then
+      seen[key] = true
+      border[#border + 1] = {x, y}
+    end
+  end
+  for i = 1, #tiles, 2 do
+    local x, y = tiles[i], tiles[i + 1]
+    for _, d in ipairs({{-1, 0}, {1, 0}, {0, -1}, {0, 1}}) do
+      local nx, ny = x + d[1], y + d[2]
+      if nx >= 1 and ny >= 1 and nx <= width and ny <= height and
+          th:getCellFlags(nx, ny, flags).parcelId ~= plot then
+        add(x, y)
+        add(nx, ny)
+      end
+    end
+  end
+  world.map:_wallInRooms(border, true)
+  th:updatePathfinding()
+  if world.ui and world.ui.applyTransparency then world.ui:applyTransparency() end
+end
+
+--! Sell a plot back to the bank: {plot}.
+function handlers.sell_plot(world, cmd)
+  local S = _S.multiplayer_window
+  local hospital = hospital_of(world, cmd)
+  if not hospital then return false, "no such hospital" end
+  local plot = math.floor(tonumber(cmd.plot) or 0)
+  local why = MultiplayerSession.plotRefusal(world, hospital, plot)
+  if why then return false, why end
+  local paid = MultiplayerSession.plotPaid(world, plot)
+  local refund = MultiplayerSession.plotRefund(world, plot)
+  release_plot(world, hospital, plot, 0)
+  if world.mp_plot_paid then world.mp_plot_paid[plot] = nil end
+  hospital:receiveMoney(refund, S.plot_sold_transaction:format(plot), paid)
+  cmd.resolved = "plot " .. plot .. " for $" .. refund
+  MultiplayerSession.tellPlayer(world, hospital, S.plot_sold_note:format(plot, refund))
+  if world.mp_coop and world.mp_coop.players > 1 then
+    MultiplayerSession.tellOthers(world, hospital, S.plot_sold_others_note:format(hospital.name, plot))
+  end
+  return true
+end
+
+--------------------------------------------------------------------------------
+-- Handing a plot to an ally. The owner offers an empty plot (the same rules
+-- as for selling it back, and not the starting plot) for a price of $0 to
+-- PLOT_MAX_PRICE; the other player gets a fax and accepts or declines it
+-- (an offer left alone lapses after OFFER_DAYS: declined). Both games check
+-- it again when it is answered: the plot must still be the giver's, empty,
+-- and the receiver must be able to pay (a bot takes a loan for it). The plot
+-- must touch land the receiver owns, so that it is not cut off from their
+-- hospital: this is the sides rule for a gift, where "sides" (plotSide) only
+-- tell whose plot the bank sells first. The plot keeps its original price:
+-- selling it back to the bank pays 80 percent of that, to whoever owns it.
+--------------------------------------------------------------------------------
+
+MultiplayerSession.PLOT_MAX_PRICE = 50000
+MultiplayerSession.PLOT_PRICE_STEP = 500
+
+--! Why `hospital` may not take `plot` (it touches none of its land), or nil.
+function MultiplayerSession.plotHandoverRefusal(world, hospital, plot)
+  local th = world.map.th
+  local player = hospital:getPlayerIndex()
+  for q in pairs(MultiplayerSession.plotsTouching(world, plot)) do
+    if th:getPlotOwner(q) == player then return nil end
+  end
+  return "does not touch their land"
+end
+
+--! Is a fax offering `plot` still waiting for an answer?
+local function plot_offer_pending(world, plot)
+  local id = world.mp_plot_offers and world.mp_plot_offers[plot]
+  local panel = world.ui and world.ui.bottom_panel
+  return id ~= nil and panel ~= nil and panel:findMessageIcon(id) ~= nil
+end
+
+--! Offer a plot to an ally: {to, plot, price (0 to PLOT_MAX_PRICE)}.
+function handlers.offer_plot(world, cmd)
+  local S = _S.multiplayer_window
+  local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
+  if not from or not to or from == to then return false, "no such hospital" end
+  if not world:mpMayTrade(from, to) or world:mpRivals(from, to) then return false, "not on your team" end
+  local price = math.floor(tonumber(cmd.price) or 0)
+  if price < 0 or price > MultiplayerSession.PLOT_MAX_PRICE then return false, "invalid price" end
+  local plot = math.floor(tonumber(cmd.plot) or 0)
+  local why = MultiplayerSession.plotRefusal(world, from, plot)
+  if not why then why = MultiplayerSession.plotHandoverRefusal(world, to, plot) end
+  if not why and plot_offer_pending(world, plot) then why = "already offered" end
+  if why then return false, why end
+  local panel = world.ui and world.ui.bottom_panel
+  if not panel then return false, "no message panel" end
+  local tiles = math.floor(#MultiplayerSession.plotTiles(world.map.th, plot) / 2)
+  local message = {
+    {text = S.plot_offer_line:format(from.name, plot, tiles)},
+    {text = price > 0 and S.plot_offer_price_line:format(price) or S.plot_offer_free_line},
+    choices = {
+      {text = price > 0 and S.offer_accept_price:format(price) or S.offer_accept, choice = "mp_offer_accept"},
+      {text = S.offer_decline, choice = "mp_offer_decline"},
+    },
+    mp_offer = {kind = "plot", from = world:getHospitalIndex(from), to = world:getHospitalIndex(to),
+        plot = plot, price = price > 0 and price or nil, name = "plot " .. plot},
+  }
+  panel:queueMessage("mp_money", message, nil, Date.hoursPerDay() * MultiplayerSession.OFFER_DAYS, 2, nil, to)
+  world.mp_plot_offers = world.mp_plot_offers or {}
+  world.mp_plot_offers[plot] = world.next_message_id
+  MultiplayerSession.tellPlayer(world, from, price > 0 and S.plot_offer_sent_price_note:format(plot, to.name, price)
+      or S.plot_offer_sent_note:format(plot, to.name))
+  cmd.resolved = "plot " .. plot .. " for $" .. price
+  return true
+end
+
+--! A plot offer was answered (or lapsed): on acceptance the plot, and the
+--! price if there is one, change hands if all is as it was offered.
+function MultiplayerSession.resolvePlotOffer(world, offer, from, to, accept)
+  local S = _S.multiplayer_window
+  local plot, price = offer.plot, offer.price or 0
+  if world.mp_plot_offers then world.mp_plot_offers[plot] = nil end
+  local session = world.app.mp_session
+  local function log(outcome)
+    if session then
+      session.log(string.format("offer of plot %s to hospital %d: %s", tostring(plot), offer.to, outcome))
+    end
+  end
+  if not accept then
+    log("declined")
+    MultiplayerSession.tellPlayer(world, from, S.plot_offer_declined_note:format(to.name, plot))
+    return
+  end
+  local why = MultiplayerSession.plotRefusal(world, from, plot, true)
+  if not why then why = MultiplayerSession.plotHandoverRefusal(world, to, plot) end
+  if why then
+    log("void: " .. why)
+    MultiplayerSession.tellPlayer(world, from, S.plot_offer_gone_note:format(plot))
+    MultiplayerSession.tellPlayer(world, to, S.plot_offer_gone_note:format(plot))
+    return
+  end
+  -- (A bot borrows what it lacks, as it does at an auction.)
+  if price > 0 and to.balance < price then
+    MultiplayerSession.botBorrow(world, offer.to, to, price)
+  end
+  if price > 0 and to.balance < price then
+    log("no money")
+    MultiplayerSession.tellPlayer(world, to, S.plot_offer_no_money_note:format(price, plot))
+    MultiplayerSession.tellPlayer(world, from, S.plot_offer_no_money_sender_note:format(to.name, plot))
+    return
+  end
+  local paid = MultiplayerSession.plotPaid(world, plot)
+  release_plot(world, from, plot, to:getPlayerIndex())
+  table.insert(to.ownedPlots, plot)
+  if not world.free_build_mode then
+    -- The plot's worth moves with it.
+    from.value = from.value - paid
+    to.value = to.value + paid
+  end
+  if price > 0 then
+    to:spendMoney(price, S.plot_bought_transaction:format(from.name, plot))
+    from:receiveMoney(price, S.plot_given_transaction:format(to.name, plot))
+  end
+  log(price > 0 and ("handed over for $" .. price) or "handed over")
+  MultiplayerSession.tellPlayer(world, to, S.plot_received_note:format(plot, from.name))
+  MultiplayerSession.tellPlayer(world, from, price > 0 and S.plot_offer_accepted_price_note:format(to.name, plot, price)
+      or S.plot_offer_accepted_note:format(to.name, plot))
+end
+
+--! A bot hospital that must pay `cost` and would be left with less than its
+--! reserve borrows the difference (in steps of $5000, as far as the bank
+--! lets it). Returns the amount borrowed (0: none). The same on every peer.
+function MultiplayerSession.botBorrow(world, index, hospital, cost)
+  local bots = world.mp_coop and world.mp_coop.bot_hospitals or {}
+  local reserve = MultiplayerSession.BOT_AUCTION_RESERVE
+  if not (hospital and bots[index]) or hospital.balance - cost >= reserve then return 0 end
+  local short = cost + reserve - hospital.balance
+  local room = MultiplayerSession.maxLoan(world, hospital) - hospital.loan
+  local amount = math.min(math.ceil(short / 5000) * 5000, math.floor(room / 5000) * 5000)
+  if amount <= 0 then return 0 end
+  hospital.loan = hospital.loan + amount
+  hospital:receiveMoney(amount, _S.transactions.bank_loan)
+  return amount
 end
 
 --------------------------------------------------------------------------------
