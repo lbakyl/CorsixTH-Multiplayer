@@ -257,7 +257,7 @@ run_probe yuki MP_ROLE=join MP_ROOM=refer MP_STEPS=1100 \
 # a bot does) with its second swing door on the room's top corner: refused
 # in both games (that door was never made, and its pair broke the game).
 run_probe kim MP_ROLE=host MP_ROOM=research MP_COOP=1 MP_LEVEL=5 MP_STEPS=900 \
-  MP_UI_SCRIPT="20:openhospital;100:learn;104:learn;108:learn;112:learn;116:learn;120:learn;124:learn;128:learn;150:shareresearch:5000;190:askmoney:7500;200:chat:0:hello everyone;230:chat:1:just for you;500:learn;540:shareresearch:0;600:askmoney:2000;800:cornerdoor:operating_theatre" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;100:learn;104:learn;108:learn;112:learn;116:learn;120:learn;124:learn;128:learn;150:shareresearch:5000;190:askmoney:7500;200:chat:0:hello everyone;230:chat:2:just for you;500:learn;540:shareresearch:0;600:askmoney:2000;800:cornerdoor:operating_theatre" & pids+=($!)
 sleep 1
 run_probe lea MP_ROLE=join MP_ROOM=research MP_STEPS=900 \
   MP_UI_SCRIPT="30:openhospital;250:answermoney:pay;300:answerresearch:accept;650:answermoney:decline;700:answerresearch:decline" & pids+=($!)
@@ -294,10 +294,10 @@ sleep 1
 PROBE_LANG=$greta_lang PROBE_FONT="$lang_font" run_probe greta MP_ROLE=join MP_ROOM=lang MP_STEPS=2000 MP_SCENARIO=busy \
   MP_UI_SCRIPT="1650:hire:Nurse;1750:hire:Doctor" & pids+=($!)
 run_probe wade MP_ROLE=host MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
-  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;605:breakroom:gp;620:patients:5;645:patients:5;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench;820:buy:plant;840:moveinto:plant:gp;920:objectroom:plant;860:movestaff:Doctor;870:whereis:Doctor;950:overlay" & pids+=($!)
+  MP_UI_SCRIPT="100:askraise:Doctor;300:askraise:Handyman;400:patients:10;410:queuefront;600:fire:Nurse;605:breakroom:gp;620:patients:5;645:patients:5;650:buy:bench;660:buy:bench;700:moveobject:bench;800:sellobject:bench;820:buy:plant;840:moveinto:plant:gp;920:objectroom:plant;930:moveout:plant;975:objectroom:plant;860:movestaff:Doctor;870:whereis:Doctor;950:overlay" & pids+=($!)
 sleep 1
 run_probe yara MP_ROLE=join MP_ROOM=staff MP_STEPS=1000 MP_SCENARIO=busy \
-  MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront;500:furnishroom:gp:5:5;750:cancelroom:toilets:4:4;870:whereis:Doctor;900:uistate;920:objectroom:plant;950:overlay" & pids+=($!)
+  MP_UI_SCRIPT="150:answerraise:accept;350:answerraise:decline;420:queuefront;500:furnishroom:gp:5:5;750:cancelroom:toilets:4:4;870:whereis:Doctor;900:uistate;920:objectroom:plant;950:overlay;975:objectroom:plant" & pids+=($!)
 # Room editing: ed builds a GP's office, then edits it while patients are
 # about (pick up, place, buy, move, confirm) and later removes it; flo watches.
 run_probe ed MP_ROLE=host MP_ROOM=edit MP_STEPS=1400 MP_SCENARIO=busy \
@@ -762,7 +762,7 @@ print(f"29. Load MP game:           {load29.groups() if load29 else '-'}; x: {x2
 fail |= not ok29
 
 lv30 = re.search(r"UI: levels listed \[(.*?)\]; map drawn: (\w+); shared level 3: (.*?); chosen: level (\d+), room name kept: (\w+)", log('kai'))
-ok30 = bool(lv30 and len(lv30.group(1).split(' | ')) == 8 and lv30.group(1).endswith('CUTTHROAT | TEAM TOWN')
+ok30 = bool(lv30 and len(lv30.group(1).split(' | ')) == 9 and lv30.group(1).endswith('CUTTHROAT | TEAM TOWN | CROSSROADS')
             and lv30.group(2) == 'true' and lv30.group(3) == 'LARGECHESTER' and lv30.groups()[3:] == ('6', 'true'))
 print(f"30. Level browser:          {lv30.groups() if lv30 else '-'}")
 fail |= not ok30
@@ -884,7 +884,11 @@ moved10 = bool(moving10 and where_w and where_y and where_w.groups() == where_y.
 plant10 = [re.search(r'UI: plant in rooms at step \d+: (#\d+ gp)', t) for t in (w_, y_)]
 plant10 = [m.group(1) if m else None for m in plant10]
 into10 = 'UI: moved plant' in w_ and plant10[0] is not None and plant10[0] == plant10[1]
-ok10 = moved10 and into10 and 'move_staff' in kinds10 and clean10 and clicks10 and (result('wade').startswith('IN SYNC through step 1000') and result('yara').startswith('IN SYNC')
+# ... and picked up in the room again without room editing, put in the
+# corridor: in no room on either screen.
+later10 = [re.findall(r'UI: plant in rooms at step 975: (.*)', t) for t in (w_, y_)]
+out10 = (re.search(r'UI: moved plant #\d+ out of gp', w_) is not None and later10[0] == later10[1] == [''])
+ok10 = moved10 and into10 and out10 and 'move_staff' in kinds10 and clean10 and clicks10 and (result('wade').startswith('IN SYNC through step 1000') and result('yara').startswith('IN SYNC')
         and cw == applied('yara') and kinds10.count('pay_rise') == 2 and kinds10.count('probe_raise') == 2
         and 'fire_staff' in kinds10 and kinds10.count('queue_move') >= 1 and 'probe_patients' in kinds10
         and 'move_object' in kinds10 and 'sell_object' in kinds10
@@ -892,7 +896,7 @@ ok10 = moved10 and into10 and 'move_staff' in kinds10 and clean10 and clicks10 a
         and rooms10 == re.search(r'rooms built: (.*)', y_).group(1)
         and drawn10.get('gp', '-') in rooms10.split() and drawn10.get('toilets', '-') not in rooms10.split()
         and 'accepted the pay rise' in y_ and 'declined the pay rise' in y_)
-print(f"10. Staff and queues:       {result('wade')}; commands {len(okw)}/{len(cw)} ok, identical: {cw == applied('yara')}; {' '.join(kinds10)}; rooms {rooms10 or 'none'}; clicks after furnishing: {clicks10}; markers left: {'/'.join(marks10) or '-'}; staff moved: {moved10} {where_w.group(2, 3) if where_w else '-'}; plant moved into the GP's office: {into10} {plant10}")
+print(f"10. Staff and queues:       {result('wade')}; commands {len(okw)}/{len(cw)} ok, identical: {cw == applied('yara')}; {' '.join(kinds10)}; rooms {rooms10 or 'none'}; clicks after furnishing: {clicks10}; markers left: {'/'.join(marks10) or '-'}; staff moved: {moved10} {where_w.group(2, 3) if where_w else '-'}; plant moved into the GP's office: {into10} {plant10}; and out again: {out10}")
 fail |= not ok10
 
 ed, fl = log('ed'), log('flo')

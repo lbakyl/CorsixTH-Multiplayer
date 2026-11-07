@@ -771,7 +771,7 @@ function Object:onClick(ui, button, data)
   -- should only happen as long as the object is not picked up.
   if button == "right" or (button == "left" and window and window.in_pickup_mode) then
     if TheApp.mp_session then
-      -- Multiplayer: only corridor objects, outside the room editor; moving
+      -- Multiplayer: only corridor objects (also in a room), outside the room editor; moving
       -- one is a command (UIPlaceObjects:placeObject), so the object stays
       -- where it is in the shared game until then.
       local room = self:getRoom()
@@ -783,7 +783,10 @@ function Object:onClick(ui, button, data)
         ui:playSound("pickup.wav")
         return
       end
-      if window or room or not self.object_type.corridor_object then
+      -- (A corridor object in one of this player's rooms, a plant or a
+      -- radiator, too, as in single player: MultiplayerSession.roomOpenForObjects.)
+      if window or not self.object_type.corridor_object or
+          (room and not MultiplayerSession.roomOpenForObjects(self.world, room, ui.hospital)) then
         MultiplayerSession.blockUnsupported(ui)
         return
       end

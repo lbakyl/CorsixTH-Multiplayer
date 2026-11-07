@@ -1638,6 +1638,37 @@ local function run()
             log(string.format("UI: no spot for %s in a %s (object %s, room %s)", id, room_id, tostring(obj and obj.mp_id),
                 tostring(rm and rm.id)))
           end
+        elseif a == "moveout" then
+          -- moveout:<object>: pick up a corridor object standing in one of
+          -- this hospital's rooms (no room editing, as in single player) and
+          -- put it down on a free corridor tile near the room's door.
+          local obj
+          for _, e in ipairs(world.entities) do
+            local r = not obj and class.is(e, Object) and e.object_type.id == entry.arg and e.tile_x and e:getRoom()
+            if r and r.hospital == world.ui.hospital then obj = e end
+          end
+          local place = obj and (obj:onClick(world.ui, "right") or true) and world.ui:getWindow(UIPlaceObjects)
+          local x, y
+          if place then
+            local room = obj:getRoom()
+            x, y = builder.find_free_rect(world, room.x + room.width + 1, room.y, 1, 1, 12, function(tx, ty)
+              if world:getRoom(tx, ty) or world:anyHumanoidObscuringArea(tx, ty) then return false end
+              place:setBlueprintCell(tx, ty)
+              return place.object_blueprint_good
+            end)
+          end
+          if x then
+            local from = obj:getRoom()
+            place:setBlueprintCell(x, y)
+            place.object_cell_x, place.object_cell_y = x, y
+            place:onMouseUp("left", 100000, 100000)
+            log(string.format("UI: moved %s #%d out of %s #%d to %d,%d at step %d", entry.arg, obj.mp_id,
+                from.room_info.id, from.id, x, y, session.step))
+          else
+            if place then place:close(true) end
+            log(string.format("UI: could not move %s out of a room (object %s, window %s)", entry.arg,
+                tostring(obj and obj.mp_id), tostring(place and true)))
+          end
         elseif a == "objectroom" then
           -- objectroom:<object>: which room of this hospital each one is in.
           local where = {}

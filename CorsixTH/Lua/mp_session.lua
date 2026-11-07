@@ -1644,13 +1644,25 @@ function handlers.place_object(world, cmd)
   return true
 end
 
---! A corridor object of `hospital` that a player may pick up, or nil.
+--! May `hospital`'s players take corridor objects (a plant, a radiator) out
+--! of `room`, or put them in, without the room editor, as in single player
+--! (Argus, 2026-11-07)? Its own working room, not while somebody edits or
+--! furnishes it.
+function MultiplayerSession.roomOpenForObjects(world, room, hospital)
+  return room.hospital == hospital and room.is_active and not room.crashed and not room.mp_edit and
+      not (world.mp_furnishing and world.mp_furnishing[room.id])
+end
+
+--! A corridor object of `hospital` that a player may pick up, or nil: in a
+--! corridor, or in one of its rooms (MultiplayerSession.roomOpenForObjects).
 local function movable_object(world, hospital, id)
   local obj = world:getEntityById(tonumber(id))
-  if not obj or not class.is(obj, Object) or not obj.tile_x or obj:getRoom() or
+  if not obj or not class.is(obj, Object) or not obj.tile_x or
       not obj.object_type.corridor_object or not hospital:isInHospital(obj.tile_x, obj.tile_y) then
     return nil
   end
+  local room = obj:getRoom()
+  if room and not MultiplayerSession.roomOpenForObjects(world, room, hospital) then return nil end
   return obj
 end
 
@@ -1677,6 +1689,7 @@ local function put_down(world, obj, x, y, direction)
 end
 
 --! Move a corridor object (picked up and put down): {object, x, y, orientation}.
+--! Out of a room or into one too (MultiplayerSession.roomOpenForObjects).
 function handlers.move_object(world, cmd)
   local hospital = world.hospitals[cmd.hospital or 1]
   local obj = hospital and movable_object(world, hospital, cmd.object)
@@ -1691,11 +1704,11 @@ function handlers.move_object(world, cmd)
   local room = world:getRoom(cmd.x, cmd.y)
   if room then
     local allowed = world:willObjectsFootprintTileBeWithinItsAllowedRoomIfLocatedAt(cmd.x, cmd.y, obj.object_type)
-    if room.hospital ~= hospital or not room.is_active or room.crashed or room.mp_edit or
-        (world.mp_furnishing and world.mp_furnishing[room.id]) or not allowed.within_room then
+    if not MultiplayerSession.roomOpenForObjects(world, room, hospital) or not allowed.within_room then
       return false, "tile not free"
     end
   end
+  local old_room = obj:getRoom()
   pick_up(obj)
   obj:setTile(nil)
   obj:rebuildPassableCellFlags()
@@ -1708,6 +1721,7 @@ function handlers.move_object(world, cmd)
     return false, "tile not free"
   end
   put_down(world, obj, cmd.x, cmd.y, cmd.orientation)
+  if old_room and old_room ~= room then old_room.objects[obj] = nil end
   if room then room.objects[obj] = true end
   if obj.object_type.id == "reception_desk" then hospital:buildReceptionDesksCache() end
   return true
