@@ -51,6 +51,10 @@ Each game week you get a report of its hospital and a menu of projects it can do
 now, as a good player would: treat the patients who come (build the rooms their diseases need, enough
 staff, short queues), keep staff rested (staff room) and patients comfortable (benches, drinks, warmth,
 toilets), keep enough money, and work towards the level's goals (reputation, money, hospital value, cures).
+The report says how far each goal is. When most are met, aim at the rest: the hospital value is its land,
+rooms and what is in them (buy:land and new rooms raise it, cash does not count); a money goal means
+spending only on what is needed; cures need more treatment rooms and doctors; reputation and happiness
+need toilets, a staff room, benches, plants and warmth.
 In a race, beating the rivals matters too. Rooms with machines earn the most, the operating theatre above
 all, so keep them working. The report may start with PROBLEMS TO FIX FIRST: the bot found them from its
 numbers, and they are what loses the game (a room destroyed by an exploding machine, a worn machine about to

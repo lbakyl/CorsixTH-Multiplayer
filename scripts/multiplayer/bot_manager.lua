@@ -351,6 +351,18 @@ function M:assess()
       s.goals[name] = {now = ok and tonumber(now) or 0, want = g.win_value}
     end
   end
+  -- How far each goal is (1 = met; a death rate is met below its value).
+  s.goal_progress, s.goals_left = {}, 0
+  for name, g in pairs(s.goals) do
+    local p
+    if name == "percentage_killed" then
+      p = g.now <= g.want and 1 or g.want / math.max(g.now, 1)
+    else
+      p = g.want > 0 and math.min(1, g.now / g.want) or 1
+    end
+    s.goal_progress[name] = p
+    if p < 1 then s.goals_left = s.goals_left + 1 end
+  end
   s.heat = hosp.heating and math.floor((hosp.heating.radiator_heat or 0.5) * 10 + 0.5) or 5
   self.state = s
   return s
@@ -487,7 +499,7 @@ function M:projects(s)
     -- (Only the basics of an opening hospital are done without the money
     -- for them; not what a plan or a wish lifted that high.)
     local basic = score >= 90
-    score = score + (self.boost[key] or 0) + (self.wishes[key] and WISH or 0)
+    score = score + (self.boost[key] or 0) + (self.wishes[key] and WISH or 0) + self:goalBonus(key, s)
     listed[key] = true
     if self.failed[key] and s.day < self.failed[key] then return end
     if score > 0.5 then list[#list + 1] = {key = key, score = score, run = run, cost = cost or 0, basic = basic} end
@@ -695,6 +707,17 @@ function M:projects(s)
   end
   if wanted and land_price then
     add("buy:land", 10 + wanted * 6, function() return bot:buyPlot() end, land_price)
+  end
+  -- The hospital's value is a goal still to reach: land counts in full, so a
+  -- plot is bought when the money is there, needed or not (GOAL_LEVERS
+  -- raises it further).
+  local value_left = s.goal_progress.value
+  if not wanted and value_left and value_left < 1 and (value_left >= 0.8 or s.goals_left == 1) and
+      s.balance > 3 * RESERVE then
+    local _, price = bot:cheapestPlot()
+    if price and price < s.balance - RESERVE then
+      add("buy:land", 6, function() return bot:buyPlot() end, price)
+    end
   end
   -- A room nobody has used for about five months: taken down for its floor.
   -- (Not in a hospital a person plays in too: the rooms are theirs as well.)
@@ -1148,14 +1171,19 @@ function M:monthLine(s)
   table.sort(staff)
   local juniors = #self:doctorsWhere(function(p) return self.bot.flag(p, "is_junior") end)
   local consultants = #self:doctorsWhere(function(p) return self.bot.flag(p, "is_consultant") end)
+  local goals = {}
+  for name, g in pairs(s.goals or {}) do
+    goals[#goals + 1] = string.format("%s %d/%d", name, math.floor(g.now), g.want)
+  end
+  table.sort(goals)
   return string.format("month %d: left %s; lost most: %s; in hospital %d; queues %s, reception %d; psychiatrists %d,"
       .. " surgeons %d; prices %d%%; reputation %d, $%d; loan $%d; staff %d (%s), juniors %d, consultants %d;"
-      .. " staff happy %d%%, tired %d%%; patients happy %d%%; land %d%% full", s.month, table.concat(left, " "), table.concat(top, " "),
+      .. " staff happy %d%%, tired %d%%; patients happy %d%%; land %d%% full; goals %s", s.month, table.concat(left, " "), table.concat(top, " "),
       s.patients, table.concat(queues, " "), s.reception_queue, hosp:countStaffOfCategory("Psychiatrist"),
       hosp:countStaffOfCategory("Surgeon"), 100, s.reputation, math.floor(s.balance),
       math.floor(s.loan or 0), n, table.concat(staff, ","), juniors, consultants, math.floor(s.staff_happy * 100 + 0.5),
       math.floor(s.fatigue * 100 + 0.5), math.floor((s.happiness or 0) * 100 + 0.5),
-      math.floor(self:landFill(s) * 100 + 0.5))
+      math.floor(self:landFill(s) * 100 + 0.5), #goals > 0 and table.concat(goals, " ") or "none")
 end
 
 --! Once a month: prices, repaying the loan, research.
@@ -1311,6 +1339,49 @@ function M:answerFaxes(s)
       end
     end
   end
+end
+
+--! What raises each of the level's goals (Jan: a bot should know them and
+--! work towards them; Bertie won by his value only by the way). Keys are a
+--! project key or its kind ("room", "buy", "hire").
+-- How far a goal must be (its share of the way) before the bot works at it.
+local GOAL_REACH = 0.7
+local GOAL_LEVERS = {
+  -- (The value is land, rooms and what is in them: cash does not count.)
+  value = {["buy:land"] = 8, room = 3, buy = 1},
+  num_cured = {room = 2, hire = 2},
+  percentage_cured = {room = 2, hire = 2},
+  reputation = {["room:toilets"] = 3, ["room:staff_room"] = 2, ["buy:plant"] = 2, ["buy:bench"] = 2,
+      ["buy:radiator"] = 2, ["buy:bin"] = 2, ["hire:Handyman"] = 2},
+  patient_happiness = {["room:toilets"] = 3, ["buy:bench"] = 3, ["buy:plant"] = 2, ["buy:radiator"] = 2,
+      ["buy:drinks_machine"] = 1, ["buy:bin"] = 1},
+  staff_happiness = {["room:staff_room"] = 5, ["buy:plant"] = 1, ["buy:radiator"] = 1},
+}
+
+--! Extra score for a project from the goals not met yet but within reach
+--! (GOAL_REACH of the way there): more the nearer, double when it is the
+--! last one. Early on every goal is far and nothing changes: the hospital
+--! is built as usual first (with pushes from the start, a bot bought land
+--! before anything else and had no money for tricks or auctions). A money
+--! goal within reach, with at most one other left, makes spending wait (not
+--! what is urgent: repairs, a loan for those).
+function M:goalBonus(key, s)
+  local left = s.goals_left or 0
+  if left == 0 then return 0 end
+  local kind = key:match("^(%a+):")
+  local push = left == 1 and 2 or 1
+  local bonus = 0
+  for name, p in pairs(s.goal_progress) do
+    local levers = p < 1 and p >= GOAL_REACH and GOAL_LEVERS[name]
+    local b = levers and (levers[key] or levers[kind])
+    if b then bonus = bonus + b * p * push end
+  end
+  local money = s.goal_progress.balance
+  if money and money < 1 and money >= GOAL_REACH and left <= 2 and
+      (kind == "room" or kind == "buy" or kind == "edit") then
+    bonus = bonus - 4 * push * money
+  end
+  return bonus
 end
 
 --! Once a day: the rooms in use (a patient inside; staff in a staff-only
@@ -1765,6 +1836,8 @@ local function wish_words(key)
     return obj:gsub("_", " ") .. " in the " .. room_name(what)
   elseif kind == "bigger" then
     return "bigger " .. room_name(what)
+  elseif kind == "remove" then
+    return room_name(what)
   elseif kind == "hire" then
     return "a " .. what:lower()
   elseif key == "buy:land" then
@@ -1782,7 +1855,8 @@ function M:tellWisher(w, kind, key)
     local name = bot:playerName(peer)
     if name then
       -- (Something put into a room: "the plant in the GP room is in place".)
-      local lines = (kind == "wish_done" and key:find("^add:") and self.lines.wish_done_add) or self.lines[kind]
+      local lines = (kind == "wish_done" and key:find("^add:") and self.lines.wish_done_add) or
+          (kind == "wish_done" and key:find("^remove:") and self.lines.wish_done_remove) or self.lines[kind]
       local line = self.pick(lines):format(name, wish_words(key))
       bot:say(line, self.typing(line), peer)
     end

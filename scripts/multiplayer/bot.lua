@@ -119,6 +119,8 @@ local LINES = {
   -- To whoever asked for a project in the chat (Manager:tellWisher).
   wish_done = {"%s, your %s is ready.", "Done, %s: the %s is up and running."},
   wish_done_add = {"%s, the %s is in place.", "Done, %s: I put the %s in."},
+  -- (A room taken down: remove:<room>; said once the walls are coming down.)
+  wish_done_remove = {"%s, the %s is coming down: its floor will be free.", "On it, %s: the %s goes, the floor is yours."},
   wish_no_space = {"Sorry %s, there is no space for the %s yet. I'll buy more land first."},
   wish_no_money = {"%s, the %s has to wait a little: not enough money yet."},
   research_ask = {"%s, shall I send %s our research for free (%s)? Say \"share\" and I will."},
