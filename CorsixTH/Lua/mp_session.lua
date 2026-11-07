@@ -596,7 +596,7 @@ end
 
 --! Sounds for this player's own actions that only count once every peer has
 --! done them (the click itself could still be turned down).
-MultiplayerSession.success_sounds = {buy_plot = "cashreg.wav"}
+MultiplayerSession.success_sounds = {buy_plot = "cashreg.wav", sell_plot = "cashreg.wav"}
 
 --! What the player is told when one of their own actions is turned down
 --! (by command kind, then by reason); the reason is shown otherwise.
@@ -627,6 +627,12 @@ MultiplayerSession.rejection_texts = {
   give_reputation = {["reputation too low"] = "Your reputation is too low to give any away.",
                      ["their reputation is full"] = "Their reputation cannot go any higher.",
                      ["monthly limit"] = "You have given as much reputation as you may this month."},
+  sell_plot = {["not your plot"] = "That plot is not yours.",
+               ["starting plot"] = "Your starting plot cannot be sold.",
+               ["plot not empty"] = "You can only sell this plot when it is emptied of any items.",
+               ["people on the plot"] = "You can only sell this plot when nobody is on it. Try again in a moment.",
+               ["joins your land"] = "You cannot sell this plot: the rest of your land is joined to your hospital through it.",
+               ["an auction is on"] = "Wait until the auction is over."},
   auction_bid = {["outbid"] = "Somebody bid first. Try again.",
                  ["not enough money"] = "You cannot afford that bid.",
                  ["the auction is over"] = "The auction is over."},
@@ -3516,6 +3522,253 @@ function MultiplayerSession:syncAuction(world)
   elseif waiting then
     waiting:close()
   end
+end
+
+--------------------------------------------------------------------------------
+-- Selling a plot back to the bank. A player may undo a purchase at any time,
+-- except for their starting plot, once the plot is empty: no room (not one
+-- being built either), no object (the walls are the rooms' walls), nobody on
+-- it or about to walk over it (people are not moved: the sale is refused
+-- until they have gone). Litter and rat holes do not count; they go with the
+-- plot. The bank pays back PLOT_SELL_PERCENT of what the plot cost (an
+-- auction's price, not the list price; a plot bought before this was kept
+-- track of counts at the list price). The plot belongs to nobody then, and
+-- can be bought (or auctioned) again. A plot is also refused when the rest
+-- of the player's land hangs together with their hospital through it.
+--------------------------------------------------------------------------------
+
+MultiplayerSession.PLOT_SELL_PERCENT = 80
+
+-- Each plot's tiles, flat {x1, y1, x2, y2, ...}, per map (the plots never change).
+local plot_tile_lists = setmetatable({}, {__mode = "k"})
+
+--! The tiles of a plot, flat {x1, y1, x2, y2, ...}, in map order.
+function MultiplayerSession.plotTiles(th, plot)
+  local lists = plot_tile_lists[th]
+  if not lists then
+    lists = {}
+    local w, h = th:size()
+    local flags = {}
+    for y = 1, h do
+      for x = 1, w do
+        local p = th:getCellFlags(x, y, flags).parcelId
+        if p and p ~= 0 then
+          local list = lists[p]
+          if not list then
+            list = {}
+            lists[p] = list
+          end
+          list[#list + 1] = x
+          list[#list + 1] = y
+        end
+      end
+    end
+    plot_tile_lists[th] = lists
+  end
+  return lists[plot] or {}
+end
+
+--! The tile in the top right corner of a plot (the one furthest that way),
+--! for the town map's buttons.
+function MultiplayerSession.plotCorner(th, plot)
+  local tiles = MultiplayerSession.plotTiles(th, plot)
+  local bx, by, best
+  for i = 1, #tiles, 2 do
+    local score = tiles[i] - tiles[i + 1]
+    if not best or score > best then bx, by, best = tiles[i], tiles[i + 1], score end
+  end
+  return bx, by
+end
+
+--! What `plot` cost its owner (kept when it was bought; the list price for
+--! land bought before that was kept).
+function MultiplayerSession.plotPaid(world, plot)
+  local paid = world.mp_plot_paid and world.mp_plot_paid[plot]
+  if paid then return paid end
+  if world.free_build_mode then return 0 end
+  return world.map:getParcelPrice(plot)
+end
+
+--! What the bank pays back for `plot`.
+function MultiplayerSession.plotRefund(world, plot)
+  return math.floor(MultiplayerSession.plotPaid(world, plot) * MultiplayerSession.PLOT_SELL_PERCENT / 100)
+end
+
+--! Is `plot` one of the starting plots (every player starts with one)?
+function MultiplayerSession.isStartingPlot(world, plot)
+  return plot <= world.map.th:getPlayerCount()
+end
+
+--! Is there a person on `plot`, or one whose walk crosses it?
+local function person_on_plot(world, plot)
+  local th = world.map.th
+  local flags = {}
+  for _, entity in ipairs(world.entities) do
+    local queue = entity.action_queue
+    if queue and entity.tile_x then
+      if th:getCellFlags(entity.tile_x, entity.tile_y, flags).parcelId == plot then return true end
+      local action = queue[1]
+      local path_x = action and action.name == "walk" and action.path_x
+      local path_y = action and action.path_y
+      if path_x and path_y then
+        for i = action.path_index or 1, #path_x do
+          if th:getCellFlags(path_x[i], path_y[i], flags).parcelId == plot then return true end
+        end
+      end
+    end
+  end
+  return false
+end
+
+--! Why `plot` is not empty: "plot not empty" (a room, or an object other than
+--! litter and rat holes), "people on the plot", or nil when it is empty.
+function MultiplayerSession.plotNotEmpty(world, plot)
+  local th = world.map.th
+  local tiles = MultiplayerSession.plotTiles(th, plot)
+  local flags = {}
+  for i = 1, #tiles, 2 do
+    local x, y = tiles[i], tiles[i + 1]
+    if (th:getCellFlags(x, y, flags).roomId or 0) ~= 0 then return "plot not empty" end
+    for _, object in ipairs(world:getObjects(x, y) or {}) do
+      local id = object.object_type.id
+      -- (Litter that cannot be cleaned up stays an object in the way.)
+      if id ~= "rathole" and not (id == "litter" and object:isCleanable()) then return "plot not empty" end
+    end
+  end
+  -- A room still being built has no room number on its tiles yet.
+  for _, room in pairs(world.rooms) do
+    for ry = room.y, room.y + room.height - 1 do
+      for rx = room.x, room.x + room.width - 1 do
+        if th:getCellFlags(rx, ry, flags).parcelId == plot then return "plot not empty" end
+      end
+    end
+  end
+  if person_on_plot(world, plot) then return "people on the plot" end
+  return nil
+end
+
+--! Would the rest of `hospital`'s land still hang together with its
+--! starting plot without `plot` (plots joined along an edge)?
+local function land_stays_whole(world, hospital, plot)
+  local th = world.map.th
+  local player = hospital:getPlayerIndex()
+  local owned, count = {}, 0
+  for p = 1, th:getPlotCount() - 1 do
+    if p ~= plot and th:getPlotOwner(p) == player then
+      owned[p] = true
+      count = count + 1
+    end
+  end
+  if not owned[player] then return true end -- (no starting plot to measure from)
+  local seen, queue, n = {[player] = true}, {player}, 1
+  local reached = 1
+  local next_index = 1
+  while next_index <= n do
+    local current = queue[next_index]
+    next_index = next_index + 1
+    for q in pairs(MultiplayerSession.plotsTouching(world, current)) do
+      if owned[q] and not seen[q] then
+        seen[q] = true
+        reached = reached + 1
+        n = n + 1
+        queue[n] = q
+      end
+    end
+  end
+  return reached == count
+end
+
+--! Why `hospital` may not sell or hand over `plot` now, or nil when it may.
+--! The reasons: "no such plot", "not your plot", "starting plot", "an auction
+--! is on", "plot not empty", "people on the plot", "joins your land".
+function MultiplayerSession.plotRefusal(world, hospital, plot)
+  local th = world.map.th
+  if not plot or plot < 1 or plot >= th:getPlotCount() then return "no such plot" end
+  if th:getPlotOwner(plot) ~= hospital:getPlayerIndex() then return "not your plot" end
+  if MultiplayerSession.isStartingPlot(world, plot) then return "starting plot" end
+  if world.mp_auction then return "an auction is on" end
+  local why = MultiplayerSession.plotNotEmpty(world, plot)
+  if why then return why end
+  if not land_stays_whole(world, hospital, plot) then return "joins your land" end
+  return nil
+end
+
+--! Take `plot` off `hospital`'s hands: its litter and rat holes go, the
+--! handymen who looked after it look after all the land, and the plot
+--! belongs to `new_owner` (0: nobody) with the rooms next to it walled in
+--! again.
+local function release_plot(world, hospital, plot, new_owner)
+  local th = world.map.th
+  local tiles = MultiplayerSession.plotTiles(th, plot)
+  local flags = {}
+  for i = 1, #tiles, 2 do
+    local litter = {}
+    for _, object in ipairs(world:getObjects(tiles[i], tiles[i + 1]) or {}) do
+      if object.object_type.id == "litter" then litter[#litter + 1] = object end
+    end
+    for _, object in ipairs(litter) do object:remove() end
+  end
+  local holes = {}
+  for _, hole in ipairs(hospital.ratholes) do
+    if th:getCellFlags(hole.x, hole.y, flags).parcelId == plot then holes[#holes + 1] = hole end
+  end
+  for _, hole in ipairs(holes) do hospital:removeRathole(hole) end
+  for i, owned in ipairs(hospital.ownedPlots) do
+    if owned == plot then
+      table.remove(hospital.ownedPlots, i)
+      break
+    end
+  end
+  for _, member in ipairs(hospital.staff) do
+    if member.parcelNr == plot then member.parcelNr = 0 end
+  end
+  world:setPlotOwner(plot, new_owner)
+  -- The plot's border tiles and the tiles across it: the engine puts a fence
+  -- over the wall of a room that stands next to land of another owner.
+  local width, height = th:size()
+  local border, seen = {}, {}
+  local function add(x, y)
+    local key = y * (width + 2) + x
+    if not seen[key] then
+      seen[key] = true
+      border[#border + 1] = {x, y}
+    end
+  end
+  for i = 1, #tiles, 2 do
+    local x, y = tiles[i], tiles[i + 1]
+    for _, d in ipairs({{-1, 0}, {1, 0}, {0, -1}, {0, 1}}) do
+      local nx, ny = x + d[1], y + d[2]
+      if nx >= 1 and ny >= 1 and nx <= width and ny <= height and
+          th:getCellFlags(nx, ny, flags).parcelId ~= plot then
+        add(x, y)
+        add(nx, ny)
+      end
+    end
+  end
+  world.map:_wallInRooms(border, true)
+  th:updatePathfinding()
+  if world.ui and world.ui.applyTransparency then world.ui:applyTransparency() end
+end
+
+--! Sell a plot back to the bank: {plot}.
+function handlers.sell_plot(world, cmd)
+  local S = _S.multiplayer_window
+  local hospital = hospital_of(world, cmd)
+  if not hospital then return false, "no such hospital" end
+  local plot = math.floor(tonumber(cmd.plot) or 0)
+  local why = MultiplayerSession.plotRefusal(world, hospital, plot)
+  if why then return false, why end
+  local paid = MultiplayerSession.plotPaid(world, plot)
+  local refund = MultiplayerSession.plotRefund(world, plot)
+  release_plot(world, hospital, plot, 0)
+  if world.mp_plot_paid then world.mp_plot_paid[plot] = nil end
+  hospital:receiveMoney(refund, S.plot_sold_transaction:format(plot), paid)
+  cmd.resolved = "plot " .. plot .. " for $" .. refund
+  MultiplayerSession.tellPlayer(world, hospital, S.plot_sold_note:format(plot, refund))
+  if world.mp_coop and world.mp_coop.players > 1 then
+    MultiplayerSession.tellOthers(world, hospital, S.plot_sold_others_note:format(hospital.name, plot))
+  end
+  return true
 end
 
 --------------------------------------------------------------------------------

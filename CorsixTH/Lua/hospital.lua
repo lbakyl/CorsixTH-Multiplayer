@@ -605,6 +605,11 @@ function Hospital:purchasePlot(plot_number, price)
     if cost <= self.balance then
       self.world:setPlotOwner(plot_number, self:getPlayerIndex())
       table.insert(self.ownedPlots, plot_number)
+      -- Multiplayer: what was paid is kept (a plot sold back returns most of it).
+      if self.world.mp_coop then
+        self.world.mp_plot_paid = self.world.mp_plot_paid or {}
+        self.world.mp_plot_paid[plot_number] = cost
+      end
       -- Also make sure to apply transparency to the new walls, if required.
       self.world.ui:applyTransparency()
       self:spendMoney(cost, _S.transactions.buy_land, cost)

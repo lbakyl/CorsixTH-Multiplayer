@@ -118,8 +118,113 @@ function UITownMap:tilePixels()
   return math.max(1, math.floor(384 / math.max(map.width or 128, map.height or 128)))
 end
 
+-- Multiplayer: the size of the buttons on the player's plots (pixels before the UI scale).
+local BUTTON = 9
+
+--! Multiplayer: the buttons in the top right corner of each of this player's
+--! plots but the starting plot: a red X to sell the plot back to the bank,
+--! and (with an ally in the game) a blue arrow to hand it to an ally.
+--!return (list) {plot, kind ("sell" or "give"), x, y} in window pixels before
+--! the UI scale (BUTTON wide and high)
+function UITownMap:plotButtons()
+  local list = {}
+  local world = self.ui.hospital.world
+  local session = TheApp.mp_session
+  if not (session and not session.observer and world.mp_coop and world.mp_coop.players > 1) then
+    return list
+  end
+  local hospital = self.ui.hospital
+  local allies = false
+  for _, other in ipairs(world.hospitals) do
+    if other ~= hospital and world:mpMayTrade(hospital, other) and not world:mpRivals(hospital, other) then
+      allies = true
+    end
+  end
+  local th = world.map.th
+  local player = hospital:getPlayerIndex()
+  local tp = self:tilePixels()
+  self.plot_corners = self.plot_corners or {}
+  for plot = 1, th:getPlotCount() - 1 do
+    if th:getPlotOwner(plot) == player and not MultiplayerSession.isStartingPlot(world, plot) then
+      local corner = self.plot_corners[plot]
+      if not corner then
+        corner = {MultiplayerSession.plotCorner(th, plot)}
+        self.plot_corners[plot] = corner
+      end
+      if corner[1] then
+        local right = 227 + corner[1] * tp -- (the corner tile's right edge)
+        local top = 25 + (corner[2] - 1) * tp
+        list[#list + 1] = {plot = plot, kind = "sell", x = right - BUTTON, y = top}
+        if allies then
+          list[#list + 1] = {plot = plot, kind = "give", x = right - 2 * BUTTON - 1, y = top}
+        end
+      end
+    end
+  end
+  return list
+end
+
+--! The plot button under the mouse (window pixels), or nil.
+function UITownMap:buttonAt(x, y)
+  local s = TheApp.gfx:getUIScale()
+  for _, button in ipairs(self:plotButtons()) do
+    if x >= button.x * s and x < (button.x + BUTTON) * s and y >= button.y * s and y < (button.y + BUTTON) * s then
+      return button
+    end
+  end
+end
+
+--! Draw the plot buttons: a red X (sell) and a blue arrow (give to an ally),
+--! lighter while the mouse is over one.
+function UITownMap:drawPlotButtons(canvas, x, y, s)
+  local hover = self.hover_button
+  for _, button in ipairs(self:plotButtons()) do
+    local sell = button.kind == "sell"
+    local lit = hover and hover.plot == button.plot and hover.kind == button.kind
+    local bx, by = x + button.x * s, y + button.y * s
+    canvas:drawRect(canvas:mapRGB(30, 20, 20), bx, by, BUTTON * s, BUTTON * s)
+    local face = sell and (lit and canvas:mapRGB(255, 90, 80) or canvas:mapRGB(200, 30, 30)) or
+        (lit and canvas:mapRGB(110, 160, 255) or canvas:mapRGB(40, 90, 210))
+    canvas:drawRect(face, bx + s, by + s, (BUTTON - 2) * s, (BUTTON - 2) * s)
+    local white = canvas:mapRGB(255, 255, 255)
+    if sell then
+      for i = 0, 6 do
+        canvas:drawRect(white, bx + (1 + i) * s, by + (1 + i) * s, s, s)
+        canvas:drawRect(white, bx + (7 - i) * s, by + (1 + i) * s, s, s)
+      end
+    else
+      for _, p in ipairs({{2, 4}, {3, 4}, {4, 4}, {5, 4}, {6, 4}, {4, 2}, {5, 3}, {4, 6}, {5, 5}}) do
+        canvas:drawRect(white, bx + p[1] * s, by + p[2] * s, s, s)
+      end
+    end
+  end
+end
+
+--! The question before a plot is sold back (the sale itself is a command,
+--! checked again by everybody's game).
+function UITownMap:askToSell(plot)
+  local world = self.ui.hospital.world
+  local refund = MultiplayerSession.plotRefund(world, plot)
+  local ui = self.ui
+  ui:addWindow(UIConfirmDialog(ui, false, _S.multiplayer_window.plot_sell_question:format(refund),
+      --[[persistable:town_map_sell_plot]] function() UITownMap.sellPlot(ui, plot) end))
+end
+
+--! Sell `plot` back: a message instead when it is not empty (or the like).
+function UITownMap.sellPlot(ui, plot)
+  local world = ui.hospital.world
+  local why = MultiplayerSession.plotRefusal(world, ui.hospital, plot)
+  if why then
+    local texts = MultiplayerSession.rejection_texts.sell_plot
+    ui:addWindow(UIInformation(ui, {texts[why] or ("That plot cannot be sold now (" .. why .. ").")}))
+    return
+  end
+  TheApp.mp_session:issue({kind = "sell_plot", plot = plot})
+end
+
 function UITownMap:onMouseMove(x, y, dx, dy)
   local s = TheApp.gfx:getUIScale()
+  self.hover_button = self:buttonAt(x, y)
   local tx = math.floor((x - 227 * s) / (self:tilePixels() * s))
   local ty = math.floor((y - 25 * s) / (self:tilePixels() * s))
   self.hover_plot = nil
@@ -134,7 +239,11 @@ end
 function UITownMap:onMouseUp(button, x, y)
   local redraw = false
   local s = TheApp.gfx:getUIScale()
-  if button == "left" then
+  local plot_button = button == "left" and self:buttonAt(x, y)
+  if plot_button then
+    if plot_button.kind == "sell" then self:askToSell(plot_button.plot) end
+    return true
+  elseif button == "left" then
     local tx = math.floor((x - 227 * s) / (self:tilePixels() * s))
     local ty = math.floor((y - 25 * s) / (self:tilePixels() * s))
     local map = self.ui.hospital.world.map.th
@@ -256,6 +365,11 @@ function UITownMap:draw(canvas, x, y)
   end
   TH.windowHelpers.townMapDraw(self, map.th, canvas, town_map_offset_x, town_map_offset_y,
     config.radiators_enabled, s, player, options)
+  self:drawPlotButtons(canvas, x, y, s)
+  if self.hover_button then
+    self.city_font:draw(canvas, self.hover_button.kind == "sell" and _S.multiplayer_window.plot_sell_hint or
+        _S.multiplayer_window.plot_give_hint, x + 227 * s, y + 413 * s, 380 * s, 15 * s)
+  end
 
   -- Draw entities
   local function draw_entities(list, color, size)

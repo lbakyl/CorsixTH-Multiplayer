@@ -382,7 +382,28 @@ end
 ]]
 function Map:setPlotOwner(plot_number, new_owner)
   local split_tiles = self.th:setPlotOwner(plot_number, new_owner)
-  for _, coordinates in ipairs(split_tiles) do
+  self:_wallInRooms(split_tiles)
+  -- Refresh the map's paths and flags
+  self.th:updatePathfinding()
+  if self.app.world then
+    self.app.world:resetSideObjects()
+  end
+  self:_fixTiles()
+end
+
+-- The wall blocks of a plot divider (the fence the engine puts between plots
+-- of different owners: th_map.cpp, addRemoveDividerWalls): north 142 (unowned
+-- side) and 144, west 143 and 145.
+local divider_blocks = {[142] = true, [143] = true, [144] = true, [145] = true}
+
+--[[! Gives the rooms next to the given tiles walls in all directions.
+!param tiles (list) {x, y} pairs
+!param over_dividers (bool) optional; also where the wall is a plot divider
+       (land next to a room became another owner's, or nobody's: the engine
+       then put its fence over the room's wall)
+]]
+function Map:_wallInRooms(tiles, over_dividers)
+  for _, coordinates in ipairs(tiles) do
     local x = coordinates[1]
     local y = coordinates[2]
 
@@ -423,7 +444,7 @@ function Map:setPlotOwner(plot_number, new_owner)
              },
     }
     for _, dir in pairs(wall_dirs) do
-      if dir.layer == 0 and dir.room_cell_flags.roomId ~= 0 and
+      if (dir.layer == 0 or (over_dividers and divider_blocks[dir.layer])) and dir.room_cell_flags.roomId ~= 0 and
           dir.room_cell_flags.parcelId ~= dir.adj_cell_flags.parcelId then
         local room = self.app.world.rooms[dir.room_cell_flags.roomId]
         local wall_type = self.app.walls[room.room_info.wall_type][dir.tile_cat][dir.wall_dir]
@@ -431,12 +452,6 @@ function Map:setPlotOwner(plot_number, new_owner)
       end
     end
   end
-  -- Refresh the map's paths and flags
-  self.th:updatePathfinding()
-  if self.app.world then
-    self.app.world:resetSideObjects()
-  end
-  self:_fixTiles()
 end
 
 --[[! Saves the map to a .map file

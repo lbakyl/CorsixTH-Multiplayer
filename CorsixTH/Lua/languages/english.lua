@@ -627,6 +627,13 @@ multiplayer_window = {
   rep_rivals = "Only allies can vouch for each other.",
   rep_given_note = "You vouched for %s: you gave %d reputation points.",
   rep_received_note = "%s vouches for your hospital: you gained %d reputation points.",
+  -- Land: selling a plot back, handing it to an ally (town map)
+  plot_sell_question = "Do you want to sell this plot? You will receive back $%d.",
+  plot_sell_hint = "Sell this plot back to the bank (it must be empty)",
+  plot_give_hint = "Hand this plot to an ally, free or for a price",
+  plot_sold_transaction = "Plot %d sold back",
+  plot_sold_note = "Plot %d is sold back to the bank for $%d.",
+  plot_sold_others_note = "%s sold plot %d back. It is for sale again.",
   saved_note = "Game saved: %s",
   load_game = "Load MP game",
   levels_caption = "Levels",

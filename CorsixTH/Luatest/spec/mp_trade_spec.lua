@@ -28,7 +28,7 @@ local handlers = MultiplayerSession.default_handlers
 -- Texts the handlers format for their notes (shown to nobody here).
 local function with_texts(fn)
   local old_S = rawget(_G, "_S")
-  rawset(_G, "_S", {multiplayer_window = setmetatable({}, {__index = function() return "%s %s" end})})
+  rawset(_G, "_S", {multiplayer_window = setmetatable({}, {__index = function() return "%s" end})})
   local ok, err = pcall(fn)
   rawset(_G, "_S", old_S)
   if not ok then error(err, 0) end
@@ -112,6 +112,165 @@ describe("Trading reputation", function()
       assert.is_true(handlers.give_reputation(world, {hospital = 1, to = 2, amount = 40}))
       assert.equal(660, a.reputation)
       assert.equal(160, MultiplayerSession.reputationLeft(world, a))
+    end)
+  end)
+end)
+
+-- A map of one row of tiles, two per plot: `layout` lists the plot of each
+-- position (by two tiles), `owners` the owner of each plot. Plots 1 and 2 are
+-- the players' starting plots.
+local function plot_world(layout, owners, extra)
+  extra = extra or {}
+  local th = {}
+  local owner = {}
+  for p, o in pairs(owners) do owner[p] = o end
+  local function plot_at(x) return layout[math.ceil(x / 2)] end
+  function th.size() return #layout * 2, 1 end
+  function th.getPlotCount() return 20 end
+  function th.getPlayerCount() return 2 end
+  function th.getPlotOwner(_, plot) return owner[plot] or 0 end
+  function th.getCellFlags(_, x, _, t)
+    t = t or {}
+    t.parcelId = plot_at(x) or 0
+    t.roomId = extra.room_tiles and extra.room_tiles[x] and 7 or 0
+    return t
+  end
+  function th.updatePathfinding() end
+  local removed_litter = {}
+  local world = {map = {th = th, width = #layout * 2, height = 1}, entities = extra.entities or {},
+      rooms = extra.rooms or {}, mp_coop = {players = 2}, mp_plot_paid = extra.paid,
+      removed_litter = removed_litter}
+  function world.map.getParcelPrice() return 1000 end
+  function world.map._wallInRooms() end
+  function world.getObjects(_, x) return extra.objects and extra.objects[x] end
+  function world.setPlotOwner(_, plot, new) owner[plot] = new end
+  local hospitals = {}
+  for i = 1, 2 do
+    local h = {ownedPlots = {}, ratholes = {}, staff = {}, balance = 0, name = "H" .. i, value = 0}
+    function h.getPlayerIndex() return i end
+    function h.receiveMoney(self, amount, _, value)
+      self.balance = self.balance + amount
+      self.value = self.value - (value or 0)
+    end
+    hospitals[i] = h
+  end
+  world.hospitals = hospitals
+  return world, hospitals, owner
+end
+
+describe("Selling a plot back", function()
+  -- plots by position: 3 1 4 2 5; hospital 1 has 1, 3 and 4.
+  local function make(extra, owners)
+    return plot_world({3, 1, 4, 2, 5}, owners or {[1] = 1, [2] = 2, [3] = 1, [4] = 1}, extra)
+  end
+
+  it("pays back 80 percent of what was paid and frees the plot", function()
+    with_texts(function()
+      local world, hospitals, owner = make({paid = {[4] = 1500}})
+      hospitals[1].ownedPlots = {1, 3, 4}
+      hospitals[1].staff = {{parcelNr = 4}, {parcelNr = 3}}
+      assert.is_nil(MultiplayerSession.plotRefusal(world, hospitals[1], 4))
+      assert.equal(1200, MultiplayerSession.plotRefund(world, 4))
+      assert.is_true(handlers.sell_plot(world, {hospital = 1, plot = 4}))
+      assert.equal(1200, hospitals[1].balance)
+      assert.equal(-1500, hospitals[1].value)
+      assert.equal(0, owner[4])
+      assert.is_nil(world.mp_plot_paid[4])
+      assert.same({1, 3}, hospitals[1].ownedPlots)
+      assert.equal(0, hospitals[1].staff[1].parcelNr)
+      assert.equal(3, hospitals[1].staff[2].parcelNr)
+    end)
+  end)
+
+  it("counts land bought before the price was kept at the list price", function()
+    local world = make()
+    assert.equal(800, MultiplayerSession.plotRefund(world, 3))
+  end)
+
+  it("never sells a starting plot or somebody else's plot", function()
+    with_texts(function()
+      local world, hospitals = make()
+      local ok, why = handlers.sell_plot(world, {hospital = 1, plot = 1})
+      assert.is_false(ok)
+      assert.equal("starting plot", why)
+      ok, why = handlers.sell_plot(world, {hospital = 2, plot = 3})
+      assert.is_false(ok)
+      assert.equal("not your plot", why)
+      ok, why = handlers.sell_plot(world, {hospital = 1, plot = 5})
+      assert.is_false(ok)
+      assert.equal("not your plot", why)
+      ok, why = handlers.sell_plot(world, {hospital = 1, plot = 99})
+      assert.is_false(ok)
+      assert.equal("no such plot", why)
+      assert.equal(0, hospitals[1].balance)
+    end)
+  end)
+
+  it("refuses a plot with a room, a room being built, an object or a person", function()
+    with_texts(function()
+      -- Plot 4 is at tiles 5 and 6.
+      local _
+      local world = make({room_tiles = {[6] = true}})
+      local ok, why = handlers.sell_plot(world, {hospital = 1, plot = 4})
+      assert.is_false(ok)
+      assert.equal("plot not empty", why)
+      world = make({rooms = {{x = 5, y = 1, width = 1, height = 1}}})
+      _, why = handlers.sell_plot(world, {hospital = 1, plot = 4})
+      assert.equal("plot not empty", why)
+      world = make({objects = {[5] = {{object_type = {id = "bench"}}}}})
+      _, why = handlers.sell_plot(world, {hospital = 1, plot = 4})
+      assert.equal("plot not empty", why)
+      world = make({entities = {{action_queue = {}, tile_x = 6, tile_y = 1}}})
+      _, why = handlers.sell_plot(world, {hospital = 1, plot = 4})
+      assert.equal("people on the plot", why)
+      -- Somebody who is about to walk across it.
+      world = make({entities = {{tile_x = 9, tile_y = 1, action_queue = {{name = "walk",
+          path_x = {9, 8, 7, 6}, path_y = {1, 1, 1, 1}, path_index = 2}}}}})
+      _, why = handlers.sell_plot(world, {hospital = 1, plot = 4})
+      assert.equal("people on the plot", why)
+      -- (...but another plot is not stopped by it.)
+      world.entities[1].action_queue[1].path_index = 4
+      world.entities[1].tile_x = 6
+      assert.is_true(handlers.sell_plot(world, {hospital = 1, plot = 3}))
+      assert.equal(800, world.hospitals[1].balance)
+    end)
+  end)
+
+  it("lets litter and rat holes go with the plot", function()
+    with_texts(function()
+      local removed = 0
+      local litter = {object_type = {id = "litter"}, isCleanable = function() return true end,
+          remove = function() removed = removed + 1 end}
+      local world, hospitals = make({objects = {[5] = {litter}, [6] = {{object_type = {id = "rathole"}}}}})
+      local hole = {x = 6, y = 1}
+      hospitals[1].ratholes = {hole, {x = 1, y = 1}}
+      local gone
+      hospitals[1].removeRathole = function(_, h) gone = h end
+      assert.is_true(handlers.sell_plot(world, {hospital = 1, plot = 4}))
+      assert.equal(1, removed)
+      assert.equal(hole, gone)
+    end)
+  end)
+
+  it("refuses to cut off land that hangs together with the hospital through the plot", function()
+    with_texts(function()
+      -- Hospital 1: plot 1 (start), 4 and 5, in a row: 1 4 5 ... 2.
+      local world = plot_world({1, 4, 5, 2}, {[1] = 1, [2] = 2, [4] = 1, [5] = 1})
+      local ok, why = handlers.sell_plot(world, {hospital = 1, plot = 4})
+      assert.is_false(ok)
+      assert.equal("joins your land", why)
+      ok = handlers.sell_plot(world, {hospital = 1, plot = 5})
+      assert.is_true(ok)
+    end)
+  end)
+
+  it("waits while an auction is on", function()
+    with_texts(function()
+      local world = make()
+      world.mp_auction = {}
+      local ok, why = handlers.sell_plot(world, {hospital = 1, plot = 4})
+      assert.is_false(ok)
+      assert.equal("an auction is on", why)
     end)
   end)
 end)
