@@ -79,8 +79,10 @@ levels.LEVELS = {
   -- and a helipad by each; his had none, so no emergencies): a town of three
   -- rows of three, eight walled hospitals around four plots for sale where
   -- the paths cross. Players 1 to 4 have the corners: with 2 to 4 players
-  -- only those, the other hospitals are for sale. Level 4's rooms and
-  -- research, CUTTHROAT's goals.
+  -- only those, the other hospitals are for sale. A ring road round the
+  -- middle (scripts/multiplayer/pave_roads.py) joins the roads between the
+  -- hospitals, which otherwise run through them: an empty hospital cut the
+  -- town apart. Level 4's rooms and research, CUTTHROAT's goals.
   {campaign = 8, map = 0, cash = 60000, intro = "level_intro_9",
     name = "CROSSROADS", map_author = "Matroftt",
     map_files = {[2] = "crossroads8.map", [3] = "crossroads8.map", [4] = "crossroads8.map",

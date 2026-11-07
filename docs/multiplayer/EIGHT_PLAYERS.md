@@ -47,6 +47,14 @@ Status: on `mp/team-hospitals`; first released in mp-test-d5a471a7 (eu2).
   painted helipad (an H, like Finisham's) on the grass by each hospital,
   with its own path onto the nearest road. Land costs $25 a tile, so a
   hospital's plot is worth $41,625 (his: $20,975).
+- His roads run through the hospitals, so an empty hospital (a plot nobody
+  owns cannot be walked) cut the town apart: with 6 players the south-east
+  corner could not be reached at all, with 4 or fewer the corners not from
+  each other. Since 2026-11-08 a ring road runs round the four plots in the
+  middle, joining every road between two hospitals
+  (`scripts/multiplayer/pave_roads.py`, which also draws the pavement's
+  edges), so every hospital that has a player is reachable from every other
+  and from the edges of town that lead to one.
 - With 5 to 7 players, the starting plots of the missing ones are for sale.
 - The map editor makes maps for up to 8 players: its player count menu goes
   to 8, and one Camera and one Heliport button set the tiles of the player
