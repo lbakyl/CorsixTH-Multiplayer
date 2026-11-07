@@ -3510,9 +3510,13 @@ function MultiplayerSession:tickHold()
   local world = self.world
   local hold = world and world.mp_hold
   if hold then
+    -- (Nobody to wait for in a hospital whose player is away, or that only
+    -- bots play now: a hold saved before a game was continued with bots in
+    -- people's places waited for them, Jan on eu2.)
+    local bots = world.mp_coop and world.mp_coop.bot_hospitals or {}
     for i in pairs(hold.waiting) do
       local h = world.hospitals[i]
-      if not h or h.mp_player_away then hold.waiting[i] = nil end
+      if not h or h.mp_player_away or bots[i] then hold.waiting[i] = nil end
     end
     -- (A win fax: over once it is answered, handlers.fax_choice; not from
     -- the message bar, which is each player's own screen.)

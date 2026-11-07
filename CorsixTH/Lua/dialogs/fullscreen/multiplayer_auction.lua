@@ -488,8 +488,9 @@ function UIMultiplayerHoldWait:onTick()
   local hold = world and world.mp_hold
   if hold then
     local names = {}
-    local session = TheApp.mp_session
-    local mine = session and session.hold_done_sent == hold.id and self.ui.hospital
+    -- (Not this player's own hospital: their fax or report is on their
+    -- screen; the box named them too.)
+    local mine = self.ui.hospital
     for i = 1, #world.hospitals do
       if hold.waiting[i] and world.hospitals[i] ~= mine then names[#names + 1] = world.hospitals[i].name end
     end
