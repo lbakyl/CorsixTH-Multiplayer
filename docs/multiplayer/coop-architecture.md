@@ -81,6 +81,7 @@ for that, the rules new code must follow, and what is still missing.
 | Hospital settings | Windows changed them on one machine | Commands: `loan`, `set_price`, `concentrate_research`, `research_frac`, `set_policy`, `buy_plot`, `set_heat`, `handyman_parcel`, `handyman_prio`, `queue_size` |
 | Actions on one entity | Applied locally | Commands by entity id: `send_home`, `guess_cure`, `to_reception`, `staff_bonus`, `raise_wage`, `call_handyman`, `replace_machine`, `shoot_rat` (own hospital's rats only), `mark_vaccinate`, `remove_crashed_room` (with the single player "remove destroyed rooms" option on) |
 | Sending staff, referring patients | Staff moved at once | Offers the other player accepts: `offer_staff`, `offer_patient` (purple icon; see below) |
+| Land and reputation between allies | Not possible | `give_reputation` (1 to 100 points, the giver keeps 200 and gives at most 200 a month), `sell_plot` (an empty plot back to the bank for 80 percent of its price; the town map's X), `offer_plot` (an empty plot to an ally for $0 to $50,000, answered in a fax; the arrow next to the X) |
 | Epidemics | Off in co-op | Cover-up countdown in the simulation (`World:_tickCoopOpenings`), the watch only shows it to the owner |
 | Cheats, debug, load/restart hotkeys, pushing patients | Worked locally | Blocked in multiplayer |
 | Rooms used by people | Any hospital's | Own hospital's only |

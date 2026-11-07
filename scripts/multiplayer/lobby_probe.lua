@@ -222,12 +222,17 @@ local filming -- see the "film" action
 local held_room -- see the "holdroom" action
 local moved_from -- where the last object moved by "moveobject" stood
 local held_user -- see the "holduser" action
+--! The text of a game string (they are proxies), as plain text.
+local function plain_text(text)
+  return (tostring(text):gsub("^<LocalisedString> Current value:%s*", ""))
+end
 --! Draw a frame and save it as <shot_dir>/<name>-<what>.png (once per what).
-local function shot(what)
+--!param keep_info (bool) optional; leave the information popups open
+local function shot(what, keep_info)
   if not shot_dir or shots_taken[what] then return end
   shots_taken[what] = true
   -- In the game, close information popups so the map is visible.
-  if TheApp.world then
+  if TheApp.world and not keep_info then
     for i = #TheApp.ui.windows, 1, -1 do
       local win = TheApp.ui.windows[i]
       if class.is(win, UIInformation) then win:close() end
@@ -1972,6 +1977,231 @@ local function run()
           local to, amount = entry.arg:match("^(%d+):(%d+)$")
           log(string.format("UI: giving $%s to hospital %s at step %d", amount, to, session.step))
           session:issue({kind = "give_money", to = tonumber(to), amount = tonumber(amount)})
+        elseif a == "plotbuy" then
+          -- plotbuy:plot:<n> buys that plot; plotbuy:any the cheapest plot that can be bought; plotbuy:near
+          -- the cheapest one that touches a plot another hospital bought
+          -- (so that it can be handed over to them); plotbuy:again the plot
+          -- bought (and sold) last. Bought outright (the room has no auctions).
+          local th, hospital = world.map.th, world.ui.hospital
+          local me = hospital:getPlayerIndex()
+          local best
+          local named = tonumber((entry.arg or ""):match("^plot:(%d+)$"))
+          if entry.arg == "again" then
+            best = session.probe_plot
+          elseif named then
+            best = named
+          else
+            for plot = 1, th:getPlotCount() - 1 do
+              if th:isParcelPurchasable(plot, me) then
+                local near = false
+                for q in pairs(MultiplayerSession.plotsTouching(world, plot)) do
+                  local owner = th:getPlotOwner(q)
+                  if owner ~= 0 and owner ~= me and not MultiplayerSession.isStartingPlot(world, q) then near = true end
+                end
+                if (entry.arg ~= "near" or near) and
+                    (not best or world.map:getParcelPrice(plot) < world.map:getParcelPrice(best)) then
+                  best = plot
+                end
+              end
+            end
+          end
+          session.probe_plot = best
+          log(string.format("UI: plotbuy plot %s price %s balance %d at step %d", tostring(best),
+              best and world.map:getParcelPrice(best) or "-", hospital.balance, session.step))
+          if best then session:issue({kind = "buy_plot", plot = best}) end
+        elseif a == "plotmap" then
+          -- Every plot: owner, price, which players may buy it, what it touches.
+          local th = world.map.th
+          local rows = {}
+          for plot = 1, th:getPlotCount() - 1 do
+            local who, touch = {}, {}
+            for player = 1, th:getPlayerCount() do
+              if th:isParcelPurchasable(plot, player) then who[#who + 1] = tostring(player) end
+            end
+            for q in pairs(MultiplayerSession.plotsTouching(world, plot)) do touch[#touch + 1] = q end
+            table.sort(touch)
+            rows[#rows + 1] = string.format("%d:o%d:$%d:b%s:t%s", plot, th:getPlotOwner(plot),
+                world.map:getParcelPrice(plot), table.concat(who), table.concat(touch, ","))
+          end
+          log("UI: plotmap " .. table.concat(rows, " "))
+        elseif a == "plotshot" then
+          -- The town map with the buttons on this player's plots.
+          local ui = world.ui
+          local map = UITownMap(ui)
+          ui:addWindow(map)
+          local kinds = {}
+          for _, b in ipairs(map:plotButtons()) do kinds[#kinds + 1] = b.plot .. ":" .. b.kind end
+          log(string.format("UI: town map buttons at step %d: %s", session.step, table.concat(kinds, " ")))
+          if map:plotButtons()[1] then
+            -- (Pointing at the first one: it lights up and says what it does.)
+            local s = TheApp.gfx:getUIScale()
+            local b = map:plotButtons()[1]
+            map:onMouseMove((b.x + 4) * s, (b.y + 4) * s, 0, 0)
+          end
+          shot("plots-townmap")
+          map:close()
+        elseif a == "plotsell" then
+          -- plotsell: the sale through the town map (its X, the question,
+          -- Yes); plotsell:force: the command itself, as a changed game
+          -- would send it.
+          local ui = world.ui
+          local plot = session.probe_plot
+          local before = ui.hospital.balance
+          if entry.arg == "force" then
+            log(string.format("UI: forcing the sale of plot %s at step %d", tostring(plot), session.step))
+            session:issue({kind = "sell_plot", plot = plot})
+          else
+            local map = UITownMap(ui)
+            ui:addWindow(map)
+            local found
+            for _, b in ipairs(map:plotButtons()) do
+              if b.plot == plot and b.kind == "sell" then found = b end
+            end
+            log(string.format("UI: sell button of plot %s: %s", tostring(plot), tostring(found ~= nil)))
+            if found then
+              local s = TheApp.gfx:getUIScale()
+              map:onMouseUp("left", (found.x + 4) * s, (found.y + 4) * s)
+              local dialog
+              for _, win in ipairs(ui.windows) do
+                if class.is(win, UIConfirmDialog) then dialog = win end
+              end
+              log("UI: the question " .. (dialog and ("asked: " .. plain_text(dialog.text)) or "was not asked"))
+              shot("plot-sell-question")
+              if dialog then dialog:ok() end
+              for _, win in ipairs(ui.windows) do
+                if class.is(win, UIInformation) then
+                  log("UI: message after the sale: " .. plain_text(win.text and win.text[1]))
+                  shot("plot-sell-refused", true)
+                end
+              end
+            end
+            map:close()
+          end
+          log(string.format("UI: balance before the sale $%d", before))
+        elseif a == "plotbench" then
+          -- A bench on the plot: the free tile nearest its middle, with no
+          -- object within two tiles (the entrance's doors).
+          local th = world.map.th
+          local plot = session.probe_plot
+          local tiles = MultiplayerSession.plotTiles(th, plot)
+          local flags = {}
+          local sx, sy = 0, 0
+          for k = 1, #tiles, 2 do sx, sy = sx + tiles[k], sy + tiles[k + 1] end
+          sx, sy = sx / (#tiles / 2), sy / (#tiles / 2)
+          local best_d
+          for k = 1, #tiles, 2 do
+            local x, y = tiles[k], tiles[k + 1]
+            th:getCellFlags(x, y, flags)
+            local clear = flags.buildable and flags.passable and flags.hospital
+            for dx = -2, 2 do
+              for dy = -2, 2 do
+                if world:getObject(x + dx, y + dy) then clear = false end
+              end
+            end
+            local d = (x - sx) ^ 2 + (y - sy) ^ 2
+            if clear and (not best_d or d < best_d) then
+              session.probe_bench, best_d = {x, y}, d
+            end
+          end
+          local at = session.probe_bench
+          log(string.format("UI: bench on plot %s at %s,%s, step %d", tostring(plot), tostring(at and at[1]),
+              tostring(at and at[2]), session.step))
+          if at then
+            session:issue({kind = "place_object", object = "bench", x = at[1], y = at[2], orientation = "north"})
+          end
+        elseif a == "plotclear" then
+          -- Sell that bench again.
+          local at = session.probe_bench
+          local bench = at and world:getObject(at[1], at[2], "bench")
+          log(string.format("UI: selling the bench %s at step %d", tostring(bench and bench.mp_id), session.step))
+          if bench then session:issue({kind = "sell_object", object = bench.mp_id}) end
+          session.probe_bench = nil
+        elseif a == "plotgive" then
+          -- plotgive:<hospital>:<price>: through the town map's arrow and
+          -- the window it opens.
+          local ui = world.ui
+          local to, price = entry.arg:match("^(%d+):(%d+)$")
+          local plot = session.probe_plot
+          local map = UITownMap(ui)
+          ui:addWindow(map)
+          local found
+          for _, b in ipairs(map:plotButtons()) do
+            if b.plot == plot and b.kind == "give" then found = b end
+          end
+          log(string.format("UI: give button of plot %s: %s", tostring(plot), tostring(found ~= nil)))
+          if found then
+            local s = TheApp.gfx:getUIScale()
+            map:onMouseUp("left", (found.x + 4) * s, (found.y + 4) * s)
+          end
+          local window = ui:getWindow(UIMultiplayerGivePlot)
+          if window then
+            for k, ally in ipairs(window.allies) do
+              if world:getHospitalIndex(ally) == tonumber(to) then window:selectAlly(k, true) end
+            end
+            window:setPrice(tonumber(price))
+            shot("plot-give-window")
+            log(string.format("UI: giving plot %s to hospital %s for $%d at step %d", tostring(plot), to,
+                window.price, session.step))
+            window:give()
+          else
+            log("UI: no window to give the plot")
+          end
+          map:close()
+        elseif a == "answerplot" then
+          -- answerplot:accept / answerplot:decline: the fax with a plot offer.
+          local icon
+          for _, candidate in ipairs(world.ui.bottom_panel:allMessageIcons()) do
+            local offer = type(candidate.message) == "table" and candidate.message.mp_offer
+            if not icon and offer and offer.kind == "plot" and candidate.hospital == world.ui.hospital then
+              icon = candidate
+            end
+          end
+          if icon then
+            if not icon.fax then icon:openMessage() end
+            shot("plot-offer-fax")
+            local offer = icon.message.mp_offer
+            log(string.format("UI: %s the offer of plot %s for $%d at step %d", entry.arg, tostring(offer.plot),
+                offer.price or 0, session.step))
+            session.probe_plot = offer.plot
+            icon.fax:buttonChoice(entry.arg == "accept" and 1 or 2)
+          else
+            log("UI: no plot offer to answer")
+          end
+        elseif a == "plotstate" then
+          local th, hospital = world.map.th, world.ui.hospital
+          local plot = session.probe_plot
+          local paid = world.mp_plot_paid and world.mp_plot_paid[plot]
+          log(string.format("UI: plotstate at step %d: plot %s owner %d, paid %s, balance %d, loan %d, owned %s",
+              session.step, tostring(plot), th:getPlotOwner(plot or 0), tostring(paid), hospital.balance,
+              hospital.loan or 0, table.concat(hospital.ownedPlots, ",")))
+          if plot then
+            local why = MultiplayerSession.plotNotEmpty(world, plot)
+            local found, flags = {}, {}
+            local tiles = MultiplayerSession.plotTiles(th, plot)
+            for k = 1, #tiles, 2 do
+              th:getCellFlags(tiles[k], tiles[k + 1], flags)
+              for _, o in ipairs(world:getObjects(tiles[k], tiles[k + 1]) or {}) do
+                found[#found + 1] = string.format("%s@%d,%d", o.object_type.id, tiles[k], tiles[k + 1])
+              end
+              if (flags.roomId or 0) ~= 0 then found[#found + 1] = "room" .. flags.roomId end
+            end
+            log(string.format("UI: plot %d: %d tiles, not empty: %s; found %s", plot, #tiles / 2, tostring(why),
+                table.concat(found, " ")))
+          end
+        elseif a == "giverep" then
+          -- giverep:<points>: through the trade window.
+          local trade = UIMultiplayerTrade(world.ui)
+          world.ui:addWindow(trade)
+          shot("trade-reputation")
+          trade:setReputation(tonumber(entry.arg))
+          log(string.format("UI: vouching %d points for %s at step %d", trade.reputation, trade.target.name,
+              session.step))
+          trade:sendReputation()
+          trade:close()
+        elseif a == "repstate" then
+          local parts = {}
+          for k, h in ipairs(world.hospitals) do parts[#parts + 1] = k .. ":" .. math.floor(h.reputation) end
+          log(string.format("UI: reputation at step %d: %s", session.step, table.concat(parts, " ")))
         elseif a == "teamview" then
           -- What the mouse may point at: a team mate's people, and not the
           -- other team's.
