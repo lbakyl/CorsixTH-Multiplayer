@@ -102,7 +102,7 @@ KICK_BLOCK_SECONDS = 300.0
 # person in it.
 MAX_BOTS = 7
 # A bot asks the language model (advisor.py) at most this often (seconds).
-ASK_INTERVAL = {"plan": 20.0, "chat": 3.0}
+ASK_INTERVAL = {"plan": 20.0, "chat": 3.0, "rescue": 30.0}
 # Gameplay settings every peer must use (lesson 4 in the handover README).
 DEFAULT_SETTINGS = {"grant_wage_increase": 1, "free_build_mode": 0}
 
@@ -986,8 +986,8 @@ class Server:
         return True
 
     def _on_ask(self, player: Player, f: dict[str, str]) -> None:
-        """A bot asks for advice (advisor.py): kind=plan (text = its hospital's
-        report, menu = its projects, comma-separated) or kind=chat (text =
+        """A bot asks for advice (advisor.py): kind=plan or kind=rescue (a failing
+        hospital; text = its hospital's report, menu = its projects, comma-separated) or kind=chat (text =
         its hospital in brief, lines = the chat so far, newline-separated,
         rival=1 in a race; a team mate's bot adds menu, and may get a wish).
         The answer comes back as ANSWER id=... with actions
@@ -1010,9 +1010,10 @@ class Server:
         advisor = self.advisor
         assert advisor is not None
         try:
-            if kind == "plan":
+            if kind in ("plan", "rescue"):
                 menu = [m for m in f.get("menu", "").split(",") if m]
-                plan = await advisor.plan(f.get("text", ""), menu)
+                ask = advisor.rescue if kind == "rescue" else advisor.plan
+                plan = await ask(f.get("text", ""), menu)
                 if plan is None:
                     player.send(encode("ANSWER", id=qid, error="none"))
                     return

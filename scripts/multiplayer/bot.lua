@@ -42,6 +42,7 @@
 --                        its staff for the training room every month
 --   MP_BOT_TEST_WIN      tests: "<hospital index>:<day>;...": those hospitals meet the level's requirements to
 --                        win from that game day on (the bots' chat about it)
+--   MP_BOT_TEST_FAIL     tests: from this game day the bot counts as failing its objectives
 --   MP_BOT_PLAN          tests: "<action>:<weight>,..." the plan every game week
 --                        instead of the server's advice (buy:drinks_machine:10)
 --   MP_BOT_PACE          game days between its building steps are divided
@@ -365,6 +366,20 @@ local LINES = {
     "My hospital meets the requirements too.",
     "Same here, I'm ready as well.",
     "I'm there too. Now we only have to wait for the others.",
+  },
+  -- A bot that is failing its objectives asks its team for help (Manager:askForHelp):
+  -- {amount}, what it would {purpose} and {goal} with it.
+  rescue_ask = {
+    "I seem to be failing my objectives. Could you send me ${amount} to {purpose} and {goal}? After all, we are on the same boat here. Thanks.",
+    "I'm falling behind on the level's goals. Could someone send me ${amount} so I can {purpose} and {goal}? We're in this together.",
+    "My hospital is struggling with its objectives. ${amount} would let me {purpose} and {goal}. Can you spare it? Thanks a lot.",
+    "Help, I'm failing my objectives! Could you send me ${amount}? I would {purpose} and {goal}. We win or lose together.",
+  },
+  -- (When no project is waiting for money.)
+  rescue_ask_plain = {
+    "I seem to be failing my objectives. Could you send me ${amount} so I can {goal}? After all, we are on the same boat here. Thanks.",
+    "I'm falling behind on the level's goals. Could someone spare ${amount} to help me {goal}? We're in this together.",
+    "My hospital is struggling with its objectives. ${amount} would help me {goal}. Can you spare it? Thanks a lot.",
   },
   -- An opponent meets the requirements to win (Manager:rivalWatch), to the
   -- team: one name ({names}) or several.
@@ -1005,6 +1020,21 @@ function Bot:askPlan()
     if f.note and f.note ~= "" and not self.fiery and rand() < 0.3 then
       self:say(f.note, typing(f.note), "team")
     end
+  end)
+end
+
+--! A hospital failing its objectives: the server's model reviews it (ASK
+--! kind=rescue, answered like a weekly plan). `done(plan)` gets the plan
+--! ({priorities = {{action, weight}}, note}) or nil if none came within a
+--! minute. False if it did not ask (no advice on this server).
+function Bot:askRescue(report, menu, done)
+  return self:ask("rescue", {text = report, menu = menu}, 60, function(f)
+    if not f then return done(nil) end
+    local plan = {priorities = {}, note = f.note}
+    for action, weight in (f.actions or ""):gmatch("([%w_:]+):(%d+)") do
+      plan.priorities[#plan.priorities + 1] = {action = action, weight = tonumber(weight)}
+    end
+    done(plan)
   end)
 end
 

@@ -82,6 +82,9 @@ local GIVE_DAYS, ASK_DAYS, ASK_DAYS_EMERGENCY = 20, 20, 7
 local LACK_DAYS, LACK_EMERGENCY_DAYS = 10, 3
 -- Game days between warnings that an opponent can win (4 months).
 local RIVAL_WARN_DAYS = 120
+-- A failing hospital is looked at from this game day (a year in, a quarter of
+-- it for the first quarter's start-up), and at most every RESCUE_DAYS (3 months).
+local RESCUE_FROM, RESCUE_DAYS = 150, 90
 -- Waiting areas (Jan, 2026-11-03): by each room's door and the reception
 -- benches for the queue, a plant and a radiator, and a drinks machine by
 -- every third, within WAITING_R tiles. Not by rooms nobody queues for.
@@ -2007,6 +2010,10 @@ function M:applyPlan(plan)
       taken[#taken + 1] = p.action
     end
   end
+  -- (A plan to revive a failing hospital stays in force for a month, M:rescue.)
+  if self.rescue_until and self.bot:gameDay() <= self.rescue_until then
+    for key, b in pairs(self.rescue_boost or {}) do self.boost[key] = math.max(self.boost[key] or 0, b) end
+  end
   -- (No price: bots keep the normal prices, M:monthly.)
   self:note("plan: " .. table.concat(taken, ", "))
 end
@@ -2481,6 +2488,192 @@ function M:rivalWatch(s)
   bot:say(line, self.typing(line), "team")
 end
 
+--------------------------------------------------------------------------------
+-- A hospital that is failing its objectives: review with the model, ask the allies
+--------------------------------------------------------------------------------
+
+--! Dollars with thousands separators: 20,000.
+local function dollars(n)
+  local text = string.format("%d", math.max(0, math.floor(n + 0.5)))
+  local out = text:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+  return (out:gsub("^,", ""))
+end
+
+--! Why this hospital is failing its objectives, as a list of reasons (empty:
+--! it is not): close to a way of losing the level, failing at the last year
+--! end (a race, or co-op), far behind the goals a year in, out of money and
+--! loans, or a low reputation that keeps falling. (Tests: MP_BOT_TEST_FAIL
+--! makes it fail from that game day.)
+function M:failing(s)
+  local world, hosp = self.bot.world, s.hosp
+  local reasons = {}
+  local forced = tonumber(os.getenv("MP_BOT_TEST_FAIL") or "")
+  if forced and s.day >= forced then reasons[#reasons + 1] = "(a test) the objectives are not met" end
+  -- A group of lose goals all past the point where the game warns, and half
+  -- the way to the limit or more (as EndConditions:generateReportTable counts it).
+  local ec = world.endconditions
+  if ec and type(ec.lose_goals) == "table" and ec.getAttribute then
+    for _, g in ipairs(sorted_keys(ec.lose_goals)) do
+      local total, near, worst, names = 0, 0, 1, {}
+      for _, name in ipairs(sorted_keys(ec.lose_goals[g])) do
+        local crit = ec.lose_goals[g][name]
+        total = total + 1
+        local ok, now = pcall(ec.getAttribute, ec, hosp, name)
+        local mm = crit.max_min == 1 and 1 or -1
+        if ok and tonumber(now) and crit.boundary and crit.lose_value and crit.boundary ~= crit.lose_value and
+            (tonumber(now) - crit.boundary) * mm > 0 then
+          near = near + 1
+          names[#names + 1] = name
+          worst = math.min(worst, 1 - (tonumber(now) - crit.lose_value) / (crit.boundary - crit.lose_value))
+        end
+      end
+      if total > 0 and near == total and worst >= 0.5 then
+        reasons[#reasons + 1] = "close to losing the level (" .. table.concat(names, ", ") .. ")"
+      end
+    end
+  end
+  if hosp.mp_failing_since then
+    reasons[#reasons + 1] = "it failed the goals at the last year end and fails the level at the next"
+  end
+  -- A year in and far from the goals.
+  local me = s.month >= 12 and M.requirements(world, hosp)
+  if me and not (me.ready or me.reached) then
+    local sum, n = 0, 0
+    for _, c in ipairs(me.list) do
+      if c.name ~= "months_played" then sum, n = sum + c.progress, n + 1 end
+    end
+    if n > 0 and sum / n < 0.3 then
+      reasons[#reasons + 1] = string.format("far behind on the goals after %d months (%d%% of the way)", s.month,
+          math.floor(100 * sum / n + 0.5))
+    end
+  end
+  -- No money, no loan left.
+  if hosp.opened and s.balance < 2000 and s.loan >= s.max_loan - 5000 then
+    self.broke_since = self.broke_since or s.day
+    if s.day - self.broke_since >= 20 then reasons[#reasons + 1] = "out of money with the loan used up" end
+  else
+    self.broke_since = nil
+  end
+  -- A low reputation that fell by 50 or more in the last 3 months.
+  self.rep_hist = self.rep_hist or {}
+  if self.rep_hist.month ~= s.month then
+    self.rep_hist.month = s.month
+    table.insert(self.rep_hist, s.reputation)
+    if #self.rep_hist > 4 then table.remove(self.rep_hist, 1) end
+  end
+  if #self.rep_hist >= 4 and s.reputation < 250 and s.reputation <= self.rep_hist[1] - 50 then
+    reasons[#reasons + 1] = string.format("reputation %d and falling (it was %d three months ago)",
+        math.floor(s.reputation), math.floor(self.rep_hist[1]))
+  end
+  return reasons
+end
+
+--! What the weakest of the level's goals needs, in words after "to": raise the
+--! value of my hospital, cure more patients...
+function M:goalWords(s)
+  local me = M.requirements(self.bot.world, s.hosp)
+  local worst
+  for _, c in ipairs(me and me.list or {}) do
+    if not c.ok and c.name ~= "months_played" and (not worst or c.progress < worst.progress) then worst = c end
+  end
+  local words = {value = "raise the value of my hospital", reputation = "improve my reputation",
+      num_cured = "cure more patients", percentage_cured = "cure more patients",
+      percentage_killed = "keep more patients alive", staff_happiness = "make my staff happier",
+      patient_happiness = "make my patients happier", balance = "get my finances back in order"}
+  return words[worst and worst.name or ""] or "get back on track"
+end
+
+--! A project in words after "to": build a new X-Ray room, hire a surgeon...
+local function purpose_words(key)
+  local kind, what = key:match("^(%a+):([^:@]+)")
+  if kind == "room" then
+    return "build a new " .. wish_words(key)
+  elseif kind == "hire" then
+    return "hire " .. wish_words(key)
+  elseif key == "buy:land" then
+    return "buy more land"
+  elseif kind == "buy" then
+    return "buy a " .. what:gsub("_", " ")
+  elseif kind == "repair" then
+    return "repair the " .. wish_words("room:" .. what)
+  elseif kind == "replace" then
+    return "replace the machine in the " .. wish_words("room:" .. what)
+  end
+  return nil
+end
+
+--! The bot is failing its objectives: it asks its allies, in the team chat,
+--! for one concrete thing: money for the project it cannot afford that now
+--! matters most (the top of its list that the bank cannot pay), and what for.
+function M:askForHelp(s, reasons)
+  if self:sideReaders() == 0 then return end
+  local list = self:projects(s)
+  local pick
+  -- The top project the bank cannot pay, else the top one that costs anything.
+  for i = 1, math.min(#list, 8) do
+    local p = list[i]
+    if not pick and p.cost > 0 and s.balance - p.cost < RESERVE and purpose_words(p.key) then pick = p end
+  end
+  for i = 1, math.min(#list, 8) do
+    local p = list[i]
+    if not pick and p.cost > 0 and purpose_words(p.key) then pick = p end
+  end
+  local vars = {goal = self:goalWords(s)}
+  local line
+  if pick then
+    local need = pick.cost + RESERVE - s.balance
+    vars.amount = dollars(math.min(30000, math.max(2000, math.ceil(math.max(need, pick.cost) / 1000) * 1000)))
+    vars.purpose = purpose_words(pick.key)
+    line = self.fill_in(self.pick(self.lines.rescue_ask), vars)
+    -- (The server cuts a chat line at 200 letters: a long room name takes the short form.)
+    if #line > 195 then pick = nil end
+  end
+  if not pick then
+    vars.amount = dollars(math.min(30000, math.max(5000, math.ceil((2 * RESERVE - s.balance) / 1000) * 1000)))
+    line = self.fill_in(self.pick(self.lines.rescue_ask_plain), vars)
+  end
+  self:note(string.format("day %d: asked the team for $%s (%s)", s.day, vars.amount, pick and pick.key or "no project"))
+  self.bot:say(line, self.typing(line), "team")
+end
+
+--! Once a day: is the hospital failing its objectives (M:failing)? Then, at
+--! most every RESCUE_DAYS, the model reviews it (a "rescue" question to the
+--! server, its answer a plan like the weekly one that stays in force for a
+--! month) and the allies are asked for help (M:askForHelp), after the answer
+--! or a minute without one.
+function M:rescue(s)
+  local bot = self.bot
+  if s.hosp.mp_place then
+    self.rescue_wait = nil
+    return
+  end
+  local wait = self.rescue_wait
+  if wait then
+    if wait.done or bot:now() - wait.at > 70 then
+      self.rescue_wait = nil
+      self:askForHelp(s, wait.reasons)
+    end
+    return
+  end
+  local reasons = self:failing(s)
+  local first = tonumber(os.getenv("MP_BOT_TEST_FAIL") or "") or RESCUE_FROM
+  if #reasons == 0 or s.day < math.max(first, self.rescue_next or 0) then return end
+  self.rescue_next = s.day + RESCUE_DAYS
+  self:note(string.format("day %d: failing its objectives: %s", s.day, table.concat(reasons, "; ")))
+  wait = {at = bot:now(), reasons = reasons}
+  self.rescue_wait = wait
+  local text = (self:report() or "") .. "\nFAILING ITS OBJECTIVES: " .. table.concat(reasons, "; ") .. "."
+  local asked = bot:askRescue(text, table.concat(self:planMenu(), ","), function(plan)
+    if plan then
+      self:applyPlan(plan)
+      self.rescue_boost, self.rescue_until = {}, s.day + 30
+      for key, b in pairs(self.boost) do self.rescue_boost[key] = b end
+    end
+    wait.done = true
+  end)
+  if not asked then wait.done = true end
+end
+
 --! (MP_BOT_DIAG) Where the GP's offices, their doctors, the patients and
 --! the doctors are, in the log once a month.
 function M:diagnose(s)
@@ -2568,6 +2761,8 @@ function M:think()
     self:winChat(s)
     self:rivalWatch(s)
   end
+  -- Failing its objectives: a review by the model, and a word to the allies.
+  self:rescue(s)
   if s.hosp.mp_place then return end -- out of the race (or won): no more building
   if not s.hosp.opened and s.staffed_desks > 0 and s.rooms.gp and (s.staff.Doctor or 0) > 0 and
       not bot:sharesWithPerson() then

@@ -2,7 +2,7 @@
 Anthropic API).
 
 A bot (scripts/multiplayer/bot.lua) asks the server, never the API itself:
-the API key stays with the server and never reaches a game. Two kinds of
+the API key stays with the server and never reaches a game. Three kinds of
 question (ASK lines, see server.py):
 
   * plan: once per game week the bot sends a report of its hospital (its
@@ -10,6 +10,9 @@ question (ASK lines, see server.py):
     to six priorities from that menu (with weights) and a short note on
     why. The bot still checks and does everything itself. (No prices: bots
     keep the normal treatment prices, Argus 2026-11-07.)
+  * rescue: a bot whose hospital is failing the level's objectives sends the
+    report with the reasons; the model answers like a plan (priorities from
+    the menu, with weights), aimed at reviving the hospital.
   * chat: a player wrote to the bot; the model writes its answer in the
     bot's voice (friendly in co-op, a good-natured rival in a race).
 
@@ -69,6 +72,18 @@ they asked for and has not been done yet comes first, after the problems. Only n
 Weights are 1 (nice to have) to 10 (do it first): a weight of 9 or 10 is done before the bot's own ideas, and
 it borrows for it if the money is short; 3 or less only tips the balance. The note is one short sentence on the main reason, as the player would
 say it in the chat (no numbers needed)."""
+
+RESCUE_SYSTEM = """You advise a computer player in a multiplayer game of Theme Hospital (CorsixTH) whose hospital is
+FAILING the level's objectives: the report ends with why. Work out what would revive it, as a good player would.
+First what loses the level: money running out (no big spending, patients cured and paying, a loan), destroyed or
+worn machines (repair:<room> and replace:<room>), long queues and rooms without staff, patients dying or leaving
+uncured (the rooms and doctors their diseases need). Then what the goals ask: the hospital value is its land, rooms and
+what is in them (buy:land and new rooms raise it, cash does not count); reputation and happiness need toilets, a
+staff room, benches, plants, a drinks machine and warmth; cures need treatment rooms with their doctors. The report
+may say what its team mates asked for. Only name projects from the menu. Weights are 1 (nice to have) to 10 (do it
+first): a weight of 9 or 10 is done before the bot's own ideas and borrows if the money is short; use that for the
+few things that matter most, and list them in the order a good player would do them. The note is one short sentence
+on the main thing to fix."""
 
 PLAN_SCHEMA = {
     "type": "object",
@@ -242,12 +257,12 @@ class Advisor:
             return None
         return next((b.text for b in response.content if b.type == "text"), None)
 
-    async def plan(self, report: str, menu: list[str]) -> dict | None:
+    async def plan(self, report: str, menu: list[str], system: str = PLAN_SYSTEM) -> dict | None:
         """Priorities from the menu for this hospital: {"actions": [(action, weight)],
-        "note": str}."""
+        "note": str}. `system` is the prompt (PLAN_SYSTEM; RESCUE_SYSTEM for a failing hospital)."""
         text = (f"Report:\n{report[:MAX_REPORT]}\n\nMenu of projects: {', '.join(menu)}\n\n"
                 "Choose up to six priorities.")
-        answer = await self._ask(PLAN_SYSTEM, text, 4000, PLAN_SCHEMA)
+        answer = await self._ask(system, text, 4000, PLAN_SCHEMA)
         if not answer:
             return None
         try:
@@ -263,6 +278,10 @@ class Advisor:
                 actions.append((action, weight))
         note = " ".join(str(data.get("note", "")).split())[:MAX_CHAT_OUT]
         return {"actions": actions, "note": note}
+
+    async def rescue(self, report: str, menu: list[str]) -> dict | None:
+        """A plan to revive a hospital that is failing its objectives (see plan)."""
+        return await self.plan(report, menu, RESCUE_SYSTEM)
 
     async def chat(self, name: str, rival: bool, context: str, lines: list[str]) -> str | None:
         """The bot's answer to the last chat line."""

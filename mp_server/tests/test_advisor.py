@@ -193,3 +193,38 @@ def test_a_room_asked_for_beside_something_keeps_its_place():
     assert ask(["room:toilets@far:gp", "hire:Nurse@near:gp", "room:ward@near:gp", "room:toilets@near:G P!"]) == []
     # A room left to them is left, whatever the place.
     assert ask(["room:toilets@near:gp", "room:pharmacy"], leave=["room:toilets"]) == ["room:pharmacy"]
+
+
+def test_a_failing_hospital_gets_a_rescue_plan_from_the_menu():
+    answer = json.dumps({"priorities": [{"action": "buy:land", "weight": 9}, {"action": "format c:", "weight": 10},
+                                        {"action": "room:ward", "weight": 7}],
+                         "note": "Get more floor\nfor the wards."})
+    a = fake_advisor(answer)
+    plan = asyncio.run(a.rescue("Money $900\nFAILING ITS OBJECTIVES: out of money.", ["buy:land", "room:ward"]))
+    assert plan == {"actions": [("buy:land", 9), ("room:ward", 7)], "note": "Get more floor for the wards."}
+    call = a.client.messages.calls[0]
+    # Its own prompt, not the weekly one.
+    assert "FAILING" in call["system"] and "revive" in call["system"]
+    assert "FAILING ITS OBJECTIVES" in call["messages"][0]["content"]
+
+
+def test_a_bot_asks_for_a_rescue_plan_through_the_server():
+    async def body(server, port, bots):
+        server.advisor = fake_advisor(json.dumps({"priorities": [{"action": "room:gp", "weight": 8}],
+                                                  "note": "More GPs."}))
+        ann = await Client.connect(port, "Ann")
+        ann.send(encode("CREATE", room="r", password="", max=2, mode="coop", level=1))
+        await ann.expect("JOINED")
+        ann.send(encode("BOT", add=1))
+        await started_bots(bots, 1)
+        bot = await connect_bot(port, bots[0])
+        await bot.expect("JOINED")
+        bot.send(encode("ASK", id=5, kind="rescue", text="Money $1\nFAILING ITS OBJECTIVES: x.", menu="room:gp"))
+        answer = await bot.expect("ANSWER", id=5)
+        assert answer["actions"] == "room:gp:8" and answer["note"] == "More GPs."
+        # Not too often (one a half minute), but the weekly plan has its own clock.
+        bot.send(encode("ASK", id=6, kind="rescue", text="again", menu="room:gp"))
+        assert (await bot.expect("ANSWER", id=6))["error"] == "busy"
+        bot.send(encode("ASK", id=7, kind="plan", text="Money $1", menu="room:gp"))
+        assert (await bot.expect("ANSWER", id=7))["actions"] == "room:gp:8"
+    run_with_bots(body)

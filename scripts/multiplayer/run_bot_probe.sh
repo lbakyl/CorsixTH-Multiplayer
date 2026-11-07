@@ -92,7 +92,7 @@ export MP_REFEREE_PROBE_SCENARIO="team=none;race=none;trio=none;duel=none;lab=no
 export CORSIXTH_MP_MAX_BOTS=9 # (nine bots in all the rooms)
 # (MP_BOT_AWAY_SECONDS: kay in "afk" counts as away after a game week; the
 # bots' games run faster than real time.)
-MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 MP_BOT_AWAY_SECONDS=3 MP_BOT_GIVE_LIMITS=2000:1000 MP_BOT_TEST_LACK=5:Surgeon:operating_theatre MP_BOT_TEST_WIN="1:10;3:12" PYTHONPATH="$source_dir/mp_server" \
+MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 MP_BOT_AWAY_SECONDS=3 MP_BOT_GIVE_LIMITS=2000:1000 MP_BOT_TEST_LACK=5:Surgeon:operating_theatre MP_BOT_TEST_WIN="1:10;3:12" MP_BOT_TEST_FAIL=20 PYTHONPATH="$source_dir/mp_server" \
   python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
 server_pid=$!
@@ -387,3 +387,16 @@ for name, text in sorted(bots.items()):
     if errors: print(f"   {name} problems: {errors[:5]}")
 sys.exit(1 if fail else 0)
 PY
+# 19. A failing hospital asks its team for help (test hook MP_BOT_TEST_FAIL:
+# both bots of "team" count as failing from game day 20): each says in the
+# team chat that it is failing its objectives and asks ann for an amount, once
+# (the next ask is 3 months later). The advice is off in this test, so no model
+# review comes first.
+help19 = [(int(st), who, t) for who in ('Bot Agnes', 'Bot Bertie') for st, t in chats_from(a, who)
+          if re.search(r'objectives|falling behind|struggling', t) and re.search(r'\$\d', t)]
+notes19 = [l for k, t in bots.items() if k.startswith('team/') for l in t.splitlines()
+           if 'asked the team for $' in l]
+ok19 = (sorted(w for _, w, _ in help19) == ['Bot Agnes', 'Bot Bertie'] and len(notes19) == 2
+        and min(st for st, _, _ in help19) >= 20 * 50 - 50)
+print(f"19. Failing, asks for help: {[(st, w, t) for st, w, t in help19]}; notes {[n.split('] ', 1)[1] for n in notes19]}")
+fail |= not ok19
