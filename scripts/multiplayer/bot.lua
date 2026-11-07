@@ -34,6 +34,10 @@
 --                        (test command probe_learn), research to share
 --   MP_BOT_WISHES        tests: "<day>:<project>;..." a team mate's wishes on those game
 --                        days, as if asked in the chat (add:psych:skeleton, bigger:gp)
+--   MP_BOT_TEST_LACK     tests: "<day>:<Category>:<room>": from that game day the bot lacks a
+--                        specialist (Surgeon) for that room, so it asks its allies
+--   MP_BOT_GIVE_LIMITS   tests: "<above>:<keep>" replaces the $20000 and $15000 of a money
+--                        request (it gives only above the first, and keeps the second)
 --   MP_BOT_PLAN          tests: "<action>:<weight>,..." the plan every game week
 --                        instead of the server's advice (buy:drinks_machine:10)
 --   MP_BOT_PACE          game days between its building steps are divided

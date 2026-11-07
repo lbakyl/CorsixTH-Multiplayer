@@ -41,6 +41,20 @@
 #  14. "Allied bots build: off" ("hands", one shared hospital on level 2: liv
 #      and a bot, the game option helpers=0): the bot builds no room and
 #      buys nothing for the corridors (land, staff and the rest it may)
+#  15. orders only from allies, money on request: in "team" ann asks a bot for
+#      $1000 (sent), $9,000,000 (declined, it says what it could spare) and some
+#      cash (half of its spare money); in "race" bob, a rival, asks it for money
+#      and a room (refused, no money sent). The bots' limits are 2000:1000 here
+#      (MP_BOT_GIVE_LIMITS) instead of $20,000 and $15,000
+#  16. asking for staff: from game day 5 the bots lack a surgeon (MP_BOT_TEST_LACK);
+#      after 10 days they ask the allies in the team chat
+#  17. the level's requirements (MP_BOT_TEST_WIN: ann's hospital meets them from day
+#      10, the third from day 12): one bot says "good job" to ann, the third
+#      hospital's bot says it is ready too, the other says what it still needs
+#  18. a warning that an opponent meets them: in "afk" the bot tells kay, in
+#      "duel" nobody is there to read it
+#  19. failing its objectives (MP_BOT_TEST_FAIL): both bots of "team" ask ann for
+#      an amount, once
 #  10. tricks on a bot ("duel", competitive: eve and one bot): eve sends
 #      rats, an evil handyman (level 3), a smear campaign and a broken
 #      boiler. The bot shoots the rats and throws the handyman out, each at
@@ -78,7 +92,7 @@ export MP_REFEREE_PROBE_SCENARIO="team=none;race=none;trio=none;duel=none;lab=no
 export CORSIXTH_MP_MAX_BOTS=9 # (nine bots in all the rooms)
 # (MP_BOT_AWAY_SECONDS: kay in "afk" counts as away after a game week; the
 # bots' games run faster than real time.)
-MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 MP_BOT_AWAY_SECONDS=3 MP_BOT_GIVE_LIMITS=2000:1000 PYTHONPATH="$source_dir/mp_server" \
+MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 MP_BOT_AWAY_SECONDS=3 MP_BOT_GIVE_LIMITS=2000:1000 MP_BOT_TEST_LACK=5:Surgeon:operating_theatre PYTHONPATH="$source_dir/mp_server" \
   python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
 server_pid=$!
@@ -335,6 +349,15 @@ print(f"15. Money and orders:       Agnes sent {[l.split(': ',1)[1] for l in sen
       f"give_money commands {gives15}; her lines {sent_lines15}; the race bot refused bob {len(refused15)} times "
       f"({rb_lines15[:2]}), money sent to him early: {early_money15}")
 fail |= not ok15
+# 16. Asking for staff. From game day 5 every bot "lacks" a surgeon for an
+# operating theatre (test hook MP_BOT_TEST_LACK); after 10 days it asks its
+# allies in the team's chat, which ann reads.
+asks16 = [(int(st), t) for who in ('Bot Agnes', 'Bot Bertie') for st, t in chats_from(a, who) if 'urgeon' in t]
+notes16 = [l for k, t in bots.items() if k.startswith('team/') for l in t.splitlines()
+           if 'asked the allies for a Surgeon' in l]
+ok16 = bool(asks16) and bool(notes16) and min(s for s, _ in asks16) >= (5 - 1) * 50 + 10 * 50
+print(f"16. Asking for staff:       lines to ann {asks16[:2]}; bot notes {[n.split('] ', 1)[1] for n in notes16][:2]}")
+fail |= not ok16
 for name, text in sorted(bots.items()):
     errors = [l for l in text.splitlines() if 'ERROR' in l or 'could not' in l]
     if errors: print(f"   {name} problems: {errors[:5]}")

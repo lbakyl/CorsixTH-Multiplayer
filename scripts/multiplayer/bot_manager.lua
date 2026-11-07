@@ -75,6 +75,11 @@ local SHARE_DAYS = 21
 -- Game days between specialists sent to the same ally (of one kind), and
 -- between asking the allies for one (an emergency: sooner).
 local GIVE_DAYS, ASK_DAYS, ASK_DAYS_EMERGENCY = 20, 20, 7
+-- Game days a specialist must be missing (a room waits for one, or cannot work
+-- without one) before the allies are asked for one (an emergency: sooner), and
+-- before an allied bot lends one although the ally could hire (Jan, 2026-11-07:
+-- no bot ever asked).
+local LACK_DAYS, LACK_EMERGENCY_DAYS = 10, 3
 -- Waiting areas (Jan, 2026-11-03): by each room's door and the reception
 -- benches for the queue, a plant and a radiator, and a drinks machine by
 -- every third, within WAITING_R tiles. Not by rooms nobody queues for.
@@ -161,6 +166,9 @@ function M.new(bot, ctx)
   self.shared = {}         -- ally hospital index -> {item key -> game day offered}
   self.gave = {}           -- "<ally index>:<category>" -> game day a specialist was sent
   self.asked_for = {}      -- category -> game day the allies were asked for one
+  self.lacking = {}        -- specialist category -> game day it was first missing for a room
+  self.ally_lack = {}      -- "<ally index>:<category>" -> game day an ally was first missing one
+  self.blocked_spec = {}   -- category -> {day, room}: a room patients need waits for this specialist
   return self
 end
 
@@ -514,7 +522,11 @@ function M:projects(s)
     -- until one is on the staff or on the hiring list: an empty room helps
     -- nobody.
     for cat in pairs(rt.required_staff or {}) do
-      if SPECIALISTS[cat] and hosp:countStaffOfCategory(cat, 1) == 0 and not bot:canHire(cat) then return end
+      if SPECIALISTS[cat] and hosp:countStaffOfCategory(cat, 1) == 0 and not bot:canHire(cat) then
+        -- (Patients ask for the room, or an ally wished for it: the allies are asked, M:askAllies.)
+        if (self.demand[id] or 0) >= 2 or self.wishes["room:" .. id] then self.blocked_spec[cat] = {day = s.day, room = id} end
+        return
+      end
     end
     local want, extras = M.roomPlan(id)
     add("room:" .. id, score, function()
@@ -1987,21 +1999,37 @@ local function room_name(id)
   return rt and rt.name and plain(rt.name) or id:gsub("_", " ")
 end
 
---! A specialist an ally needs and cannot hire (an operating theatre with one
---! surgeon, none on their hiring list): one of its own it can spare is
---! offered for free (they accept in their messages, as any offer of staff;
---! a bot accepts an ally's), at most once in GIVE_DAYS per ally and kind.
---! (A bot sharing a person's hospital leaves its staff to the person.)
+--! A specialist an ally needs and cannot get (an operating theatre with one
+--! surgeon, none on their hiring list, or none hired for LACK_DAYS): one of
+--! its own it can spare is offered for free (they accept in their messages,
+--! as any offer of staff; a bot accepts an ally's), at most once in
+--! GIVE_DAYS per ally and kind. (A bot sharing a person's hospital leaves
+--! its staff to the person.)
 function M:helpAllies(s)
   local bot, world = self.bot, self.bot.world
   local mine = s.hosp
   if bot:sharesWithPerson() then return end
   for _, ally in ipairs(self:allies()) do
     local h, index = ally.hosp, ally.index
-    for _, sh in ipairs(M.shortStaff(world, h, M.emergencyRooms(world, h))) do
+    local short = M.shortStaff(world, h, M.emergencyRooms(world, h))
+    -- How long each kind has been missing there (the same days they count).
+    local missing = {}
+    for _, sh in ipairs(short) do
+      if lends(sh) and (sh.built or sh.building) then
+        local key = index .. ":" .. sh.cat
+        missing[key] = true
+        self.ally_lack[key] = self.ally_lack[key] or s.day
+      end
+    end
+    for key in pairs(self.ally_lack) do
+      if key:find("^" .. index .. ":") and not missing[key] then self.ally_lack[key] = nil end
+    end
+    for _, sh in ipairs(short) do
       local key = index .. ":" .. sh.cat
+      local lacking = self.ally_lack[key] and s.day - self.ally_lack[key] >= (sh.emergency and LACK_EMERGENCY_DAYS or LACK_DAYS)
       if lends(sh) and (sh.built or sh.building) and s.day - (self.gave[key] or -999) >= GIVE_DAYS and
-          not bot:canHire(sh.cat, h) and M.spareStaff(world, mine, sh.cat, s.emergency and s.emergency.rooms) > 0 then
+          (lacking or not bot:canHire(sh.cat, h)) and
+          M.spareStaff(world, mine, sh.cat, s.emergency and s.emergency.rooms) > 0 then
         -- (The least skilled of them: it keeps its best.)
         local pick
         for _, st in ipairs(mine.staff) do
@@ -2028,45 +2056,100 @@ function M:helpAllies(s)
   end
 end
 
---! A specialist its own room needs and nobody is on the hiring list: the
---! allies are asked (at most once in ASK_DAYS per kind; an emergency
---! sooner). An allied bot with one to spare sends one by itself
---! (M:helpAllies, an offer): no need to ask. People with one to spare are asked by
---! name, else every person on its side.
+--! The specialists this hospital lacks for a room (it has, or is building,
+--! or patients ask for): {room, cat, need, have, built, building, emergency}.
+--! A room it cannot build for want of one (M:projects) counts when patients
+--! need it, or an ally wished for it. (Tests: MP_BOT_TEST_LACK="day:Cat:room"
+--! makes it lack one from that game day.)
+function M:lackedStaff(s)
+  local lacks = {}
+  local have_cat = {}
+  for _, sh in ipairs(s.short) do
+    if lends(sh) and (sh.built or sh.building) then
+      lacks[#lacks + 1] = sh
+      have_cat[sh.cat] = true
+    end
+  end
+  local cats = {}
+  for cat in pairs(self.blocked_spec) do cats[#cats + 1] = cat end
+  table.sort(cats)
+  for _, cat in ipairs(cats) do
+    local b = self.blocked_spec[cat]
+    if s.day - b.day <= 5 and not have_cat[cat] and SPECIALISTS[cat] then
+      local need = 1
+      for _, rt in ipairs(TheApp.rooms) do
+        if rt.id == b.room then need = (rt.required_staff or {})[cat] or 1 end
+      end
+      lacks[#lacks + 1] = {room = b.room, cat = cat, need = need, have = s.hosp:countStaffOfCategory(cat),
+          built = false, building = false, emergency = false}
+      have_cat[cat] = true
+    end
+  end
+  local test_day, test_cat, test_room = (os.getenv("MP_BOT_TEST_LACK") or ""):match("^(%d+):(%a+):([%w_]+)$")
+  if test_day and s.day >= tonumber(test_day) and not have_cat[test_cat] then
+    lacks[#lacks + 1] = {room = test_room, cat = test_cat, need = 1, have = 0, built = false, building = false,
+        emergency = false}
+  end
+  return lacks
+end
+
+--! A specialist its own room needs (or patients ask a room for) and it has
+--! lacked for LACK_DAYS (an emergency: sooner), whether or not one is on the
+--! hiring list: the allies are asked (at most once in ASK_DAYS per kind; an
+--! emergency sooner). Before, it asked only when none was on the hiring
+--! list, which hardly ever happens: a room waits for its specialist to be on
+--! the list before it is built. An allied bot with one to spare sends one by
+--! itself (M:helpAllies, an offer): no need to ask. People with one to spare
+--! are asked by name, else the team's chat asks everybody on its side.
 function M:askAllies(s)
   local bot, world = self.bot, self.bot.world
-  for _, sh in ipairs(s.short) do
+  local lacks = self:lackedStaff(s)
+  -- Since when each kind is missing (and forgotten once it is not).
+  local now = {}
+  for _, sh in ipairs(lacks) do
+    now[sh.cat] = true
+    self.lacking[sh.cat] = self.lacking[sh.cat] or s.day
+  end
+  for cat in pairs(self.lacking) do
+    if not now[cat] then self.lacking[cat] = nil end
+  end
+  for _, sh in ipairs(lacks) do
     local wait = sh.emergency and ASK_DAYS_EMERGENCY or ASK_DAYS
-    if lends(sh) and (sh.built or sh.building) and not bot:canHire(sh.cat) and
+    local days = s.day - self.lacking[sh.cat]
+    if days >= (sh.emergency and LACK_EMERGENCY_DAYS or LACK_DAYS) and
         s.day - (self.asked_for[sh.cat] or -999) >= wait then
       local bot_spares, spare_peers, spare_names, everybody = false, {}, {}, {}
       for _, ally in ipairs(self:allies()) do
         local spare = M.spareStaff(world, ally.hosp, sh.cat, M.emergencyRooms(world, ally.hosp)) > 0
         local peers, names = bot:peopleOfHospital(ally.index)
         local _, _, is_bot = bot:playerOfHospital(ally.index)
-        if spare and #peers == 0 and is_bot then bot_spares = true end
+        -- (An allied bot lends one by itself only for a room that stands or is being built.)
+        if spare and #peers == 0 and is_bot and (sh.built or sh.building) then bot_spares = true end
         for i, peer in ipairs(peers) do
           everybody[#everybody + 1] = peer
           if spare then spare_peers[#spare_peers + 1], spare_names[#spare_names + 1] = peer, names[i] end
         end
       end
-      if bot_spares or #everybody == 0 then return end
-      self.asked_for[sh.cat] = s.day
-      local urgent = sh.emergency and self.pick(self.lines.staff_for_emergency) or ""
-      local needs = sh.need .. " " .. sh.cat:lower() .. (sh.need > 1 and "s" or "")
-      local line, to
-      if #spare_peers > 0 then
-        line = self.fill_in(self.pick(self.lines.staff_ask_one), {names = table.concat(spare_names, " or "),
-            kind = sh.cat:lower(), room = room_name(sh.room), needs = needs, have = sh.have, urgent = urgent})
-        to = spare_peers
-      else
-        line = self.fill_in(self.pick(self.lines.staff_ask_all), {kind = sh.cat:lower(), room = room_name(sh.room),
-            needs = needs, have = sh.have, urgent = urgent})
-        to = everybody
+      -- (Nobody to read it, or an allied bot sends one anyway.)
+      if not bot_spares and #everybody > 0 then
+        self.asked_for[sh.cat] = s.day
+        local urgent = sh.emergency and self.pick(self.lines.staff_for_emergency) or ""
+        local needs = sh.need .. " " .. sh.cat:lower() .. (sh.need > 1 and "s" or "")
+        local line, to
+        if #spare_peers > 0 then
+          line = self.fill_in(self.pick(self.lines.staff_ask_one), {names = table.concat(spare_names, " or "),
+              kind = sh.cat:lower(), room = room_name(sh.room), needs = needs, have = sh.have, urgent = urgent})
+          to = table.concat(spare_peers, ",")
+        else
+          line = self.fill_in(self.pick(self.lines.staff_ask_all), {kind = sh.cat:lower(), room = room_name(sh.room),
+              needs = needs, have = sh.have, urgent = urgent})
+          to = "team"
+        end
+        self:note(string.format("day %d: asked the allies for a %s (%s), missing for %d days", s.day, sh.cat,
+            sh.room, days))
+        bot:say(line, self.typing(line), to)
+        return
       end
-      self:note(string.format("day %d: asked the allies for a %s (%s)", s.day, sh.cat, sh.room))
-      bot:say(line, self.typing(line), table.concat(to, ","))
-      return
     end
   end
 end
