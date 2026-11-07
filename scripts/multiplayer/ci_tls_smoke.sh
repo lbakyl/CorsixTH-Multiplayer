@@ -13,6 +13,8 @@
 # Python 3.11 or newer is needed for the server; with an older one only the
 # require("ssl") part runs.
 set -euo pipefail
+# (Git Bash on Windows would turn "-subj /CN=smoke" into a Windows path.)
+export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
 src=$(cd "$(dirname "$0")/../.." && pwd)
 work=$(mktemp -d "${TMPDIR:-/tmp}/corsixth-tls-smoke.XXXXXXXX")
 # Paths for programs of the platform (Git Bash on Windows turns /d/a/... into D:/a/...).
