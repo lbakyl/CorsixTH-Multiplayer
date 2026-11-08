@@ -472,15 +472,21 @@ end
 
 --! Multiplayer competitive: whether `entity` is part of a rival's hospital,
 --! which this player may not look into (no information, staff or queue
---! windows, no details in the bottom panel). Whatever is in their own
---! hospital stays visible, a rival's evil handyman too, and in a race of two
---! teams everything of a team mate's.
+--! windows, no details in the bottom panel). People by whose they are (their
+--! own anywhere, a rival's nowhere; an evil handyman is his target's), things
+--! by where they are (whatever is in their own hospital); in a race of two
+--! teams everything of a team mate's stays visible.
 function GameUI:_isRivals(entity)
   local world = self.app.world
   if not (world and world.mp_coop and world.mp_coop.competitive) then return false end
-  -- (One's own staff and patients, wherever they stand: a doctor who had
-  -- wandered onto a rival's floor could not be picked up and brought back.)
-  if entity.hospital == self.hospital and class.is(entity, Humanoid) then return false end
+  -- People go by whose they are, not by where they stand: one's own staff
+  -- and patients anywhere (a doctor who had wandered onto a rival's floor
+  -- could not be picked up and brought back), a rival's nowhere, not even
+  -- passing through one's own corridors (Argus, eu2 2026-11-07). An evil
+  -- handyman counts as his target's staff, so they can throw him out.
+  if class.is(entity, Humanoid) and entity.hospital then
+    return world:mpRivals(entity.hospital, self.hospital) and true or false
+  end
   local x, y = entity.tile_x, entity.tile_y
   if x and self.hospital:isInHospital(x, y) then return false end
   if entity.hospital and world:mpRivals(entity.hospital, self.hospital) then return true end
