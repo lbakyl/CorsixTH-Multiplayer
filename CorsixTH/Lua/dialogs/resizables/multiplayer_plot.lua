@@ -94,9 +94,11 @@ function UIMultiplayerGivePlot:UIMultiplayerGivePlot(ui, plot)
   self.price_panel.lowered = true
   local steps = {-5000, -500, 500, 5000}
   for i, amount in ipairs(steps) do
-    self:addBevelPanel(130 + (i - 1) * 54, y, 50, 28, col.button)
+    -- (Four buttons from x 130 to the right edge, as wide as the rows above.)
+    local bw = math.floor((WIDTH - 20 - 130 - 6 * (#steps - 1)) / #steps)
+    self:addBevelPanel(130 + (i - 1) * (bw + 6), y, bw, 28, col.button)
         :setLabel((amount > 0 and "+$" or "-$") .. math.abs(amount))
-        :makeRepeatButton(0, 0, 50, 28, nil, function(window) window:setPrice(window.price + amount) end)
+        :makeRepeatButton(0, 0, bw, 28, nil, function(window) window:setPrice(window.price + amount) end)
   end
   y = height - 45
   self:addBevelPanel(20, y, 160, 30, col.button):setLabel(S.plot_give_button)
