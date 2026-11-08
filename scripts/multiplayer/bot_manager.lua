@@ -47,8 +47,10 @@ local REFER_SHARE = 0.5
 local REFER_GAP_DAYS = 3
 -- A room nobody has used for this many game days (about 5 months) is taken
 -- down for its floor (Jan, eu2), and none of the kind is built again for
--- REMOVED_REBUILD_DAYS unless patients keep asking for it.
-local VACANT_DAYS = 150
+-- REMOVED_REBUILD_DAYS unless patients keep asking for it. While the level's
+-- hospital value is a goal not met yet: only after VACANT_DAYS_VALUE (a
+-- year) and with no space left (M:projects, M:outOfSpace).
+local VACANT_DAYS, VACANT_DAYS_VALUE = 150, 360
 local REMOVED_REBUILD_DAYS = 180
 -- Rooms used by staff, not patients: used while staff are in them.
 local STAFF_ROOMS = {staff_room = true, training = true, research = true}
@@ -792,17 +794,26 @@ function M:projects(s)
     end
   end
   -- A room nobody has used for about five months: taken down for its floor.
+  -- While the level's hospital value is a goal not reached yet, a room is
+  -- sold only as a last resort (it takes the room's whole price off the value,
+  -- for half of it back: Argus, Jan 2026-11-08): unused for a year, and only
+  -- when it has no space for what it needs and no land it can get
+  -- (M:outOfSpace); the cheapest such room, after a room bigger than it needs
+  -- was taken in (edit:shrink scores higher).
   -- (Not in a hospital a person plays in too: the rooms are theirs as well.)
   if #bot:hospitalMates() == 0 then
-    local rm = self:vacantRoom(s)
+    local value_goal = s.goal_progress.value ~= nil and s.goal_progress.value < 1
+    local days = value_goal and VACANT_DAYS_VALUE or VACANT_DAYS
+    local rm = (not value_goal or self:outOfSpace(s)) and self:vacantRoom(s, days, value_goal)
     if rm then
       local kind = rm.room_info.id
-      add("edit:remove", 14 + (wanted or 0) * 6, function()
+      add("edit:remove", (value_goal and 8 or 14) + (wanted or 0) * 6, function()
         local ok, why = bot:editRoom(rm, {"delete"})
         if ok then
           self.removed_type[kind] = s.day
           self.room_used[rm.id] = nil
-          self:note(string.format("day %d: removing %s #%d: nobody used it for %d days", s.day, kind, rm.id, VACANT_DAYS))
+          self:note(string.format("day %d: removing %s #%d: nobody used it for %d days%s", s.day, kind, rm.id, days,
+              value_goal and " and there is no space left (the value goal is not met)" or ""))
         end
         return ok, why
       end, 0)
@@ -1647,20 +1658,38 @@ function M:noteRoomUse(s)
   end
 end
 
---! A room of its own nobody has used for VACANT_DAYS game days (the one
---! empty longest), or nil.
-function M:vacantRoom(s)
+--! A room of its own nobody has used for `days` game days (VACANT_DAYS by
+--! default): the one empty longest, or with `cheapest` the one that costs
+--! least (the least value lost); nil if none.
+function M:vacantRoom(s, days, cheapest)
+  days = days or VACANT_DAYS
   local world = self.bot.world
-  local best, best_day
+  local best, best_day, best_cost
   for _, rm in pairs(world.rooms) do
     local day = self.room_used[rm.id]
     if rm.hospital == s.hosp and rm.built and rm.is_active and not rm.crashed and day and
-        not KEEP_ROOMS[rm.room_info.id] and s.day - day >= VACANT_DAYS and
-        (not best_day or day < best_day or (day == best_day and rm.id < best.id)) then
-      best, best_day = rm, day
+        not KEEP_ROOMS[rm.room_info.id] and s.day - day >= days then
+      local cost = cheapest and self.bot:roomCost(rm.room_info) or 0
+      if not best or cost < best_cost or
+          (cost == best_cost and (day < best_day or (day == best_day and rm.id < best.id))) then
+        best, best_day, best_cost = rm, day, cost
+      end
     end
   end
   return best
+end
+
+--! No room to grow: something it wanted found no floor in the last 30 days
+--! (M:doProject), and no plot is left that it may buy and pay for, with a
+--! loan if need be.
+function M:outOfSpace(s)
+  local cramped = false
+  for _, day in pairs(self.no_space) do
+    if s.day - day <= 30 then cramped = true end
+  end
+  if not cramped then return false end
+  local _, price = self.bot:cheapestPlot()
+  return not price or s.balance + math.max(0, s.max_loan - s.loan) - price < RESERVE
 end
 
 --! A team mate's hospital to refer a patient to: one that has every room in

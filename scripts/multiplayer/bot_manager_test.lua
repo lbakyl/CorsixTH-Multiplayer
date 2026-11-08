@@ -142,6 +142,37 @@ do
 end
 print("spending ok")
 
+-- Rooms taken down: one nobody used for 5 months; while the level's value goal
+-- is not met, only one unused for a year and only with no space left (a room
+-- found no floor lately and no land can be got), the cheapest first.
+do
+  local hosp = {}
+  local function room(id, kind, cost)
+    return {id = id, hospital = hosp, built = true, is_active = true, room_info = {id = kind, cost = cost}}
+  end
+  local plot_price
+  local m = setmetatable({bot = {world = {rooms = {room(1, "gp", 5000), room(2, "x_ray", 12000),
+      room(3, "training", 3000)}}, roomCost = function(_, rt) return rt.cost end,
+      cheapestPlot = function() return plot_price and 1, plot_price end},
+      room_used = {[1] = 0, [2] = 0, [3] = 10}, no_space = {}}, M)
+  local st = {hosp = hosp, day = 200, balance = 5000, loan = 0, max_loan = 20000}
+  eq(m:vacantRoom(st).id, 2, "five months unused: the one empty longest (never the GP's office)")
+  eq(m:vacantRoom(st, 360, true), nil, "the value goal: not before a year")
+  st.day = 400
+  eq(m:vacantRoom(st, 360, true).id, 3, "a year unused: the cheapest")
+  eq(m:outOfSpace(st), false, "not without a room that found no floor")
+  m.no_space["room:psych"] = 390
+  plot_price = 10000
+  eq(m:outOfSpace(st), false, "land it can get (with a loan)")
+  plot_price = 40000
+  eq(m:outOfSpace(st), true, "land too dear: out of space")
+  plot_price = nil
+  eq(m:outOfSpace(st), true, "no land left: out of space")
+  st.day = 430
+  eq(m:outOfSpace(st), false, "the last room without floor was a month ago")
+end
+print("rooms taken down ok")
+
 -- The training room: students fill the chairs from the doctors who can be
 -- spared; a doctor with a patient, or the only surgeon of an operating
 -- theatre, stays at work.
