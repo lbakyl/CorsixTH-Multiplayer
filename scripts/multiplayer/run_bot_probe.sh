@@ -60,6 +60,12 @@
 #      part with its entrance, desk and room doors on it (its month line);
 #      also shown: spots refused because they would cut the floor in two, and
 #      objects sold to mend a floor in parts
+#  21. a plot asked of an allied bot ("lab"): frank asks for plot 7 at auction
+#      and drops out, so the bot gets it; asked for plot 7 on game day 4 it
+#      keeps it for the level's value goal (its requirements count as met only
+#      from day 5 there, MP_BOT_TEST_WIN "lab/2:5"); asked for any plot on day 6
+#      it offers plot 7 for free (it holds more than the $1,000 it keeps here),
+#      frank gets the fax, accepts, and the plot is his
 #  10. tricks on a bot ("duel", competitive: eve and one bot): eve sends
 #      rats, an evil handyman (level 3), a smear campaign and a broken
 #      boiler. The bot shoots the rats and throws the handyman out, each at
@@ -97,7 +103,7 @@ export MP_REFEREE_PROBE_SCENARIO="team=none;race=none;trio=none;duel=none;lab=no
 export CORSIXTH_MP_MAX_BOTS=9 # (nine bots in all the rooms)
 # (MP_BOT_AWAY_SECONDS: kay in "afk" counts as away after a game week; the
 # bots' games run faster than real time.)
-MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 MP_BOT_AWAY_SECONDS=3 MP_BOT_GIVE_LIMITS=1000:2000 MP_BOT_TEST_LACK=5:Surgeon:operating_theatre MP_BOT_TEST_WIN="1:10;2:12;3:12" MP_BOT_TEST_FAIL=20 PYTHONPATH="$source_dir/mp_server" \
+MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 MP_BOT_AWAY_SECONDS=3 MP_BOT_GIVE_LIMITS=1000:2000 MP_BOT_TEST_LACK=5:Surgeon:operating_theatre MP_BOT_TEST_WIN="1:10;2:12;3:12;lab/2:5" MP_BOT_TEST_FAIL=20 PYTHONPATH="$source_dir/mp_server" \
   python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
 server_pid=$!
@@ -143,7 +149,8 @@ run_probe eve MP_ROLE=host MP_ROOM=duel MP_MODE=competitive MP_PLAYERS=2 MP_ADD_
   MP_STEPS=3000 MP_STALL_LIMIT=120 \
   MP_UI_SCRIPT="20:openhospital;320:sabotage:handyman:3:2;340:sabotage:smear:1:2;900:sabotage:rats:1:2;1500:sabotage:boiler:1:2;2990:hospitals" & pids+=($!)
 run_probe frank MP_ROLE=host MP_ROOM=lab MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_LEVEL=2 MP_SCENARIO=none \
-  MP_STEPS=3000 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital;2990:hospitals" & pids+=($!)
+  MP_STEPS=3000 MP_STALL_LIMIT=120 \
+  MP_UI_SCRIPT="20:openhospital;100:auctionbuy;130:auctionpass;160:chat:1:Agnes, can I have plot 7?;260:chat:1:Agnes, could you spare me a plot?;320:answerplot:accept;360:plotmap;2990:hospitals" & pids+=($!)
 run_probe gus MP_ROLE=host MP_ROOM=auc MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_LEVEL=2 MP_SCENARIO=none   MP_STEPS=1100 MP_STALL_LIMIT=120   MP_UI_SCRIPT="20:openhospital;200:auctionbuy;260:auctionbid;270:auctionbid;700:auctionbuy;760:auctionpass" & pids+=($!)
 run_probe cid MP_ROLE=host MP_ROOM=trio MP_MODE=coop MP_PLAYERS=3 MP_ADD_BOTS=1 MP_SCENARIO=none \
   MP_STEPS=600 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital;300:speedother" & pids+=($!)
@@ -446,6 +453,33 @@ print(f"20. Floor in one piece:     (parts, without objects, entrance tiles, des
       f"{dict((k, v) for k, v in sorted(refused20.items()) if v)}; objects sold to mend it "
       f"{dict((k, v) for k, v in sorted(mended20.items()) if v)}")
 fail |= not ok20
+# 21. A plot asked of an allied bot. In "lab" frank asks for plot 7 at
+# auction and drops out: the bot gets it. On game day 4 frank asks the bot
+# for plot 7: it keeps it for the level's value goal (worth less than the
+# goal without it; its requirements count as met only from day 5 in this room,
+# MP_BOT_TEST_WIN "lab/2:5"). On day 6 he asks for any plot it can spare: plot
+# 7 is empty (a building of its own; the bot's first rooms go by its
+# reception, and it uses plot 7 only from about day 11) and its land is far
+# from full, so it offers plot 7 for free (its bank holds more than the $1,000
+# it keeps here); frank gets the fax, accepts, and plot 7 is his.
+asked21 = re.search(r'UI: asking for plot (\d+)', f)
+plot21 = asked21.group(1) if asked21 else '-'
+won21 = re.search(rf'auction \d+: plot {plot21} sold to hospital 2', f)
+decisions21 = re.findall(r'plot request from frank \(plot (\w+)\): (.*)', lb)
+kept21 = [d for d in decisions21 if d[0] == plot21 and d[1].startswith('keeps it: value')]
+gave21 = [d for d in decisions21 if d[0] == 'any' and d[1].startswith(f'offers plot {plot21} for $0')]
+offers21 = applied(f, 2, 'offer_plot')
+lines21 = [t for _, t in chats_from(f, lab_bot) if 'plot' in t.lower()] if lab_bot else []
+fax21 = re.search(rf'UI: accept the offer of plot {plot21} for \$0', f)
+handed21 = re.search(rf'offer of plot {plot21} to hospital 1: handed over', f)
+owners21 = re.findall(r'UI: plotmap (.*)', f)
+his21 = bool(owners21) and f' {plot21}:o1:' in ' ' + owners21[-1]
+ok21 = (bool(won21) and len(decisions21) == 2 and bool(kept21) and bool(gave21) and len(offers21) == 1
+        and offers21[0][1] == 'ok' and len(lines21) >= 2 and bool(fax21) and bool(handed21) and his21)
+print(f"21. A plot asked of a bot:  plot {plot21} won by the bot: {bool(won21)}; its answers {decisions21}; "
+      f"its lines {lines21}; offer_plot {offers21}; frank accepted: {bool(fax21)}, handed over: {bool(handed21)}, "
+      f"his now: {his21}")
+fail |= not ok21
 for name, text in sorted(bots.items()):
     errors = [l for l in text.splitlines() if 'ERROR' in l or 'could not' in l]
     if errors: print(f"   {name} problems: {errors[:5]}")

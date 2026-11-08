@@ -142,6 +142,177 @@ do
 end
 print("spending ok")
 
+-- An ally asks a bot for one of its plots (M:plotRequest). A map of 30 x 10
+-- indoor tiles in columns: plot 1 (x 1-6, the asker's start), plot 2 (x 7-12,
+-- the bot's start), plot 5 (x 13-18, 60 tiles), plot 6 (x 19-26, 80 tiles),
+-- plot 7 (x 27-30, the asker's). Plot 6 touches plot 7. Rooms fill the
+-- first `room_rows` rows of a plot. The level wants a hospital worth $100,000.
+do
+  local function plot_of(x)
+    if x <= 6 then return 1 elseif x <= 12 then return 2 elseif x <= 18 then return 5 elseif x <= 26 then return 6 end
+    return 7
+  end
+  local owner = {[1] = 1, [2] = 2, [5] = 2, [6] = 2, [7] = 1}
+  local room_rows = {[2] = 3}
+  local paid = {[5] = 7875, [6] = 9000}
+  local touch = {[5] = {[2] = true, [6] = true}, [6] = {[5] = true, [7] = true}, [7] = {[6] = true}}
+  local blocked, far, icons = {}, {}, {}
+  local th = {
+    size = function() return 30, 10 end,
+    getCellFlags = function(_, x, y, flags)
+      flags = flags or {}
+      local p = plot_of(x)
+      flags.parcelId, flags.owner, flags.hospital = p, owner[p] or 0, true
+      flags.roomId = y <= (room_rows[p] or 0) and 1 or 0
+      return flags
+    end,
+    getPlotCount = function() return 7 end,
+    getPlotOwner = function(_, p) return owner[p] or 0 end,
+  }
+  MultiplayerSession = {
+    BOT_LAND_FILL = 0.70, PLOT_PRICE_STEP = 500, PLOT_MAX_PRICE = 50000,
+    plotTiles = function(_, p)
+      local t = {}
+      for y = 1, 10 do
+        for x = 1, 30 do
+          if plot_of(x) == p then t[#t + 1] = x t[#t + 1] = y end
+        end
+      end
+      return t
+    end,
+    plotPaid = function(_, p) return paid[p] or 0 end,
+    plotsTouching = function(_, p) return touch[p] or {} end,
+    isStartingPlot = function(_, p) return p <= 2 end,
+    plotRefusal = function(_, h, p)
+      if p < 1 or p > 7 then return "no such plot" end
+      if owner[p] ~= h:getPlayerIndex() then return "not your plot" end
+      if p <= 2 then return "starting plot" end
+      return blocked[p]
+    end,
+    -- (The released game's rule: the plot must touch the asker's land.)
+    plotHandoverRefusal = function(_, _, p) return far[p] end,
+  }
+  local asker = {getPlayerIndex = function() return 1 end}
+  local mine = hospital({balance = 50000, value = 150000})
+  mine.getPlayerIndex = function() return 2 end
+  local tworld = {map = {th = th}, hospitals = {asker, mine}, endconditions = ec, mp_plot_offers = {},
+      ui = {hospital = mine, bottom_panel = {findMessageIcon = function(_, id) return icons[id] end}}}
+  local today, free_floor = 100, 400
+  local bot = {world = tworld, gameDay = function() return today end, freeFloor = function() return free_floor end,
+      freeTile = function(_, x, y) local p = plot_of(x) return owner[p] == 2 and y > (room_rows[p] or 0) end}
+  local m = setmetatable({bot = bot, log = function() end, pick = function(l) return l[1] end, fill_in = fill,
+      no_space = {}, plot_bought = {}, plot_sent = {}}, M)
+  local function ask(plot, asker_index) return m:plotRequest(asker_index or 1, plot, 15000, "ann") end
+  local function gives(v, plot, price, what)
+    eq(v.give, true, what .. ": given")
+    eq(v.plot, plot, what .. ": the plot")
+    eq(v.price, price, what .. ": the price")
+  end
+  local function keeps(v, why, what)
+    eq(v.give, nil, what .. ": kept")
+    eq(v.why, why, what .. ": why")
+  end
+  -- An empty plot it does not need: free (its bank holds $15,000 or more).
+  local v = ask(5)
+  gives(v, 5, 0, "empty plot")
+  eq(v.why, "free", "free")
+  eq(v.line, "Plot 5 is yours, ann, free of charge. Just accept the fax.", "the line")
+  -- Short of cash: what it cost, rounded to $500, at least $500, at most $50,000.
+  mine.balance = 9000
+  gives(ask(5), 5, 8000, "short of cash: $7,875 asks $8,000")
+  eq(ask(5).why, "price", "a price")
+  eq(ask(5).line:find("$8,000", 1, true) ~= nil, true, "the price in the line")
+  paid[5], mine.value = 120000, 300000
+  gives(ask(5), 5, 50000, "never more than $50,000")
+  paid[5] = 100
+  gives(ask(5), 5, 500, "at least one step")
+  paid[5], mine.balance, mine.value = 7875, 50000, 150000
+  -- Kept: rooms or things on it.
+  blocked[5] = "plot not empty"
+  keeps(ask(5), "in_use", "in use")
+  -- Somebody walking on it: given, once nobody is (Bot:plotWaitTick).
+  blocked[5] = "people on the plot"
+  v = ask(5)
+  gives(v, 5, 0, "people on it")
+  eq(v.wait, "people", "offered once nobody is on it")
+  blocked[5] = nil
+  -- Kept: it needs the land. Without plot 5, rooms would take 124 of 140 tiles
+  -- (less than 35% free).
+  room_rows = {[2] = 10, [6] = 8}
+  keeps(ask(5), "land", "too little floor left without it")
+  room_rows = {[2] = 3}
+  -- A room found no floor lately, and without the plot's 60 free tiles only 70
+  -- would be left (under 120): it is about to build there.
+  m.no_space["room:psych"] = today - 5
+  free_floor = 130
+  keeps(ask(5), "land", "a room waits for floor")
+  free_floor = 400
+  gives(ask(5), 5, 0, "plenty of floor besides it")
+  m.no_space = {}
+  -- Kept: it bought the plot itself a few days ago (for rooms to come).
+  m:notePlotBought(5)
+  today = today + 10
+  keeps(ask(5), "fresh", "just bought")
+  today = today + 30
+  gives(ask(5), 5, 0, "bought more than 30 days ago")
+  -- Kept: the value goal ($100,000). Worth $105,000, without the plot's $7,875
+  -- it would be under it.
+  mine.value = 105000
+  v = ask(5)
+  keeps(v, "value", "the value goal would fail")
+  eq(v.line, "Sorry ann, without plot 5 my hospital value would be under the $100k the level asks for.", "value line")
+  mine.value = 50000
+  keeps(ask(5), "value", "the value goal not met yet")
+  mine.mp_goals_reached = true
+  gives(ask(5), 5, 0, "the requirements reached: the value no longer matters")
+  mine.mp_goals_reached, mine.value = nil, 150000
+  -- No plot named: the one touching the asker's land first (plot 6, though
+  -- bigger), then the smallest; one with nobody on it first.
+  gives(ask(nil), 6, 0, "any: the one touching the asker's land")
+  owner[7] = 0
+  gives(ask(nil), 5, 0, "any: the smallest")
+  blocked[5] = "people on the plot"
+  v = ask(nil)
+  gives(v, 6, 0, "any: one nobody is on")
+  eq(v.wait, nil, "offered at once")
+  blocked[5] = nil
+  -- None to spare: the reason of the best kept, or none at all.
+  mine.value = 105000
+  v = ask(nil)
+  keeps(v, "value", "all kept for the value goal")
+  eq(v.plot, 5, "the best of the rest named")
+  mine.value = 150000
+  owner[5], blocked[6] = 0, "plot not empty"
+  keeps(ask(nil), "none", "none to spare")
+  owner[5], blocked[6] = 2, nil
+  -- Plots it cannot give.
+  keeps(ask(7), "not_mine", "not its plot")
+  keeps(ask(99), "no_such", "no such plot")
+  keeps(ask(2), "start", "its starting plot")
+  blocked[5] = "joins your land"
+  keeps(ask(5), "joins", "joins its land")
+  blocked[5] = nil
+  far[5] = "does not touch their land"
+  keeps(ask(5), "far", "the released game: must touch the asker's land")
+  far[5] = nil
+  -- Offered already: a fax waiting, or an offer just sent.
+  tworld.mp_plot_offers[5], icons[77] = 77, {}
+  keeps(ask(5), "offered", "a fax waiting")
+  icons[77] = nil
+  gives(ask(5), 5, 0, "the fax answered")
+  m:notePlotOffered(5)
+  keeps(ask(5), "offered", "an offer just sent")
+  today = today + 2
+  gives(ask(5), 5, 0, "the offer long gone")
+  -- The same hospital, an auction on.
+  keeps(ask(5, 2), "same", "a person sharing its hospital")
+  tworld.mp_auction = {}
+  keeps(ask(5), "auction", "during an auction")
+  tworld.mp_auction = nil
+  MultiplayerSession = nil
+end
+print("plot requests ok")
+
 -- Rooms taken down: one nobody used for 5 months; while the level's value goal
 -- is not met, only one unused for a year and only with no space left (a room
 -- found no floor lately and no land can be got), the cheapest first.

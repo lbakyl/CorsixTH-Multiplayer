@@ -66,18 +66,18 @@ def test_a_team_mate_asks_for_a_room():
     a = fake_advisor(json.dumps({"reply": "Bot Agnes:  On it,\nboss!", "projects": ["room:psych"], "leave": []}))
     menu = ["room:gp", "room:psych", "hire:Nurse"]
     answer = asyncio.run(a.team_chat("Bot Agnes", "fine", ["ann: build a psychiatry please"], menu))
-    assert answer == {"text": "On it, boss!", "wishes": ["room:psych"], "leave": [], "give": None}
+    assert answer == {"text": "On it, boss!", "wishes": ["room:psych"], "leave": [], "give": None, "plot": None}
     call = a.client.messages.calls[0]
     assert call["output_config"]["format"]["type"] == "json_schema"
     assert "room:psych" in call["messages"][0]["content"] and "same team" in call["system"]
     # Only projects from the menu.
     b = fake_advisor(json.dumps({"reply": "Sure.", "projects": ["loan:100000"], "leave": []}))
     assert asyncio.run(b.team_chat("Bot Agnes", "fine", ["ann: take a loan"], menu)) == \
-        {"text": "Sure.", "wishes": [], "leave": [], "give": None}
+        {"text": "Sure.", "wishes": [], "leave": [], "give": None, "plot": None}
     # "I'll build it myself": left to them, never both.
     c = fake_advisor(json.dumps({"reply": "All yours.", "projects": ["room:psych"], "leave": ["room:psych"]}))
     assert asyncio.run(c.team_chat("Bot Agnes", "fine", ["ann: no, I build the psychiatry"], menu)) == \
-        {"text": "All yours.", "wishes": [], "leave": ["room:psych"], "give": None}
+        {"text": "All yours.", "wishes": [], "leave": ["room:psych"], "give": None, "plot": None}
     # Several at once.
     d = fake_advisor(json.dumps({"reply": "Will do.", "projects": ["room:gp", "hire:Nurse", "room:gp"], "leave": []}))
     assert asyncio.run(d.team_chat("Bot Agnes", "fine", ["ann: a gp and a nurse"], menu))["wishes"] == \
@@ -227,4 +227,44 @@ def test_a_bot_asks_for_a_rescue_plan_through_the_server():
         assert (await bot.expect("ANSWER", id=6))["error"] == "busy"
         bot.send(encode("ASK", id=7, kind="plan", text="Money $1", menu="room:gp"))
         assert (await bot.expect("ANSWER", id=7))["actions"] == "room:gp:8"
+    run_with_bots(body)
+
+
+def test_a_request_for_a_plot_comes_back_as_its_number():
+    menu = ["room:gp"]
+
+    def ask(**fields):
+        a = fake_advisor(json.dumps({"reply": "Let me see.", "projects": [], "leave": [], "give": -1, **fields}))
+        return asyncio.run(a.team_chat("Bot Agnes", "fine", ["ann: can I have your plot 7?"], menu))
+    # The plot asked for (0: none named); -1, a missing or silly value: no request for a plot.
+    assert ask(plot=7)["plot"] == 7
+    assert ask(plot=0)["plot"] == 0
+    assert ask(plot=-1)["plot"] is None
+    assert ask()["plot"] is None
+    assert ask(plot=100000)["plot"] is None
+    assert ask(plot="seven")["plot"] is None
+    # A price offered for a plot is no request for money.
+    answer = ask(plot=7)
+    assert answer["plot"] == 7 and answer["give"] is None
+    a = fake_advisor(json.dumps({"reply": "Hm.", "projects": [], "leave": [], "give": -1, "plot": 0}))
+    asyncio.run(a.team_chat("Bot Agnes", "fine", ["ann: can you spare a plot?"], menu))
+    call = a.client.messages.calls[0]
+    assert "plot" in call["output_config"]["format"]["schema"]["required"]
+    assert "plots of land" in call["system"] and "checks your land" in call["system"]
+
+
+def test_the_answer_to_a_team_mates_bot_carries_the_plot():
+    async def body(server, port, bots):
+        server.advisor = fake_advisor(json.dumps({"reply": "Hm.", "projects": [], "leave": [], "give": -1,
+                                                  "plot": 7}))
+        ann = await Client.connect(port, "Ann")
+        ann.send(encode("CREATE", room="r", password="", max=2, mode="coop", level=1))
+        await ann.expect("JOINED")
+        ann.send(encode("BOT", add=1))
+        await started_bots(bots, 1)
+        bot = await connect_bot(port, bots[0])
+        await bot.expect("JOINED")
+        bot.send(encode("ASK", id=4, kind="chat", text="x", lines="ann: give me plot 7", menu="room:gp"))
+        answer = await bot.expect("ANSWER", id=4)
+        assert answer["plot"] == "7" and "give" not in answer
     run_with_bots(body)

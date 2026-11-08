@@ -190,6 +190,8 @@ function M.new(bot, ctx)
   self.ally_lack = {}      -- "<ally index>:<category>" -> game day an ally was first missing one
   self.blocked_spec = {}   -- category -> {day, room}: a room patients need waits for this specialist
   self.spent = nil         -- its last big spending, {key, cost, day} (M:noteSpent)
+  self.plot_bought = {}    -- plot -> game day it asked to buy it itself (Bot:buyPlot)
+  self.plot_sent = {}      -- plot -> game day it offered it to an ally (M:plotRequest)
   return self
 end
 
@@ -1251,13 +1253,16 @@ end
 --! badly placed, more land would not help), unless three kinds failed.
 --! Once rooms take BOT_LAND_FILL of its floor it looks for a plot anyway
 --! (2: urgent enough to borrow for), before a rival buys up the land.
-function M:landWanted(s)
+--!param free_floor (number) optional: its free floor tiles (Bot:freeFloor)
+--!param fill (number) optional: how full its land is (M:landFill); both
+--! as they would be without a plot it is asked for (M:plotRequest)
+function M:landWanted(s, free_floor, fill)
   local wanted = 0
   for _, day in pairs(self.no_space) do
     if s.day - day <= 30 then wanted = wanted + 1 end
   end
-  if wanted < 3 and wanted > 0 and self.bot:freeFloor() >= 120 then wanted = 0 end
-  if self:landFill(s) >= MultiplayerSession.BOT_LAND_FILL then wanted = math.max(wanted, 2) end
+  if wanted < 3 and wanted > 0 and (free_floor or self.bot:freeFloor()) >= 120 then wanted = 0 end
+  if (fill or self:landFill(s)) >= MultiplayerSession.BOT_LAND_FILL then wanted = math.max(wanted, 2) end
   if wanted == 0 then return nil end
   return wanted
 end
@@ -1275,7 +1280,8 @@ local PLOT_LINES = {
 --! An ally offers a plot (offer.plot, offer.price): take it when little of
 --! its own land is free (under PLOT_TAKE_FREE, by MultiplayerSession.landFill)
 --! and it can pay, with a loan if need be (the loan is taken when the plot
---! changes hands: MultiplayerSession.botBorrow).
+--! changes hands: MultiplayerSession.botBorrow). (An ally asking for one of
+--! its plots: M:plotRequest.)
 --!return (bool, string) accept, and the line to say (%s: the other player's name)
 function M:plotAnswer(offer)
   local world = self.bot.world
@@ -2467,7 +2473,8 @@ end
 --! win), reached (the game already said so: the flag co-op and teams keep, or a
 --! place won in a race)}. nil if the level has no goals.
 --! (Tests: MP_BOT_TEST_WIN="<hospital index>:<day>;..." makes those hospitals
---! meet them from that game day on.)
+--! meet them from that game day on; "<room>/<hospital index>:<day>" only in
+--! that room, MP_BOT_ROOM.)
 function M.requirements(world, hosp)
   local ec = world.endconditions
   if not (ec and type(ec.win_goals) == "table" and ec.getAttribute) then return nil end
@@ -2506,8 +2513,12 @@ function M.requirements(world, hosp)
   local forced = os.getenv("MP_BOT_TEST_WIN")
   if forced then
     local index = world:getHospitalIndex(hosp)
-    for i, day in forced:gmatch("(%d+):(%d+)") do
-      if tonumber(i) == index and game_day(world) >= tonumber(day) then best.ready, best.reached = true, true end
+    local room = os.getenv("MP_BOT_ROOM") or ""
+    for entry in forced:gmatch("[^;]+") do
+      local where, i, day = entry:match("^%s*([%w_]-)/?(%d+):(%d+)%s*$")
+      if i and (where == "" or where == room) and tonumber(i) == index and game_day(world) >= tonumber(day) then
+        best.ready, best.reached = true, true
+      end
     end
   end
   return best
@@ -2819,6 +2830,271 @@ function M:spentWords(day)
     return nil
   end
   return string.format("%s ($%s)", words, dollars(sp.cost))
+end
+
+--------------------------------------------------------------------------------
+-- An ally asks for one of its plots (Bot:answerPlotRequest; the other way
+-- round, a plot an ally offers it, is M:plotAnswer)
+--------------------------------------------------------------------------------
+
+-- An ally may ask a bot in the chat for one of its plots (Jan, 2026-11-08).
+-- It hands over an empty plot that the game lets it give
+-- (MultiplayerSession.plotRefusal: its own, not the starting plot, empty,
+-- nobody on it, not the plot that joins the rest of its land to the
+-- hospital) unless it needs it:
+--  * the land: without the plot less than PLOT_TAKE_FREE of its indoor floor
+--    would be free (it would take that plot back if it were offered,
+--    M:plotAnswer), or it would be looking for land (M:landWanted, counted
+--    without the plot: rooms that found no floor lately while too little
+--    floor is left, or BOT_LAND_FILL full);
+--  * rooms to come: it bought the plot itself in the last PLOT_FRESH_DAYS
+--    game days (it buys land for rooms that found no floor);
+--  * the level's hospital value goal: without what the plot cost it
+--    (MultiplayerSession.plotPaid; the plot is empty, nothing else on it
+--    counts) its value would be under the goal, and the hospital has not
+--    reached the level's requirements yet (the game's flag, M.requirements).
+-- A bank under the floor it keeps when an ally asks for money (Bot GIVE_KEEP,
+-- $15,000) is short of cash: then it asks what the plot cost it, rounded to
+-- PLOT_PRICE_STEP (at least one step, at most PLOT_MAX_PRICE); else the
+-- plot is free.
+local PLOT_FRESH_DAYS = 30
+-- An offer it sent counts as waiting for an answer this long before the game
+-- shows it (the command runs a few steps later).
+local PLOT_SENT_DAYS = 1
+-- What it says: {name}, {plot}, {price}, {terms} ("for free", "for $8,000"),
+-- {want} (the value goal).
+local PLOT_ASK_LINES = {
+  free = {"Plot {plot} is yours, {name}, free of charge. Just accept the fax.",
+      "You can have plot {plot} for nothing, {name}. The offer is in your faxes.",
+      "Sure, {name}: plot {plot}, free. Accept the fax and it's yours."},
+  price = {"You can have plot {plot} for ${price}, {name}: what it cost me. My bank is low, sorry.",
+      "Plot {plot} is yours for ${price}, {name}. That's what I paid, and I'm short of cash right now.",
+      "{name}, I'm low on money, so plot {plot} is ${price}, what it cost me. The offer is in your faxes."},
+  wait = {"Plot {plot} is yours {terms}, {name}. Somebody is on it right now: the fax comes once they're off.",
+      "You can have plot {plot} {terms}, {name}. I'll send the offer as soon as nobody is on it.",
+      "{name}, plot {plot} is yours {terms} once the people on it have walked off. The fax follows."},
+  in_use = {"Sorry {name}, I use plot {plot}: there are rooms or things of mine on it.",
+      "Plot {plot} is in use, {name}. My rooms and things stand on it.",
+      "I can't give you plot {plot}, {name}, my rooms and things are on it."},
+  land = {"Sorry {name}, I need plot {plot} myself: my hospital would be short of floor without it.",
+      "I'd be too cramped without plot {plot}, {name}. I need the space.",
+      "{name}, plot {plot} stays with me: I need the land for my rooms."},
+  fresh = {"Sorry {name}, I only just bought plot {plot} for my next rooms.",
+      "Plot {plot} is for my next rooms, {name}. I bought it for them.",
+      "{name}, I bought plot {plot} a few days ago to build on. It stays with me."},
+  value = {"Sorry {name}, without plot {plot} my hospital value would be under the {want} the level asks for.",
+      "I need plot {plot} for the hospital value goal ({want}), {name}.",
+      "{name}, plot {plot} counts towards my hospital value, and I need it for the level's goal of {want}."},
+  none = {"Sorry {name}, I have no plot to spare right now.",
+      "I have no land to spare, {name}. My plots are all in use.",
+      "Nothing to spare, {name}: I use all my land or need it."},
+  not_mine = {"Plot {plot} isn't mine, {name}.", "I don't own plot {plot}, {name}.",
+      "{name}, plot {plot} belongs to somebody else, not me."},
+  no_such = {"There is no plot {plot}, {name}.", "Plot {plot}? There's no such plot, {name}."},
+  start = {"Plot {plot} is my starting plot, {name}. That one stays with me.",
+      "I can't give away plot {plot}, {name}: my hospital started there."},
+  joins = {"Plot {plot} joins the rest of my land to my hospital, {name}. I can't give it away.",
+      "Without plot {plot} the rest of my land would be cut off, {name}. Sorry."},
+  far = {"Plot {plot} doesn't touch your land, {name}, so I can't hand it over.",
+      "{name}, plot {plot} would have to touch your land for me to give it to you."},
+  offered = {"I've already offered plot {plot}, {name}. Check the faxes.",
+      "Plot {plot} is already on offer, {name}."},
+  auction = {"Ask me again after the auction, {name}.", "Not during the auction, {name}. Ask me again after it."},
+  same = {"We share this hospital, {name}: its land is yours as much as mine.",
+      "No need, {name}: we run the same hospital and its land."},
+  -- (A plot promised once nobody is on it, Bot:plotWaitTick: people kept
+  -- walking over it.)
+  busy = {"Sorry {name}, people keep walking over plot {plot}. Ask me again later.",
+      "{name}, plot {plot} is never empty of people for long. Try asking me again later."},
+}
+M.PLOT_ASK_LINES = PLOT_ASK_LINES
+-- plotRefusal's reasons -> the line it says.
+local PLOT_REFUSED = {["no such plot"] = "no_such", ["not your plot"] = "not_mine", ["starting plot"] = "start",
+    ["an auction is on"] = "auction", ["plot not empty"] = "in_use", ["joins your land"] = "joins",
+    ["does not touch their land"] = "far", ["already offered"] = "offered"}
+M.PLOT_REFUSED = PLOT_REFUSED
+
+--! Note a plot it asks to buy itself (Bot:buyPlot): it is kept for the
+--! rooms to come (PLOT_FRESH_DAYS).
+function M:notePlotBought(plot)
+  if plot then self.plot_bought[plot] = self.bot:gameDay() end
+end
+
+--! Note a plot it offered to an ally (until the game shows the offer).
+function M:notePlotOffered(plot)
+  self.plot_sent[plot] = self.bot:gameDay()
+end
+
+--! Is a fax offering `plot` waiting for an answer (the check the game's own
+--! offer_plot makes)?
+function M.plotOnOffer(world, plot)
+  local id = world.mp_plot_offers and world.mp_plot_offers[plot]
+  local panel = world.ui and world.ui.bottom_panel
+  return id ~= nil and panel ~= nil and panel.findMessageIcon ~= nil and panel:findMessageIcon(id) ~= nil
+end
+
+--! Its indoor floor as MultiplayerSession.landFill counts it: {inside =
+--! tiles, rooms = tiles with a room, per_plot = plot -> tiles}.
+local function indoor_floor(world, hosp)
+  local th = world.map.th
+  local player = hosp:getPlayerIndex()
+  local w, h = th:size()
+  local flags = {}
+  local land = {inside = 0, rooms = 0, per_plot = {}}
+  for y = 1, h do
+    for x = 1, w do
+      th:getCellFlags(x, y, flags)
+      if flags.hospital and flags.owner == player then
+        land.inside = land.inside + 1
+        if (flags.roomId or 0) ~= 0 then land.rooms = land.rooms + 1 end
+        local p = flags.parcelId or 0
+        land.per_plot[p] = (land.per_plot[p] or 0) + 1
+      end
+    end
+  end
+  return land
+end
+
+--! What it asks for `plot`: nothing, or, short of cash (a bank under
+--! `keep`), what the plot cost it, rounded to PLOT_PRICE_STEP, from one step
+--! to PLOT_MAX_PRICE.
+function M.plotPrice(world, hosp, plot, keep)
+  local paid = MultiplayerSession.plotPaid(world, plot)
+  if hosp.balance >= keep or paid <= 0 then return 0 end
+  local step = MultiplayerSession.PLOT_PRICE_STEP
+  return math.max(step, math.min(MultiplayerSession.PLOT_MAX_PRICE, math.floor(paid / step + 0.5) * step))
+end
+
+--! Why it keeps `plot` (one the game would let it hand over): "land",
+--! "fresh", "value" or nil (it can spare it); and what it worked out, for
+--! the log: {fill = how full its land would be without it, want = the value goal}.
+function M:plotNeed(s, plot, land)
+  local bot, world = self.bot, self.bot.world
+  local left = land.inside - (land.per_plot[plot] or 0)
+  local info = {fill = left > 0 and land.rooms / left or 1}
+  -- Its free floor without the plot's.
+  local tiles = MultiplayerSession.plotTiles(world.map.th, plot)
+  local free_on = 0
+  for i = 1, #tiles, 2 do
+    if bot:freeTile(tiles[i], tiles[i + 1]) then free_on = free_on + 1 end
+  end
+  land.free_floor = land.free_floor or bot:freeFloor()
+  if 1 - info.fill < PLOT_TAKE_FREE or self:landWanted(s, land.free_floor - free_on, info.fill) then
+    return "land", info
+  end
+  local bought = self.plot_bought[plot]
+  if bought and s.day - bought <= PLOT_FRESH_DAYS then return "fresh", info end
+  local r = M.requirements(world, s.hosp)
+  if r and not r.reached then
+    for _, c in ipairs(r.list) do
+      if c.name == "value" and c.now - MultiplayerSession.plotPaid(world, plot) < c.want then
+        info.want = c.want
+        return "value", info
+      end
+    end
+  end
+  return nil, info
+end
+
+--! An ally (hospital `asker`, called `name`) asks for one of its plots:
+--! `plot`, or any it can spare (nil). `keep`: the bank's floor for gifts to
+--! allies (Bot GIVE_KEEP). Without a number it picks, among its plots the
+--! game would let go and it does not need, one that touches the asker's land
+--! first (MultiplayerSession.plotsTouching), then the smallest, then the
+--! lowest number; with none, it says why it keeps the best of the rest.
+--!return {give = true: offer `plot` for `price` (wait = "people": once nobody
+--! is on it), why = the kind of answer (a key of PLOT_ASK_LINES), line = what
+--! it says}
+function M:plotRequest(asker, plot, keep, name)
+  local bot, world = self.bot, self.bot.world
+  local hosp, to = world.ui.hospital, world.hospitals[asker or 0]
+  local th = world.map.th
+  local today = bot:gameDay()
+  local s = self.state and self.state.day == today and self.state or {hosp = hosp, day = today}
+  local v = {plot = plot, price = 0}
+  local function answer(why, detail, want)
+    v.why = why
+    local price = v.price > 0 and dollars(v.price)
+    v.line = self.fill_in(self.pick(PLOT_ASK_LINES[why]), {name = name, plot = v.plot or "", price = price or "",
+        terms = price and ("for $" .. price .. ", what it cost me") or "for free", want = want and money(want) or ""})
+    self.log(string.format("plot request from %s (plot %s): %s%s", tostring(name), tostring(plot or "any"),
+        v.give and string.format("offers plot %d for $%d", v.plot, v.price) or ("keeps it: " .. why),
+        detail and (" (" .. detail .. ")") or ""))
+    return v
+  end
+  if not to then return answer("none") end
+  if to == hosp then return answer("same") end
+  if world.mp_auction then return answer("auction") end
+  -- Why the game would not let it hand `p` to the asker now (nil: it would).
+  local function refusal(p)
+    local why = MultiplayerSession.plotRefusal(world, hosp, p)
+    -- (The released game wants the plot to touch the asker's land: guarded.)
+    if not why and MultiplayerSession.plotHandoverRefusal then
+      why = MultiplayerSession.plotHandoverRefusal(world, to, p)
+    end
+    -- (Offered, about to be, or promised once nobody is on it: Bot:plotWaitTick.)
+    if not why and (M.plotOnOffer(world, p) or today - (self.plot_sent[p] or -99) <= PLOT_SENT_DAYS or
+        (bot.plot_wait and bot.plot_wait.plot == p)) then
+      why = "already offered"
+    end
+    return why
+  end
+  local land = indoor_floor(world, hosp)
+  local function detail(info, p)
+    return string.format("land %d%% full without it, bank $%d, it cost $%d", math.floor(info.fill * 100 + 0.5),
+        math.floor(hosp.balance), math.floor(MultiplayerSession.plotPaid(world, p)))
+  end
+  local function offer(p, wait, info)
+    v.give, v.plot, v.wait = true, p, wait or nil
+    v.price = M.plotPrice(world, hosp, p, keep)
+    return answer(wait and "wait" or (v.price > 0 and "price" or "free"), detail(info, p))
+  end
+  if plot then
+    local why = refusal(plot)
+    if why and why ~= "people on the plot" then return answer(PLOT_REFUSED[why] or "none", why) end
+    local need, info = self:plotNeed(s, plot, land)
+    if need then return answer(need, detail(info, plot), info.want) end
+    return offer(plot, why and "people", info)
+  end
+  -- Any plot: the ones it may give, the best first.
+  local mine = hosp:getPlayerIndex()
+  local theirs = to:getPlayerIndex()
+  local spare, kept, offered = {}, {}, nil
+  for p = 1, th:getPlotCount() do
+    if th:getPlotOwner(p) == mine and not MultiplayerSession.isStartingPlot(world, p) then
+      local why = refusal(p)
+      if not why or why == "people on the plot" then
+        local touches = false
+        for q in pairs(MultiplayerSession.plotsTouching(world, p)) do
+          if th:getPlotOwner(q) == theirs then touches = true end
+        end
+        local need, info = self:plotNeed(s, p, land)
+        local entry = {plot = p, busy = why ~= nil, touches = touches, need = need, info = info,
+            tiles = #MultiplayerSession.plotTiles(th, p)}
+        if need then kept[#kept + 1] = entry else spare[#spare + 1] = entry end
+      elseif why == "already offered" then
+        offered = offered or p
+      end
+    end
+  end
+  local function better(a, b)
+    if a.busy ~= b.busy then return not a.busy end
+    if a.touches ~= b.touches then return a.touches end
+    if a.tiles ~= b.tiles then return a.tiles < b.tiles end
+    return a.plot < b.plot
+  end
+  table.sort(spare, better)
+  table.sort(kept, better)
+  if spare[1] then return offer(spare[1].plot, spare[1].busy and "people", spare[1].info) end
+  if kept[1] then
+    v.plot = kept[1].plot
+    return answer(kept[1].need, detail(kept[1].info, kept[1].plot), kept[1].info.want)
+  end
+  if offered then
+    v.plot = offered
+    return answer("offered")
+  end
+  return answer("none")
 end
 
 --! The bot is failing its objectives: it asks its allies, in the team chat,

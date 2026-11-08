@@ -301,7 +301,7 @@ environment):
   `banter=1`; each player chooses in MULTIPLAYER > BOT CHAT whether to see
   all, everything but the small talk, or nothing from bots
   (`multiplayer_bot_chat` in the config: `all`, `useful`, `off`).
-- **Only allies give orders**: wishes, "leave it to me", money and a word to share
+- **Only allies give orders**: wishes, "leave it to me", money, plots and a word to share
   research are done only for an ally (`Bot:isAlly`: the same hospital, the same
   team, or anybody in a co-op game; in a race without teams nobody). Anybody
   else who asks for something gets a short refusal, without a question to the
@@ -322,6 +322,32 @@ environment):
   named answers, or else the richest allied bot. `MP_BOT_GIVE_LIMITS=keep:max`
   sets other limits in tests. (A request through the bank manager's **Ask a
   player** is a fax: the bot pays it in full while it keeps $3,000, see Offers.)
+- **A plot on request** (Jan, 2026-11-08): an ally may ask a bot in the chat
+  for one of its plots ("give me plot 7", "can I have your plot 7?", "sell me
+  plot 7", "can you spare a plot?"; a few Czech words too, or the advisor's
+  `plot` field: the number, 0 for any). Its manager decides
+  (`Manager:plotRequest`) and the bot offers the plot as a person would
+  (`offer_plot`: the ally gets the fax and accepts or declines), with one line
+  why. It gives only a plot the game lets it hand over
+  (`MultiplayerSession.plotRefusal`: its own, not the starting plot, empty,
+  not the plot that joins the rest of its land), and keeps one it needs:
+  without it less than 35% of its indoor floor would be free (`PLOT_TAKE_FREE`,
+  the share under which it takes a plot an ally offers), or it would be
+  looking for land (`Manager:landWanted` counted without the plot: rooms that
+  found no floor in the last 30 days while under 120 free tiles would be left,
+  or 70% full); a plot it bought itself in the last 30 game days (for rooms to
+  come); and, while the hospital has not reached the level's requirements, a
+  plot without which its value would be under the level's value goal (minus
+  what the plot cost it, `MultiplayerSession.plotPaid`). It gives the plot for
+  free, or, with less than $15,000 in the bank (the floor of money on
+  request), for what it cost it, rounded to $500 (at least $500, at most
+  $50,000). With no number named it picks, among the plots it can spare, one
+  that touches the asker's land first, then the smallest. Somebody walking on
+  the plot: it says yes and sends the offer once nobody is on it (within 3
+  game days). A plot it is handing over gets no rooms or objects of its own
+  meanwhile (`Bot:plotsGiven`). In the team chat only the bot named answers,
+  or the bot that owns the plot named, or the allied bot with the emptiest
+  land among those with a plot to give.
 - **A room at a place**: an ally may ask for a room "next to the GP's office",
   "near the entrance" or "by the reception"; the advisor returns it as
   `room:toilets@near:gp` (or `@near:entrance`, `@near:reception`, any room id).
@@ -357,15 +383,22 @@ votes, research, tricks on a bot, the bonus, auctions, hands off, and since
 reads the bots' month lines: their corridor objects never part their floor,
 and the entrances, both sides of the desk and the room doors are found; it
 also shows how many spots each bot refused because they would cut its floor
-in two and what it sold to mend a floor in parts. Lobby probe:
+in two and what it sold to mend a floor in parts. Check 21 (a plot asked of a
+bot): the bot of "lab" wins plot 7 at an auction frank drops out of, keeps it
+for the value goal when asked on day 4, and offers it for free when asked for
+any plot on day 6 (its requirements count as met from day 5 in that room only:
+`MP_BOT_TEST_WIN` entries may name a room, `lab/2:5`); frank accepts the fax and
+the plot is his. Lobby probe:
 `MP_ADD_BOTS=n` (the host clicks empty places), action `hospitals` (every hospital's rooms and
 staff), and chat lines received are logged (`CHAT IN`).
 Two small checks need no game, only Lua: `lua scripts/multiplayer/bot_text_test.lua
-scripts/multiplayer/bot.lua` (requests, sums, what a bank gives) and
+scripts/multiplayer/bot.lua` (requests, sums, plots asked for, what a bank
+gives) and
 `lua scripts/multiplayer/bot_manager_test.lua scripts/multiplayer/bot_manager.lua`
 (who meets the requirements, what a bot says it lacks, when it is failing and
-not in the first year, where its money went, which room it takes down, a split
-floor refused and the object in the way found, who goes to the training room).
+not in the first year, where its money went, which plot it gives an ally and
+for how much, which room it takes down, a split floor refused and the object in
+the way found, who goes to the training room).
 
 ## Not done
 

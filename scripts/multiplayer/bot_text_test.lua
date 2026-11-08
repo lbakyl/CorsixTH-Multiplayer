@@ -9,7 +9,8 @@ local function cut(from, to)
 end
 local code = cut("local function has_word", "local function reply_kind") ..
   cut("-- Words of a request", "--------------------------------------------------------------------------------\n-- The bot")
-code = code .. "\nreturn {has_word=has_word,is_request=is_request,is_money_request=is_money_request,parse_amount=parse_amount}"
+code = code .. "\nreturn {has_word=has_word,is_request=is_request,is_money_request=is_money_request,parse_amount=parse_amount," ..
+  "is_plot_request=is_plot_request,parse_plot=parse_plot}"
 local T = assert((loadstring or load)(code))()
 local function eq(a, b, what) if a ~= b then print("FAIL", what, tostring(a), tostring(b)) os.exit(1) end end
 for text, want in pairs({
@@ -27,6 +28,24 @@ for text, want in pairs({
 eq(T.is_request("build a toilet next to the gp"), true, "req1")
 eq(T.is_request("nice hospital"), false, "req2")
 eq(T.is_request("thanks for the doctor"), false, "req3")
+-- A plot asked for (with its number, or any), and lines that are not that:
+-- an offer of a plot, land for the bot itself, a room on a plot, money.
+for text, want in pairs({
+  ["Agnes, give me plot 7"] = true, ["can I have your plot 7?"] = true, ["sell me plot 7"] = true,
+  ["give me one of your plots"] = true, ["can you spare a plot?"] = true, ["could you spare some land?"] = true,
+  ["Bertie, can I buy plot 12 from you?"] = true, ["sell me plot 7 for 5000 dollars"] = true,
+  ["dej mi pozemek 7"] = true, ["prodej mi parcelu 3 prosím"] = true, ["I need a plot please"] = true,
+  ["I can spare a plot for you"] = false, ["you can have my plot 9"] = false, ["thanks for the plot!"] = false,
+  ["buy more land please"] = false, ["build a toilet on plot 7"] = false, ["nice plot"] = false,
+  ["I need money for land"] = false, ["send me $5000"] = false, ["I'll buy plot 7 myself"] = false,
+}) do eq(T.is_plot_request(text), want, "plot request " .. text) end
+for text, want in pairs({
+  ["give me plot 7"] = 7, ["can I have plot #12?"] = 12, ["plot number 3 please"] = 3, ["parcel no. 5"] = 5,
+  ["pozemek č. 4"] = 4, ["can you spare a plot?"] = false, ["give me plot, I have 20000"] = false,
+  ["sell me plot 7 for $5000"] = 7, ["your plots 2"] = 2, ["one of your plots"] = false,
+}) do eq(T.parse_plot(text) or false, want, "plot number " .. text) end
+-- (A plot request is no money request when it names a plot: the plot comes first in Bot:onChat.)
+eq(T.is_plot_request("sell me plot 7 for 5000 dollars") and T.parse_plot("sell me plot 7 for 5000 dollars"), 7, "plot first")
 print("text helpers ok")
 local g = assert((loadstring or load)("local Bot = {}\nlocal GIVE_KEEP, GIVE_MAX = 15000, 20000\n" ..
   cut("function Bot.giftFor", "--! An ally asked in the chat for money") .. "\nreturn Bot.giftFor"))()

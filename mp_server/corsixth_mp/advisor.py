@@ -50,6 +50,7 @@ PRICES = {
 MAX_REPORT = 6000  # characters of a hospital report
 MAX_CHAT_OUT = 200  # characters of an answer in the chat
 MAX_GIVE = 10_000_000  # dollars: a sum asked for above this is no sum
+MAX_PLOT = 999  # a plot number above this is no plot
 # A room asked for beside something: room:toilets@near:gp (a room id), @near:entrance, @near:reception.
 NEAR_RE = re.compile(r"near:(entrance|reception|[a-z_]{2,30})")
 
@@ -131,8 +132,11 @@ pharmacy near the entrance", "by the reception"), write the room item with the p
 or room:pharmacy@near:reception. Use the plain item when they name no place. Never promise anything you
 do not set as the project. If the last message asks YOU for money (cash, a loan, a gift of dollars), set "give" to
 the sum they name in dollars (20000 for "$20k"), or 0 if they name no sum; otherwise -1. Never say in "reply"
-whether you will send money or how much: the game checks your bank and answers that itself. "reply" is your chat
-line."""
+whether you will send money or how much: the game checks your bank and answers that itself. If the last message
+asks YOU to give or sell them one of your plots of land, set "plot" to the plot number they name (7 for "plot 7"),
+or 0 if they name none; otherwise -1. A price they offer for a plot is not a request for money ("give" stays -1).
+Never say in "reply" whether you will give the plot: the game checks your land and answers that itself. "reply" is
+your chat line."""
 
 TEAM_CHAT_SCHEMA = {
     "type": "object",
@@ -141,8 +145,9 @@ TEAM_CHAT_SCHEMA = {
         "projects": {"type": "array", "items": {"type": "string"}},
         "leave": {"type": "array", "items": {"type": "string"}},
         "give": {"type": "integer"},
+        "plot": {"type": "integer"},
     },
-    "required": ["reply", "projects", "leave", "give"],
+    "required": ["reply", "projects", "leave", "give", "plot"],
     "additionalProperties": False,
 }
 
@@ -295,8 +300,9 @@ class Advisor:
     async def team_chat(self, name: str, context: str, lines: list[str], menu: list[str]) -> dict | None:
         """A team mate's bot answers, and names the projects from the menu
         they asked for, and those they keep for themselves (or take back):
-        {"text": str, "wishes": [str], "leave": [str], "give": int or None}: give is the sum
-        in dollars an ally asks for (0: no sum named), None when they do not ask for money."""
+        {"text": str, "wishes": [str], "leave": [str], "give": int or None, "plot": int or None}: give
+        is the sum in dollars an ally asks for (0: no sum named), None when they do not ask for money;
+        plot the number of the plot they ask for (0: none named), None when they ask for no plot."""
         system = CHAT_SYSTEM.format(name=name, stance=STANCES["friendly"]) + TEAM_CHAT_EXTRA
         text = (f"Your hospital: {context[:1500]}\n\nMenu of projects: {', '.join(menu)}\n\nChat so far:\n" +
                 "\n".join(line[:300] for line in lines[-8:]))
@@ -320,12 +326,15 @@ class Advisor:
                     out.append(str(k) if places else base)
             return list(dict.fromkeys(out))[:12]
         leave = items("leave")
-        try:
-            give = int(data.get("give", -1))
-        except (TypeError, ValueError):
-            give = -1
+
+        def number(key: str, most: int) -> int | None:
+            try:
+                value = int(data.get(key, -1))
+            except (TypeError, ValueError):
+                return None
+            return value if 0 <= value <= most else None
         return {"text": reply, "wishes": [k for k in items("projects", True) if k.partition("@")[0] not in leave], "leave": leave,
-                "give": give if 0 <= give <= MAX_GIVE else None}
+                "give": number("give", MAX_GIVE), "plot": number("plot", MAX_PLOT)}
 
 
 def _chat_line(name: str, answer: str) -> str | None:

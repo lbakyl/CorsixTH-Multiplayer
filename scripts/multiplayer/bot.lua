@@ -41,7 +41,8 @@
 --   MP_BOT_STAFF_REVIEW_FROM  tests: the game day (default 720, the 3rd year) from which the bot reviews
 --                        its staff for the training room every month
 --   MP_BOT_TEST_WIN      tests: "<hospital index>:<day>;...": those hospitals meet the level's requirements to
---                        win from that game day on (the bots' chat about it)
+--                        win from that game day on (the bots' chat about it; the value goal of a plot asked
+--                        for); "<room>/<hospital index>:<day>" only in that room
 --   MP_BOT_TEST_FAIL     tests: from this game day the bot counts as failing its objectives
 --   MP_BOT_PLAN          tests: "<action>:<weight>,..." the plan every game week
 --                        instead of the server's advice (buy:drinks_machine:10)
@@ -629,6 +630,48 @@ local function parse_amount(text)
   return v and ok(number((v:gsub("[%.,]+$", "")))) or nil
 end
 
+-- A plot of land asked for ("give me plot 7", "can I have your plot 7?", "sell
+-- me plot 7", "can you spare a plot?"): words for a plot, words that ask for
+-- one, and lines that offer one rather than ask. Lower case; some Czech too.
+local PLOT_WORDS = {"plot", "plots", "parcel", "parcels", "land", "pozemek", "pozemku", "pozemky", "parcela",
+    "parcelu", "parcely"}
+local PLOT_ASKING = {"give me", "give us", "sell me", "sell us", "send me", "hand me", "hand over", "can i have",
+    "could i have", "may i have", "can i get", "could i get", "can we have", "could we have", "let me have",
+    "spare", "i need", "we need", "i want", "i'd like", "can i buy", "could i buy", "may i buy", "let me buy",
+    "from you", "one of your", "dej mi", "dejte mi", "dáš mi", "das mi", "prodej mi", "prodáš mi", "prodas mi",
+    "potřebuju", "potrebuju", "chci"}
+local PLOT_NOT_ASKING = {"i can spare", "i could spare", "i'll give", "i will give", "i give you", "i gave",
+    "i sold", "i'll sell", "i will sell", "i offer", "i offered", "you can have", "take my", "want my", "for you"}
+
+--! The plot number a chat line names ("plot 7", "plot #7", "plot number 7",
+--! "parcel no. 7", "pozemek č. 7", "#7"), or nil.
+local function parse_plot(text)
+  text = text:lower()
+  for _, w in ipairs({"plot", "parcel", "pozem", "land"}) do
+    local n = text:match(w .. "%a*[%s:#%-]*(%d+)") or text:match(w .. "%a*%s+n[%a%.]*%s*#?%s*(%d+)") or
+        text:match(w .. "%a*%s+č%.?%s*(%d+)")
+    if n then return tonumber(n) end
+  end
+  local n = text:match("#%s*(%d+)")
+  return n and tonumber(n) or nil
+end
+
+--! Does this chat line ask the bot for one of its plots? Not a line that
+--! offers one, asks it to build or buy land for itself, or asks for money
+--! (unless it names a plot: "sell me plot 7 for 5000 dollars").
+local function is_plot_request(text)
+  text = text:lower()
+  if any_word(text, NOT_ASKING) or any_word(text, PLOT_NOT_ASKING) or not any_word(text, PLOT_WORDS) then
+    return false
+  end
+  if any_word(text, {"build", "construct", "put", "place", "postav", "postavit"}) then return false end
+  if has_word(text, "buy") and not any_word(text, {"can i buy", "could i buy", "may i buy", "let me buy", "from you"}) then
+    return false
+  end
+  if any_word(text, MONEY_WORDS) and not parse_plot(text) then return false end
+  return any_word(text, PLOT_ASKING)
+end
+
 --------------------------------------------------------------------------------
 -- The bot
 --------------------------------------------------------------------------------
@@ -1119,6 +1162,19 @@ function Bot:onChat(f)
     self:say(reply, typing(reply), to)
     return
   end
+  -- An ally asks for one of its plots, with or without a number: its land
+  -- decides (Manager:plotRequest; the model is not asked). In the team's
+  -- chat only the bot named answers, or else the one that owns the plot
+  -- named, or has the most room (Bot:isPlotDonor).
+  local function plot_turn(plot)
+    return named or (private and f.team ~= "1") or
+        (not self:namesOtherBot(text) and self:isPlotDonor(self.lobby.peer_hospital and self.lobby.peer_hospital[peer], plot))
+  end
+  if (private or named) and ally and self.world and is_plot_request(text) then
+    local plot = parse_plot(text)
+    if plot_turn(plot) then self:answerPlotRequest(peer, name, plot, to) end
+    return
+  end
   -- An ally asks for money, with or without a sum: the bank decides (the
   -- model is not asked: it could promise what the bank cannot do).
   -- Asked in the team's chat, which every bot of the team gets, only the one
@@ -1145,9 +1201,16 @@ function Bot:onChat(f)
         for key in (answer.wish or ""):gmatch("[^,]+") do self.manager:wish(key, peer) end
         for key in (answer.leave or ""):gmatch("[^,]+") do self.manager:leaveTo(key) end
       end
-      -- (The model says whether the ally asked for money, and how much: -1
-      -- no, 0 no sum named. What the bot does and says about it is its own
-      -- doing, not the model's reply.)
+      -- (The model says whether the ally asked for one of its plots: the
+      -- number, 0 none named; and for money, and how much: -1 no, 0 no sum
+      -- named. What the bot does and says about it is its own doing, not the
+      -- model's reply. An older server sends no plot.)
+      local want_plot = answer and ally and self.world and tonumber(answer.plot)
+      if want_plot and want_plot >= 0 then
+        local plot = want_plot >= 1 and want_plot or parse_plot(text)
+        if plot_turn(plot) then self:answerPlotRequest(peer, name, plot, to) end
+        return
+      end
       local give = answer and ally and tonumber(answer.give)
       if give and give >= 0 then
         local amount = give >= 1 and give <= 10000000 and give or parse_amount(text)
@@ -1390,6 +1453,121 @@ function Bot:answerMoneyRequest(peer, name, amount, to)
   self:say(line, typing(line), to)
 end
 
+-- A plot promised while somebody was on it is offered once nobody is, for at
+-- most this many game days (Bot:plotWaitTick).
+local PLOT_WAIT_DAYS = 3
+
+--! Asked in the team's chat for a plot (which every bot of the team gets)
+--! without a bot named: is it this bot's turn to answer? A plot named: its
+--! owner's, if that is an allied bot. Any plot: the allied bot with the
+--! emptiest land (MultiplayerSession.landFill) among those with a plot the
+--! game would let go (ties: the lower hospital). Else the richest
+--! (Bot:isBestDonor). All bots see the same land, so exactly one answers.
+function Bot:isPlotDonor(asker_index, plot)
+  local world, mine = self.world, self.world.ui.hospital
+  local th = world.map.th
+  local best, best_fill
+  for peer, p in pairs(self.lobby.players or {}) do
+    local index = p.bot == "1" and self.lobby.peer_hospital and self.lobby.peer_hospital[peer]
+    local h = index and world.hospitals[index]
+    if h and index ~= asker_index and
+        (h == mine or (world:mpMayTrade(mine, h) and not world:mpRivals(mine, h))) then
+      local owner = h:getPlayerIndex()
+      if plot then
+        if plot >= 1 and plot <= th:getPlotCount() and th:getPlotOwner(plot) == owner then return h == mine end
+      else
+        local has = false
+        for q = 1, th:getPlotCount() do
+          local why = th:getPlotOwner(q) == owner and MultiplayerSession.plotRefusal(world, h, q)
+          if why == nil or why == "people on the plot" then has = true end
+        end
+        local fill = has and MultiplayerSession.landFill(world, h)
+        if fill and (not best_fill or fill < best_fill or (fill == best_fill and index < best)) then
+          best, best_fill = index, fill
+        end
+      end
+    end
+  end
+  if best then return best == self:hospitalIndex() end
+  return self:isBestDonor(asker_index)
+end
+
+--! Offer `plot` to hospital `index` for `price`, as a person would (the
+--! ally gets the fax).
+function Bot:offerPlot(plot, index, price)
+  TheApp.mp_session:issue({kind = "offer_plot", to = index, plot = plot, price = price})
+  self.manager:notePlotOffered(plot)
+end
+
+--! An ally asked in the chat for one of its plots (`plot`, or nil: any it
+--! can spare): its manager decides (Manager:plotRequest), the bot offers it
+--! as a person would (an offer_plot command: the ally gets the fax) and says
+--! one line why, never more. A plot somebody is walking on is offered once
+--! nobody is (Bot:plotWaitTick). `to` is where the answer goes.
+function Bot:answerPlotRequest(peer, name, plot, to)
+  local session = TheApp.mp_session
+  local index = self.lobby.peer_hospital and self.lobby.peer_hospital[peer]
+  local line
+  if not self.manager then
+    line = fill_in(pick(Manager.PLOT_ASK_LINES.none), {name = name})
+  else
+    local v = self.manager:plotRequest(index, plot, GIVE_KEEP, name)
+    line = v.line
+    if v.give and (not session or session.held) then
+      line = fill_in(pick(LINES.gift_later), {name = name})
+    elseif v.give and v.wait then
+      self.plot_wait = {plot = v.plot, to = index, price = v.price, name = name, reply_to = to,
+          until_day = self:gameDay() + PLOT_WAIT_DAYS}
+    elseif v.give then
+      self:offerPlot(v.plot, index, v.price)
+    end
+  end
+  self:say(line, typing(line), to)
+end
+
+--! A plot promised while somebody was on it (Bot:answerPlotRequest): offered
+--! as soon as nobody is. After PLOT_WAIT_DAYS, or when it cannot go any more
+--! (a room on it, say), it is not, and the ally is told why.
+function Bot:plotWaitTick()
+  local w = self.plot_wait
+  if not w or not self.manager then return end
+  local world = self.world
+  local why = MultiplayerSession.plotRefusal(world, world.ui.hospital, w.plot)
+  local to = world.hospitals[w.to]
+  if not why and to and MultiplayerSession.plotHandoverRefusal then
+    why = MultiplayerSession.plotHandoverRefusal(world, to, w.plot)
+  end
+  if why == "people on the plot" and self:gameDay() <= w.until_day then return end
+  self.plot_wait = nil
+  if not why then
+    log(string.format("plot %d for %s: nobody on it now, offered for $%d", w.plot, w.name, w.price))
+    self:offerPlot(w.plot, w.to, w.price)
+    return
+  end
+  log(string.format("plot %d for %s: not offered after all (%s)", w.plot, w.name, why))
+  local key = why == "people on the plot" and "busy" or Manager.PLOT_REFUSED[why] or "none"
+  local line = fill_in(pick(Manager.PLOT_ASK_LINES[key]), {name = w.name, plot = w.plot})
+  self:say(line, typing(line), w.reply_to)
+end
+
+--! The plots this hospital is handing over (an offer waiting for an answer,
+--! or one promised once nobody is on it): nothing is built or put on them.
+--! A set, worked out once a game step.
+function Bot:plotsGiven()
+  local session = TheApp.mp_session
+  local step = session and session.step
+  if self.given_plots and self.given_step == step then return self.given_plots end
+  local world = self.world
+  local set = {}
+  local mine = world.ui.hospital:getPlayerIndex()
+  for plot in pairs(world.mp_plot_offers or {}) do
+    if world.map.th:getPlotOwner(plot) == mine and Manager.plotOnOffer(world, plot) then set[plot] = true end
+  end
+  if self.plot_wait then set[self.plot_wait.plot] = true end
+  self.given_plots, self.given_step = set, step
+  return set
+end
+
 --! Money arrived from another player (give_money, seen as it happens).
 function Bot:moneyReceived(from_index, amount)
   local _, name = self:playerOfHospital(from_index)
@@ -1463,6 +1641,11 @@ function Bot:reservedTiles()
   for _, r in pairs(session and session.remote_blueprints or {}) do
     if (r.w or 0) > 0 then mark(r) end
   end
+  -- (A plot it is handing over: Bot:plotsGiven.)
+  for plot in pairs(self:plotsGiven()) do
+    local tiles = MultiplayerSession.plotTiles(self.world.map.th, plot)
+    for i = 1, #tiles, 2 do reserved[tiles[i + 1] * 1000 + tiles[i]] = true end
+  end
   return reserved
 end
 
@@ -1481,7 +1664,8 @@ function Bot:freeFloor()
   return n
 end
 
---! Is this tile free floor of this hospital (no room, no object on it)?
+--! Is this tile free floor of this hospital (no room, no object on it, not on
+--! a plot it is handing over)?
 function Bot:freeTile(x, y)
   local world = self.world
   local th = world.map.th
@@ -1490,6 +1674,7 @@ function Bot:freeTile(x, y)
   if self.reserved and self.reserved[y * 1000 + x] then return false end
   if not world.ui.hospital:isInHospital(x, y) or world:getRoom(x, y) or world:getObject(x, y) then return false end
   local flags = th:getCellFlags(x, y)
+  if self:plotsGiven()[flags.parcelId] then return false end
   return flags.buildable and flags.passable
 end
 
@@ -2323,6 +2508,8 @@ function Bot:buyPlot()
   end
   log(string.format("buying plot %d for $%d", best, best_price))
   TheApp.mp_session:issue({kind = "buy_plot", plot = best})
+  -- (Bought for rooms to come: kept if an ally asks for it soon, Manager:plotRequest.)
+  if self.manager then self.manager:notePlotBought(best) end
   return true
 end
 
@@ -2447,7 +2634,9 @@ function Bot:buyCorridor(object_id, near_x, near_y)
     if not ok then cuts = cuts + 1 end
     return ok
   end
+  local given = self:plotsGiven()
   local function fits(tx, ty)
+    if next(given) and given[world.map.th:getCellFlags(tx, ty).parcelId] then return false end
     for _, e in ipairs(apart) do
       if math.abs(e.tile_x - tx) <= DRINKS_APART and math.abs(e.tile_y - ty) <= DRINKS_APART then return false end
     end
@@ -2847,6 +3036,7 @@ function Bot:think()
   local day = self:gameDay()
   if self:bidAtAuction() then return end
   self:answerOffers()
+  self:plotWaitTick()
   self:careForStaff(day)
   -- (Tests: wishes as if a team mate asked for them.)
   if self.manager and os.getenv("MP_BOT_WISHES") then
