@@ -15,7 +15,8 @@ local function eq(a, b, what) if a ~= b then print("FAIL", what, tostring(a), to
 for text, want in pairs({
   ["Agnes, can you send me $20,000?"] = 20000, ["send me 20k"] = 20000, ["I need 2.5k please"] = 2500,
   ["give me 5000 dollars"] = 5000, ["need 20 000"] = 20000, ["send $ 3000"] = 3000, ["pošli mi 5000"] = 5000,
-  ["could you spare some cash"] = false, ["20.000 dollars"] = 20000, ["send me $50"] = false,
+  ["could you spare some cash"] = false, ["20.000 dollars"] = 20000, ["send me $50"] = 50,
+  ["give me 5 dollars"] = 5, ["send me money for 3 rooms"] = false,
 }) do eq(T.parse_amount(text) or false, want, "amount " .. text) end
 for text, want in pairs({
   ["Agnes, can you send me $20,000?"] = true, ["please send some cash"] = true, ["I sent you the money"] = false,
@@ -27,17 +28,28 @@ eq(T.is_request("build a toilet next to the gp"), true, "req1")
 eq(T.is_request("nice hospital"), false, "req2")
 eq(T.is_request("thanks for the doctor"), false, "req3")
 print("text helpers ok")
-local g = assert((loadstring or load)("local Bot = {}\nlocal GIVE_ABOVE, GIVE_KEEP = 20000, 15000\n" ..
+local g = assert((loadstring or load)("local Bot = {}\nlocal GIVE_KEEP, GIVE_MAX = 15000, 20000\n" ..
   cut("function Bot.giftFor", "--! An ally asked in the chat for money") .. "\nreturn Bot.giftFor"))()
-local function gift(b, a, wg, ws) local x, y = g(b, a) eq(x, wg, "give " .. b .. "/" .. tostring(a)) eq(y, ws, "spare " .. b .. "/" .. tostring(a)) end
-gift(20000, 1000, 0, 0)     -- not more than 20000
-gift(20001, 1000, 1000, 5000)
+-- gift(bank, sum asked or nil, what it sends, the most it could send now)
+local function gift(b, a, wg, ws) local x, y = g(b, a) eq(x, wg, "give " .. b .. "/" .. tostring(a)) eq(y, ws, "most " .. b .. "/" .. tostring(a)) end
+-- A sum named: min(asked, $20,000, bank - $15,000).
+gift(15000, 1000, 0, 0)            -- at the floor: nothing
+gift(15001, 1000, 1, 1)
+gift(16000, 500, 500, 1000)        -- a small sum
+gift(18000, 50, 50, 3000)
+gift(15500, 1000, 500, 500)        -- less than asked: all above the floor
 gift(30000, 15000, 15000, 15000)
-gift(30000, 16000, 0, 15000)
-gift(25500, nil, 5000, 10000)
-gift(60000, nil, 10000, 45000)
-gift(40000, nil, 10000, 25000)
+gift(30000, 16000, 15000, 15000)
+gift(60000, 50000, 20000, 20000)   -- at most $20,000 at once
+gift(20000, 1000, 1000, 5000)      -- (before: refused, the bank was not over $20,000)
+-- No sum named: half of the spare above $15,000, whole thousands, $1,000 to $10,000.
+gift(25500, nil, 5000, 10500)
+gift(60000, nil, 10000, 20000)
+gift(40000, nil, 10000, 20000)
 gift(22000, nil, 3000, 7000)
-gift(20500, nil, 2000, 5000)
-gift(19000, nil, 0, 0)
+gift(20500, nil, 2000, 5500)
+gift(19000, nil, 2000, 4000)
+gift(16500, nil, 1000, 1500)
+gift(15800, nil, 0, 800)
+gift(14000, nil, 0, 0)
 print("gift ok")

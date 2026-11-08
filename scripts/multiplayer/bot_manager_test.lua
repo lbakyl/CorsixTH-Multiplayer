@@ -103,6 +103,24 @@ s.day = 121
 eq(#self:failing(s), 1, "broke for 20 days")
 print("manager judgements ok")
 
+-- Where its money went (said to an ally it gives less than asked, or nothing):
+-- its last big spending, in words, for three months.
+do
+  local today = 100
+  local m = setmetatable({bot = {gameDay = function() return today end}, log = function() end, history = {}}, M)
+  eq(m:spentWords(today), nil, "nothing spent yet")
+  m:noteSpent("buy:bench", 150)
+  eq(m:spentWords(today), nil, "a bench is no big spending")
+  m:noteSpent("room:x_ray", 12000)
+  eq(m:spentWords(today), "the new x ray room ($12,000)", "a room")
+  m:noteSpent("gift:Ann", 5000)
+  eq(m:spentWords(today), "the money I sent to Ann ($5,000)", "a gift")
+  m:noteSpent("buy:land", 30000)
+  eq(m:spentWords(today + 10), "a new plot of land ($30,000)", "land")
+  eq(m:spentWords(today + 91), nil, "too long ago")
+end
+print("spending ok")
+
 -- The training room: students fill the chairs from the doctors who can be
 -- spared; a doctor with a patient, or the only surgeon of an operating
 -- theatre, stays at work.

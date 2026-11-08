@@ -181,6 +181,7 @@ function M.new(bot, ctx)
   self.lacking = {}        -- specialist category -> game day it was first missing for a room
   self.ally_lack = {}      -- "<ally index>:<category>" -> game day an ally was first missing one
   self.blocked_spec = {}   -- category -> {day, room}: a room patients need waits for this specialist
+  self.spent = nil         -- its last big spending, {key, cost, day} (M:noteSpent)
   return self
 end
 
@@ -188,6 +189,19 @@ function M:note(text)
   self.log(text)
   self.history[#self.history + 1] = text
   if #self.history > 12 then table.remove(self.history, 1) end
+end
+
+-- Spending worth telling an ally who asks for money where it went (Jan,
+-- 2026-11-08): this much or more, within SPENT_DAYS game days.
+local SPENT_NOTE, SPENT_DAYS = 2000, 90
+
+--! Note what the bot spent money on (`key`: a project key, "loan" for a
+--! repayment, "gift:<name>" for money sent to an ally, "trick"), if it was
+--! big enough to be worth a word (M:spentWords).
+function M:noteSpent(key, cost)
+  if (cost or 0) >= SPENT_NOTE then
+    self.spent = {key = key, cost = math.floor(cost), day = self.bot:gameDay()}
+  end
 end
 
 --------------------------------------------------------------------------------
@@ -1199,6 +1213,7 @@ function M:doProject(s)
       local ok, why = p.run()
       if ok then
         self:note(string.format("day %d: %s (score %.1f, $%d)", s.day, p.key, p.score, math.floor(s.balance)))
+        self:noteSpent(p.key, p.cost)
         if p.key == "buy:land" or p.key == "edit:shrink" then self.no_space = {} end
         self.no_space[p.key] = nil
         self.boost[p.key] = nil
@@ -1350,6 +1365,7 @@ function M:monthly(s)
     local keep = s.balance > 25000 and 20000 or 12000
     local amount = math.min(s.loan, math.floor((s.balance - keep) / 1000) * 1000)
     if amount > 0 and self:issue({kind = "loan", amount = -amount}) then
+      self:noteSpent("loan", amount)
       self:note(string.format("day %d: repaid $%d of the loan ($%d left)", s.day, amount, s.loan - amount))
     end
   end
@@ -2633,6 +2649,40 @@ local function purpose_words(key)
     return "replace the machine in the " .. wish_words("room:" .. what)
   end
   return nil
+end
+
+--! The bot's last big spending (M:noteSpent) in words for the chat: "the new
+--! X-Ray room ($12,000)", if it was within SPENT_DAYS game days of `day`;
+--! else nil.
+function M:spentWords(day)
+  local sp = self.spent
+  if not sp or day - sp.day > SPENT_DAYS then return nil end
+  local kind, what = sp.key:match("^(%a+):([^:@]+)")
+  local words
+  if kind == "room" then
+    words = "the new " .. wish_words(sp.key)
+  elseif sp.key == "buy:land" then
+    words = "a new plot of land"
+  elseif kind == "repair" then
+    words = "repairing the " .. wish_words("room:" .. what)
+  elseif kind == "replace" then
+    words = "a new machine for the " .. wish_words("room:" .. what)
+  elseif kind == "add" then
+    words = "the " .. wish_words(sp.key)
+  elseif kind == "bigger" then
+    words = "making the " .. wish_words("room:" .. what) .. " bigger"
+  elseif kind == "gift" then
+    words = "the money I sent to " .. what
+  elseif sp.key == "loan" then
+    words = "paying back my loan"
+  elseif sp.key == "trick" then
+    words = "a dirty trick"
+  elseif kind == "buy" then
+    words = "a new " .. what:gsub("_", " ")
+  else
+    return nil
+  end
+  return string.format("%s ($%s)", words, dollars(sp.cost))
 end
 
 --! The bot is failing its objectives: it asks its allies, in the team chat,

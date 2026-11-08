@@ -223,8 +223,9 @@ local LINES = {
       "I've already hired the best doctors in town. Sorry!",
     },
   },
-  -- An ally asked for money (Bot:answerMoneyRequest); {name}, {amount} (sent
-  -- or asked), {spare} are filled in by `fill_in`.
+  -- An ally asked for money (Bot:answerMoneyRequest); {name}, {amount} (sent),
+  -- {asked}, {keep} (the bank's floor) and {max} (the most sent at once) are
+  -- filled in by `fill_in`.
   gift_sent = {
     "Sent you ${amount}, {name}. That's what allies are for.",
     "On its way, {name}: ${amount}. Spend it wisely!",
@@ -234,17 +235,28 @@ local LINES = {
   },
   -- No amount named: half of what is above the bank's floor.
   gift_sent_auto = {
-    "I sent you ${amount}, {name}: half of what I can spare above my $15,000 floor.",
-    "{name}, I put ${amount} your way. That's half of my spare cash; I keep $15,000 for emergencies.",
-    "Here's ${amount}, {name}. It's half of what I can spare, I keep a cushion of $15,000.",
+    "I sent you ${amount}, {name}: half of what I can spare above my ${keep} floor.",
+    "{name}, I put ${amount} your way. That's half of my spare cash; I keep ${keep} for emergencies.",
+    "Here's ${amount}, {name}. It's half of what I can spare, I keep a cushion of ${keep}.",
     "Sent ${amount}, {name}. You didn't name a sum, so I took half of my spare cash.",
   },
-  -- Too much asked.
-  gift_spare = {
-    "Sorry {name}, ${amount} is too much for me. I could spare ${spare}.",
-    "{name}, I can't do ${amount} and still pay my bills. ${spare} is what I could manage.",
-    "Not ${amount}, {name}, my bank would be too low. I could send ${spare}, though.",
-    "That's more than I can spare, {name}. Ask for ${spare} and it's yours.",
+  -- Less than asked: all it can spare above its floor.
+  gift_part = {
+    "Sent you ${amount} of the ${asked}, {name}. That's all I can spare above my ${keep} floor.",
+    "{name}, ${amount} is on its way. More would take me under the ${keep} I keep for my own bills.",
+    "I can only manage ${amount} of it, {name}; I keep ${keep} in the bank. Sent.",
+  },
+  -- Less than asked: the most it sends at once.
+  gift_cap = {
+    "Sent you ${amount}, {name}. That's the most I send in one go.",
+    "{name}, ${amount} is on its way: I don't send more than ${max} at once.",
+    "Here's ${amount}, {name}, my limit for one transfer. Ask again later if you need more.",
+  },
+  -- After less than asked, or nothing: where its money went ({spent}).
+  gift_spent = {
+    "Most of my cash went into {spent}.",
+    "My money went into {spent} lately.",
+    "I just spent a lot on {spent}.",
   },
   -- Nothing to spare.
   gift_none = {
@@ -593,12 +605,14 @@ local function is_money_request(text)
 end
 
 --! The amount of money a chat line names, in dollars, or nil: "$20,000",
---! "20k", "2.5k", "20 000", "5000 dollars". Between $100 and $10,000,000.
+--! "20k", "2.5k", "20 000", "5000 dollars", "$50". Between $1 and $10,000,000.
+--! (A small sum is a sum: before, "$50" counted as none named, and the bot
+--! sent thousands.)
 local function parse_amount(text)
   text = text:lower()
   local function ok(v)
     v = v and math.floor(v + 0.5)
-    if v and v >= 100 and v <= 10000000 then return v end
+    if v and v >= 1 and v <= 10000000 then return v end
   end
   local function number(str)
     str = str:gsub(",", "")
@@ -1136,7 +1150,7 @@ function Bot:onChat(f)
       -- doing, not the model's reply.)
       local give = answer and ally and tonumber(answer.give)
       if give and give >= 0 then
-        local amount = give > 0 and give >= 100 and give <= 10000000 and give or parse_amount(text)
+        local amount = give >= 1 and give <= 10000000 and give or parse_amount(text)
         if money_turn() then self:answerMoneyRequest(peer, name, amount, to) end
         return
       end
@@ -1261,32 +1275,39 @@ function Bot:answerEmergencies()
   end
 end
 
--- An ally's request for money is met when the bank stays above this (and
--- only when it holds more than GIVE_ABOVE) (Jan, 2026-11-07). Tests: the
--- limits "above:keep" in MP_BOT_GIVE_LIMITS.
-local GIVE_ABOVE, GIVE_KEEP = 20000, 15000
+-- An ally's request for money (Jan, 2026-11-08): the sum asked for, up to
+-- GIVE_MAX at once, while the bank holds more than GIVE_KEEP and keeps that
+-- much. (Before, only a bank over $20,000 gave anything, and a sum it could
+-- not give in full got nothing: a player who had sent a bot a lot was
+-- refused a small sum back.) Tests: the limits "keep:max" in
+-- MP_BOT_GIVE_LIMITS.
+local GIVE_KEEP, GIVE_MAX = 15000, 20000
 do
-  local above, keep = (os.getenv("MP_BOT_GIVE_LIMITS") or ""):match("^(%d+):(%d+)$")
-  if above then GIVE_ABOVE, GIVE_KEEP = tonumber(above), tonumber(keep) end
+  local keep, most = (os.getenv("MP_BOT_GIVE_LIMITS") or ""):match("^(%d+):(%d+)$")
+  if keep then GIVE_KEEP, GIVE_MAX = tonumber(keep), tonumber(most) end
+end
+
+--! Dollars with thousands separators: 20,000.
+local function thousands(n)
+  local text = string.format("%d", math.max(0, math.floor(n + 0.5)))
+  return (text:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", ""))
 end
 
 --! What a bank of `balance` dollars gives to an ally who asks for `amount`
---! (nil: no sum named): the amount to send (0: none) and what it could
---! spare. It sends only when it holds more than GIVE_ABOVE and keeps
---! GIVE_KEEP afterwards. With no sum named it sends half of what is above
---! GIVE_KEEP (in whole thousands, between $2,000 and $10,000): enough to
---! help, and the bank stays well above its floor.
+--! (nil: no sum named): the amount to send (0: none) and the most it could
+--! send now. A sum named: min(asked, GIVE_MAX, balance - GIVE_KEEP), so
+--! nothing once the bank holds GIVE_KEEP or less. No sum named: half of what
+--! is above GIVE_KEEP, in whole thousands, $1,000 to $10,000 (and at most
+--! GIVE_MAX): enough to help, and the bank stays well above its floor.
 function Bot.giftFor(balance, amount)
   balance = math.floor(balance)
-  if balance <= GIVE_ABOVE then return 0, 0 end
-  local spare = math.max(0, math.floor((balance - GIVE_KEEP) / 1000) * 1000)
-  if amount then
-    if balance - amount >= GIVE_KEEP then return amount, spare end
-    return 0, spare
-  end
-  local give = math.min(10000, math.max(2000, math.floor(spare / 2000) * 1000))
-  if give > spare then return 0, spare end
-  return give, spare
+  local most = math.max(0, math.min(GIVE_MAX, balance - GIVE_KEEP))
+  if most == 0 then return 0, 0 end
+  if amount then return math.min(amount, most), most end
+  local spare = math.floor((balance - GIVE_KEEP) / 1000) * 1000
+  local give = math.min(10000, most, math.max(1000, math.floor(spare / 2000) * 1000))
+  if give > spare then return 0, most end
+  return give, most
 end
 
 --! Does this chat line name another bot of the room (not this one)?
@@ -1323,30 +1344,47 @@ end
 --! An ally asked in the chat for money (`amount`: the sum named, or nil):
 --! the bot decides by its own bank (Bot.giftFor), sends it as a person would
 --! (a give_money command) and says what it did, never more. `to` is where
---! the answer goes (the team, the asker, or everybody).
+--! the answer goes (the team, the asker, or everybody). Less than asked, or
+--! nothing: it also says where its money went lately (its last big spending,
+--! Manager:spentWords), so a player who gave it money sees what became of it.
 function Bot:answerMoneyRequest(peer, name, amount, to)
   local world, session = self.world, TheApp.mp_session
   local mine = world.ui.hospital
   local index = self.lobby.peer_hospital and self.lobby.peer_hospital[peer]
   local line
+  local vars = {name = name, keep = thousands(GIVE_KEEP), max = thousands(GIVE_MAX)}
+  -- (Where the money went, after a line that gives less than asked.)
+  local function spent(text)
+    local words = self.manager and self.manager:spentWords(self:gameDay())
+    local more = words and text .. " " .. fill_in(pick(LINES.gift_spent), {spent = words})
+    return more and #more <= 195 and more or text -- (the server cuts a chat line at 200 letters)
+  end
   if not index or world.hospitals[index] == mine then
-    line = fill_in(pick(LINES.gift_same_bank), {name = name})
+    line = fill_in(pick(LINES.gift_same_bank), vars)
   else
-    local give, spare = Bot.giftFor(mine.balance, amount)
-    if (give > 0 or spare >= 1000) and (not session or session.held) then
-      line = fill_in(pick(LINES.gift_later), {name = name})
+    local give, most = Bot.giftFor(mine.balance, amount)
+    vars.amount, vars.asked = thousands(give), amount and thousands(amount)
+    if give > 0 and (not session or session.held) then
+      line = fill_in(pick(LINES.gift_later), vars)
     elseif give > 0 then
       session:issue({kind = "give_money", to = index, amount = give})
-      log(string.format("money for %s: sent $%d (asked %s, bank $%d)", name, give, tostring(amount),
-          math.floor(mine.balance)))
-      line = fill_in(pick(amount and LINES.gift_sent or LINES.gift_sent_auto), {name = name, amount = give})
-    elseif amount and spare >= 1000 then
-      log(string.format("money for %s: declined $%d, could spare $%d", name, amount, spare))
-      line = fill_in(pick(LINES.gift_spare), {name = name, amount = amount, spare = spare})
+      if self.manager then self.manager:noteSpent("gift:" .. name, give) end
+      if amount and give < amount then
+        -- (The most it sends at once, or all it can spare above its floor.)
+        local capped = give >= GIVE_MAX
+        log(string.format("money for %s: sent $%d, less than the $%d asked (%s; bank $%d)", name, give, amount,
+            capped and "the most at once" or "all it can spare", math.floor(mine.balance)))
+        line = fill_in(pick(capped and LINES.gift_cap or LINES.gift_part), vars)
+        if not capped then line = spent(line) end
+      else
+        log(string.format("money for %s: sent $%d (asked %s, bank $%d)", name, give, tostring(amount),
+            math.floor(mine.balance)))
+        line = fill_in(pick(amount and LINES.gift_sent or LINES.gift_sent_auto), vars)
+      end
     else
-      log(string.format("money for %s: declined (asked %s, bank $%d)", name, tostring(amount),
-          math.floor(mine.balance)))
-      line = fill_in(pick(LINES.gift_none), {name = name})
+      log(string.format("money for %s: declined (asked %s, bank $%d, most it could send $%d)", name,
+          tostring(amount), math.floor(mine.balance), most))
+      line = spent(fill_in(pick(LINES.gift_none), vars))
     end
   end
   self:say(line, typing(line), to)
@@ -2448,6 +2486,7 @@ function Bot:playTrick()
   end
   log(string.format("dirty trick: %s level %d on %s", kind, level, target[2]))
   TheApp.mp_session:issue({kind = "sabotage", trick = kind, level = level, to = world:getHospitalIndex(target[1])})
+  if self.manager then self.manager:noteSpent("trick", cost(level)) end
   if rand() < 0.5 then
     local line = pick(LINES.trick):format(target[2])
     self:say(line, 20 + rand() * 40, nil, nil, true)
