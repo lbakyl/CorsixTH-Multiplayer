@@ -2439,10 +2439,12 @@ function MultiplayerSession.transferStaff(world, from, to, staff)
 end
 
 --! Show a short adviser message, only to the player running `hospital`.
-function MultiplayerSession.tellPlayer(world, hospital, text)
+--!param longer (number) [optional] how many times as long as usual the
+--! adviser talks (UIAdviser:say)
+function MultiplayerSession.tellPlayer(world, hospital, text, longer)
   local ui = world.ui
   if ui and ui.adviser and ui.hospital == hospital then
-    ui.adviser:say({text = text, priority = 10})
+    ui.adviser:say({text = text, priority = 10, longer = longer})
   end
 end
 

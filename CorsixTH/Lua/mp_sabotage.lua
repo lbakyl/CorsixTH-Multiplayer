@@ -328,15 +328,29 @@ end
 --! never looks at their handymen gets a hint (Jan: Argus had no idea).
 sabotage.HINT_DAYS = 30
 
+--! An evil handyman's hint is due (every HINT_DAYS he works in a hospital):
+--! its adviser wonders aloud, for twice as long as usual, but at most once
+--! in HINT_DAYS however many of them are there (Jan: two of them, from two
+--! rivals, made it twice a month). The words: the next of a few, the same
+--! on every peer.
+function sabotage.hint(world, handyman)
+  local s = handyman.mp_saboteur
+  local hospital = handyman.hospital
+  local now = world.game_date
+  if hospital.mp_handyman_hint and now < hospital.mp_handyman_hint then return end
+  -- (A day short: the same handyman's next hint is HINT_DAYS on, to the hour.)
+  hospital.mp_handyman_hint = now:plusDays(sabotage.HINT_DAYS - 1)
+  s.hints = (s.hints or 0) + 1
+  MultiplayerSession.tellPlayer(world, hospital, nth_text(S().sabotage_handyman_hint, s.hints), 2)
+end
+
 function sabotage.tick(handyman)
   local s = handyman.mp_saboteur
   local world = handyman.world
   s.hours = s.hours + 1
   if s.hours >= sabotage.STAY_DAYS[s.level] * 50 then return sabotage.goHome(handyman) end
   if s.hours % (sabotage.HINT_DAYS * 50) == 0 and handyman.hospital then
-    -- (The words: the next of a few, the same on every peer.)
-    s.hints = (s.hints or 0) + 1
-    MultiplayerSession.tellPlayer(world, handyman.hospital, nth_text(S().sabotage_handyman_hint, s.hints))
+    sabotage.hint(world, handyman)
   end
   local x, y = handyman.tile_x, handyman.tile_y
   local hospital = handyman.hospital

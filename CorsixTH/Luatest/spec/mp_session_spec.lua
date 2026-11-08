@@ -570,3 +570,42 @@ describe("MultiplayerSession game options", function()
     assert.same({7, 8, 6, 5}, MultiplayerSession.auctionBidders(world, 9, hospitals[7]))
   end)
 end)
+
+describe("Evil handyman hints", function()
+  require("date")
+  local sabotage = MultiplayerSession.sabotage
+
+  it("wonders at most once a month, however many evil handymen there are", function()
+    local said = {}
+    local old_tell, old_S = MultiplayerSession.tellPlayer, _G._S
+    MultiplayerSession.tellPlayer = function(_, hospital, text, longer)
+      said[#said + 1] = {hospital = hospital, text = text, longer = longer}
+    end
+    _G._S = {multiplayer_window = {sabotage_handyman_hint = {"one", "two", "three"}}}
+    local ok, err = pcall(function()
+      local mine, theirs = {}, {}
+      local world = {game_date = Date(3, 3, 1, 0)}
+      local a = {hospital = mine, mp_saboteur = {}}
+      local b = {hospital = mine, mp_saboteur = {}}
+      local c = {hospital = theirs, mp_saboteur = {}}
+      sabotage.hint(world, a)
+      world.game_date = Date(3, 3, 12, 0)
+      sabotage.hint(world, b) -- 11 days after a's: not again
+      sabotage.hint(world, c) -- another hospital: its own month
+      world.game_date = Date(3, 3, 31, 0)
+      sabotage.hint(world, a) -- 30 days after a's first: the next words
+      world.game_date = Date(3, 4, 11, 0)
+      sabotage.hint(world, b)
+      world.game_date = Date(3, 4, 30, 0)
+      sabotage.hint(world, a)
+      assert.equal(4, #said)
+      assert.same({mine, "one", 2}, {said[1].hospital, said[1].text, said[1].longer})
+      assert.same({theirs, "one"}, {said[2].hospital, said[2].text})
+      assert.same({mine, "two"}, {said[3].hospital, said[3].text})
+      assert.same({mine, "three"}, {said[4].hospital, said[4].text})
+      assert.is_nil(b.mp_saboteur.hints)
+    end)
+    MultiplayerSession.tellPlayer, _G._S = old_tell, old_S
+    assert(ok, err)
+  end)
+end)

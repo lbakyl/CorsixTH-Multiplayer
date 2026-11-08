@@ -130,7 +130,6 @@ function UIAdviser:talk()
   self.th:setAnimation(self.ui.app.world.anims, 460, DrawFlags.Nearest)
   self.frame = 1
   self.timer = nil -- Reset the idle timer
-  self.number_frames = 45
   -- Fetch the next message from the queue.
   local best = 1
   if self.queued_messages[1].priority then
@@ -141,6 +140,8 @@ function UIAdviser:talk()
       end
     end
   end
+  -- (A message may ask to be talked for longer: `longer` times as long.)
+  self.number_frames = math.floor(45 * (self.queued_messages[best].longer or 1))
   local speech = self.queued_messages[best].speech
   self.stay_up = self.queued_messages[best].stay_up
   table.remove(self.queued_messages, best)
@@ -195,7 +196,8 @@ function UIAdviser:checkForDuplicates(speech)
 end
 
 -- Makes the adviser say something
---!param speech The table containing the text he should say and the priority.
+--!param speech The table containing the text he should say and the priority
+-- (and optionally `longer`: how many times as long as usual he talks).
 --!param talk_until_next_announce Whether he should stay up
 -- until the next say() call is made. Useful for the tutorial.
 --!param override_current Cancels previous messages (if any) immediately
@@ -209,7 +211,8 @@ function UIAdviser:say(speech, talk_until_next_announce, override_current)
     self.queued_messages[#self.queued_messages + 1] = {
       speech = speech.text,
       stay_up = talk_until_next_announce,
-      priority = speech.priority
+      priority = speech.priority,
+      longer = speech.longer
     }
     if self.phase == 0 then
       -- The adviser is not active at all at the moment.
