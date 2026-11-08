@@ -122,7 +122,9 @@ included), **Research sharing** (off: nobody gives or sells research) and
 **Allied bots build** (off: a bot sharing a person's hospital builds no rooms
 and puts nothing in the corridors, unless that person asks it to in the
 chat; it still hires staff, pays bonuses, shares research, bids at auctions
-and buys land). What the host changed shows in the room.
+and buys land) and **Rat attack** (off by default: the rat attack is not
+among the dirty tricks; the host may allow it). What differs from the
+defaults shows in the room.
 
 **Nobody to play with?** As the host, click an empty place in your room
 ("click: add a bot") and a computer player takes it; click the bot to take it
@@ -152,7 +154,9 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   answered (at most 5 minutes).
 - **Speed and pause** are shared too; the room's connection limits the top
   speed. Any player can pause or unpause, at once (the chat works while
-  paused). A different speed is a vote: the other players get a purple fax
+  paused). A different speed is a vote: you are asked first (the number
+  keys are easy to hit by mistake; OK or Enter starts it), then the other
+  players get a purple fax
   with a fast-forward sign (Agree or Decline); it does not pause the game.
   The speed changes once more than half of the players agree, the asker
   included (with two players the other one must agree; with three, one of
@@ -286,7 +290,10 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   shows one of the patients (a right-click goes on to the next one).
 - **Epidemics:** declaring one (the first fax) costs less than in single
   player with a hospital each: $1,000 per infected patient (at most
-  $10,000) and 2 reputation per patient (at most 25). If you cover one up
+  $10,000) and 2 reputation per patient (at most 25). An epidemic only
+  spreads to its own hospital's patients (not to other hospitals' patients
+  walking through), and you see the epidemic icons over your own patients
+  only. If you cover one up
   instead, a watch appears at the bottom left.
   Its syringe button starts **vaccination mode**: click the infected patients
   and a nurse vaccinates them. While it is on, other patients cannot be
@@ -490,7 +497,7 @@ Cutthroat, has its own, later months (below).
 | **Evil handyman**: looks like one of their handymen and strolls their corridors; stays 4, 3 or 2 months (L1, L2, L3), then goes home | $5,000: does no work | $12,500: also drops litter | $20,000: also "repairs" a machine about every three days, and walks away leaving it nearly broken |
 | **Epidemic**: contagious patients of one disease arrive at their hospital | $6,000: 2 patients | $12,000: 4 | $20,000: 7 |
 | **Emergency** they cannot refuse: patients arrive by helicopter | $5,000: 3 patients | $10,000: 6 | $18,000: 10, maybe of a disease they have not discovered |
-| **Rat attack**: rats come out of new holes in their walls; while they run about they cost them a reputation point a day for every 5 rats, at most 3 a day (for 30 days at most) | $4,000: 5 rats | $9,000: 10 | $15,000: 20 |
+| **Rat attack** (only when the host allowed it in the game options): rats come out of new holes in their walls; while they run about they cost them a reputation point a day for every 5 rats, at most 3 a day (for 30 days at most) | $4,000: 5 rats | $9,000: 10 | $15,000: 20 |
 | **Headhunter**: their best member of staff of a kind gets a better offer and asks for a pay rise; if they do not agree within 10 days, that person leaves for the hiring list, kept for you for 2 weeks | $4,000: a junior doctor or nurse, +50% | $9,000: a doctor, +75% | $16,000: a consultant or specialist, double the wage |
 | **Broken boiler**: their heating fails (too cold in winter, too hot in summer) until their handymen repair it; more handymen repair it sooner | $3,000: short | $7,000: about twice as long | $12,000: long |
 | **Smear campaign**: bad press sends some of their new patients to the other hospitals | $5,000: 1 month, 3 in 10 | $10,000: 2 months, 4 in 10 | $18,000: 3 months, half |

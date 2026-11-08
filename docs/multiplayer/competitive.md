@@ -96,7 +96,9 @@ the start, as before.
   that says it cannot be refused. Level 3 may pick a disease the target has
   not discovered.
 
-- **Rat attack.** `sabotage.ratAttack`: `Hospital:mpAddRatholes` (random
+- **Rat attack.** Only when the room's `rats` game option allows it (off
+  by default; `world.mp_coop.rats_on`, `sabotage.allowed`).
+  `sabotage.ratAttack`: `Hospital:mpAddRatholes` (random
   corridor wall spots near the target's start view; the daily rathole update
   tries spots over the whole map and seldom hits a small hospital), then
   5/10/20 rats (`spawnRat`) with `mp_attack_rat`. Such a rat runs on to
@@ -162,10 +164,12 @@ refusals, the trick of the month, the rank and the hiring list.
 ## Window and Progress Report
 
 - Rivals' hospitals are closed to the mouse: `GameUI:_isRivals` drops a
-  hovered entity in a rival's building, or a person of a rival's hospital
-  outside your own (no staff or patient windows, door queues, bottom panel
-  details or hover cursor). The evil handyman in your own hospital stays
-  clickable (his `hospital` is yours). Co-op teams still see each other.
+  hovered person of a rival's hospital wherever they stand (your own
+  corridors included), and an object or room in a rival's building (no
+  staff or patient windows, door queues, bottom panel details or hover
+  cursor). Your own people stay clickable anywhere. The evil handyman in
+  your own hospital stays clickable (his `hospital` is yours). Co-op teams
+  still see each other.
 - Rivals' room outlines are not shown (`MultiplayerLobby:_onSHOW` drops
   their blueprint notes in a race), nor the blue floor of a rival's room
   being furnished (every peer's room editor paints it while building the
