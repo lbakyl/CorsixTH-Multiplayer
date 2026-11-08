@@ -184,9 +184,12 @@ do
   function clinic.countStaffOfCategory(_, cat) return cat == "Surgeon" and 1 or 0 end
   local tworld = {ui = {hospital = clinic}, rooms = {training, theatre, gp}, available_staff = {Doctor = {}},
       getRoom = function(_, x, y) return rooms_at[x .. "," .. y] end}
+  local wanted, hired, can_hire = 2, 0, true
   local bot = {world = tworld, flag = function(p, name) return p[name] ~= nil and p[name] ~= false end,
       teacherScore = function() return 0 end, specialisms = function() return 0 end,
-      staffWanted = function() return {Doctor = 2} end,
+      staffWanted = function() return {Doctor = wanted} end,
+      canHire = function() return can_hire end,
+      hireStudent = function() hired = hired + 1 return true end,
       moveStaffInto = function(_, st) moved[#moved + 1] = st.name return true end}
   local m = setmetatable({bot = bot, log = function() end, history = {}, rand = function(_, b) return b or 1 end}, M)
   local first = {day = 40, balance = 50000}
@@ -203,13 +206,41 @@ do
   eq(m:canSpareDoctor(gp_doc), false, "a doctor with a patient stays")
   eq(m:canSpareDoctor(surgeon), false, "the only surgeon of a theatre stays")
   eq(m:canSpareDoctor(plain), true, "a plain doctor can go")
-  -- Three chairs: the teacher and two students fill the room, no third.
+  -- Three chairs, two students: the third is no doctor who must stay at work,
+  -- but (until the 3rd year the chairs are kept full) one hired as a student.
   local second = moved[2]
   plain.tile_x = 5
   rooms_at["5,1"] = training
   training.humanoids[plain] = true
   m:training({day = 50, balance = 50000})
   eq(#moved, 2, "no third student for a doctor who must stay (" .. tostring(moved[3]) .. ", " .. second .. ")")
+  eq(hired, 1, "a student hired for the third chair")
+  m:training({day = 52, balance = 50000})
+  eq(hired, 1, "one every 3 days")
+  m:training({day = 53, balance = 5000})
+  eq(hired, 1, "not without the money for it")
+  -- The hospital lacks a doctor (the GP's office stands empty and fewer
+  -- doctors work than its rooms need). Until the 3rd year a student goes back
+  -- only when no doctor can be hired (the students do not count as staff, so
+  -- a doctor is hired for the room); then the most skilled one.
+  wanted = 4
+  gp.humanoids[gp_doc] = nil
+  m:training({day = 600, balance = 50000})
+  eq(#moved, 2, "a doctor can be hired: the students stay")
+  eq(m:studentsAway(600), 2, "both students are away from work")
+  can_hire = false
+  m:training({day = 603, balance = 50000})
+  eq(moved[3], "Junior", "none to hire: the most skilled student goes back")
+  -- From the 3rd year nobody is hired to fill a chair, a junior learns until
+  -- he is a doctor (and counts as staff for the need he was hired for), and
+  -- a student who is not a junior goes back when a doctor is lacking.
+  local before = hired
+  m:training({day = 800, balance = 50000})
+  eq(moved[4], "Plain", "the student who is not a junior goes back")
+  eq(hired, before, "no student hired from the 3rd year")
+  eq(m:studentsAway(800), 1, "the junior counts as staff")
+  eq(m:traineeChair({day = 800}) ~= nil, true, "a free chair for a junior hired for a need")
+  eq(m:traineeChair({day = 700}), nil, "not before the 3rd year")
   -- Chairs: 3 to 6, chosen once.
   local n1 = m:trainingPlan()
   local _, extra = m:trainingPlan()

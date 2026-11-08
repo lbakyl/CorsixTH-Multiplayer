@@ -2376,6 +2376,28 @@ function Bot:hireTeacher()
   return ok
 end
 
+--! Hire a doctor straight into the training room as a student: the most
+--! skilled junior on the list, else (unless `junior_only`) the most skilled
+--! doctor not yet a consultant (he learns too). False if there is none.
+function Bot:hireStudent(junior_only)
+  local world = self.world
+  if world.ui.hospital.balance < RESERVE then return false end
+  local pool = (world.staffPool and world:staffPool() or world.available_staff).Doctor or {}
+  local junior, other = false, false
+  for _, p in ipairs(pool) do
+    if flag(p, "is_junior") then junior = true elseif not flag(p, "is_consultant") then other = true end
+  end
+  if not junior and (junior_only or not other) then return false end
+  local dx, dy = self:anchor()
+  local ok, err = pcall(builder.ui_hire, world, dx, dy, junior and "Doctor:junior@training" or "Doctor@training", log,
+      function(p)
+        if flag(p, "is_consultant") then return nil end
+        return p.skill or 0
+      end)
+  if not ok then log("could not hire a student: " .. tostring(err)) end
+  return ok
+end
+
 --! Send a member of staff into a room (the move_staff command, as a player
 --! dragging them there): onto a free tile inside it, nearest the middle.
 function Bot:moveStaffInto(staff, target)
