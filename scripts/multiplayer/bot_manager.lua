@@ -1392,6 +1392,14 @@ function M:daily(s)
   self:defend(s)
   if helper then return end
   self:training(s)
+  -- Its floor in pieces (Bot:repairFloor): looked at once a game week, every
+  -- 2 days while it is being mended. (Not when it leaves the building to the
+  -- person it shares with: those are their things.)
+  if s.day >= (self.floor_check or 0) and not bot:leavesBuilding() then
+    local sold = bot:repairFloor()
+    self.floor_check = s.day + (sold and 2 or 7)
+    if sold then self:note(string.format("day %d: %s", s.day, sold)) end
+  end
   -- Heating: warmer when patients are cold, cooler when they are hot.
   -- (Not while the boiler is broken: the heating cannot be set then.)
   if hosp.opened and s.patients >= 4 and (s.objects.radiator or 0) > 0 and
@@ -1434,14 +1442,19 @@ function M:monthLine(s)
     goals[#goals + 1] = string.format("%s %d/%d", name, math.floor(g.now), g.want)
   end
   table.sort(goals)
+  -- (Its floor, Bot:floorReport: in how many parts, with and without its
+  -- corridor objects, and what must be reached.)
+  local ok, floor_text = pcall(self.bot.floorReport, self.bot)
+  if not ok then floor_text = "?" end
   return string.format("month %d: left %s; lost most: %s; in hospital %d; queues %s, reception %d; psychiatrists %d,"
       .. " surgeons %d; prices %d%%; reputation %d, $%d; loan $%d; staff %d (%s), juniors %d, consultants %d;"
-      .. " staff happy %d%%, tired %d%%; patients happy %d%%; land %d%% full; goals %s", s.month, table.concat(left, " "), table.concat(top, " "),
+      .. " staff happy %d%%, tired %d%%; patients happy %d%%; land %d%% full; goals %s; floor %s", s.month,
+      table.concat(left, " "), table.concat(top, " "),
       s.patients, table.concat(queues, " "), s.reception_queue, hosp:countStaffOfCategory("Psychiatrist"),
       hosp:countStaffOfCategory("Surgeon"), 100, s.reputation, math.floor(s.balance),
       math.floor(s.loan or 0), n, table.concat(staff, ","), juniors, consultants, math.floor(s.staff_happy * 100 + 0.5),
       math.floor(s.fatigue * 100 + 0.5), math.floor((s.happiness or 0) * 100 + 0.5),
-      math.floor(self:landFill(s) * 100 + 0.5), #goals > 0 and table.concat(goals, " ") or "none")
+      math.floor(self:landFill(s) * 100 + 0.5), #goals > 0 and table.concat(goals, " ") or "none", floor_text)
 end
 
 --! Once a month: prices, repaying the loan, research.
@@ -2882,6 +2895,150 @@ function M:rescue(s)
     wait.done = true
   end)
   if not asked then wait.done = true end
+end
+
+--------------------------------------------------------------------------------
+-- The hospital's floor in one piece (Argus, 2026-11-08: a bot's benches and
+-- drinks machines cut its floor apart, and its patients walked outside and
+-- through three other hospitals to get from one part to the other. The
+-- game's own rule only asks that some way exists, even one outside.)
+--------------------------------------------------------------------------------
+
+-- Tiles are keyed y * FLOOR_W + x. The sides of a tile one may cross (the
+-- game's travel flags) are bits, north 1, east 2, south 4, west 8, and a side
+-- is keyed tile key * 16 + its bit.
+local FLOOR_W = 1000
+M.FLOOR_W = FLOOR_W
+local SIDES = {{bit = 1, step = -FLOOR_W, back = 4}, {bit = 2, step = 1, back = 8},
+    {bit = 4, step = FLOOR_W, back = 1}, {bit = 8, step = -1, back = 2}}
+local SIDE_OF = {north = SIDES[1], east = SIDES[2], south = SIDES[3], west = SIDES[4]}
+
+local function has_bit(bits, bit) return math.floor(bits / bit) % 2 == 1 end
+
+--! In how many separate parts of the floor are the places that must be
+--! reached? `floor` (Bot:floorMap) = {walk = {[tile] = side bits} (the
+--! hospital's corridor tiles, in no room, one can walk on), held = {[tile] =
+--! side bits} (those an object stands on), targets = {tile, ...} (its
+--! entrances, the front of each reception desk, the tile before each room's
+--! door)}. `change` (optional, M.objectChange) is what an object or a room
+--! would do: {block = {[tile] = true}, cut = {[side] = true}} put down, or
+--! {open = {[tile] = true}, join = {[side] = true}} taken away. A target on a
+--! tile nobody can walk on is a part of its own.
+--!return the number of parts, and the part of each tile reached from a target
+function M.floorParts(floor, change)
+  change = change or {}
+  local block, cut, open, join = change.block or {}, change.cut or {}, change.open or {}, change.join or {}
+  local walk, held = floor.walk, floor.held
+  local function walkable(k)
+    return not block[k] and (walk[k] ~= nil or (open[k] ~= nil and held[k] ~= nil))
+  end
+  local part, parts = {}, 0
+  for _, t in ipairs(floor.targets) do
+    if not walkable(t) then
+      parts = parts + 1
+    elseif not part[t] then
+      parts = parts + 1
+      part[t] = parts
+      local queue, head = {t}, 1
+      while head <= #queue do
+        local k = queue[head]
+        head = head + 1
+        local bits = walk[k] or held[k] or 0
+        for _, d in ipairs(SIDES) do
+          local n = k + d.step
+          if not part[n] and walkable(n) and not cut[k * 16 + d.bit] and not cut[n * 16 + d.back] and
+              (has_bit(bits, d.bit) or join[k * 16 + d.bit] or join[n * 16 + d.back]) then
+            part[n] = parts
+            queue[#queue + 1] = n
+          end
+        end
+      end
+    end
+  end
+  return parts, part
+end
+
+--! What an object of type `object` (with its orientations and footprints)
+--! does to the floor (M.floorParts) at x, y facing `direction`, added to
+--! `change` (a new table if nil): the tiles it takes (`block`) and the sides
+--! it closes (`cut`: a radiator, a bin, an extinguisher stand against one
+--! side of a tile); with `away`, what taking it away does (`open`, `join`).
+function M.objectChange(object, x, y, direction, change, away)
+  change = change or {}
+  local o = object.orientations and object.orientations[direction]
+  if not o then return change end
+  -- (A bin facing east stands on its tile's west side, as the game has it:
+  -- Object:occupyTilesByObjectFootprintAt.)
+  if object.thob == 50 and direction == "east" then direction = "west" end
+  local side = SIDE_OF[direction]
+  local tiles, sides = away and "open" or "block", away and "join" or "cut"
+  for _, t in ipairs(o.footprint or {}) do
+    local k = (y + t[2]) * FLOOR_W + x + t[1]
+    if t.only_side then
+      if side then
+        change[sides] = change[sides] or {}
+        change[sides][k * 16 + side.bit] = true
+      end
+    elseif not t.only_passable then
+      change[tiles] = change[tiles] or {}
+      change[tiles][k] = true
+    end
+  end
+  return change
+end
+
+--! The first thing in the way between two parts of the floor (M.floorParts),
+--! with every object of `away` (M.objectChange of them all, taken away): the
+--! shortest way from one part to another (or to a target an object stands
+--! on), and the first tile on it that an object stands on, or side one
+--! closes.
+--!return "tile", tile key or "side", side key; nil when no object is in the way
+function M.floorBlocker(floor, away)
+  local parts, part = M.floorParts(floor)
+  local walk, held = floor.walk, floor.held
+  local open, join = away.open or {}, away.join or {}
+  local held_target = {}
+  for _, t in ipairs(floor.targets) do
+    if walk[t] == nil then held_target[t] = true end
+  end
+  local function walkable(k) return walk[k] ~= nil or (open[k] ~= nil and held[k] ~= nil) end
+  for p = 1, parts do
+    local prev, queue, head = {}, {}, 1
+    for k, q in pairs(part) do
+      if q == p then
+        prev[k] = false
+        queue[#queue + 1] = k
+      end
+    end
+    table.sort(queue) -- (the same way every time)
+    while head <= #queue do
+      local k = queue[head]
+      head = head + 1
+      local bits = walk[k] or held[k] or 0
+      for _, d in ipairs(SIDES) do
+        local n = k + d.step
+        local through = has_bit(bits, d.bit) or join[k * 16 + d.bit] or join[n * 16 + d.back]
+        if prev[n] == nil and walkable(n) and through then
+          prev[n] = k
+          if (part[n] and part[n] ~= p) or held_target[n] then
+            -- Back along the way to part p: its first step out of the part is
+            -- through an object (else the two would be one part).
+            local a, b = k, n
+            while prev[a] do a, b = prev[a], a end
+            if walk[b] == nil then return "tile", b end
+            for _, e in ipairs(SIDES) do
+              if a + e.step == b then
+                return "side", join[a * 16 + e.bit] and a * 16 + e.bit or b * 16 + e.back
+              end
+            end
+            return nil
+          end
+          queue[#queue + 1] = n
+        end
+      end
+    end
+  end
+  return nil
 end
 
 --! (MP_BOT_DIAG) Where the GP's offices, their doctors, the patients and

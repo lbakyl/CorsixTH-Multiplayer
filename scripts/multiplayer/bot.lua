@@ -1508,6 +1508,9 @@ end
 -- A room asked for "next to" something is built within this many tiles of it,
 -- else the normal place is used and the person told.
 local NEAR_MAX_GAP = 8
+-- Spots for a room checked against its whole floor (Bot:roomKeepsFloor) in one
+-- search at most.
+local FLOOR_TRIES = 60
 
 --! Where a player would put a w x h room (squares from `size` down to
 --! `min`, and one tile shorter): against the building's walls and the other
@@ -1634,10 +1637,20 @@ function Bot:layoutSpot(min, size, near)
     log(string.format("layout diag %d-%d: area %d,%d-%d,%d, %d spots; best %s; tiles in %d free %d reserved %d room %d object %d not buildable %d",
         min, size, x0, y0, x1, y1, #spots, table.concat(top, ", "), n_in, n_free, n_res, n_room, n_obj, n_flag))
   end
+  -- (And its own floor stays one piece with every door on it, Bot:roomKeepsFloor:
+  -- a scan of the floor per spot, so at most FLOOR_TRIES of them.)
+  local floor_tries = 0
   for i, spot in ipairs(spots) do
     if self:keepsCorridor(spot[2], spot[3], spot[4], spot[5]) then
-      if i > 1 then log(string.format("layout: %d better spots would cut the corridor in two", i - 1)) end
-      return spot[2], spot[3], spot[4], spot[5]
+      floor_tries = floor_tries + 1
+      if floor_tries > FLOOR_TRIES then
+        log(string.format("layout: %d spots would cut its floor in two; no more tried", FLOOR_TRIES))
+        return nil
+      end
+      if self:roomKeepsFloor(spot[2], spot[3], spot[4], spot[5]) then
+        if i > 1 then log(string.format("layout: %d better spots would cut the corridor or the floor in two", i - 1)) end
+        return spot[2], spot[3], spot[4], spot[5]
+      end
     end
   end
 end
@@ -1684,6 +1697,162 @@ function Bot:keepsCorridor(x, y, w, h)
     if not seen[t[2] * 1000 + t[1]] then return false end
   end
   return true
+end
+
+--! Its hospital's floor for Manager.floorParts: the corridor tiles of its own
+--! building (in no room) one can walk on and those an object stands on, each
+--! with the sides one can cross (the game's travel flags), and the places
+--! that must be reached: its entrances, both sides of each reception desk
+--! (patients and receptionist) and the tile before each room's door. Made
+--! once a game step (a scan of the map), so only when the bot is about to put
+--! something down.
+function Bot:floorMap()
+  local world, session = self.world, TheApp.mp_session
+  local step = session and session.step
+  local cache = self.floor_cache
+  if cache and cache.world == world and cache.step == step then return cache.floor end
+  local hosp = world.ui.hospital
+  local th = world.map.th
+  local mw, mh = th:size()
+  local me = hosp:getPlayerIndex()
+  local W = Manager.FLOOR_W
+  local rooms = world.rooms
+  local walk, held, flags = {}, {}, {}
+  for y = 1, mh do
+    for x = 1, mw do
+      th:getCellFlags(x, y, flags)
+      local room_id = flags.roomId or 0
+      if flags.hospital and flags.owner == me and (room_id == 0 or not rooms[room_id]) then
+        local bits = (flags.travelNorth and 1 or 0) + (flags.travelEast and 2 or 0) +
+            (flags.travelSouth and 4 or 0) + (flags.travelWest and 8 or 0)
+        if flags.passable then walk[y * W + x] = bits else held[y * W + x] = bits end
+      end
+    end
+  end
+  local targets, seen = {}, {}
+  local counts = {entrances = 0, desks = 0, doors = 0} -- (for the month's log line)
+  local function target(k, kind)
+    if k and (walk[k] or held[k]) and not seen[k] then
+      seen[k] = true
+      targets[#targets + 1] = k
+      counts[kind] = counts[kind] + 1
+    end
+  end
+  -- (An entrance door stands on the tile south or east of its wall: the
+  -- floor inside may be the tile on the other side.)
+  for _, e in ipairs(world.entities) do
+    local id = e.object_type and e.object_type.id
+    if (id == "entrance_left_door" or id == "entrance_right_door") and e.tile_x then
+      local k = e.tile_y * W + e.tile_x
+      if not (walk[k] or held[k]) then k = e.direction == "west" and k - 1 or k - W end
+      target(k, "entrances")
+    end
+  end
+  -- (A desk: where its patients stand, and its receptionist.)
+  for _, desk in ipairs(hosp:getReceptionDesks()) do
+    local o = desk.tile_x and desk.object_type.orientations[desk.direction]
+    for _, use in ipairs(o and {o.use_position, o.use_position_secondary} or {}) do
+      target((desk.tile_y + use[2]) * W + desk.tile_x + use[1], "desks")
+    end
+  end
+  local own = {}
+  for _, rm in pairs(rooms) do
+    if rm.hospital == hosp and rm.door and rm.door.tile_x and not rm.crashed then own[#own + 1] = rm end
+  end
+  table.sort(own, function(a, b) return a.id < b.id end)
+  for _, rm in ipairs(own) do
+    local ok, x, y = pcall(rm.getEntranceXY, rm, false)
+    if ok and x then target(y * W + x, "doors") end
+  end
+  local floor = {walk = walk, held = held, targets = targets, counts = counts}
+  floor.parts = Manager.floorParts(floor)
+  self.floor_cache = {world = world, step = step, floor = floor}
+  return floor
+end
+
+--! Would `change` (Manager.objectChange: an object put down) leave the
+--! hospital's floor in no more parts than now (Bot:floorMap)? `extra`
+--! (optional): more tiles that must be reached (a new desk's two sides).
+function Bot:floorKept(floor, change, extra)
+  if not extra then return Manager.floorParts(floor, change) <= floor.parts end
+  local with = {walk = floor.walk, held = floor.held, targets = {}}
+  for _, k in ipairs(extra) do with.targets[#with.targets + 1] = k end
+  for _, k in ipairs(floor.targets) do with.targets[#with.targets + 1] = k end
+  return Manager.floorParts(with, change) <= Manager.floorParts(with)
+end
+
+--! Would a w x h room at x, y keep the hospital's floor in one piece
+--! (Bot:floorKept) and open onto it: some tile along its sides reached from
+--! the entrances, the desks and the other rooms, where its door can go?
+function Bot:roomKeepsFloor(x, y, w, h)
+  local floor = self:floorMap()
+  local W = Manager.FLOOR_W
+  local change = {block = {}}
+  for ty = y, y + h - 1 do
+    for tx = x, x + w - 1 do change.block[ty * W + tx] = true end
+  end
+  local after, part = Manager.floorParts(floor, change)
+  if after > floor.parts then return false end
+  if #floor.targets == 0 then return true end
+  for tx = x, x + w - 1 do
+    if part[(y - 1) * W + tx] or part[(y + h) * W + tx] then return true end
+  end
+  for ty = y, y + h - 1 do
+    if part[ty * W + x - 1] or part[ty * W + x + w] then return true end
+  end
+  return false
+end
+
+--! The corridor objects of its hospital but the reception desks (which a bot
+--! may sell): all of them taken away, as a Manager.objectChange, and which
+--! object stands on each tile or closes each side.
+--!return away, object by tile key, object by side key
+function Bot:floorObjects()
+  local world = self.world
+  local hosp = world.ui.hospital
+  local away, by_tile, by_side = {open = {}, join = {}}, {}, {}
+  for _, e in ipairs(world.entities) do
+    local ot = e.object_type
+    if ot and ot.corridor_object and ot.id ~= "reception_desk" and e.tile_x and e.mp_id and e.direction and
+        hosp:isInHospital(e.tile_x, e.tile_y) and not world:getRoom(e.tile_x, e.tile_y) then
+      local one = Manager.objectChange(ot, e.tile_x, e.tile_y, e.direction, nil, true)
+      for k in pairs(one.open or {}) do by_tile[k], away.open[k] = e, true end
+      for k in pairs(one.join or {}) do by_side[k], away.join[k] = e, true end
+    end
+  end
+  return away, by_tile, by_side
+end
+
+--! Its floor in words for the month's log line: in how many parts, in how
+--! many it would be without its corridor objects (more than that: objects
+--! cut it), and what must be reached. (A plot bought is often a building of
+--! its own, with its own entrance: a part of its own.)
+function Bot:floorReport()
+  local floor = self:floorMap()
+  local c = floor.counts
+  return string.format("%d part(s) (%d without its corridor objects), to reach %d entrance tile(s), %d desk side(s),"
+      .. " %d door(s)", floor.parts, Manager.floorParts(floor, (self:floorObjects())), c.entrances, c.desks, c.doors)
+end
+
+--! A floor already in pieces (from an older game, or objects put down before
+--! the bot checked): the corridor object that stands first in the way
+--! between two parts (Manager.floorBlocker) is sold, with the sell_object
+--! command a person's click sends (its price comes back; the waiting-area
+--! rules buy what is missing again where it fits). Never a reception desk.
+--! One object a call (Manager:daily).
+--!return a line for the log when it sold something, else nil
+function Bot:repairFloor()
+  local session = TheApp.mp_session
+  if not session or session.held or not MultiplayerSession.default_handlers.sell_object then return nil end
+  local floor = self:floorMap()
+  if floor.parts <= 1 then return nil end
+  local away, by_tile, by_side = self:floorObjects()
+  local kind, key = Manager.floorBlocker(floor, away)
+  local e = kind == "tile" and by_tile[key] or kind == "side" and by_side[key] or nil
+  if not e then return nil end
+  session:issue({kind = "sell_object", object = e.mp_id})
+  return string.format("its floor is in %d parts: sold the %s at %d,%d, which was in the way",
+      floor.parts, e.object_type.id, e.tile_x, e.tile_y)
 end
 
 --! The nearest place for a packed w x h room (see Bot:roomFits).
@@ -1795,7 +1964,7 @@ function Bot:drawRoom(room_type, size, extras, near)
         if self.reserved[ty * 1000 + tx] then return end -- (a room being edited, an outline)
       end
     end
-    if self:keepsCorridor(fx, fy, s, s) then x, y, w = fx, fy, s end
+    if self:keepsCorridor(fx, fy, s, s) and self:roomKeepsFloor(fx, fy, s, s) then x, y, w = fx, fy, s end
   end
   for s = size, min, -1 do
     if not x then try(s, builder.find_free_rect(self.world, ax, ay, s + 1, s + 1, 40)) end
@@ -2258,6 +2427,26 @@ function Bot:buyCorridor(object_id, near_x, near_y)
       end
     end
   end
+  -- Its own floor stays in one piece with the entrances, the desks and every
+  -- room's door on it (Bot:floorKept; Argus, 2026-11-08: benches and drinks
+  -- machines had cut a bot's hospital in two). A new desk's two sides
+  -- (patients, receptionist) must be reached too.
+  local object_type = place.objects[1].object
+  local floor, cuts = nil, 0
+  local function keeps_floor(tx, ty, facing)
+    floor = floor or self:floorMap()
+    local o = object_type.orientations[facing]
+    local extra
+    if object_id == "reception_desk" and o then
+      extra = {}
+      for _, use in ipairs({o.use_position, o.use_position_secondary}) do
+        extra[#extra + 1] = (ty + use[2]) * Manager.FLOOR_W + tx + use[1]
+      end
+    end
+    local ok = self:floorKept(floor, Manager.objectChange(object_type, tx, ty, facing), extra)
+    if not ok then cuts = cuts + 1 end
+    return ok
+  end
   local function fits(tx, ty)
     for _, e in ipairs(apart) do
       if math.abs(e.tile_x - tx) <= DRINKS_APART and math.abs(e.tile_y - ty) <= DRINKS_APART then return false end
@@ -2266,7 +2455,7 @@ function Bot:buyCorridor(object_id, near_x, near_y)
     for _, facing in ipairs(facings) do
       place:setOrientation(facing)
       place:setBlueprintCell(tx, ty)
-      if place.object_blueprint_good then return true end
+      if place.object_blueprint_good and keeps_floor(tx, ty, facing) then return true end
     end
     return false
   end
@@ -2291,13 +2480,14 @@ function Bot:buyCorridor(object_id, near_x, near_y)
     -- Tiles with free floor all around (so nothing blocks a corridor).
     x, y = builder.find_free_rect(world, ax, ay, 1, 1, 40, fits)
   end
+  local refused = cuts > 0 and string.format(" (%d spot(s) refused: they would cut its floor in two)", cuts) or ""
   if x then
     place.object_cell_x, place.object_cell_y = x, y
     place:onMouseUp("left", 100000, 100000) -- a click outside the window
     placed = true
-    log(string.format("bought a %s at %d,%d", object_id, x, y))
+    log(string.format("bought a %s at %d,%d%s", object_id, x, y, refused))
   else
-    log("no place for a " .. object_id)
+    log("no place for a " .. object_id .. refused)
   end
   if ui:getWindow(UIPlaceObjects) then ui:getWindow(UIPlaceObjects):close() end
   return placed

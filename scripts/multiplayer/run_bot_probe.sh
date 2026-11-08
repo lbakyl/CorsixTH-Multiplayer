@@ -56,6 +56,10 @@
 #      "duel" nobody is there to read it
 #  19. failing its objectives (MP_BOT_TEST_FAIL): both bots of "team" ask ann for
 #      an amount, once
+#  20. the floor in one piece: each bot that builds reads its own floor as one
+#      part with its entrance, desk and room doors on it (its month line);
+#      also shown: spots refused because they would cut the floor in two, and
+#      objects sold to mend a floor in parts
 #  10. tricks on a bot ("duel", competitive: eve and one bot): eve sends
 #      rats, an evil handyman (level 3), a smear campaign and a broken
 #      boiler. The bot shoots the rats and throws the handyman out, each at
@@ -417,6 +421,31 @@ ok19 = (sorted(w for _, w, _ in help19) == ['Bot Agnes', 'Bot Bertie'] and len(n
         and min(st for st, _, _ in help19) >= 20 * 50 - 50)
 print(f"19. Failing, asks for help: {[(st, w, t) for st, w, t in help19]}; notes {[n.split('] ', 1)[1] for n in notes19]}")
 fail |= not ok19
+# 20. The floor in one piece. Each bot that builds (team, race, duel, lab)
+# reads its own floor (Bot:floorMap) and says in its month lines in how many
+# parts it is, in how many it would be without its corridor objects (a plot
+# bought is often a building of its own: a part of its own), and what must be
+# reached. Every month: its objects cut nothing (the same number), and the
+# entrance, both sides of the desk and the doors of its rooms are found.
+# Also, for information: spots refused because they would cut the floor in
+# two, and objects sold because it was in parts already (Bot:repairFloor).
+floor20, months20 = {}, {}
+for k, t in bots.items():
+    found = re.findall(r'month \d+: .*; floor (\d+) part\(s\) \((\d+) without its corridor objects\), to reach '
+                       r'(\d+) entrance tile\(s\), (\d+) desk side\(s\), (\d+) door\(s\)', t)
+    if found:
+        months20[k] = [tuple(int(v) for v in f) for f in found]
+        floor20[k] = months20[k][-1]
+builders20 = [k for k in bots if k.split('/')[0] in ('team', 'race', 'duel', 'lab')]
+refused20 = {k: sum(int(n) for n in re.findall(r'\((\d+) spot\(s\) refused: they would cut', t)) for k, t in bots.items()}
+mended20 = {k: re.findall(r'its floor is in \d+ parts: sold the (\w+)', t) for k, t in bots.items()}
+ok20 = bool(builders20) and all(k in floor20 and all(m[0] == m[1] for m in months20[k]) and floor20[k][2] >= 1
+                                and floor20[k][3] >= 2 and floor20[k][4] >= 3 for k in builders20)
+print(f"20. Floor in one piece:     (parts, without objects, entrance tiles, desk sides, doors) "
+      f"{dict(sorted(floor20.items()))}; spots refused "
+      f"{dict((k, v) for k, v in sorted(refused20.items()) if v)}; objects sold to mend it "
+      f"{dict((k, v) for k, v in sorted(mended20.items()) if v)}")
+fail |= not ok20
 for name, text in sorted(bots.items()):
     errors = [l for l in text.splitlines() if 'ERROR' in l or 'could not' in l]
     if errors: print(f"   {name} problems: {errors[:5]}")

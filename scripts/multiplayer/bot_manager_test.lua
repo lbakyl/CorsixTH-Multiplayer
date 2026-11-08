@@ -173,6 +173,58 @@ do
 end
 print("rooms taken down ok")
 
+-- The floor in one piece: a corridor 7 tiles long and 3 wide, the entrance at
+-- its west end, a room's door at its east end. A bench or drinks machine
+-- (a whole tile) or a radiator (one side of a tile) that would cut it in two
+-- is refused (Bot:floorKept: more parts than before); one that already does
+-- is found and taken away (M.floorBlocker).
+do
+  local W = M.FLOOR_W
+  local function key(x, y) return y * W + x end
+  local walk, held = {}, {}
+  for y = 1, 3 do
+    for x = 1, 7 do
+      walk[key(x, y)] = (y > 1 and 1 or 0) + (x < 7 and 2 or 0) + (y < 3 and 4 or 0) + (x > 1 and 8 or 0)
+    end
+  end
+  local floor = {walk = walk, held = held, targets = {key(1, 2), key(7, 2)}}
+  local function parts(change) return (M.floorParts(floor, change)) end
+  local function put(x, y) walk[key(x, y)], held[key(x, y)] = nil, walk[key(x, y)] end
+  local bench = {orientations = {north = {footprint = {{0, 0, complete_cell = true},
+      {0, -1, only_passable = true, invisible = true, shareable = true}}}}}
+  local radiator = {orientations = {east = {footprint = {{0, 0, only_side = true}}},
+      south = {footprint = {{0, 0, only_side = true}}}}}
+  eq(parts(), 1, "one piece")
+  eq(parts(M.objectChange(bench, 4, 3, "north")), 1, "a bench by the wall is fine")
+  local across = {}
+  for y = 1, 3 do M.objectChange(bench, 4, y, "north", across) end
+  eq(parts(across), 2, "a row of benches across the corridor would split it")
+  -- Two benches stand (as a bot put them down); the third would close the gap.
+  put(4, 1)
+  put(4, 2)
+  local before = parts()
+  eq(before, 1, "two benches leave a gap")
+  eq(parts(M.objectChange(bench, 4, 3, "north")) > before, true, "the third is refused: it splits the floor")
+  eq(parts(M.objectChange(bench, 2, 3, "north")) > before, false, "elsewhere a bench is fine")
+  eq(parts(M.objectChange(radiator, 4, 3, "east")) > before, true, "a radiator closing the gap's side is refused")
+  eq(parts(M.objectChange(radiator, 4, 3, "south")) > before, false, "against the wall it is fine")
+  eq(parts(M.objectChange(bench, 7, 2, "north")) > before, true, "nothing on the tile before a door")
+  -- A floor already in two (three benches across): the bench in the way is
+  -- the one the bot sells, and without it the floor is one piece again.
+  put(4, 3)
+  eq(parts(), 2, "three benches split it")
+  local away = {}
+  for y = 1, 3 do M.objectChange(bench, 4, y, "north", away, true) end
+  local kind, k = M.floorBlocker(floor, away)
+  eq(kind, "tile", "an object is in the way")
+  eq(k % W, 4, "one of the three benches")
+  eq(parts(M.objectChange(bench, k % W, math.floor(k / W), "north", nil, true)), 1, "taken away, the floor is whole")
+  -- A floor parted by walls (nothing to take away): no object is blamed.
+  eq(M.floorBlocker({walk = {[key(1, 1)] = 0, [key(3, 1)] = 0}, held = {}, targets = {key(1, 1), key(3, 1)}}, {}),
+      nil, "walls: nothing to sell")
+end
+print("floor ok")
+
 -- The training room: students fill the chairs from the doctors who can be
 -- spared; a doctor with a patient, or the only surgeon of an operating
 -- theatre, stays at work.
