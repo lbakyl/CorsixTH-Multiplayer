@@ -101,6 +101,27 @@ local s = {hosp = broke, day = 100, month = 4, balance = 500, loan = 20000, max_
 eq(#self:failing(s), 0, "broke, but not for long")
 s.day = 121
 eq(#self:failing(s), 1, "broke for 20 days")
+-- A failing bot asks the advisor and its allies, but never in the first game
+-- year (months 1 to 12), and then at most every 3 months.
+do
+  local reviews, asks = 0, 0
+  local m = setmetatable({bot = {now = function() return 0 end,
+      askRescue = function() reviews = reviews + 1 return false end},
+      log = function() end, history = {}, failing = function() return {"(a test) failing"} end,
+      report = function() return "" end, planMenu = function() return {} end,
+      askForHelp = function() asks = asks + 1 end}, M)
+  local function day(d) local st = {day = d, month = math.floor((d - 1) / 30) + 1, hosp = {}} m:rescue(st) m:rescue(st) end
+  day(200)
+  day(360)
+  eq(reviews + asks, 0, "no rescue in the first year")
+  day(361)
+  eq(reviews, 1, "a review in month 13")
+  eq(asks, 1, "and an ask to the allies")
+  day(400)
+  eq(reviews, 1, "not again within 3 months")
+  day(452)
+  eq(reviews, 2, "again after 3 months")
+end
 print("manager judgements ok")
 
 -- Where its money went (said to an ally it gives less than asked, or nothing):

@@ -82,9 +82,11 @@ local GIVE_DAYS, ASK_DAYS, ASK_DAYS_EMERGENCY = 20, 20, 7
 local LACK_DAYS, LACK_EMERGENCY_DAYS = 10, 3
 -- Game days between warnings that an opponent can win (4 months).
 local RIVAL_WARN_DAYS = 120
--- A failing hospital is looked at from this game day (a year in, a quarter of
--- it for the first quarter's start-up), and at most every RESCUE_DAYS (3 months).
-local RESCUE_FROM, RESCUE_DAYS = 150, 90
+-- A failing hospital is looked at from the second game year (Jan, 2026-11-08:
+-- the thresholds stay, "with the exception of year 1": no review by the
+-- advisor and no ask to the allies before month 13 of the game), and at most
+-- every RESCUE_DAYS (3 months).
+local RESCUE_FROM_MONTH, RESCUE_DAYS = 13, 90
 -- Waiting areas (Jan, 2026-11-03): by each room's door and the reception
 -- benches for the queue, a plant and a radiator, and a drinks machine by
 -- every third, within WAITING_R tiles. Not by rooms nobody queues for.
@@ -2723,7 +2725,9 @@ end
 --! most every RESCUE_DAYS, the model reviews it (a "rescue" question to the
 --! server, its answer a plan like the weekly one that stays in force for a
 --! month) and the allies are asked for help (M:askForHelp), after the answer
---! or a minute without one.
+--! or a minute without one. Never in the first game year (RESCUE_FROM_MONTH;
+--! the check still runs, so the reputation it remembers is there in month
+--! 13). (Tests: MP_BOT_TEST_FAIL=<day> from that game day instead.)
 function M:rescue(s)
   local bot = self.bot
   if s.hosp.mp_place then
@@ -2739,8 +2743,10 @@ function M:rescue(s)
     return
   end
   local reasons = self:failing(s)
-  local first = tonumber(os.getenv("MP_BOT_TEST_FAIL") or "") or RESCUE_FROM
-  if #reasons == 0 or s.day < math.max(first, self.rescue_next or 0) then return end
+  local test_from = tonumber(os.getenv("MP_BOT_TEST_FAIL") or "")
+  local too_early
+  if test_from then too_early = s.day < test_from else too_early = (s.month or 0) < RESCUE_FROM_MONTH end
+  if #reasons == 0 or too_early or s.day < (self.rescue_next or 0) then return end
   self.rescue_next = s.day + RESCUE_DAYS
   self:note(string.format("day %d: failing its objectives: %s", s.day, table.concat(reasons, "; ")))
   wait = {at = bot:now(), reasons = reasons}
