@@ -797,9 +797,17 @@ fail |= not ok33
 closed35 = {n: re.findall(r'UI: closed the annual report at step (\d+) \(game hours (\d+)\)', log(n))
             for n in ('wes', 'xan')}
 box35 = re.findall(r'UI: hold box at step (\d+) \(game hours (\d+)\): (.*)', log('xan'))
-gone35 = re.findall(r'UI: hold box gone at step (\d+) \(game hours (\d+)\)', log('xan'))
+gone35 = re.findall(r'UI: hold box gone at step (\d+) \(game hours (\d+)\)(?: \| (.*))?', log('xan'))
+# (The box says when the game goes on by itself, three minutes at most, and
+# counts down: "The game goes on in 2:58 at the latest.")
+def clock35(text):
+    m = re.search(r'(\d+):(\d\d)', text or '')
+    return int(m.group(1)) * 60 + int(m.group(2)) if m else None
+start35 = clock35(box35[0][2].split(' | ')[-1]) if box35 else None
+end35 = clock35(gone35[0][2]) if gone35 else None
 ok35 = (len(closed35['wes']) == 1 and len(closed35['xan']) == 1 and len(box35) == 1 and len(gone35) == 1
         and 'WES' in box35[0][2]
+        and start35 is not None and end35 is not None and 150 <= start35 <= 180 and end35 < start35
         and int(closed35['wes'][0][0]) - int(closed35['xan'][0][0]) >= 70
         and int(gone35[0][1]) - int(box35[0][1]) <= 1  # (no game hours while it waited)
         and result('wes').startswith('IN SYNC') and result('xan').startswith('IN SYNC'))

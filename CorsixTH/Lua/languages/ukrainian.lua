@@ -3690,6 +3690,7 @@ multiplayer_window.goals_reached_team = "Ваша лікарня досягла 
 multiplayer_window.goals_recovered = "%s знову виконує цілі цього рівня."
 multiplayer_window.helpers_off = "Союзні боти будують: ні"
 multiplayer_window.helpers_on = "Союзні боти будують: так"
+multiplayer_window.hold_left = "Гра продовжиться не пізніше ніж через %d:%02d."
 multiplayer_window.hold_win = "Чекаємо, поки %s відповість на факс..."
 multiplayer_window.hold_year = "Чекаємо, поки %s закриє річний звіт..."
 multiplayer_window.is_ready = "готовий"

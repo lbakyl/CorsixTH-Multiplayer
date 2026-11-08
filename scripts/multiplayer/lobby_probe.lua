@@ -217,7 +217,7 @@ local function seats_text(lobby)
 end
 
 local shots_taken = {}
-local report_seen, hold_box_logged -- (the annual report; the box while the game waits)
+local report_seen, hold_box_logged, hold_time_shown -- (the annual report; the box while the game waits, its time line)
 local filming -- see the "film" action
 local held_room -- see the "holdroom" action
 local moved_from -- where the last object moved by "moveobject" stood
@@ -894,14 +894,19 @@ local function run()
       end
     end
     local hold_box = TheApp.ui:getWindow(rawget(_G, "UIMultiplayerHoldWait"))
+    -- (And the time until the game goes on by itself: when the box opens
+    -- and as it was last shown before it went.)
+    local hold_time = hold_box and hold_box.time_panel and plain_text(hold_box.time_panel.label or "")
     if hold_box and not hold_box_logged then
       hold_box_logged = true
-      log(string.format("UI: hold box at step %d (game hours %d): %s", session.step, world.mp_hours or 0,
-          (tostring(hold_box.text_panel.label or ""):gsub("^<LocalisedString> Current value:%s*", ""))))
+      log(string.format("UI: hold box at step %d (game hours %d): %s | %s", session.step, world.mp_hours or 0,
+          plain_text(hold_box.text_panel.label or ""), hold_time or "-"))
     elseif not hold_box and hold_box_logged then
       hold_box_logged = false
-      log(string.format("UI: hold box gone at step %d (game hours %d)", session.step, world.mp_hours or 0))
+      log(string.format("UI: hold box gone at step %d (game hours %d) | %s", session.step, world.mp_hours or 0,
+          hold_time_shown or "-"))
     end
+    hold_time_shown = hold_time
     for i = #presses, 1, -1 do
       local press = presses[i]
       -- An unpause only counts down once the shared pause has arrived.

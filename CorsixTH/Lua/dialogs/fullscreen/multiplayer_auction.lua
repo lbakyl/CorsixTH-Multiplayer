@@ -471,16 +471,26 @@ class "UIMultiplayerHoldWait" (UIResizable)
 local UIMultiplayerHoldWait = _G["UIMultiplayerHoldWait"] ---@type UIMultiplayerHoldWait
 
 function UIMultiplayerHoldWait:UIMultiplayerHoldWait(ui)
-  -- (Two lines: with several names the text ran out of the box.)
-  self:UIResizable(ui, 400, 84, wait_col.bg)
+  -- (Two lines: with several names the text ran out of the box. Below them
+  -- the time until the game goes on by itself, so nobody wonders how long
+  -- it may take, Jan and Lewry.)
+  self:UIResizable(ui, 400, 108, wait_col.bg)
   self.esc_closes = false
   self.resizable = false
   self.on_top = true
   self:setDefaultPosition(0.5, 0.35)
-  self.text_panel = self:addBevelPanel(20, 14, 360, 56, wait_col.text)
+  self.text_panel = self:addBevelPanel(20, 12, 360, 56, wait_col.text)
   self.text_panel.lowered = true
   self.text_panel.wrap_text = true
+  self.time_panel = self:addBevelPanel(20, 74, 360, 22, wait_col.text)
+  self.time_panel.lowered = true
   self:onTick()
+end
+
+--! "2:41": minutes and seconds.
+function UIMultiplayerHoldWait.clock(seconds)
+  seconds = math.max(0, math.floor(seconds))
+  return math.floor(seconds / 60), seconds % 60
 end
 
 function UIMultiplayerHoldWait:onTick()
@@ -497,6 +507,8 @@ function UIMultiplayerHoldWait:onTick()
     local S = _S.multiplayer_window
     local text = hold.kind == "year" and S.hold_year or S.hold_win
     self.text_panel:setLabel(text:format(table.concat(names, ", ")))
+    local left = MultiplayerSession.holdSecondsLeft(hold)
+    self.time_panel:setLabel(S.hold_left:format(UIMultiplayerHoldWait.clock(left)))
   end
   return UIResizable.onTick(self)
 end

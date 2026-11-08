@@ -4007,6 +4007,14 @@ function MultiplayerSession.startHold(world, kind, msg_id, only)
   return world.mp_hold
 end
 
+--! Seconds until the hold ends by itself (HOLD_SECONDS), counted from the
+--! shared step count, so the same on every screen. (A world tick is 18 ms;
+--! the time stands still while the game waits for a slow connection.)
+function MultiplayerSession.holdSecondsLeft(hold)
+  if not (hold and hold.limit and hold.frames) then return 0 end
+  return math.max(0, math.ceil((hold.limit - hold.frames) * 18 / 1000))
+end
+
 --! This player closed their annual report: {hold}.
 function handlers.hold_done(world, cmd)
   local hold, hospital = world.mp_hold, hospital_of(world, cmd)

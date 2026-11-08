@@ -1119,6 +1119,7 @@ multiplayer_window.goals_reached_team = "Il tuo ospedale ha raggiunto gli obiett
 multiplayer_window.goals_recovered = "%s non fallisce più gli obiettivi di questo livello."
 multiplayer_window.helpers_off = "I bot alleati costruiscono: no"
 multiplayer_window.helpers_on = "I bot alleati costruiscono: sì"
+multiplayer_window.hold_left = "Il gioco riprende al massimo tra %d:%02d."
 multiplayer_window.hold_win = "In attesa che %s risponda al fax..."
 multiplayer_window.hold_year = "In attesa che %s chiuda il rapporto annuale..."
 multiplayer_window.is_ready = "pronto"

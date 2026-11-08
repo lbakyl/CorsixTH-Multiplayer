@@ -238,6 +238,19 @@ describe("MultiplayerSession notices", function()
     assert.equal("Waiting for the other player...", MultiplayerSession.waitingText({}, 2))
   end)
 
+  it("counts down the year end wait from three minutes", function()
+    assert.equal(180, MultiplayerSession.HOLD_SECONDS.year)
+    local hold = {limit = math.ceil(180 * 1000 / 18), frames = 0}
+    assert.equal(180, MultiplayerSession.holdSecondsLeft(hold))
+    hold.frames = 1000 -- world ticks of 18 ms: 18 s later
+    assert.equal(162, MultiplayerSession.holdSecondsLeft(hold))
+    hold.frames = 1001 -- (a part of a second still shows as a whole one)
+    assert.equal(162, MultiplayerSession.holdSecondsLeft(hold))
+    hold.frames = hold.limit + 5
+    assert.equal(0, MultiplayerSession.holdSecondsLeft(hold))
+    assert.equal(0, MultiplayerSession.holdSecondsLeft(nil))
+  end)
+
   it("tells the player about a desync", function()
     local now = {0}
     local a, notes, inbox = pair_with_clock(now)
