@@ -609,3 +609,26 @@ describe("Evil handyman hints", function()
     assert(ok, err)
   end)
 end)
+
+describe("The win video's letter", function()
+  it("is the win fax's words, after a greeting", function()
+    local old_S = _G._S
+    _G._S = {letter = {dear_player = "Dear %s"}}
+    local ok, err = pcall(function()
+      local jan = {name = "JAN"}
+      local fax = {{text = "Congratulations!"}, {text = "First!"}, {text = "Lobby, or watch?"},
+          choices = {{text = "Back to the lobby"}}}
+      -- A race won: the fax comes after the video, its question in the letter.
+      assert.same({"Dear JAN", "Congratulations!", "First!", "Lobby, or watch?"},
+          MultiplayerSession.winLetter(fax, jan))
+      -- Answered "Back to the lobby": without the question.
+      assert.same({"Dear JAN", "Congratulations!", "First!"}, MultiplayerSession.winLetter(fax, jan, true))
+      -- A fax with its own greeting (a shared hospital won) keeps it.
+      local shared = {{text = "Dear JAN + ARGUS", greeting = true}, {text = "Well done!"}, {text = "No next level."}}
+      assert.same({"Dear JAN + ARGUS", "Well done!"}, MultiplayerSession.winLetter(shared, jan, true))
+      assert.is_nil(MultiplayerSession.winLetter(nil, jan))
+    end)
+    _G._S = old_S
+    assert(ok, err)
+  end)
+end)

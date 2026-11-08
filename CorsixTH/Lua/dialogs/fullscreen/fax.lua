@@ -299,9 +299,11 @@ function UIFax:choice(choice_number)
   elseif choice == "return_to_main_menu" then
     if TheApp.mp_session then
       -- Multiplayer: the game ends for everybody, back to the lobby.
+      -- (The fax's words, without its question, on the win video's letter.)
       local world = self.ui.app.world
-      TheApp.mp_session:finish({_S.multiplayer_window.level_won_end},
-          world:mpEndMovie(world:getUIHospital()))
+      local own = world:getUIHospital()
+      TheApp.mp_session:finish({_S.multiplayer_window.level_won_end}, world:mpEndMovie(own),
+          MultiplayerSession.winLetter(self.message, own, true))
     else
       self.ui.app.moviePlayer:playWinMovie()
       self.ui.app:loadMainMenu()

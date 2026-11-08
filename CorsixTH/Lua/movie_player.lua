@@ -154,6 +154,53 @@ local loseMovieOverlay = function(me, lose_movie_index)
   end
 end
 
+--! The words of the letter at the end of the level won movie (WINLEVEL), as
+--! the original game wrote them there: on the paper below its letter head, in
+--! the letter's ink (Font115V in the movie's own palette, winlevel.pl8), each
+--! paragraph on new lines, smaller when they would not fit (down to half).
+--!param paragraphs (table) the letter's paragraphs (strings or _S strings)
+--!return (function) the overlay for MoviePlayer:refresh, or nil without the
+--! font
+local winLetterOverlay = function(me, paragraphs)
+  local gfx = me.app.gfx
+  local ok, font = pcall(function()
+    local palette = gfx:getPalette("winlevel.pl8")
+    return gfx:loadFontAndSpriteTable("QData", "Font115V", false, palette)
+  end)
+  if not ok or not font then return nil end
+
+  -- The movie is 320x240, drawn at 640x480 like the lose movies' headlines.
+  -- The paper there, once it has settled (about 0.25 s before the end), runs
+  -- from x = 161 to 466 and y = 25 to 470; the letter head ends at y = 88.
+  local left, top, width, bottom = 186, 104, 256, 448
+  local gap = 10 -- between paragraphs
+  local start_pts = me.movie_length - 250
+
+  local function height(fit)
+    local y = 0
+    for i, text in ipairs(paragraphs) do
+      if i > 1 then y = y + gap end
+      y = font:drawWrapped(nil, text, 0, y, math.floor(width / fit))
+    end
+    return y * fit
+  end
+  local fit = 1
+  while fit > 0.5 and height(fit) > bottom - top do fit = fit - 0.05 end
+
+  return function(player, x, y, _, _, scale, pts)
+    if pts < start_pts then return end
+    local s = scale * 0.5 * fit
+    player.video:scale(s)
+    local tx = math.floor(x / s + left / fit)
+    local ty = math.floor(y / s + top / fit)
+    for i, text in ipairs(paragraphs) do
+      if i > 1 then ty = ty + gap end
+      ty = font:drawWrapped(player.video, text, tx, ty, math.floor(width / fit))
+    end
+    player.video:scale(1)
+  end
+end
+
 function MoviePlayer:MoviePlayer(app, audio, video)
   self.app = app
   self.audio = audio
@@ -247,8 +294,13 @@ end
 --! Play the movie for winning the level
 --!param callback (function) [optional] What to do after the movie ends (or
 --! at once without it)
-function MoviePlayer:playWinLevelMovie(callback)
+--!param letter (table) [optional] paragraphs to write on the letter it ends
+--! with (otherwise the letter stays blank)
+function MoviePlayer:playWinLevelMovie(callback, letter)
   self:playMovie(self.win_level_movie, true, callback)
+  if self.playing and letter and #letter > 0 then
+    self.refresh_overlay = winLetterOverlay(self, letter)
+  end
 end
 
 --! Plays the level advance movie, which is going to the next level on the game board

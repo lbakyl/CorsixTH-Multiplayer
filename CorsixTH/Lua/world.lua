@@ -2344,7 +2344,7 @@ function World:winGame(player_no)
     local S = _S.multiplayer_window
     local level_info = not self:isCampaign() and TheApp:readLevelFile(self.map.level_number)
     local message = {
-      {text = _S.letter.dear_player:format(self.hospitals[player_no].name)},
+      {text = _S.letter.dear_player:format(self.hospitals[player_no].name), greeting = true},
       {text = level_info and level_info.end_praise or _S.letter.custom_level_completed},
       {text = S.shared_won},
       choices = {

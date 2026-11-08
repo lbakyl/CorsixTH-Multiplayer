@@ -2479,8 +2479,37 @@ end
 --! main menu with `message` and into the lobby of the same server.
 --!param message (table) lines for the main menu
 --!param movie (string) [optional] "win" or "lose": the video to play first
-function MultiplayerSession:finish(message, movie)
-  self.finish_request = self.finish_request or {message = message, movie = movie}
+--!param letter (table) [optional] the words for the letter the win video
+--! ends with (MultiplayerSession.winLetter)
+function MultiplayerSession:finish(message, movie, letter)
+  self.finish_request = self.finish_request or {message = message, movie = movie, letter = letter}
+end
+
+--! The words for the letter the win video ends with (Jan: it stayed blank):
+--! "Dear <hospital>" (unless the fax `message` starts with it: a line marked
+--! `greeting`) and the paragraphs of the win fax, without its last one when
+--! it has been `answered` (the question its buttons answer).
+--!return (table) the paragraphs, or nil
+function MultiplayerSession.winLetter(message, hospital, answered)
+  if type(message) ~= "table" then return nil end
+  local letter = {}
+  if hospital and not (message[1] and message[1].greeting) then
+    letter[1] = _S.letter.dear_player:format(hospital.name)
+  end
+  for i = 1, #message - (answered and 1 or 0) do
+    if message[i].text then letter[#letter + 1] = message[i].text end
+  end
+  return letter
+end
+
+--! The message (its table of lines) of fax number `mp_id`, shown or queued.
+local function fax_message(panel, mp_id)
+  if not (panel and mp_id) then return nil end
+  for _, info in ipairs(panel.message_queue or {}) do
+    if info.mp_id == mp_id then return info.message end
+  end
+  local icon = panel.findMessageIcon and panel:findMessageIcon(mp_id)
+  return icon and icon.message
 end
 
 function MultiplayerSession:finishGame()
@@ -2504,7 +2533,7 @@ function MultiplayerSession:finishGame()
   -- (a server hangs up on a connection that says nothing for 15 seconds).
   local movies = back_to_lobby and app.moviePlayer
   if movies and request.movie == "win" then
-    movies:playWinLevelMovie(reconnect)
+    movies:playWinLevelMovie(reconnect, request.letter)
   elseif movies and request.movie == "lose" then
     movies:playLoseMovie(reconnect)
   else
@@ -2527,7 +2556,10 @@ function MultiplayerSession:checkPendingMovie(app)
   end
   if movie == "win" and app.moviePlayer then
     self.win_movie_shown = true
-    app.moviePlayer:playWinLevelMovie(open_fax)
+    -- The fax's words on the letter the video ends with.
+    local ui = app.ui
+    local letter = ui and MultiplayerSession.winLetter(fax_message(ui.bottom_panel, fax), ui.hospital)
+    app.moviePlayer:playWinLevelMovie(open_fax, letter)
   else
     open_fax()
   end
