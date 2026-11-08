@@ -692,6 +692,16 @@ local function run()
   -- A scripted player agrees to every speed vote (MP_VOTE=no declines,
   -- MP_VOTE=ask shows the fax, answered by the votefax action).
   local vote_mode = os.getenv("MP_VOTE") or "yes"
+  -- A new speed asks the player first (MultiplayerSession:_confirmVote): a
+  -- scripted player says yes in the box, as a person would.
+  local function choose_speed(speed)
+    world:setUserSpeed(speed)
+    local box = TheApp.ui and TheApp.ui:getWindow(UIConfirmDialog)
+    if box and box.mp_speed_vote then
+      log("UI: confirmed the speed vote for " .. tostring(speed) .. " at step " .. session.step)
+      box:ok()
+    end
+  end
   session.auto_agree = vote_mode ~= "ask" and vote_mode or nil
   if desk_x then look_at(desk_x, desk_y) end
   shot("game-start")
@@ -799,7 +809,7 @@ local function run()
     if waiting_rejoin and (session.restarts or 0) > waiting_rejoin and not session.held then
       waiting_rejoin = nil
       log("UI: a player rejoined; unpausing at step " .. session.step)
-      world:setUserSpeed("Max speed")
+      choose_speed("Max speed")
     end
     if furnishing and builder.furnish_tick(world, furnishing, log) then furnishing = nil end
     local editor = hover and world.ui.edit_room
@@ -1433,7 +1443,7 @@ local function run()
           presses[#presses + 1] = {wait = tonumber(entry.arg) or 0, paused = a == "unpause"}
         elseif a == "speed" then
           log("UI: chose speed " .. entry.arg .. " at step " .. session.step)
-          world:setUserSpeed(entry.arg)
+          choose_speed(entry.arg)
         elseif a == "speedother" then
           -- The slowest speed the room allows that is not the current one
           -- (the room's top speed depends on the connection).
@@ -1445,7 +1455,7 @@ local function run()
             end
           end
           log("UI: chose speed " .. tostring(pick) .. " at step " .. session.step)
-          if pick then world:setUserSpeed(pick) end
+          if pick then choose_speed(pick) end
         elseif a == "votefax" then
           -- Answer the speed vote fax with choice <arg> (1 agree, 2 decline),
           -- clicked in the fax window; wait for it if it is not there yet.
