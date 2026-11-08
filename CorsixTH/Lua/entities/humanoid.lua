@@ -514,7 +514,9 @@ function Humanoid:setMood(mood_name, activate)
   local hide_epidemic = world and world.mp_coop and self.hospital and
       not world:isUIHospital(self.hospital)
   -- TODO: Make equal priorities cycle, or make all moods unique
-  for name, value in pairs(self.active_moods) do
+  for name, mood in pairs(self.active_moods) do
+    -- (A local: the loop's own variables stay as pairs gave them.)
+    local value = mood
     if hide_epidemic and name:sub(1, 7) == "epidemy" then
       value = nil -- (not shown on this computer)
     end
