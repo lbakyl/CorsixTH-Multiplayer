@@ -481,16 +481,16 @@ function UIMultiplayerHoldWait:UIMultiplayerHoldWait(ui)
   self:setDefaultPosition(0.5, 0.35)
   self.text_panel = self:addBevelPanel(20, 12, 360, 56, wait_col.text)
   self.text_panel.lowered = true
-  self.text_panel.wrap_text = true
   self.time_panel = self:addBevelPanel(20, 74, 360, 22, wait_col.text)
   self.time_panel.lowered = true
   self:onTick()
 end
 
---! "2:41": minutes and seconds.
+--! "2:41": minutes and seconds. (Made here: the game's own string format
+--! knows %s and %d, not %02d.)
 function UIMultiplayerHoldWait.clock(seconds)
   seconds = math.max(0, math.floor(seconds))
-  return math.floor(seconds / 60), seconds % 60
+  return string.format("%d:%02d", math.floor(seconds / 60), seconds % 60)
 end
 
 function UIMultiplayerHoldWait:onTick()
@@ -506,7 +506,13 @@ function UIMultiplayerHoldWait:onTick()
     end
     local S = _S.multiplayer_window
     local text = hold.kind == "year" and S.hold_year or S.hold_win
-    self.text_panel:setLabel(text:format(table.concat(names, ", ")))
+    local panel = self.text_panel
+    panel:setLabel(text:format(table.concat(names, ", ")), nil, "center")
+    -- One line: drawn in the middle of the panel; longer (several names)
+    -- wrapped from the top (Font:drawWrapped does not centre vertically).
+    local s = TheApp.gfx:getUIScale()
+    local _, _, rows = panel.label_font:sizeOf(panel.label, (panel.w - 4) * s)
+    panel.wrap_text = (rows or 1) > 1
     local left = MultiplayerSession.holdSecondsLeft(hold)
     self.time_panel:setLabel(S.hold_left:format(UIMultiplayerHoldWait.clock(left)))
   end

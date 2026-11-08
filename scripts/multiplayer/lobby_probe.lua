@@ -901,6 +901,7 @@ local function run()
       hold_box_logged = true
       log(string.format("UI: hold box at step %d (game hours %d): %s | %s", session.step, world.mp_hours or 0,
           plain_text(hold_box.text_panel.label or ""), hold_time or "-"))
+      shot("hold-box")
     elseif not hold_box and hold_box_logged then
       hold_box_logged = false
       log(string.format("UI: hold box gone at step %d (game hours %d) | %s", session.step, world.mp_hours or 0,
