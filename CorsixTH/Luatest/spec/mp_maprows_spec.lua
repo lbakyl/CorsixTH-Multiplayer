@@ -46,11 +46,14 @@ describe("Multiplayer desync map rows", function()
   end
 
   it("gives one checksum per row, and only the changed row differs", function()
-    package.loaded.TH = package.loaded.TH or {CRC32File = function(text)
+    -- (Another spec may have loaded the test TH already, which has no CRC.)
+    local TH = package.loaded.TH or {}
+    package.loaded.TH = TH
+    TH.CRC32File = TH.CRC32File or function(text)
       local h = 0
       for i = 1, #text do h = (h * 31 + text:byte(i)) % 4294967296 end
       return h
-    end}
+    end
     local a = MultiplayerSession.mapRows(fake_world(cells()))
     local changed = cells()
     changed[2][1].buildable = true

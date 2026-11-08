@@ -506,13 +506,23 @@ function Humanoid:setMood(mood_name, activate)
     end
   end
   local new_mood = nil
+  -- Multiplayer with a hospital each: the epidemic icons of another
+  -- hospital's patients are that hospital's business (Argus: they showed over
+  -- rivals' patients). Only the picture differs per computer; the moods
+  -- themselves (active_moods) are the same everywhere.
+  local world = self.world
+  local hide_epidemic = world and world.mp_coop and self.hospital and
+      not world:isUIHospital(self.hospital)
   -- TODO: Make equal priorities cycle, or make all moods unique
-  for _, value in pairs(self.active_moods) do
-    if new_mood then -- There is a mood, check priorities.
+  for name, value in pairs(self.active_moods) do
+    if hide_epidemic and name:sub(1, 7) == "epidemy" then
+      value = nil -- (not shown on this computer)
+    end
+    if value and new_mood then -- There is a mood, check priorities.
       if new_mood.priority < value.priority then
         new_mood = value
       end
-    else
+    elseif value then
       if not value.on_hover then
         new_mood = value
       end

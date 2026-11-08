@@ -141,6 +141,12 @@ function Epidemic:infectOtherPatients()
     local opx, opy = victim.tile_x, victim.tile_y
     if opx and opy and not self.hospital:isInHospital(opx, opy) then return false end
 
+    -- Multiplayer: only this hospital's own patients. Another hospital's
+    -- patient walking through (a shared town's corridors) caught the
+    -- epidemic and was then counted, faxed and timed here; it could never
+    -- end (Argus, eu2 2026-11-07). In one hospital games every patient is
+    -- the hospital's, so nothing changes there.
+    if victim.hospital ~= self.hospital then return false end
     -- 'victim' is already infected or is going home.
     if victim.infected or victim.cured or victim.vaccinated then return false end
     -- Don't infect victim if it is already under another attempt to be infected
@@ -297,7 +303,16 @@ otherwise a player may never win the epidemic in such a case.]]
 function Epidemic:checkPatientsForRemoval()
   for i = #self.infected_patients, 1, -1 do
     local infected_patient = self.infected_patients[i]
-    if (not self.coverup_selected and (infected_patient.going_home or infected_patient.going_to_die)) or
+    if infected_patient.hospital ~= self.hospital then
+      -- Multiplayer: another hospital's patient, infected here before only
+      -- own patients could be (a game saved then): not this epidemic's.
+      table.remove(self.infected_patients, i)
+      infected_patient.infected = false
+      infected_patient.marked_for_vaccination = false
+      infected_patient.vaccination_candidate = false
+      infected_patient:removeAnyEpidemicStatus()
+      infected_patient:updateDynamicInfo()
+    elseif (not self.coverup_selected and (infected_patient.going_home or infected_patient.going_to_die)) or
         infected_patient.dead or infected_patient.tile_x == nil then
       table.remove(self.infected_patients,i)
     end

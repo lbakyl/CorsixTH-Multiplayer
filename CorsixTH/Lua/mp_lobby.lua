@@ -1193,6 +1193,14 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
     -- (and this player's messages and countdowns, not the referee's)
     if app.ui.bottom_panel then app.ui.bottom_panel:showOwnMessages() end
     MultiplayerLobby.showOwnWatches(world, app.ui)
+    -- Epidemic icons show over this player's own patients only
+    -- (Humanoid:setMood); the save has the referee's picture.
+    for _, entity in ipairs(world.entities) do
+      local moods = class.is(entity, Humanoid) and entity.active_moods
+      if moods and (moods.epidemy1 or moods.epidemy2 or moods.epidemy3 or moods.epidemy4) then
+        entity:setMood()
+      end
+    end
     -- Co-op: a hospital nobody plays in this game (a saved game continued by
     -- fewer players, or a player who left) does not count for the team's
     -- goals (World:checkIfGameWon). Every peer loads the save at the same
