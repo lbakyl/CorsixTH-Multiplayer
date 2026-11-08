@@ -666,7 +666,6 @@ MultiplayerSession.rejection_texts = {
                 ["plot not empty"] = "You can only hand over this plot when it is emptied of any items.",
                 ["people on the plot"] = "You can only hand over this plot when nobody is on it. Try again in a moment.",
                 ["joins your land"] = "You cannot hand over this plot: the rest of your land is joined to your hospital through it.",
-                ["does not touch their land"] = "That plot does not touch the other player's land.",
                 ["already offered"] = "That plot has already been offered.",
                 ["an auction is on"] = "Wait until the auction is over.",
                 ["invalid price"] = "That price is not allowed."},
@@ -3845,23 +3844,20 @@ end
 -- (an offer left alone lapses after OFFER_DAYS: declined). Both games check
 -- it again when it is answered: the plot must still be the giver's, empty,
 -- and the receiver must be able to pay (a bot takes a loan for it). The plot
--- must touch land the receiver owns, so that it is not cut off from their
--- hospital: this is the sides rule for a gift, where "sides" (plotSide) only
--- tell whose plot the bank sells first. The plot keeps its original price:
--- selling it back to the bank pays 80 percent of that, to whoever owns it.
+-- need not touch the receiver's land: a plot anywhere may be bought (also at
+-- an auction), so it may be handed over too (Jan, 2026-11-08; it used to
+-- have to touch). The plot keeps its original price: selling it back to the
+-- bank pays 80 percent of that, to whoever owns it.
 --------------------------------------------------------------------------------
 
 MultiplayerSession.PLOT_MAX_PRICE = 50000
 MultiplayerSession.PLOT_PRICE_STEP = 500
 
---! Why `hospital` may not take `plot` (it touches none of its land), or nil.
+--! Why `hospital` may not take `plot`, or nil. Any plot may be handed over,
+--! as any may be bought (the giver's side is checked by plotRefusal).
 function MultiplayerSession.plotHandoverRefusal(world, hospital, plot)
-  local th = world.map.th
-  local player = hospital:getPlayerIndex()
-  for q in pairs(MultiplayerSession.plotsTouching(world, plot)) do
-    if th:getPlotOwner(q) == player then return nil end
-  end
-  return "does not touch their land"
+  if not (hospital and world.map and plot) then return "no such hospital" end
+  return nil
 end
 
 --! Is a fax offering `plot` still waiting for an answer?

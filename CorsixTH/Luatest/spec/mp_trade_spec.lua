@@ -329,7 +329,7 @@ describe("Handing a plot to an ally", function()
     return world, hospitals, owner, queued
   end
 
-  it("offers an empty plot that touches the ally's land, once", function()
+  it("offers an empty plot, once, whether or not it touches the ally's land", function()
     with_texts(function()
       local world, hospitals, owner, queued = make()
       hospitals[1].ownedPlots = {1, 3, 4}
@@ -342,10 +342,11 @@ describe("Handing a plot to an ally", function()
       local ok, why = handlers.offer_plot(world, {hospital = 1, to = 2, plot = 4, price = 0})
       assert.is_false(ok)
       assert.equal("already offered", why)
-      -- A plot that does not touch the ally's land.
-      ok, why = handlers.offer_plot(world, {hospital = 1, to = 2, plot = 3, price = 0})
-      assert.is_false(ok)
-      assert.equal("does not touch their land", why)
+      -- A plot that does not touch the ally's land may be handed over too
+      -- (it could have been bought, or won at an auction, as well).
+      assert.is_true(handlers.offer_plot(world, {hospital = 1, to = 2, plot = 3, price = 0}))
+      assert.equal(2, #queued)
+      assert.equal(3, queued[2].message.mp_offer.plot)
     end)
   end)
 
