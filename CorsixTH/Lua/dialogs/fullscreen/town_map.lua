@@ -241,6 +241,10 @@ function UITownMap:onMouseUp(button, x, y)
   local s = TheApp.gfx:getUIScale()
   local plot_button = button == "left" and self:buttonAt(x, y)
   if plot_button then
+    -- Where the town map is a window (a screen larger than the map, a Mac's),
+    -- the press on the button began a drag of the window; it ends here, or
+    -- the map went on following the mouse (Jan, eu2 2026-11-08).
+    UIFullscreen.onMouseUp(self, button, x, y)
     if plot_button.kind == "sell" then
       self:askToSell(plot_button.plot)
     else
