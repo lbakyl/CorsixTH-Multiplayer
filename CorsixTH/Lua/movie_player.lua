@@ -96,6 +96,7 @@ local destroyMovie = function(me)
     me.sound = nil
   end
   me.refresh_overlay = nil
+  me.letter = nil
   me.playing = false
   me.movie_over = false
   if me.callback_on_destroy_movie then
@@ -154,26 +155,41 @@ local loseMovieOverlay = function(me, lose_movie_index)
   end
 end
 
---! The words of the letter at the end of the level won movie (WINLEVEL), as
---! the original game wrote them there: on the paper below its letter head, in
---! the letter's ink (Font115V in the movie's own palette, winlevel.pl8), each
---! paragraph on new lines, smaller when they would not fit (down to half).
+-- The letter's cross and tick (LETTR02V in the movie's palette: 1 tick,
+-- 2 tick lit, 3 cross, 4 cross lit; 41x40), where the original game has them
+-- on the paper (at 640x480). The tick takes the first choice, the cross the
+-- second.
+local LETTER_BUTTONS = {
+  {sprite = 3, lit = 4, x = 340, y = 401, choice = 2},
+  {sprite = 1, lit = 2, x = 390, y = 401, choice = 1},
+}
+local LETTER_BUTTON_W, LETTER_BUTTON_H = 41, 40
+
+--! The letter at the end of the level won movie (WINLEVEL), written as the
+--! original game writes it there: the paragraphs on the paper below its
+--! letter head, typewritten (Font35V in the movie's own palette, winlevel.pl8),
+--! a blank line between them, smaller when they would not fit (down to half);
+--! with `choose`, the cross and tick to answer it (MoviePlayer:letterClick).
 --!param paragraphs (table) the letter's paragraphs (strings or _S strings)
+--!param choose (function) [optional] called with the choice (1 tick, 2 cross)
 --!return (function) the overlay for MoviePlayer:refresh, or nil without the
 --! font
-local winLetterOverlay = function(me, paragraphs)
+local winLetterOverlay = function(me, paragraphs, choose)
   local gfx = me.app.gfx
-  local ok, font = pcall(function()
+  local ok, font, buttons = pcall(function()
     local palette = gfx:getPalette("winlevel.pl8")
-    return gfx:loadFontAndSpriteTable("QData", "Font115V", false, palette)
+    local text_font = gfx:loadFontAndSpriteTable("QData", "Font35V", false, palette)
+    return text_font, choose and gfx:loadSpriteTable("QData", "Lettr02V", true, palette)
   end)
   if not ok or not font then return nil end
 
   -- The movie is 320x240, drawn at 640x480 like the lose movies' headlines.
   -- The paper there, once it has settled (about 0.25 s before the end), runs
   -- from x = 161 to 466 and y = 25 to 470; the letter head ends at y = 88.
-  local left, top, width, bottom = 186, 104, 256, 448
-  local gap = 10 -- between paragraphs
+  -- The original's text starts at x = 187, y = 158, its lines 258 wide.
+  local left, top, width = 187, 158, 258
+  local bottom = buttons and 396 or 452
+  local gap = 13 -- a blank line between paragraphs
   local start_pts = me.movie_length - 250
 
   local function height(fit)
@@ -187,15 +203,28 @@ local winLetterOverlay = function(me, paragraphs)
   local fit = 1
   while fit > 0.5 and height(fit) > bottom - top do fit = fit - 0.05 end
 
+  local letter = {shown = false, choose = choose}
+  if buttons then me.letter = letter end
+
   return function(player, x, y, _, _, scale, pts)
     if pts < start_pts then return end
-    local s = scale * 0.5 * fit
+    local vs = scale * 0.5
+    letter.shown, letter.x, letter.y, letter.vs = true, x, y, vs
+    local s = vs * fit
     player.video:scale(s)
     local tx = math.floor(x / s + left / fit)
     local ty = math.floor(y / s + top / fit)
     for i, text in ipairs(paragraphs) do
       if i > 1 then ty = ty + gap end
       ty = font:drawWrapped(player.video, text, tx, ty, math.floor(width / fit))
+    end
+    if buttons then
+      player.video:scale(vs)
+      local hover = player:letterButtonAt(player.mouse_x, player.mouse_y)
+      for _, button in ipairs(LETTER_BUTTONS) do
+        buttons:draw(player.video, hover == button and button.lit or button.sprite,
+            math.floor(x / vs) + button.x, math.floor(y / vs) + button.y)
+      end
     end
     player.video:scale(1)
   end
@@ -296,11 +325,50 @@ end
 --! at once without it)
 --!param letter (table) [optional] paragraphs to write on the letter it ends
 --! with (otherwise the letter stays blank)
-function MoviePlayer:playWinLevelMovie(callback, letter)
+--!param choose (function) [optional] with a letter: its cross and tick to
+--! answer it, called with the choice (1 tick, 2 cross); the movie then ends
+--! (and `callback` follows)
+function MoviePlayer:playWinLevelMovie(callback, letter, choose)
   self:playMovie(self.win_level_movie, true, callback)
   if self.playing and letter and #letter > 0 then
-    self.refresh_overlay = winLetterOverlay(self, letter)
+    self.refresh_overlay = winLetterOverlay(self, letter, choose)
   end
+end
+
+--! The win letter's button (LETTER_BUTTONS) at screen position (mx, my), once
+--! the letter shows, or nil.
+function MoviePlayer:letterButtonAt(mx, my)
+  local letter = self.letter
+  if not (letter and letter.shown and mx and my) then return nil end
+  local lx, ly = (mx - letter.x) / letter.vs, (my - letter.y) / letter.vs
+  for _, button in ipairs(LETTER_BUTTONS) do
+    if lx >= button.x and lx < button.x + LETTER_BUTTON_W and
+        ly >= button.y and ly < button.y + LETTER_BUTTON_H then
+      return button
+    end
+  end
+end
+
+--! The mouse has moved while a movie plays (the win letter's buttons light up).
+function MoviePlayer:mouseMove(x, y)
+  self.mouse_x, self.mouse_y = x, y
+end
+
+--! A left click while a movie plays. A win letter with buttons takes it: a
+--! button answers the letter and ends the movie; a click anywhere else, or
+--! before the letter shows (within 2 seconds), does nothing. (The stop movie
+--! key still ends it without an answer.)
+--!return (boolean) true if the letter took the click (the movie goes on)
+function MoviePlayer:letterClick(x, y)
+  local letter = self.letter
+  if not letter then return false end
+  local button = self:letterButtonAt(x, y)
+  if button then
+    self.letter = nil
+    letter.choose(button.choice)
+    self:stop()
+  end
+  return true
 end
 
 --! Plays the level advance movie, which is going to the next level on the game board

@@ -721,6 +721,9 @@ multiplayer_window = {
     "Your hospital has reached this level's goals: %s place.",
     "The others race on for the next places. Go back to the lobby, or watch?",
   },
+  -- The same on the winning video's letter, answered with its tick (back to
+  -- the lobby) or cross (watch).
+  race_won_question = "The others race on for the next places. Do you want to go back to the lobby?",
   -- The fax for a place in a race, with the winning video (%s: the level's
   -- name, then the place).
   race_won_first = "Your hospital is the first to reach every goal of %s. You have won the race!",

@@ -655,6 +655,7 @@ function GameUI:onMouseMove(x, y, dx, dy)
 
   local repaint = UpdateCursorPosition(self.app.video, x, y)
   if self.app.moviePlayer.playing then
+    self.app.moviePlayer:mouseMove(x, y) -- (the win letter's buttons light up)
     return false
   end
 

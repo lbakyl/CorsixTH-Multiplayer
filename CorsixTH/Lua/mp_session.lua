@@ -2549,17 +2549,32 @@ function MultiplayerSession:checkPendingMovie(app)
   self.pending_movie = nil
   local fax = self.pending_movie_fax
   self.pending_movie_fax = nil
-  -- The fax that goes with it, once the video is over (at once without one).
+  -- The fax that goes with it, once the video is over (at once without one),
+  -- unless it was answered on the video's letter.
+  local answered = false
   local function open_fax()
     local panel = app.ui and app.ui.bottom_panel
-    if fax and panel and panel.openMessageById then panel:openMessageById(fax) end
+    if not answered and fax and panel and panel.openMessageById then panel:openMessageById(fax) end
   end
   if movie == "win" and app.moviePlayer then
     self.win_movie_shown = true
-    -- The fax's words on the letter the video ends with.
+    -- The fax's words on the letter the video ends with, and its cross and
+    -- tick to answer it there, as in the original game (Jan): the question
+    -- becomes a yes or no one, the tick its first choice (back to the
+    -- lobby), the cross the second (watch). The stop movie key skips to the
+    -- fax.
     local ui = app.ui
-    local letter = ui and MultiplayerSession.winLetter(fax_message(ui.bottom_panel, fax), ui.hospital)
-    app.moviePlayer:playWinLevelMovie(open_fax, letter)
+    local message = ui and fax_message(ui.bottom_panel, fax)
+    local letter = ui and MultiplayerSession.winLetter(message, ui.hospital)
+    local choose
+    if letter and type(message.choices) == "table" and #message.choices == 2 then
+      letter[#letter] = _S.multiplayer_window.race_won_question
+      choose = function(choice)
+        answered = true
+        self:issue({kind = "fax_choice", msg = fax, choice = choice})
+      end
+    end
+    app.moviePlayer:playWinLevelMovie(open_fax, letter, choose)
   else
     open_fax()
   end
