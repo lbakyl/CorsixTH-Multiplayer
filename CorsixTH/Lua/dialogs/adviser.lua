@@ -141,7 +141,8 @@ function UIAdviser:talk()
     end
   end
   -- (A message may ask to be talked for longer: `longer` times as long.)
-  self.number_frames = math.floor(45 * (self.queued_messages[best].longer or 1))
+  local longer = self.queued_messages[best].longer
+  self.number_frames = math.floor(45 * (type(longer) == "number" and longer or 1))
   local speech = self.queued_messages[best].speech
   self.stay_up = self.queued_messages[best].stay_up
   table.remove(self.queued_messages, best)
@@ -212,7 +213,8 @@ function UIAdviser:say(speech, talk_until_next_announce, override_current)
       speech = speech.text,
       stay_up = talk_until_next_announce,
       priority = speech.priority,
-      longer = speech.longer
+      -- (rawget: an _A message makes up a table for any field it lacks.)
+      longer = rawget(speech, "longer")
     }
     if self.phase == 0 then
       -- The adviser is not active at all at the moment.
