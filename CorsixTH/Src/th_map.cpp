@@ -438,9 +438,8 @@ bool level_map::load_from_th_file(const uint8_t* pData, size_t iDataLength,
   for (int i = 0; i < player_count; ++i) {
     const bool extra = i >= th_file_player_count;
     const size_t j = (extra ? i - th_file_player_count : i) * 2;
-    read_tile_index(
-        pData + (extra ? extra_camera_offset : camera_offset) + j,
-        initial_camera_x[i], initial_camera_y[i]);
+    read_tile_index(pData + (extra ? extra_camera_offset : camera_offset) + j,
+                    initial_camera_x[i], initial_camera_y[i]);
     read_tile_index(
         pData + (extra ? extra_heliport_offset : heliport_offset) + j,
         heliport_x[i], heliport_y[i]);
