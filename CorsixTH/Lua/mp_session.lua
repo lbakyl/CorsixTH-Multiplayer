@@ -282,7 +282,9 @@ end
 
 --! A speed or pause change by the player. Returns true if it was sent to the
 --! server instead of being applied here (it comes back for everybody).
-function MultiplayerSession:requestSpeed(speed)
+--!param confirmed (boolean) the player said yes to the vote already
+--! (MultiplayerSession:_confirmVote).
+function MultiplayerSession:requestSpeed(speed, confirmed)
   if not self.request_speed then return false end
   if self.observer then return true end
   -- Only the room owner, if the room says so (checked here: the owner can
@@ -315,7 +317,28 @@ function MultiplayerSession:requestSpeed(speed)
     self.notify(_S.multiplayer_window.vote_open)
     return true
   end
+  if not confirmed and self:_confirmVote(speed) then return true end
   self:issue({kind = "speed_vote", speed = speed, voters = voters})
+  return true
+end
+
+--! Asks this player before a speed vote starts: the number keys started
+--! votes at a slip of the finger (Argus, eu2 2026-11-07). True when the box
+--! is up (its OK asks again, confirmed); false without a game screen.
+function MultiplayerSession:_confirmVote(speed)
+  local ui = TheApp and TheApp.ui
+  local UIConfirmDialog = _G["UIConfirmDialog"]
+  if not (ui and ui.addWindow and ui.getWindow and UIConfirmDialog) then return false end
+  -- (Another number key while the box is up: the newest speed is asked.)
+  local open = ui:getWindow(UIConfirmDialog)
+  if open and open.mp_speed_vote then open:close() end
+  local box = UIConfirmDialog(ui, false, _S.multiplayer_window.vote_confirm:format(speed),
+    --[[persistable:mp_speed_vote_confirm]] function()
+      local session = TheApp.mp_session
+      if session then session:requestSpeed(speed, true) end
+    end)
+  box.mp_speed_vote = true
+  ui:addWindow(box)
   return true
 end
 

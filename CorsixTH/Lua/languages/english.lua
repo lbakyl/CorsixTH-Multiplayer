@@ -907,6 +907,7 @@ multiplayer_window = {
   vote_decline = "Decline",
   vote_asked = "You asked the others to change the speed to %s.",
   vote_open = "A speed change is already being voted on.",
+  vote_confirm = "Ask the other players to change the game speed to %s?",
   vote_passed = "The players agreed: the speed is now %s.",
   vote_passed_paused = "The players agreed on %s: the game goes on at that speed when it is unpaused.",
   vote_declined = "%s declined the change of speed to %s.",

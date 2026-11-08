@@ -440,6 +440,31 @@ describe("MultiplayerSession speed votes", function()
     run_all(s, 3)
     assert.equal("Max speed", w[1].mp_speed)
   end)
+
+  it("asks the player before a vote starts on a game screen", function()
+    local s, w = make_group(2)
+    local windows = {}
+    local saved_dialog = _G.UIConfirmDialog
+    finally(function() _G.UIConfirmDialog = saved_dialog end)
+    _G.UIConfirmDialog = function(_, _, text, ok)
+      return {text = text, ok = ok, close = function(box) box.closed = true end}
+    end
+    _G.TheApp = {mp_session = s[1], ui = {
+      addWindow = function(_, window) windows[#windows + 1] = window end,
+      getWindow = function() return windows[#windows] end,
+    }}
+    _G._S.multiplayer_window.vote_confirm = "vote_confirm %s"
+    assert.is_true(s[1]:requestSpeed("Slower"))
+    assert.is_true(s[1]:requestSpeed("Max speed")) -- a second key: the newest speed
+    run_all(s, 3)
+    assert.is_nil(w[2].mp_vote) -- nothing asked yet
+    assert.equal(2, #windows)
+    assert.is_true(windows[1].closed)
+    assert.equal("vote_confirm Max speed", windows[2].text)
+    windows[2].ok()
+    run_all(s, 3)
+    assert.equal("Max speed", w[2].mp_vote.speed)
+  end)
 end)
 
 describe("MultiplayerSession game options", function()
