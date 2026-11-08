@@ -26,11 +26,11 @@ local MoviePlayer = _G["MoviePlayer"]
 describe("The win video's letter buttons", function()
   -- A movie player showing the letter: the movie drawn from (x, y) at `vs`
   -- screen pixels per 640x480 pixel (1920x1080: x = 240, vs = 2.25).
-  local function player(shown)
+  local function player(shown, typed)
     local chosen, stopped = {}, false
     local mp = setmetatable({}, {__index = MoviePlayer})
     mp.stop = function() stopped = true end
-    mp.letter = {shown = shown, x = 240, y = 0, vs = 2.25,
+    mp.letter = {shown = shown, typed = typed ~= false and shown, x = 240, y = 0, vs = 2.25,
         choose = function(choice) chosen[#chosen + 1] = choice end}
     return mp, chosen, function() return stopped end
   end
@@ -62,6 +62,27 @@ describe("The win video's letter buttons", function()
     assert.same({}, early_chosen)
     assert.is_false(stopped())
     assert.is_false(early_stopped())
+  end)
+
+  it("finishes typing with a click, and has its buttons only once typed", function()
+    local mp, chosen, stopped = player(true, false)
+    assert.is_nil(mp:letterButtonAt(at(390, 401)))
+    assert.is_true(mp:letterClick(at(390, 401))) -- on the tick's place: typed
+    assert.is_true(mp.letter.typed)
+    assert.same({}, chosen)
+    assert.is_false(stopped())
+    assert.is_true(mp:letterClick(at(390, 401))) -- now the tick
+    assert.same({1}, chosen)
+  end)
+
+  it("ends a letter without buttons with a click, once typed", function()
+    local mp = player(false)
+    mp.letter.choose = nil
+    assert.is_false(mp:letterClick(100, 100)) -- (before the letter: as any movie)
+    mp.letter.shown = true
+    assert.is_true(mp:letterClick(100, 100)) -- typing: finished
+    assert.is_false(mp:letterClick(100, 100)) -- typed: the movie ends
+    assert.is_nil(mp:letterButtonAt(at(390, 401)))
   end)
 
   it("leaves clicks to the movie without a letter", function()

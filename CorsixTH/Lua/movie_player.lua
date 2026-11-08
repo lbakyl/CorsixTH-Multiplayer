@@ -97,6 +97,8 @@ local destroyMovie = function(me)
   end
   me.refresh_overlay = nil
   me.letter = nil
+  if me.typing_sound then me.audio:stopSound(me.typing_sound) end
+  me.typing_sound = nil
   me.playing = false
   me.movie_over = false
   if me.callback_on_destroy_movie then
@@ -165,16 +167,62 @@ local LETTER_BUTTONS = {
 }
 local LETTER_BUTTON_W, LETTER_BUTTON_H = 41, 40
 
+-- The letter types itself out, as in the original game: characters a
+-- second (Jan: 40 to 50).
+local LETTER_TYPING_CPS = 45
+
+--! The UTF-8 characters of `text`, in a list.
+local function utf8_chars(text)
+  local chars = {}
+  for c in text:gmatch("[^\128-\191][\128-\191]*") do chars[#chars + 1] = c end
+  return chars
+end
+
+--! `text` in lines of at most `width` of `font`'s pixels: broken between
+--! words, and between characters where a word is wider than a line (Chinese
+--! and Japanese have no spaces). Laid out once, so a word being typed does
+--! not jump to the next line when it is complete.
+--!return (table) the lines (strings)
+local function wrap_lines(font, text, width)
+  local lines, line = {}, ""
+  local function fits(t) return (font:sizeOf(t)) <= width end
+  for word in text:gmatch("%S+") do
+    local longer = line == "" and word or line .. " " .. word
+    if fits(longer) then
+      line = longer
+    else
+      if line ~= "" then lines[#lines + 1] = line end
+      line = ""
+      if fits(word) then
+        line = word
+      else
+        for _, c in ipairs(utf8_chars(word)) do
+          if line ~= "" and not fits(line .. c) then
+            lines[#lines + 1] = line
+            line = ""
+          end
+          line = line .. c
+        end
+      end
+    end
+  end
+  if line ~= "" then lines[#lines + 1] = line end
+  return lines
+end
+
 --! The letter at the end of the level won movie (WINLEVEL), written as the
 --! original game writes it there: the paragraphs on the paper below its
---! letter head, typewritten (Font35V in the movie's own palette, winlevel.pl8),
---! a blank line between them, smaller when they would not fit (down to half);
---! with `choose`, the cross and tick to answer it (MoviePlayer:letterClick).
+--! letter head, typed out (Font35V in the movie's own palette, winlevel.pl8,
+--! LETTER_TYPING_CPS characters a second; a click finishes it), a blank line
+--! between them, smaller when they would not fit (down to half); with
+--! `choose`, the cross and tick to answer it once typed
+--! (MoviePlayer:letterClick).
 --!param paragraphs (table) the letter's paragraphs (strings or _S strings)
 --!param choose (function) [optional] called with the choice (1 tick, 2 cross)
 --!return (function) the overlay for MoviePlayer:refresh, or nil without the
 --! font
 local winLetterOverlay = function(me, paragraphs, choose)
+  local SDL = require("sdl") -- (the clock for the typing; here, not at the top: not in the unit tests)
   local gfx = me.app.gfx
   local ok, font, buttons = pcall(function()
     local palette = gfx:getPalette("winlevel.pl8")
@@ -189,22 +237,37 @@ local winLetterOverlay = function(me, paragraphs, choose)
   -- The original's text starts at x = 187, y = 158, its lines 258 wide.
   local left, top, width = 187, 158, 258
   local bottom = buttons and 396 or 452
-  local gap = 13 -- a blank line between paragraphs
   local start_pts = me.movie_length - 250
 
-  local function height(fit)
-    local y = 0
-    for i, text in ipairs(paragraphs) do
-      if i > 1 then y = y + gap end
-      y = font:drawWrapped(nil, text, 0, y, math.floor(width / fit))
+  -- The paragraphs as plain strings (_S strings unwrapped), laid out in rows
+  -- with a blank line between paragraphs.
+  local texts = {}
+  for i, text in ipairs(paragraphs) do
+    texts[i] = type(text) == "string" and text or tostring((TH.stringProxy._unwrap(text)))
+  end
+  local _, line_h = font:sizeOf("Ag")
+  local function layout(fit)
+    local rows, y = {}, 0
+    for i, text in ipairs(texts) do
+      if i > 1 then y = y + line_h end
+      for _, line in ipairs(wrap_lines(font, text, math.floor(width / fit))) do
+        rows[#rows + 1] = {text = line, chars = utf8_chars(line), y = y}
+        y = y + line_h
+      end
     end
-    return y * fit
+    return rows, y * fit
   end
   local fit = 1
-  while fit > 0.5 and height(fit) > bottom - top do fit = fit - 0.05 end
+  local rows, height = layout(fit)
+  while fit > 0.5 and height > bottom - top do
+    fit = fit - 0.05
+    rows, height = layout(fit)
+  end
+  local total = 0
+  for _, row in ipairs(rows) do total = total + #row.chars end
 
-  local letter = {shown = false, choose = choose}
-  if buttons then me.letter = letter end
+  local letter = {shown = false, typed = false, choose = choose}
+  me.letter = letter
 
   return function(player, x, y, _, _, scale, pts)
     if pts < start_pts then return end
@@ -218,19 +281,34 @@ local winLetterOverlay = function(me, paragraphs, choose)
     end
     local vs = scale * 0.5
     local ui = player.app.ui
-    if buttons and not letter.shown and ui and ui.default_cursor then
-      ui:setCursor(ui.default_cursor) -- (the pointer, to click the buttons)
+    local now = SDL.getTicks()
+    if not letter.shown then
+      letter.typing_from = now
+      if buttons and ui and ui.default_cursor then
+        ui:setCursor(ui.default_cursor) -- (the pointer, to click the buttons)
+      end
     end
     letter.shown, letter.x, letter.y, letter.vs = true, x, y, vs
+    -- How much of it is typed by now.
+    local to_draw = total
+    if not letter.typed then
+      to_draw = math.floor((now - letter.typing_from) * LETTER_TYPING_CPS / 1000)
+      if to_draw >= total then letter.typed = true end
+    end
+    player:letterTyping(not letter.typed)
     local s = vs * fit
     player.video:scale(s)
     local tx = math.floor(x / s + left / fit)
     local ty = math.floor(y / s + top / fit)
-    for i, text in ipairs(paragraphs) do
-      if i > 1 then ty = ty + gap end
-      ty = font:drawWrapped(player.video, text, tx, ty, math.floor(width / fit))
+    for _, row in ipairs(rows) do
+      if to_draw <= 0 then break end
+      local n = #row.chars
+      local text = row.text
+      if to_draw < n then text = table.concat(row.chars, "", 1, to_draw) end
+      font:draw(player.video, text, tx, ty + row.y)
+      to_draw = to_draw - n
     end
-    if buttons then
+    if buttons and letter.typed then
       player.video:scale(vs)
       local hover = player:letterButtonAt(player.mouse_x, player.mouse_y)
       for _, button in ipairs(LETTER_BUTTONS) do
@@ -360,7 +438,9 @@ end
 --! the letter shows, or nil.
 function MoviePlayer:letterButtonAt(mx, my)
   local letter = self.letter
-  if not (letter and letter.shown and mx and my) then return nil end
+  if not (letter and letter.shown and letter.typed and letter.choose and mx and my) then
+    return nil
+  end
   local lx, ly = (mx - letter.x) / letter.vs, (my - letter.y) / letter.vs
   for _, button in ipairs(LETTER_BUTTONS) do
     if lx >= button.x and lx < button.x + LETTER_BUTTON_W and
@@ -370,19 +450,41 @@ function MoviePlayer:letterButtonAt(mx, my)
   end
 end
 
+--! The typewriter while the win letter types itself out: the game's own key
+--! strike (TYPING.WAV) round and round, until it is typed.
+--!param on (boolean) typing now
+function MoviePlayer:letterTyping(on)
+  if on and self.typing_sound == nil then
+    -- (false: no sound to be had, not tried again)
+    local ok, sound = pcall(self.audio.playSound, self.audio, "TYPING.WAV", nil, false, nil, nil, -1)
+    self.typing_sound = ok and sound or false
+  elseif not on and self.typing_sound then
+    self.audio:stopSound(self.typing_sound)
+    self.typing_sound = false
+  end
+end
+
 --! The mouse has moved while a movie plays (the win letter's buttons light up).
 function MoviePlayer:mouseMove(x, y)
   self.mouse_x, self.mouse_y = x, y
 end
 
---! A left click while a movie plays. A win letter with buttons takes it: a
---! button answers the letter and ends the movie; a click anywhere else, or
---! before the letter shows (within 2 seconds), does nothing. (The stop movie
---! key still ends it without an answer.)
+--! A left click while a movie plays. On the win letter while it types
+--! itself out, the click finishes it. Once typed, on a letter with buttons a
+--! button answers it and ends the movie, and a click anywhere else does
+--! nothing (nor one before the letter shows, within 2 seconds); a letter
+--! without buttons ends with the click. (The stop movie key still ends it
+--! without an answer.)
 --!return (boolean) true if the letter took the click (the movie goes on)
 function MoviePlayer:letterClick(x, y)
   local letter = self.letter
   if not letter then return false end
+  if not letter.shown then return letter.choose ~= nil end
+  if not letter.typed then
+    letter.typed = true
+    return true
+  end
+  if not letter.choose then return false end
   local button = self:letterButtonAt(x, y)
   if button then
     self.letter = nil
