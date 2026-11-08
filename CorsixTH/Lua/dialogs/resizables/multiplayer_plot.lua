@@ -63,7 +63,9 @@ function UIMultiplayerGivePlot:UIMultiplayerGivePlot(ui, plot)
   self.target = self.allies[1]
   self.price = 0
   local rows = math.max(1, #self.allies)
-  local height = 40 + 26 + rows * 25 + 10 + 34 + 34 + 30 + 45
+  -- (No row kept for messages: they show in the "To which ally" line. An
+  -- empty row sat there before: Jan, 2026-11-08.)
+  local height = 40 + 26 + rows * 25 + 10 + 34 + 10 + 30 + 15
   self:UIResizable(ui, WIDTH, height, col.bg)
   self.esc_closes = true
   self.resizable = false
@@ -73,7 +75,8 @@ function UIMultiplayerGivePlot:UIMultiplayerGivePlot(ui, plot)
 
   self:addBevelPanel(20, 10, WIDTH - 40, 20, col.title):setLabel(S.plot_give_caption:format(plot)).lowered = true
   local y = 40
-  self:addBevelPanel(20, y, WIDTH - 40, 20, col.caption):setLabel(S.plot_give_to).lowered = true
+  self.status_panel = self:addBevelPanel(20, y, WIDTH - 40, 20, col.caption)
+  self.status_panel:setLabel(S.plot_give_to).lowered = true
   y = y + 26
   self.rows = {}
   if #self.allies == 0 then
@@ -95,10 +98,6 @@ function UIMultiplayerGivePlot:UIMultiplayerGivePlot(ui, plot)
         :setLabel((amount > 0 and "+$" or "-$") .. math.abs(amount))
         :makeRepeatButton(0, 0, 50, 28, nil, function(window) window:setPrice(window.price + amount) end)
   end
-  y = y + 34
-  self.status_panel = self:addBevelPanel(20, y, WIDTH - 40, 24, col.caption)
-  self.status_panel.lowered = true
-  self.status_panel:setLabel("")
   y = height - 45
   self:addBevelPanel(20, y, 160, 30, col.button):setLabel(S.plot_give_button)
       :makeButton(0, 0, 160, 30, nil, self.give)
@@ -131,8 +130,9 @@ function UIMultiplayerGivePlot:setPrice(price)
   self.price_panel:setLabel(self.price > 0 and S.plot_give_price:format(self.price) or S.plot_give_free)
 end
 
+--! A message in the "To which ally" line (that line again without one).
 function UIMultiplayerGivePlot:setStatus(text)
-  self.status_panel:setLabel(text)
+  self.status_panel:setLabel((text or "") ~= "" and text or _S.multiplayer_window.plot_give_to)
 end
 
 --! Make the offer (a command; the plot changes hands only if the ally

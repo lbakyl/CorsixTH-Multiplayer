@@ -635,10 +635,9 @@ multiplayer_window = {
   staff_on_the_way = "On the way to %s",
   saving_note = "Saving the game on every player's computer...",
   -- Vouching for an ally (reputation)
-  rep_caption = "Vouch for %s: your hospital recommends theirs",
-  rep_caption_2 = "to the public. You lose the points, they gain them.",
+  rep_vouch_caption = "Vouch: give them some of your reputation",
   rep_amount = "Points: %d",
-  rep_button = "Vouch for them",
+  rep_give_button = "Give them %d of your reputation points",
   rep_sent = "Done. The points move in a moment.",
   rep_rivals = "Only allies can vouch for each other.",
   rep_given_note = "You vouched for %s: you gave %d reputation points.",

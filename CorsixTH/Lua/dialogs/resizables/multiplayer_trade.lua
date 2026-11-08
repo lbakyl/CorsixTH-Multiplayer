@@ -38,10 +38,25 @@ local col = {
 }
 
 local WIDTH = 380
-local STAFF_ROWS = 8
+-- Rows of the staff list: as many as the screen has room for, 4 to 8 (a
+-- screen of 1080 lines at double size has 540: Jan's did not show it all).
+local MAX_STAFF_ROWS = 8
+local MIN_STAFF_ROWS = 4
 local AMOUNTS = {1000, 5000, 20000}
--- The room for the reputation rows: two lines of text, the amount, the button.
-local REP_HEIGHT = 124
+-- The room for the reputation rows: a line of text, the points, the button.
+local REP_HEIGHT = 94
+-- The window but for the staff rows (and the reputation rows).
+local FIXED_HEIGHT = 85 + 36 + 34 + 30 + 10 + 30 + 10
+
+--! How many staff rows fit on the screen, with the reputation rows or not.
+local function staff_rows(vouch)
+  local video = TheApp and TheApp.video
+  local gfx = TheApp and TheApp.gfx
+  if not (video and gfx and video.getRenderSize) then return MAX_STAFF_ROWS end
+  local _, screen_h = video:getRenderSize()
+  local free = math.floor(screen_h / gfx:getUIScale()) - 20 - FIXED_HEIGHT - (vouch and REP_HEIGHT or 0)
+  return math.max(MIN_STAFF_ROWS, math.min(MAX_STAFF_ROWS, math.floor(free / 25)))
+end
 
 --!param target (Hospital) optional: the player to trade with
 --!param staff (Staff) optional: this member of staff selected
@@ -52,7 +67,9 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
   self.target = target or self:_nextTarget(nil)
   -- (Reputation only between allies: not between rivals in a race.)
   local vouch = self.target and not world:mpRivals(self.hospital, self.target)
-  local height = 120 + STAFF_ROWS * 25 + 36 + 34 + 70 + (vouch and REP_HEIGHT or 0)
+  local rows = staff_rows(vouch)
+  self.staff_rows = rows
+  local height = FIXED_HEIGHT + rows * 25 + (vouch and REP_HEIGHT or 0)
   self:UIResizable(ui, WIDTH, height, col.bg)
   self.esc_closes = true
   self.resizable = false
@@ -80,7 +97,7 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
         :makeButton(0, 0, w, 30, nil, function() self:sendMoney(amount) end)
   end
 
-  -- Staff of this player's hospital, a page of STAFF_ROWS at a time
+  -- Staff of this player's hospital, a page of `rows` at a time
   self.staff_list = {}
   self.page = 1
   for i, member in ipairs(self.hospital.staff) do
@@ -92,7 +109,7 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
       self.staff_list[#self.staff_list + 1] = entry
       if member == staff then
         self.selected = entry
-        self.page = math.ceil(#self.staff_list / STAFF_ROWS)
+        self.page = math.ceil(#self.staff_list / rows)
       end
     end
   end
@@ -100,12 +117,12 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
     self:addBevelPanel(20, 85, WIDTH - 40, 25, col.caption):setLabel(S.trade_no_staff).lowered = true
   end
   self.rows = {}
-  for row = 1, STAFF_ROWS do
+  for row = 1, rows do
     self.rows[row] = self:addBevelPanel(20, 80 + (row - 1) * 25, WIDTH - 40, 23,
         col.setting, nil, nil, nil, col.setting_active)
         :makeToggleButton(0, 0, WIDTH - 40, 23, nil, function(window, state) window:selectStaff(row, state) end)
   end
-  local y = 85 + STAFF_ROWS * 25
+  local y = 85 + rows * 25
   -- (The game's font has no arrows or slashes: words instead.)
   self.page_panel = self:addBevelPanel(20, y, WIDTH - 180, 28, col.caption)
   self.page_panel.lowered = true
@@ -133,12 +150,11 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
       :makeButton(0, 0, WIDTH - 230, 30, nil, self.nextPlayer)
   if vouch then
     -- Vouch for the ally: points of reputation (1 to 100) from this hospital
-    -- to theirs.
-    local ry = y + 44
-    self:addBevelPanel(20, ry, WIDTH - 40, 20, col.caption):setLabel(S.rep_caption:format(self.target.name))
-        .lowered = true
-    self:addBevelPanel(20, ry + 22, WIDTH - 40, 20, col.caption):setLabel(S.rep_caption_2).lowered = true
-    ry = ry + 46
+    -- to theirs. (The title names them; the button says whose points go:
+    -- Jan, 2026-11-08: a name in the line ran out of the window.)
+    local ry = y + 38
+    self:addBevelPanel(20, ry, WIDTH - 40, 20, col.caption):setLabel(S.rep_vouch_caption).lowered = true
+    ry = ry + 24
     self.rep_panel = self:addBevelPanel(20, ry, 120, 28, col.caption)
     self.rep_panel.lowered = true
     for i, points in ipairs({-10, -1, 1, 10}) do
@@ -146,15 +162,17 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
           :setLabel((points > 0 and "+" or "") .. points)
           :makeRepeatButton(0, 0, 46, 28, nil, function(window) window:setReputation(window.reputation + points) end)
     end
+    self.rep_button = self:addBevelPanel(20, ry + 34, WIDTH - 40, 30, col.button)
+    self.rep_button:makeButton(0, 0, WIDTH - 40, 30, nil, self.sendReputation)
     self:setReputation(self.reputation)
-    self:addBevelPanel(20, ry + 34, WIDTH - 40, 30, col.button):setLabel(S.rep_button)
-        :makeButton(0, 0, WIDTH - 40, 30, nil, self.sendReputation)
     y = y + REP_HEIGHT
   end
-  self.status_panel = self:addBevelPanel(20, y + 40, WIDTH - 160, 25, col.bg)
+  -- (A message shows left of Close; nothing there until there is one.)
+  self.status_panel = self:addBevelPanel(20, y + 43, WIDTH - 160, 25, col.bg)
   self.status_panel:setLabel("")
   self.status_panel.lowered = true
-  self:addBevelPanel(WIDTH - 130, y + 37, 110, 30, col.button):setLabel(S.trade_close)
+  self.status_panel:setVisible(false)
+  self:addBevelPanel(WIDTH - 130, y + 40, 110, 30, col.button):setLabel(S.trade_close)
       :makeButton(0, 0, 110, 30, nil, self.close)
 end
 
@@ -175,7 +193,7 @@ function UIMultiplayerTrade:_nextTarget(current)
 end
 
 function UIMultiplayerTrade:setStatus(text)
-  if self.status_panel then self.status_panel:setLabel(text) end
+  if self.status_panel then self.status_panel:setLabel(text or ""):setVisible((text or "") ~= "") end
 end
 
 function UIMultiplayerTrade:sendMoney(amount)
@@ -189,6 +207,9 @@ end
 function UIMultiplayerTrade:setReputation(points)
   self.reputation = math.max(1, math.min(MultiplayerSession.REP_MAX_GIVE, points))
   self.rep_panel:setLabel(_S.multiplayer_window.rep_amount:format(self.reputation))
+  if self.rep_button then
+    self.rep_button:setLabel(_S.multiplayer_window.rep_give_button:format(self.reputation))
+  end
 end
 
 function UIMultiplayerTrade:sendReputation()
@@ -206,13 +227,13 @@ function UIMultiplayerTrade:setPrice(price)
 end
 
 function UIMultiplayerTrade:_pages()
-  return math.max(1, math.ceil(#self.staff_list / STAFF_ROWS))
+  return math.max(1, math.ceil(#self.staff_list / self.staff_rows))
 end
 
 --! Show the staff of the current page; the selected one toggled on, the
 --! ones already offered greyed out.
 function UIMultiplayerTrade:_showPage()
-  local first = (self.page - 1) * STAFF_ROWS
+  local first = (self.page - 1) * self.staff_rows
   for row, button in ipairs(self.rows) do
     local entry = self.staff_list[first + row]
     local label = entry and entry.label or ""
@@ -230,7 +251,7 @@ function UIMultiplayerTrade:turnPage(delta)
 end
 
 function UIMultiplayerTrade:selectStaff(row, state)
-  local entry = self.staff_list[(self.page - 1) * STAFF_ROWS + row]
+  local entry = self.staff_list[(self.page - 1) * self.staff_rows + row]
   self.selected = state and entry or nil
   self:_showPage()
 end
