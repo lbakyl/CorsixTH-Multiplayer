@@ -1526,6 +1526,9 @@ void sprite_sheet::wx_draw_sprite(size_t iSprite, uint8_t* pRGBData,
 }
 
 SDL_Texture* sprite_sheet::_makeAltBitmap(sprite* pSprite) {
+  // (draw_sprite checks the palette before it uses the extra maps; without
+  // one there is nothing to remap here either.)
+  if (!palette) return nullptr;
   const auto& argb_data = palette->get_argb_data();
 
   if (!pSprite->alt_palette_map) {

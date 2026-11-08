@@ -518,9 +518,11 @@ multiplayer_server = [[]]
 
 
 -------------------------------------------------------------------------------
--- What bots say in a multiplayer game, on this computer: [[all]], [[useful]]
--- (what they answer and tell their team mates, without greetings and taunts)
--- or [[off]]. Also in the game's MULTIPLAYER menu, BOT CHAT.
+-- What bots say in a multiplayer game, on this computer: [[auto]] (all of
+-- it, but no greetings and taunts in a game with 3 bots or more), [[every]]
+-- (all of it), [[useful]] (what they answer and tell their team mates,
+-- without greetings and taunts) or [[off]]. Also in the game's MULTIPLAYER
+-- menu, BOT CHAT.
 --
-multiplayer_bot_chat = [[all]]
+multiplayer_bot_chat = [[auto]]
 
