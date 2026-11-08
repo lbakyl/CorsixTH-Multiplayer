@@ -208,7 +208,19 @@ local winLetterOverlay = function(me, paragraphs, choose)
 
   return function(player, x, y, _, _, scale, pts)
     if pts < start_pts then return end
+    -- Hold the letter: the movie's very last frame is its first one again (a
+    -- Smacker ring frame, for looping), so it is paused here until the letter
+    -- is answered or skipped (Jan saw the text over the casebook). Paused
+    -- again if the pause key lets it run on.
+    if not letter.hold_pts or pts > letter.hold_pts + 40 then
+      player:togglePause()
+      letter.hold_pts = pts
+    end
     local vs = scale * 0.5
+    local ui = player.app.ui
+    if buttons and not letter.shown and ui and ui.default_cursor then
+      ui:setCursor(ui.default_cursor) -- (the pointer, to click the buttons)
+    end
     letter.shown, letter.x, letter.y, letter.vs = true, x, y, vs
     local s = vs * fit
     player.video:scale(s)
@@ -227,6 +239,12 @@ local winLetterOverlay = function(me, paragraphs, choose)
       end
     end
     player.video:scale(1)
+    -- A cursor the screen draws itself (no hardware cursor; the movie hides
+    -- the screen): drawn on the letter, or it cannot be seen (Jan).
+    local cursor = buttons and ui and ui.simulated_cursor
+    if cursor and player.mouse_x then
+      cursor.draw(player.video, player.mouse_x, player.mouse_y)
+    end
   end
 end
 
@@ -331,6 +349,9 @@ end
 function MoviePlayer:playWinLevelMovie(callback, letter, choose)
   self:playMovie(self.win_level_movie, true, callback)
   if self.playing and letter and #letter > 0 then
+    -- (The mouse where it was: the screen does not track it during a movie.)
+    local ui = self.app.ui
+    self.mouse_x, self.mouse_y = ui and ui.cursor_x, ui and ui.cursor_y
     self.refresh_overlay = winLetterOverlay(self, letter, choose)
   end
 end
