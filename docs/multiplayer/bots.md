@@ -69,6 +69,38 @@ best project it can afford is done, one every one to four game days.
   takes the loan when it wins (`end_auction`), a bot standing in for a
   person borrows before the bid. Up to 6 GP's offices, each only
   for a queue.
+- **Rooms nobody uses**: a room nobody has used for about five months (a
+  patient in it; staff in a staff room, training room or research room) is
+  taken down for its floor, never a GP's office and never in a hospital it
+  shares with a person. While the level has a hospital value goal the bot has
+  not reached, selling is a last resort (a room sold takes its whole price
+  off the value, for half of it back): only a room unused for a year, and only
+  when something it wanted found no floor in the last 30 days and no plot is
+  left that it may buy and pay for, with a loan if need be
+  (`Manager:outOfSpace`); then the cheapest such room, after a room bigger
+  than it needs was taken in. Extras the furnishing cannot place are sold back
+  at their full price, which takes off only the value their purchase added.
+- **The floor in one piece** (Argus, 2026-11-08: a bot's benches and vending
+  machines had cut its floor apart, and its patients walked outside and
+  through three other hospitals to get between the parts; the game only
+  checks that some way exists, even one outside). Before it puts down a
+  corridor object (benches, plants, drinks machines, radiators, bins,
+  extinguishers, a reception desk) or a room, the bot reads its own floor
+  (`Bot:floorMap`: the corridor tiles of its building, in no room, with the
+  sides one can cross, which radiators, bins and extinguishers close) and
+  refuses a spot that leaves its entrances, both sides of each reception desk
+  (patients and receptionist) and the tile before each room's door in more
+  parts than before (`Manager.floorParts`; a plot bought may be a building of
+  its own, so the rule is "no more parts", not "one part"); a new desk's two
+  sides and some tile beside a new room must be reached too. The floor is read
+  only when something is about to be put down (once a game step); a room
+  search checks at most 60 spots that way. A floor already in parts (an older
+  game's) is mended: once a game
+  week, every 2 days while mending, it sells (`sell_object`) the corridor
+  object that stands first on the shortest way between two parts
+  (`Manager.floorBlocker`; never a reception desk, nothing when walls or rooms
+  part it), and the waiting-area rules buy what is missing again where it fits.
+  Room edits (bigger, moved, taken in) still follow the game's own rule only.
 - **Hiring**: the most skilled person on the list (of those with the skill a
   room needs).
 - **"Allied bots build: off"** (the room's `helpers` game option): a bot
@@ -96,8 +128,20 @@ best project it can afford is done, one every one to four game days.
   the last doctor with a skill a room needs, and only while the other rooms
   keep their doctors (one doctor more than they need in the first two years,
   exactly enough from the 3rd year on, when it also reviews its staff every
-  30 days, `MP_BOT_STAFF_REVIEW_FROM` in tests). A student who becomes a
-  consultant, or who is needed because a room lacks a doctor, goes back to work.
+  30 days, `MP_BOT_STAFF_REVIEW_FROM` in tests). Until the 3rd year (Jan,
+  2026-11-08) the chairs are kept full from the day the room has its teacher:
+  with no doctor to spare, a junior (else a doctor not yet a consultant) is
+  hired straight into the room as a student, one every 3 days while the bank
+  holds $10,000 (`Bot:hireStudent`). Students do not count as staff in the
+  hiring rules, so the rooms still get their doctors. From the 3rd year
+  doctors are hired only for a need, and such a doctor is a junior hired into
+  a free chair (when the room has its teacher and the list a junior): he counts
+  as staff for that need and learns until he is a doctor before he works. A
+  student who becomes a consultant goes back to work at once (to the staff room
+  if no room needs one); otherwise one goes back only when fewer doctors work
+  than the rooms need (a room without its doctor on a break is no reason):
+  until the 3rd year only when none can be hired, from then on the most skilled
+  student who is not a junior.
 - **Every day**: a handyman to each machine with three uses or fewer, the
   heating up or down for cold or hot patients, a $5,000 loan before the money
   runs out, the faxes (a patient it cannot treat yet: wait if the room is
@@ -124,7 +168,10 @@ best project it can afford is done, one every one to four game days.
   machines, an epidemic or emergency for a staffed desk, else rats).
 - The month in one log line: why patients left (cured, sent away, fed up,
   too dear), the diseases it lost most, patients in the hospital, queues per
-  room type, specialists, prices, reputation, money.
+  room type, specialists, prices, reputation, money, and its floor (in how many
+  parts, in how many without its corridor objects, and how many entrance
+  tiles, desk sides and room doors it must reach: `Bot:floorReport`). A plot
+  bought is often a building of its own with its own entrance, a part of its own.
 
 `MP_BOT_BRAIN=script` keeps the old fixed plan (described below), also per
 bot or per room (`"plan=script;smart=smart"`), for comparing the two:
@@ -230,7 +277,9 @@ environment):
   half the way to the limit), failed the goals at the last year end
   (`mp_failing_since`), is under 30% of the way on the goals after a year, has
   no money and no loan left for 20 days, or has a reputation under 250 that
-  fell by 50 in 3 months. At most every 3 months it then asks the advisor
+  fell by 50 in 3 months. Never in the first game year (Jan, 2026-11-08: the
+  thresholds stay, "with the exception of year 1"): no review and no ask before
+  month 13. From then on, at most every 3 months, it asks the advisor
   (`ASK kind=rescue`: the report, the reasons and the menu; the plan that comes
   back stays in force for a month) and asks its team in the chat for one
   concrete thing: an amount and what it is for, from the project it wants most
@@ -257,15 +306,22 @@ environment):
   team, or anybody in a co-op game; in a race without teams nobody). Anybody
   else who asks for something gets a short refusal, without a question to the
   advisor.
-- **Money on request**: an ally who asks a bot for money (keywords in English
-  and Czech, or the advisor's `give` field) gets it if the bot holds more than
-  $20,000 and keeps $15,000 or more afterwards; if the sum is too big the bot
-  says what it could spare; with nothing to spare it says so. With no sum named it
-  sends half of what is above $15,000 (whole thousands, $2,000 to $10,000). The
-  bot decides and sends it (`give_money`), the line says only what it did, never
-  what the model thought. In the team chat (which every bot of the team gets)
-  only the bot named answers, or else the richest allied bot.
-  `MP_BOT_GIVE_LIMITS=above:keep` sets other limits in tests.
+- **Money on request** (Jan, 2026-11-08): an ally who asks a bot for money in
+  the chat (keywords in English and Czech, or the advisor's `give` field) gets
+  the sum asked for, up to $20,000 at once, while the bot holds more than
+  $15,000 and keeps that much: min(asked, $20,000, bank - $15,000). Small sums
+  count too ("$50"). With no sum named it sends half of what is above $15,000
+  (whole thousands, $1,000 to $10,000). Less than asked, it says why (the most
+  it sends at once, or all it can spare above its floor); with less or nothing
+  it also says where its money went lately: its last spending of $2,000 or more
+  in the last 90 game days ("Most of my cash went into the new X-Ray room
+  ($12,000).": a room, land, a new machine, a loan repaid, money sent to an
+  ally, a dirty trick; `Manager:noteSpent`). The bot decides and sends it
+  (`give_money`), the line says only what it did, never what the model
+  thought. In the team chat (which every bot of the team gets) only the bot
+  named answers, or else the richest allied bot. `MP_BOT_GIVE_LIMITS=keep:max`
+  sets other limits in tests. (A request through the bank manager's **Ask a
+  player** is a fax: the bot pays it in full while it keeps $3,000, see Offers.)
 - **A room at a place**: an ally may ask for a room "next to the GP's office",
   "near the entrance" or "by the reception"; the advisor returns it as
   `room:toilets@near:gp` (or `@near:entrance`, `@near:reception`, any room id).
@@ -297,13 +353,19 @@ votes, research, tricks on a bot, the bonus, auctions, hands off, and since
 2026-11-08 money and orders (15), asking for staff (16), the requirements chat
 (17), the warning about a rival (18) and a failing hospital asking for help
 (19), with test hooks `MP_BOT_GIVE_LIMITS`, `MP_BOT_TEST_LACK`,
-`MP_BOT_TEST_WIN` and `MP_BOT_TEST_FAIL`. Lobby probe: `MP_ADD_BOTS=n` (the
-host clicks empty places), action `hospitals` (every hospital's rooms and
+`MP_BOT_TEST_WIN` and `MP_BOT_TEST_FAIL`; check 20 (the floor in one piece)
+reads the bots' month lines: their corridor objects never part their floor,
+and the entrances, both sides of the desk and the room doors are found; it
+also shows how many spots each bot refused because they would cut its floor
+in two and what it sold to mend a floor in parts. Lobby probe:
+`MP_ADD_BOTS=n` (the host clicks empty places), action `hospitals` (every hospital's rooms and
 staff), and chat lines received are logged (`CHAT IN`).
 Two small checks need no game, only Lua: `lua scripts/multiplayer/bot_text_test.lua
 scripts/multiplayer/bot.lua` (requests, sums, what a bank gives) and
 `lua scripts/multiplayer/bot_manager_test.lua scripts/multiplayer/bot_manager.lua`
-(who meets the requirements, what a bot says it lacks, when it is failing).
+(who meets the requirements, what a bot says it lacks, when it is failing and
+not in the first year, where its money went, which room it takes down, a split
+floor refused and the object in the way found, who goes to the training room).
 
 ## Not done
 

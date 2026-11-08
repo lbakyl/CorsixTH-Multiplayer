@@ -42,10 +42,11 @@
 #      and a bot, the game option helpers=0): the bot builds no room and
 #      buys nothing for the corridors (land, staff and the rest it may)
 #  15. orders only from allies, money on request: in "team" ann asks a bot for
-#      $1000 (sent), $9,000,000 (declined, it says what it could spare) and some
-#      cash (half of its spare money); in "race" bob, a rival, asks it for money
-#      and a room (refused, no money sent). The bots' limits are 2000:1000 here
-#      (MP_BOT_GIVE_LIMITS) instead of $20,000 and $15,000
+#      $1000 (sent), $9,000,000 (it sends the most it gives at once and says so)
+#      and some cash (half of its spare money); in "race" bob, a rival, asks it
+#      for money and a room (refused, no money sent). The bots keep $1,000 and
+#      send at most $2,000 at once here (MP_BOT_GIVE_LIMITS=1000:2000) instead of
+#      $15,000 and $20,000
 #  16. asking for staff: from game day 5 the bots lack a surgeon (MP_BOT_TEST_LACK);
 #      after 10 days they ask the allies in the team chat
 #  17. the level's requirements (MP_BOT_TEST_WIN: ann's hospital meets them from day
@@ -55,6 +56,10 @@
 #      "duel" nobody is there to read it
 #  19. failing its objectives (MP_BOT_TEST_FAIL): both bots of "team" ask ann for
 #      an amount, once
+#  20. the floor in one piece: each bot that builds reads its own floor as one
+#      part with its entrance, desk and room doors on it (its month line);
+#      also shown: spots refused because they would cut the floor in two, and
+#      objects sold to mend a floor in parts
 #  10. tricks on a bot ("duel", competitive: eve and one bot): eve sends
 #      rats, an evil handyman (level 3), a smear campaign and a broken
 #      boiler. The bot shoots the rats and throws the handyman out, each at
@@ -92,7 +97,7 @@ export MP_REFEREE_PROBE_SCENARIO="team=none;race=none;trio=none;duel=none;lab=no
 export CORSIXTH_MP_MAX_BOTS=9 # (nine bots in all the rooms)
 # (MP_BOT_AWAY_SECONDS: kay in "afk" counts as away after a game week; the
 # bots' games run faster than real time.)
-MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 MP_BOT_AWAY_SECONDS=3 MP_BOT_GIVE_LIMITS=2000:1000 MP_BOT_TEST_LACK=5:Surgeon:operating_theatre MP_BOT_TEST_WIN="1:10;2:12;3:12" MP_BOT_TEST_FAIL=20 PYTHONPATH="$source_dir/mp_server" \
+MP_BOT_PACE=20 MP_BOT_FAST=1 MP_BOT_SEED=7 MP_BOT_TESTS=1 MP_BOT_LEARN=20 MP_BOT_AWAY_SECONDS=3 MP_BOT_GIVE_LIMITS=1000:2000 MP_BOT_TEST_LACK=5:Surgeon:operating_theatre MP_BOT_TEST_WIN="1:10;2:12;3:12" MP_BOT_TEST_FAIL=20 PYTHONPATH="$source_dir/mp_server" \
   python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
 server_pid=$!
@@ -330,9 +335,11 @@ print(f"14. Allied bots build: off: bot commands {sorted(set(bot_cmds14))}; buil
 fail |= not ok14
 # 15. Orders only from allies; money on request. In "team" (co-op) ann asks
 # Agnes (a bot, her ally) for $1000 (to the allies), then for $9,000,000 and for some cash (to her; the chat remembers who it was for)
-# with no sum: the bot checks its own bank (limits 2000:1000 here) and says
-# what it did. In "race" bob (a rival) asks the bot for money and for a room:
-# a refusal, no money sent before the bounce of his gift (step 900).
+# with no sum: the bot checks its own bank (it keeps $1,000 and sends at most
+# $2,000 at once here) and says what it did: the $9,000,000 gets $2,000 and a
+# word that this is the most at once. In "race" bob (a rival) asks the bot for
+# money and for a room: a refusal, no money sent before the bounce of his gift
+# (step 900).
 # (Which bot is "Agnes" and which peer it is varies from run to run: any bot of the room.)
 gives15 = [(int(st), r) for st, p, r in re.findall(r'step (\d+): peer ([2-9]) #\d+ give_money -> (\S+)', a)]
 to_ann15 = [(int(st), t) for who in ('Bot Agnes', 'Bot Bertie') for st, t in chats_from(a, who)
@@ -341,13 +348,16 @@ sent_log15 = [l for k, t in bots.items() if k.startswith('team/') for l in t.spl
 sent_lines15 = [t for _, t in to_ann15 if re.search(r'\$\d', t)]
 declined15 = [l for l in sent_log15 if 'declined' in l]
 sent15 = [l for l in sent_log15 if ': sent $' in l]
+part15 = [l for l in sent15 if 'less than the $9000000 asked (the most at once' in l]
+cap_lines15 = [t for _, t in to_ann15 if re.search(r'most I send|more than \$2,000 at once|limit for one transfer', t)]
 rb_lines15 = [t for st, t in rb if int(st) < 800 and 'bob' in t]
 early_money15 = [st for st, r in applied(b, 2, 'give_money') if int(st) < 900]
 refused15 = [l for l in (bots.get('race/' + race_bot, '') if race_bot else '').splitlines() if 'refused a request from bob' in l]
 ok15 = (len(sent15) >= 2 and any(r == 'ok' for _, r in gives15) and len(gives15) == len(sent15)
-        and bool(declined15) and len(sent_lines15) >= 2 and len(refused15) >= 2 and not early_money15
-        and len(rb_lines15) >= 2)
+        and bool(part15) and bool(cap_lines15) and len(sent_lines15) >= 2 and len(refused15) >= 2
+        and not early_money15 and len(rb_lines15) >= 2)
 print(f"15. Money and orders:       Agnes sent {[l.split(': ',1)[1] for l in sent15]}, declined {[l.split(': ',1)[1] for l in declined15]}; "
+      f"the most at once: {cap_lines15[:1]}; "
       f"give_money commands {gives15}; her lines {sent_lines15}; the race bot refused bob {len(refused15)} times "
       f"({rb_lines15[:2]}), money sent to him early: {early_money15}")
 fail |= not ok15
@@ -411,6 +421,31 @@ ok19 = (sorted(w for _, w, _ in help19) == ['Bot Agnes', 'Bot Bertie'] and len(n
         and min(st for st, _, _ in help19) >= 20 * 50 - 50)
 print(f"19. Failing, asks for help: {[(st, w, t) for st, w, t in help19]}; notes {[n.split('] ', 1)[1] for n in notes19]}")
 fail |= not ok19
+# 20. The floor in one piece. Each bot that builds (team, race, duel, lab)
+# reads its own floor (Bot:floorMap) and says in its month lines in how many
+# parts it is, in how many it would be without its corridor objects (a plot
+# bought is often a building of its own: a part of its own), and what must be
+# reached. Every month: its objects cut nothing (the same number), and the
+# entrance, both sides of the desk and the doors of its rooms are found.
+# Also, for information: spots refused because they would cut the floor in
+# two, and objects sold because it was in parts already (Bot:repairFloor).
+floor20, months20 = {}, {}
+for k, t in bots.items():
+    found = re.findall(r'month \d+: .*; floor (\d+) part\(s\) \((\d+) without its corridor objects\), to reach '
+                       r'(\d+) entrance tile\(s\), (\d+) desk side\(s\), (\d+) door\(s\)', t)
+    if found:
+        months20[k] = [tuple(int(v) for v in f) for f in found]
+        floor20[k] = months20[k][-1]
+builders20 = [k for k in bots if k.split('/')[0] in ('team', 'race', 'duel', 'lab')]
+refused20 = {k: sum(int(n) for n in re.findall(r'\((\d+) spot\(s\) refused: they would cut', t)) for k, t in bots.items()}
+mended20 = {k: re.findall(r'its floor is in \d+ parts: sold the (\w+)', t) for k, t in bots.items()}
+ok20 = bool(builders20) and all(k in floor20 and all(m[0] == m[1] for m in months20[k]) and floor20[k][2] >= 1
+                                and floor20[k][3] >= 2 and floor20[k][4] >= 3 for k in builders20)
+print(f"20. Floor in one piece:     (parts, without objects, entrance tiles, desk sides, doors) "
+      f"{dict(sorted(floor20.items()))}; spots refused "
+      f"{dict((k, v) for k, v in sorted(refused20.items()) if v)}; objects sold to mend it "
+      f"{dict((k, v) for k, v in sorted(mended20.items()) if v)}")
+fail |= not ok20
 for name, text in sorted(bots.items()):
     errors = [l for l in text.splitlines() if 'ERROR' in l or 'could not' in l]
     if errors: print(f"   {name} problems: {errors[:5]}")

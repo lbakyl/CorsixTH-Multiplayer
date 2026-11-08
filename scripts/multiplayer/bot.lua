@@ -223,8 +223,9 @@ local LINES = {
       "I've already hired the best doctors in town. Sorry!",
     },
   },
-  -- An ally asked for money (Bot:answerMoneyRequest); {name}, {amount} (sent
-  -- or asked), {spare} are filled in by `fill_in`.
+  -- An ally asked for money (Bot:answerMoneyRequest); {name}, {amount} (sent),
+  -- {asked}, {keep} (the bank's floor) and {max} (the most sent at once) are
+  -- filled in by `fill_in`.
   gift_sent = {
     "Sent you ${amount}, {name}. That's what allies are for.",
     "On its way, {name}: ${amount}. Spend it wisely!",
@@ -234,17 +235,28 @@ local LINES = {
   },
   -- No amount named: half of what is above the bank's floor.
   gift_sent_auto = {
-    "I sent you ${amount}, {name}: half of what I can spare above my $15,000 floor.",
-    "{name}, I put ${amount} your way. That's half of my spare cash; I keep $15,000 for emergencies.",
-    "Here's ${amount}, {name}. It's half of what I can spare, I keep a cushion of $15,000.",
+    "I sent you ${amount}, {name}: half of what I can spare above my ${keep} floor.",
+    "{name}, I put ${amount} your way. That's half of my spare cash; I keep ${keep} for emergencies.",
+    "Here's ${amount}, {name}. It's half of what I can spare, I keep a cushion of ${keep}.",
     "Sent ${amount}, {name}. You didn't name a sum, so I took half of my spare cash.",
   },
-  -- Too much asked.
-  gift_spare = {
-    "Sorry {name}, ${amount} is too much for me. I could spare ${spare}.",
-    "{name}, I can't do ${amount} and still pay my bills. ${spare} is what I could manage.",
-    "Not ${amount}, {name}, my bank would be too low. I could send ${spare}, though.",
-    "That's more than I can spare, {name}. Ask for ${spare} and it's yours.",
+  -- Less than asked: all it can spare above its floor.
+  gift_part = {
+    "Sent you ${amount} of the ${asked}, {name}. That's all I can spare above my ${keep} floor.",
+    "{name}, ${amount} is on its way. More would take me under the ${keep} I keep for my own bills.",
+    "I can only manage ${amount} of it, {name}; I keep ${keep} in the bank. Sent.",
+  },
+  -- Less than asked: the most it sends at once.
+  gift_cap = {
+    "Sent you ${amount}, {name}. That's the most I send in one go.",
+    "{name}, ${amount} is on its way: I don't send more than ${max} at once.",
+    "Here's ${amount}, {name}, my limit for one transfer. Ask again later if you need more.",
+  },
+  -- After less than asked, or nothing: where its money went ({spent}).
+  gift_spent = {
+    "Most of my cash went into {spent}.",
+    "My money went into {spent} lately.",
+    "I just spent a lot on {spent}.",
   },
   -- Nothing to spare.
   gift_none = {
@@ -593,12 +605,14 @@ local function is_money_request(text)
 end
 
 --! The amount of money a chat line names, in dollars, or nil: "$20,000",
---! "20k", "2.5k", "20 000", "5000 dollars". Between $100 and $10,000,000.
+--! "20k", "2.5k", "20 000", "5000 dollars", "$50". Between $1 and $10,000,000.
+--! (A small sum is a sum: before, "$50" counted as none named, and the bot
+--! sent thousands.)
 local function parse_amount(text)
   text = text:lower()
   local function ok(v)
     v = v and math.floor(v + 0.5)
-    if v and v >= 100 and v <= 10000000 then return v end
+    if v and v >= 1 and v <= 10000000 then return v end
   end
   local function number(str)
     str = str:gsub(",", "")
@@ -1136,7 +1150,7 @@ function Bot:onChat(f)
       -- doing, not the model's reply.)
       local give = answer and ally and tonumber(answer.give)
       if give and give >= 0 then
-        local amount = give > 0 and give >= 100 and give <= 10000000 and give or parse_amount(text)
+        local amount = give >= 1 and give <= 10000000 and give or parse_amount(text)
         if money_turn() then self:answerMoneyRequest(peer, name, amount, to) end
         return
       end
@@ -1261,32 +1275,39 @@ function Bot:answerEmergencies()
   end
 end
 
--- An ally's request for money is met when the bank stays above this (and
--- only when it holds more than GIVE_ABOVE) (Jan, 2026-11-07). Tests: the
--- limits "above:keep" in MP_BOT_GIVE_LIMITS.
-local GIVE_ABOVE, GIVE_KEEP = 20000, 15000
+-- An ally's request for money (Jan, 2026-11-08): the sum asked for, up to
+-- GIVE_MAX at once, while the bank holds more than GIVE_KEEP and keeps that
+-- much. (Before, only a bank over $20,000 gave anything, and a sum it could
+-- not give in full got nothing: a player who had sent a bot a lot was
+-- refused a small sum back.) Tests: the limits "keep:max" in
+-- MP_BOT_GIVE_LIMITS.
+local GIVE_KEEP, GIVE_MAX = 15000, 20000
 do
-  local above, keep = (os.getenv("MP_BOT_GIVE_LIMITS") or ""):match("^(%d+):(%d+)$")
-  if above then GIVE_ABOVE, GIVE_KEEP = tonumber(above), tonumber(keep) end
+  local keep, most = (os.getenv("MP_BOT_GIVE_LIMITS") or ""):match("^(%d+):(%d+)$")
+  if keep then GIVE_KEEP, GIVE_MAX = tonumber(keep), tonumber(most) end
+end
+
+--! Dollars with thousands separators: 20,000.
+local function thousands(n)
+  local text = string.format("%d", math.max(0, math.floor(n + 0.5)))
+  return (text:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", ""))
 end
 
 --! What a bank of `balance` dollars gives to an ally who asks for `amount`
---! (nil: no sum named): the amount to send (0: none) and what it could
---! spare. It sends only when it holds more than GIVE_ABOVE and keeps
---! GIVE_KEEP afterwards. With no sum named it sends half of what is above
---! GIVE_KEEP (in whole thousands, between $2,000 and $10,000): enough to
---! help, and the bank stays well above its floor.
+--! (nil: no sum named): the amount to send (0: none) and the most it could
+--! send now. A sum named: min(asked, GIVE_MAX, balance - GIVE_KEEP), so
+--! nothing once the bank holds GIVE_KEEP or less. No sum named: half of what
+--! is above GIVE_KEEP, in whole thousands, $1,000 to $10,000 (and at most
+--! GIVE_MAX): enough to help, and the bank stays well above its floor.
 function Bot.giftFor(balance, amount)
   balance = math.floor(balance)
-  if balance <= GIVE_ABOVE then return 0, 0 end
-  local spare = math.max(0, math.floor((balance - GIVE_KEEP) / 1000) * 1000)
-  if amount then
-    if balance - amount >= GIVE_KEEP then return amount, spare end
-    return 0, spare
-  end
-  local give = math.min(10000, math.max(2000, math.floor(spare / 2000) * 1000))
-  if give > spare then return 0, spare end
-  return give, spare
+  local most = math.max(0, math.min(GIVE_MAX, balance - GIVE_KEEP))
+  if most == 0 then return 0, 0 end
+  if amount then return math.min(amount, most), most end
+  local spare = math.floor((balance - GIVE_KEEP) / 1000) * 1000
+  local give = math.min(10000, most, math.max(1000, math.floor(spare / 2000) * 1000))
+  if give > spare then return 0, most end
+  return give, most
 end
 
 --! Does this chat line name another bot of the room (not this one)?
@@ -1323,30 +1344,47 @@ end
 --! An ally asked in the chat for money (`amount`: the sum named, or nil):
 --! the bot decides by its own bank (Bot.giftFor), sends it as a person would
 --! (a give_money command) and says what it did, never more. `to` is where
---! the answer goes (the team, the asker, or everybody).
+--! the answer goes (the team, the asker, or everybody). Less than asked, or
+--! nothing: it also says where its money went lately (its last big spending,
+--! Manager:spentWords), so a player who gave it money sees what became of it.
 function Bot:answerMoneyRequest(peer, name, amount, to)
   local world, session = self.world, TheApp.mp_session
   local mine = world.ui.hospital
   local index = self.lobby.peer_hospital and self.lobby.peer_hospital[peer]
   local line
+  local vars = {name = name, keep = thousands(GIVE_KEEP), max = thousands(GIVE_MAX)}
+  -- (Where the money went, after a line that gives less than asked.)
+  local function spent(text)
+    local words = self.manager and self.manager:spentWords(self:gameDay())
+    local more = words and text .. " " .. fill_in(pick(LINES.gift_spent), {spent = words})
+    return more and #more <= 195 and more or text -- (the server cuts a chat line at 200 letters)
+  end
   if not index or world.hospitals[index] == mine then
-    line = fill_in(pick(LINES.gift_same_bank), {name = name})
+    line = fill_in(pick(LINES.gift_same_bank), vars)
   else
-    local give, spare = Bot.giftFor(mine.balance, amount)
-    if (give > 0 or spare >= 1000) and (not session or session.held) then
-      line = fill_in(pick(LINES.gift_later), {name = name})
+    local give, most = Bot.giftFor(mine.balance, amount)
+    vars.amount, vars.asked = thousands(give), amount and thousands(amount)
+    if give > 0 and (not session or session.held) then
+      line = fill_in(pick(LINES.gift_later), vars)
     elseif give > 0 then
       session:issue({kind = "give_money", to = index, amount = give})
-      log(string.format("money for %s: sent $%d (asked %s, bank $%d)", name, give, tostring(amount),
-          math.floor(mine.balance)))
-      line = fill_in(pick(amount and LINES.gift_sent or LINES.gift_sent_auto), {name = name, amount = give})
-    elseif amount and spare >= 1000 then
-      log(string.format("money for %s: declined $%d, could spare $%d", name, amount, spare))
-      line = fill_in(pick(LINES.gift_spare), {name = name, amount = amount, spare = spare})
+      if self.manager then self.manager:noteSpent("gift:" .. name, give) end
+      if amount and give < amount then
+        -- (The most it sends at once, or all it can spare above its floor.)
+        local capped = give >= GIVE_MAX
+        log(string.format("money for %s: sent $%d, less than the $%d asked (%s; bank $%d)", name, give, amount,
+            capped and "the most at once" or "all it can spare", math.floor(mine.balance)))
+        line = fill_in(pick(capped and LINES.gift_cap or LINES.gift_part), vars)
+        if not capped then line = spent(line) end
+      else
+        log(string.format("money for %s: sent $%d (asked %s, bank $%d)", name, give, tostring(amount),
+            math.floor(mine.balance)))
+        line = fill_in(pick(amount and LINES.gift_sent or LINES.gift_sent_auto), vars)
+      end
     else
-      log(string.format("money for %s: declined (asked %s, bank $%d)", name, tostring(amount),
-          math.floor(mine.balance)))
-      line = fill_in(pick(LINES.gift_none), {name = name})
+      log(string.format("money for %s: declined (asked %s, bank $%d, most it could send $%d)", name,
+          tostring(amount), math.floor(mine.balance), most))
+      line = spent(fill_in(pick(LINES.gift_none), vars))
     end
   end
   self:say(line, typing(line), to)
@@ -1470,6 +1508,9 @@ end
 -- A room asked for "next to" something is built within this many tiles of it,
 -- else the normal place is used and the person told.
 local NEAR_MAX_GAP = 8
+-- Spots for a room checked against its whole floor (Bot:roomKeepsFloor) in one
+-- search at most.
+local FLOOR_TRIES = 60
 
 --! Where a player would put a w x h room (squares from `size` down to
 --! `min`, and one tile shorter): against the building's walls and the other
@@ -1596,10 +1637,20 @@ function Bot:layoutSpot(min, size, near)
     log(string.format("layout diag %d-%d: area %d,%d-%d,%d, %d spots; best %s; tiles in %d free %d reserved %d room %d object %d not buildable %d",
         min, size, x0, y0, x1, y1, #spots, table.concat(top, ", "), n_in, n_free, n_res, n_room, n_obj, n_flag))
   end
+  -- (And its own floor stays one piece with every door on it, Bot:roomKeepsFloor:
+  -- a scan of the floor per spot, so at most FLOOR_TRIES of them.)
+  local floor_tries = 0
   for i, spot in ipairs(spots) do
     if self:keepsCorridor(spot[2], spot[3], spot[4], spot[5]) then
-      if i > 1 then log(string.format("layout: %d better spots would cut the corridor in two", i - 1)) end
-      return spot[2], spot[3], spot[4], spot[5]
+      floor_tries = floor_tries + 1
+      if floor_tries > FLOOR_TRIES then
+        log(string.format("layout: %d spots would cut its floor in two; no more tried", FLOOR_TRIES))
+        return nil
+      end
+      if self:roomKeepsFloor(spot[2], spot[3], spot[4], spot[5]) then
+        if i > 1 then log(string.format("layout: %d better spots would cut the corridor or the floor in two", i - 1)) end
+        return spot[2], spot[3], spot[4], spot[5]
+      end
     end
   end
 end
@@ -1646,6 +1697,162 @@ function Bot:keepsCorridor(x, y, w, h)
     if not seen[t[2] * 1000 + t[1]] then return false end
   end
   return true
+end
+
+--! Its hospital's floor for Manager.floorParts: the corridor tiles of its own
+--! building (in no room) one can walk on and those an object stands on, each
+--! with the sides one can cross (the game's travel flags), and the places
+--! that must be reached: its entrances, both sides of each reception desk
+--! (patients and receptionist) and the tile before each room's door. Made
+--! once a game step (a scan of the map), so only when the bot is about to put
+--! something down.
+function Bot:floorMap()
+  local world, session = self.world, TheApp.mp_session
+  local step = session and session.step
+  local cache = self.floor_cache
+  if cache and cache.world == world and cache.step == step then return cache.floor end
+  local hosp = world.ui.hospital
+  local th = world.map.th
+  local mw, mh = th:size()
+  local me = hosp:getPlayerIndex()
+  local W = Manager.FLOOR_W
+  local rooms = world.rooms
+  local walk, held, flags = {}, {}, {}
+  for y = 1, mh do
+    for x = 1, mw do
+      th:getCellFlags(x, y, flags)
+      local room_id = flags.roomId or 0
+      if flags.hospital and flags.owner == me and (room_id == 0 or not rooms[room_id]) then
+        local bits = (flags.travelNorth and 1 or 0) + (flags.travelEast and 2 or 0) +
+            (flags.travelSouth and 4 or 0) + (flags.travelWest and 8 or 0)
+        if flags.passable then walk[y * W + x] = bits else held[y * W + x] = bits end
+      end
+    end
+  end
+  local targets, seen = {}, {}
+  local counts = {entrances = 0, desks = 0, doors = 0} -- (for the month's log line)
+  local function target(k, kind)
+    if k and (walk[k] or held[k]) and not seen[k] then
+      seen[k] = true
+      targets[#targets + 1] = k
+      counts[kind] = counts[kind] + 1
+    end
+  end
+  -- (An entrance door stands on the tile south or east of its wall: the
+  -- floor inside may be the tile on the other side.)
+  for _, e in ipairs(world.entities) do
+    local id = e.object_type and e.object_type.id
+    if (id == "entrance_left_door" or id == "entrance_right_door") and e.tile_x then
+      local k = e.tile_y * W + e.tile_x
+      if not (walk[k] or held[k]) then k = e.direction == "west" and k - 1 or k - W end
+      target(k, "entrances")
+    end
+  end
+  -- (A desk: where its patients stand, and its receptionist.)
+  for _, desk in ipairs(hosp:getReceptionDesks()) do
+    local o = desk.tile_x and desk.object_type.orientations[desk.direction]
+    for _, use in ipairs(o and {o.use_position, o.use_position_secondary} or {}) do
+      target((desk.tile_y + use[2]) * W + desk.tile_x + use[1], "desks")
+    end
+  end
+  local own = {}
+  for _, rm in pairs(rooms) do
+    if rm.hospital == hosp and rm.door and rm.door.tile_x and not rm.crashed then own[#own + 1] = rm end
+  end
+  table.sort(own, function(a, b) return a.id < b.id end)
+  for _, rm in ipairs(own) do
+    local ok, x, y = pcall(rm.getEntranceXY, rm, false)
+    if ok and x then target(y * W + x, "doors") end
+  end
+  local floor = {walk = walk, held = held, targets = targets, counts = counts}
+  floor.parts = Manager.floorParts(floor)
+  self.floor_cache = {world = world, step = step, floor = floor}
+  return floor
+end
+
+--! Would `change` (Manager.objectChange: an object put down) leave the
+--! hospital's floor in no more parts than now (Bot:floorMap)? `extra`
+--! (optional): more tiles that must be reached (a new desk's two sides).
+function Bot:floorKept(floor, change, extra)
+  if not extra then return Manager.floorParts(floor, change) <= floor.parts end
+  local with = {walk = floor.walk, held = floor.held, targets = {}}
+  for _, k in ipairs(extra) do with.targets[#with.targets + 1] = k end
+  for _, k in ipairs(floor.targets) do with.targets[#with.targets + 1] = k end
+  return Manager.floorParts(with, change) <= Manager.floorParts(with)
+end
+
+--! Would a w x h room at x, y keep the hospital's floor in one piece
+--! (Bot:floorKept) and open onto it: some tile along its sides reached from
+--! the entrances, the desks and the other rooms, where its door can go?
+function Bot:roomKeepsFloor(x, y, w, h)
+  local floor = self:floorMap()
+  local W = Manager.FLOOR_W
+  local change = {block = {}}
+  for ty = y, y + h - 1 do
+    for tx = x, x + w - 1 do change.block[ty * W + tx] = true end
+  end
+  local after, part = Manager.floorParts(floor, change)
+  if after > floor.parts then return false end
+  if #floor.targets == 0 then return true end
+  for tx = x, x + w - 1 do
+    if part[(y - 1) * W + tx] or part[(y + h) * W + tx] then return true end
+  end
+  for ty = y, y + h - 1 do
+    if part[ty * W + x - 1] or part[ty * W + x + w] then return true end
+  end
+  return false
+end
+
+--! The corridor objects of its hospital but the reception desks (which a bot
+--! may sell): all of them taken away, as a Manager.objectChange, and which
+--! object stands on each tile or closes each side.
+--!return away, object by tile key, object by side key
+function Bot:floorObjects()
+  local world = self.world
+  local hosp = world.ui.hospital
+  local away, by_tile, by_side = {open = {}, join = {}}, {}, {}
+  for _, e in ipairs(world.entities) do
+    local ot = e.object_type
+    if ot and ot.corridor_object and ot.id ~= "reception_desk" and e.tile_x and e.mp_id and e.direction and
+        hosp:isInHospital(e.tile_x, e.tile_y) and not world:getRoom(e.tile_x, e.tile_y) then
+      local one = Manager.objectChange(ot, e.tile_x, e.tile_y, e.direction, nil, true)
+      for k in pairs(one.open or {}) do by_tile[k], away.open[k] = e, true end
+      for k in pairs(one.join or {}) do by_side[k], away.join[k] = e, true end
+    end
+  end
+  return away, by_tile, by_side
+end
+
+--! Its floor in words for the month's log line: in how many parts, in how
+--! many it would be without its corridor objects (more than that: objects
+--! cut it), and what must be reached. (A plot bought is often a building of
+--! its own, with its own entrance: a part of its own.)
+function Bot:floorReport()
+  local floor = self:floorMap()
+  local c = floor.counts
+  return string.format("%d part(s) (%d without its corridor objects), to reach %d entrance tile(s), %d desk side(s),"
+      .. " %d door(s)", floor.parts, Manager.floorParts(floor, (self:floorObjects())), c.entrances, c.desks, c.doors)
+end
+
+--! A floor already in pieces (from an older game, or objects put down before
+--! the bot checked): the corridor object that stands first in the way
+--! between two parts (Manager.floorBlocker) is sold, with the sell_object
+--! command a person's click sends (its price comes back; the waiting-area
+--! rules buy what is missing again where it fits). Never a reception desk.
+--! One object a call (Manager:daily).
+--!return a line for the log when it sold something, else nil
+function Bot:repairFloor()
+  local session = TheApp.mp_session
+  if not session or session.held or not MultiplayerSession.default_handlers.sell_object then return nil end
+  local floor = self:floorMap()
+  if floor.parts <= 1 then return nil end
+  local away, by_tile, by_side = self:floorObjects()
+  local kind, key = Manager.floorBlocker(floor, away)
+  local e = kind == "tile" and by_tile[key] or kind == "side" and by_side[key] or nil
+  if not e then return nil end
+  session:issue({kind = "sell_object", object = e.mp_id})
+  return string.format("its floor is in %d parts: sold the %s at %d,%d, which was in the way",
+      floor.parts, e.object_type.id, e.tile_x, e.tile_y)
 end
 
 --! The nearest place for a packed w x h room (see Bot:roomFits).
@@ -1757,7 +1964,7 @@ function Bot:drawRoom(room_type, size, extras, near)
         if self.reserved[ty * 1000 + tx] then return end -- (a room being edited, an outline)
       end
     end
-    if self:keepsCorridor(fx, fy, s, s) then x, y, w = fx, fy, s end
+    if self:keepsCorridor(fx, fy, s, s) and self:roomKeepsFloor(fx, fy, s, s) then x, y, w = fx, fy, s end
   end
   for s = size, min, -1 do
     if not x then try(s, builder.find_free_rect(self.world, ax, ay, s + 1, s + 1, 40)) end
@@ -2220,6 +2427,26 @@ function Bot:buyCorridor(object_id, near_x, near_y)
       end
     end
   end
+  -- Its own floor stays in one piece with the entrances, the desks and every
+  -- room's door on it (Bot:floorKept; Argus, 2026-11-08: benches and drinks
+  -- machines had cut a bot's hospital in two). A new desk's two sides
+  -- (patients, receptionist) must be reached too.
+  local object_type = place.objects[1].object
+  local floor, cuts = nil, 0
+  local function keeps_floor(tx, ty, facing)
+    floor = floor or self:floorMap()
+    local o = object_type.orientations[facing]
+    local extra
+    if object_id == "reception_desk" and o then
+      extra = {}
+      for _, use in ipairs({o.use_position, o.use_position_secondary}) do
+        extra[#extra + 1] = (ty + use[2]) * Manager.FLOOR_W + tx + use[1]
+      end
+    end
+    local ok = self:floorKept(floor, Manager.objectChange(object_type, tx, ty, facing), extra)
+    if not ok then cuts = cuts + 1 end
+    return ok
+  end
   local function fits(tx, ty)
     for _, e in ipairs(apart) do
       if math.abs(e.tile_x - tx) <= DRINKS_APART and math.abs(e.tile_y - ty) <= DRINKS_APART then return false end
@@ -2228,7 +2455,7 @@ function Bot:buyCorridor(object_id, near_x, near_y)
     for _, facing in ipairs(facings) do
       place:setOrientation(facing)
       place:setBlueprintCell(tx, ty)
-      if place.object_blueprint_good then return true end
+      if place.object_blueprint_good and keeps_floor(tx, ty, facing) then return true end
     end
     return false
   end
@@ -2253,13 +2480,14 @@ function Bot:buyCorridor(object_id, near_x, near_y)
     -- Tiles with free floor all around (so nothing blocks a corridor).
     x, y = builder.find_free_rect(world, ax, ay, 1, 1, 40, fits)
   end
+  local refused = cuts > 0 and string.format(" (%d spot(s) refused: they would cut its floor in two)", cuts) or ""
   if x then
     place.object_cell_x, place.object_cell_y = x, y
     place:onMouseUp("left", 100000, 100000) -- a click outside the window
     placed = true
-    log(string.format("bought a %s at %d,%d", object_id, x, y))
+    log(string.format("bought a %s at %d,%d%s", object_id, x, y, refused))
   else
-    log("no place for a " .. object_id)
+    log("no place for a " .. object_id .. refused)
   end
   if ui:getWindow(UIPlaceObjects) then ui:getWindow(UIPlaceObjects):close() end
   return placed
@@ -2335,6 +2563,28 @@ function Bot:hireTeacher()
   local dx, dy = self:anchor()
   local ok, err = pcall(builder.ui_hire, self.world, dx, dy, "Doctor:consultant@training", log, Bot.teacherScore)
   if not ok then log("could not hire a teacher: " .. tostring(err)) end
+  return ok
+end
+
+--! Hire a doctor straight into the training room as a student: the most
+--! skilled junior on the list, else (unless `junior_only`) the most skilled
+--! doctor not yet a consultant (he learns too). False if there is none.
+function Bot:hireStudent(junior_only)
+  local world = self.world
+  if world.ui.hospital.balance < RESERVE then return false end
+  local pool = (world.staffPool and world:staffPool() or world.available_staff).Doctor or {}
+  local junior, other = false, false
+  for _, p in ipairs(pool) do
+    if flag(p, "is_junior") then junior = true elseif not flag(p, "is_consultant") then other = true end
+  end
+  if not junior and (junior_only or not other) then return false end
+  local dx, dy = self:anchor()
+  local ok, err = pcall(builder.ui_hire, world, dx, dy, junior and "Doctor:junior@training" or "Doctor@training", log,
+      function(p)
+        if flag(p, "is_consultant") then return nil end
+        return p.skill or 0
+      end)
+  if not ok then log("could not hire a student: " .. tostring(err)) end
   return ok
 end
 
@@ -2451,6 +2701,7 @@ function Bot:playTrick()
   end
   log(string.format("dirty trick: %s level %d on %s", kind, level, target[2]))
   TheApp.mp_session:issue({kind = "sabotage", trick = kind, level = level, to = world:getHospitalIndex(target[1])})
+  if self.manager then self.manager:noteSpent("trick", cost(level)) end
   if rand() < 0.5 then
     local line = pick(LINES.trick):format(target[2])
     self:say(line, 20 + rand() * 40, nil, nil, true)
