@@ -6,7 +6,7 @@
 #
 # Players need the same Lua runtime as the Windows and Linux builds (Lua 5.5:
 # it is part of the multiplayer build id), so Lua 5.5 and the Lua modules the
-# game loads (LuaFileSystem, LPeg, LuaSocket, LuaSec) are built here and bundled, as
+# game loads (LuaFileSystem, LPeg, LuaSocket) are built here and bundled, as
 # in build_linux_package.sh. SDL3 and SDL3_mixer are built from source (the
 # same versions as on Linux), and a small FFmpeg for the videos; FreeType,
 # libpng, zstd and FluidSynth come from
@@ -75,7 +75,7 @@ if [[ ! -f "$P/lib/libavcodec.dylib" ]]; then
     && make -j"$jobs" && make install)
 fi
 
-# 2. Lua 5.5 with LuaFileSystem, LPeg, LuaSocket and LuaSec.
+# 2. Lua 5.5 with LuaFileSystem, LPeg and LuaSocket.
 if [[ ! -f "$P/lib/liblua.a" ]]; then
   [[ -f lua-5.5.0.tar.gz ]] || curl -fsSLO https://www.lua.org/ftp/lua-5.5.0.tar.gz
   tar xzf lua-5.5.0.tar.gz
@@ -116,16 +116,6 @@ if [[ ! -f "$mods/socket/core.so" ]]; then
   make -C luasocket install PLAT=macosx LUAV=5.5 prefix="$P" INSTALL_TOP_LDIR="$lmods" INSTALL_TOP_CDIR="$mods"
 fi
 
-# LuaSec (TLS for the multiplayer connections, docs/multiplayer/ENCRYPTION.md)
-# with Homebrew's OpenSSL 3 (brew install openssl@3), which is bundled below.
-openssl_prefix=$(brew --prefix openssl@3)
-if [[ ! -f "$mods/ssl.so" ]]; then
-  [[ -d luasec ]] || git clone -q --depth 1 --branch v1.3.2 https://github.com/lunarmodules/luasec.git
-  make -C luasec macosx INC_PATH="-I$inc -I$openssl_prefix/include" LIB_PATH="-L$openssl_prefix/lib" \
-    MACOSX_VERSION="$MACOSX_DEPLOYMENT_TARGET"
-  make -C luasec install LUAPATH="$lmods" LUACPATH="$mods"
-fi
-
 # 3. CorsixTH, installed as an app bundle. Lua is linked statically, all of it
 # (force_load), so the Lua modules above find every function they use in the
 # program.
@@ -150,8 +140,7 @@ cp -R "$work/stage/CorsixTH.app" "$app"
 res=$app/Contents/Resources
 cp -R "$mods/." "$res/"
 cp -R "$lmods/." "$res/"
-# (ssl.so is fixed too: it brings libssl and libcrypto into the app.)
-dylibbundler -cd -of -b -x "$app/Contents/MacOS/CorsixTH" -x "$res/ssl.so" -d "$app/Contents/Frameworks/" \
+dylibbundler -cd -of -b -x "$app/Contents/MacOS/CorsixTH" -d "$app/Contents/Frameworks/" \
   -p @executable_path/../Frameworks/ -s "$P/lib" -s "$brew_prefix/lib" < /dev/null
 # Only the app's own library folder stays on the search path.
 for rp in $(otool -l "$app/Contents/MacOS/CorsixTH" | awk '/LC_RPATH/ {getline; getline; print $2}'); do

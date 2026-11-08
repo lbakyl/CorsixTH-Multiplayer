@@ -25,7 +25,7 @@ jobs:
           sudo apt-get update
           # (fluidsynth: the CMake files of libfluidsynth-dev on Ubuntu 24.04 name the program.)
           sudo apt-get install -y build-essential cmake ninja-build pkg-config git curl patchelf \
-            libfreetype-dev libpng-dev zlib1g-dev libzstd-dev libfluidsynth-dev fluidsynth libssl-dev \
+            libfreetype-dev libpng-dev zlib1g-dev libzstd-dev libfluidsynth-dev fluidsynth \
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev \
             libxtst-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libegl1-mesa-dev \
             libgles2-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev libwayland-dev \
@@ -43,8 +43,6 @@ jobs:
           ldd ./corsix-th | grep -i "not found" && exit 1 || true
           for so in lua/*.so lua/*/*.so; do ldd "$so" | grep -i "not found" && exit 1 || true; done
           ls -la
-      - name: Smoke test (LuaSec and a TLS connection to the multiplayer server)
-        run: bash scripts/multiplayer/ci_tls_smoke.sh dist/CorsixTH-Multiplayer/CorsixTH-Multiplayer.sh
       - name: Upload the package
         uses: actions/upload-artifact@v7
         with:

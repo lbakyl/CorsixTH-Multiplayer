@@ -34,10 +34,6 @@
     {
       "name": "luasocket",
       "platform": "windows"
-    },
-    {
-      "name": "luasec",
-      "platform": "windows"
     }
   ],
   "features": {

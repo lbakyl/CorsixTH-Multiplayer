@@ -55,7 +55,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Install build packages
         run: |
-          packages="ninja pkgconf freetype libpng zstd fluidsynth dylibbundler openssl@3"
+          packages="ninja pkgconf freetype libpng zstd fluidsynth dylibbundler"
           if [ "$RUNNER_ENVIRONMENT" = self-hosted ]; then
             # Somebody's own Mac: install only what is missing, upgrade nothing.
             for p in $packages; do brew list --versions "$p" > /dev/null || brew install "$p"; done
@@ -88,11 +88,6 @@ jobs:
             --resources="$PWD/$app/Contents/Resources" --server=127.0.0.1:47891 | tee smoke.txt
           kill "$server" || true
           grep -q "MACOS SMOKE OK" smoke.txt
-      - name: Smoke test (LuaSec and a TLS connection to the multiplayer server)
-        run: |
-          app=$PWD/dist/CorsixTH-Multiplayer/CorsixTH.app
-          SMOKE_ARGS="--resources=$app/Contents/Resources" \
-            bash scripts/multiplayer/ci_tls_smoke.sh "$app/Contents/MacOS/CorsixTH"
       - name: Smoke test (the game starts and keeps running without game data)
         run: |
           app=$PWD/dist/CorsixTH-Multiplayer/CorsixTH.app

@@ -247,11 +247,8 @@ sudo bash setup-referee-host.sh --release mp-stable-NEWNUMBER --motd "Welcome to
 
 ## 10. Good to know
 
-- Connections can be encrypted with TLS (`setup-referee-host.sh` makes a
-  certificate and offers it; see `ENCRYPTION.md`). Games and servers without
-  it still work, in clear: then passwords and game traffic are **not
-  encrypted**. Room passwords only keep strangers out of a room; do not use a
-  password you use anywhere else.
+- Passwords and game traffic are **not encrypted**. Room passwords only keep
+  strangers out of a room; do not use a password you use anywhere else.
 - Keep the server updated (`sudo apt update && sudo apt upgrade`), log in
   with SSH keys only, and keep fail2ban on (step 2).
 - Without a referee, a lighter server without game files exists too (Docker,

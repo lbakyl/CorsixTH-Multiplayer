@@ -19,17 +19,6 @@ The server compares the fingerprints of all players for each step. Without a
 referee it sends `DESYNC` when they differ; with one it repairs the games
 (see `referee.md` and the last section below).
 
-## Encryption (optional, first line)
-
-A client may start with the single line `STARTTLS` instead of `HELLO`. A
-server with a certificate answers `STARTTLS ok` and both sides switch to TLS
-on the same connection; `HELLO` is then the first line inside TLS. A server
-without a certificate answers `ERROR code=no_tls` and the client may go on
-with `HELLO` in clear on the same connection. A server that requires TLS
-(`CORSIXTH_MP_TLS_REQUIRED`) answers a clear `HELLO` with `ERROR
-code=tls_required` and hangs up (not for its own machine). Everything below is
-the same inside TLS. Details, threat model and settings: `ENCRYPTION.md`.
-
 ## Client to server
 
 | Message | When | Fields |
@@ -58,7 +47,7 @@ the same inside TLS. Details, threat model and settings: `ENCRYPTION.md`.
 | Message | Meaning |
 |---|---|
 | `WELCOME proto id server motd` | accepted |
-| `ERROR code text` | request refused; codes: `expected_hello`, `protocol`, `bad_room`, `room_exists`, `no_room`, `bad_password`, `build_mismatch`, `running`, `busy`, `room_full`, `in_room`, `not_owner`, `not_ready`, `not_enough`, `bad_speed`, `too_fast`, `bad_report`, `bad_command`, `unknown_verb`, `bad_message`, `not_referee`, `bad_seat`, `locked`, `no_tls`, `tls_required` |
+| `ERROR code text` | request refused; codes: `expected_hello`, `protocol`, `bad_room`, `room_exists`, `no_room`, `bad_password`, `build_mismatch`, `running`, `busy`, `room_full`, `in_room`, `not_owner`, `not_ready`, `not_enough`, `bad_speed`, `too_fast`, `bad_report`, `bad_command`, `unknown_verb`, `bad_message`, `not_referee`, `bad_seat`, `locked` |
 | `ERROR code=data_mismatch text need` | answer to `HELLO` with `data` (the Theme Hospital level files' CRC-32, `MultiplayerLobby.dataId`) other than the server's (`CORSIXTH_MP_DATA`) on a server without a referee; the server then hangs up. A server with a referee lets such a player in: in a new game their `START` has `resume=1` (no level is loaded), the others get `HOLD step=0 why=rejoin`, and everybody loads the referee's game at step 0 |
 | `ERROR code=build_mismatch text need release url` | answer to `HELLO` on a server that only lets in its referee's build (`referee.md`): `need` is the Lua code checksum it wants (the last part of the build id), `release` and `url` the release to get and its download page (both optional); the server then hangs up. The game offers `url` only if it is a `https://github.com/` page |
 | `ROOM room players max mode level locked state build_ok continue` | one per room after `LIST`, then `ROOMS_END count`; `continue=1` for a saved game |

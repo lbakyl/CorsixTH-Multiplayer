@@ -32,15 +32,6 @@
 # Without it nothing is posted. --name names this server in the report
 # (default: the host's name; kept from the last run).
 #
-# Encryption (docs/multiplayer/ENCRYPTION.md): the first run makes a
-# self-signed certificate in /etc/corsixth-mp-tls (valid for 20 years, kept
-# by every later run: the players remember its fingerprint, so do not
-# replace it casually) and the server offers TLS (STARTTLS) on the same port.
-# Old players keep working in clear. --require-tls refuses players that do
-# not encrypt (this machine's own bots and referee excepted); --allow-clear
-# goes back. Without either option the last setting is kept. To use your own
-# certificate, put it there first as server.crt and server.key.
-#
 # Safe to run again, e.g. with the next release. Restarting the service drops
 # every connected player: check that nobody is playing first.
 set -euo pipefail
@@ -51,7 +42,6 @@ DATA=""
 PORT=47800
 MOTD="CorsixTH multiplayer server (with referee)"
 NAME=""
-REQUIRE_TLS=""
 REPO=lbakyl/CorsixTH-Multiplayer
 BASE=/opt/corsixth-mp
 
@@ -63,8 +53,6 @@ while [[ $# -gt 0 ]]; do
     --port) PORT=$2; shift 2 ;;
     --motd) MOTD=$2; shift 2 ;;
     --name) NAME=$2; shift 2 ;;
-    --require-tls) REQUIRE_TLS=1; shift ;;
-    --allow-clear) REQUIRE_TLS=0; shift ;;
     -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
     *) echo "Unknown option $1 (see --help)" >&2; exit 2 ;;
   esac
@@ -78,7 +66,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 say "Packages: Python, git, and the libraries the game binary links against"
 apt-get update -q >/dev/null
-apt-get install -y -q --no-install-recommends python3 python3-venv git curl ca-certificates openssl libgomp1 \
+apt-get install -y -q --no-install-recommends python3 python3-venv git curl ca-certificates libgomp1 \
   libpulse0 libasound2t64 libjack-jackd2-0 libpipewire-0.3-0t64 libx11-6 libxext6 libxcursor1 \
   libxi6 libxfixes3 libxrandr2 libxss1 libgbm1 libwayland-egl1 libwayland-client0 \
   libwayland-cursor0 libdecor-0-0 >/dev/null
@@ -131,30 +119,10 @@ chown -R root:corsixth "$BASE/referee" "$BASE/src" && chmod -R g+rX,o= "$BASE/re
 missing=$(LD_LIBRARY_PATH="$R/game/lib" ldd "$R/game/corsix-th" | grep "not found" || true)
 [[ -z "$missing" ]] || die "the game binary misses libraries: $missing"
 
-say "Certificate for encrypted connections (/etc/corsixth-mp-tls)"
-TLS=/etc/corsixth-mp-tls
-mkdir -p "$TLS"
-if [[ ! -s "$TLS/server.crt" || ! -s "$TLS/server.key" ]]; then
-  # (EC P-256: small and fast. The players do not check the name, they only
-  # remember the fingerprint, so the subject is just a label.)
-  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 7300 \
-    -subj "/CN=$(hostname -f 2>/dev/null || hostname)" -keyout "$TLS/server.key" -out "$TLS/server.crt" 2>/dev/null
-  echo "   made a new certificate"
-else
-  echo "   keeping the certificate that is there"
-fi
-chown -R root:corsixth "$TLS" && chmod 750 "$TLS" && chmod 640 "$TLS/server.key" && chmod 644 "$TLS/server.crt"
-TLS_FINGERPRINT=$(openssl x509 -in "$TLS/server.crt" -noout -fingerprint -sha256 | sed 's/^.*=//')
-echo "   SHA-256 fingerprint: $TLS_FINGERPRINT"
-
 say "Settings (/etc/corsixth-mp.env) and the service"
 if [[ -z "$NAME" && -f /etc/corsixth-mp.env ]]; then
   NAME=$(sed -n 's/^CORSIXTH_MP_SERVER_NAME=//p' /etc/corsixth-mp.env)
 fi
-if [[ -z "$REQUIRE_TLS" && -f /etc/corsixth-mp.env ]]; then
-  REQUIRE_TLS=$(sed -n 's/^CORSIXTH_MP_TLS_REQUIRED=//p' /etc/corsixth-mp.env)
-fi
-REQUIRE_TLS=${REQUIRE_TLS:-0}
 NAME=${NAME:-$(hostname)}
 cat > /etc/corsixth-mp.env <<EOF
 # Written by setup-referee-host.sh for $RELEASE. The referee build must match
@@ -169,9 +137,6 @@ CORSIXTH_MP_REFEREE_LUA_PATH=$R/game/lua/?.lua;$R/game/lua/?/init.lua
 CORSIXTH_MP_REFEREE_WORKDIR=/var/lib/corsixth/referee-work
 LD_LIBRARY_PATH=$R/game/lib
 CORSIXTH_MP_SERVER_NAME=$NAME
-CORSIXTH_MP_TLS_CERT=$TLS/server.crt
-CORSIXTH_MP_TLS_KEY=$TLS/server.key
-CORSIXTH_MP_TLS_REQUIRED=$REQUIRE_TLS
 EOF
 chmod 644 /etc/corsixth-mp.env
 cat > /etc/systemd/system/corsixth-mp.service <<EOF
@@ -256,5 +221,4 @@ PY
 # Old referee builds are not needed any more.
 find "$BASE/referee" -mindepth 1 -maxdepth 1 -type d ! -name "$SHA" -exec rm -rf {} +
 say "Done: the server runs $RELEASE with the referee on port $PORT"
-echo "   Encrypted connections offered (players in clear: $([[ $REQUIRE_TLS == 1 ]] && echo refused || echo allowed)); certificate fingerprint $TLS_FINGERPRINT"
 echo "   Logs: journalctl -u corsixth-mp -f; referee logs in /var/lib/corsixth/referee-work"

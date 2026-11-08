@@ -20,11 +20,6 @@ services:
       CORSIXTH_MP_MOTD: ${CORSIXTH_MP_MOTD:-}
       CORSIXTH_MP_MAX_CONNECTIONS: ${CORSIXTH_MP_MAX_CONNECTIONS:-256}
       CORSIXTH_MP_MAX_PER_ADDRESS: ${CORSIXTH_MP_MAX_PER_ADDRESS:-8}
-      # Encrypted connections (docs/multiplayer/ENCRYPTION.md): paths inside
-      # the container of a certificate and key you mount below. Empty: off.
-      CORSIXTH_MP_TLS_CERT: ${CORSIXTH_MP_TLS_CERT:-}
-      CORSIXTH_MP_TLS_KEY: ${CORSIXTH_MP_TLS_KEY:-}
-      CORSIXTH_MP_TLS_REQUIRED: ${CORSIXTH_MP_TLS_REQUIRED:-}
     # The server needs nothing from the host: no writable files, no
     # capabilities, no privileges.
     user: "10001:10001"
@@ -42,10 +37,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    # For encryption, e.g. CORSIXTH_MP_TLS_CERT=/tls/server.crt and
-    # CORSIXTH_MP_TLS_KEY=/tls/server.key, with the files (readable by user
-    # 10001) mounted:
-    #   - ./tls:/tls:ro
     # Later (headless referee, milestone S3): the referee needs Theme Hospital
     # data from your own copy, mounted read-only, never baked into the image:
     # volumes:

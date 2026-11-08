@@ -314,38 +314,6 @@ if(VCPKG_TARGET_TRIPLET AND WIN32)
   endif()
 endif()
 
-# LuaSec (vcpkg port "luasec": TLS for the multiplayer connections, see
-# docs/multiplayer/ENCRYPTION.md) and the OpenSSL libraries it needs, next to
-# the game as well. The game works without them (connections stay in clear).
-# The port names the module lua-ssl.dll; Lua looks for ssl.dll (luaopen_ssl_*).
-if(VCPKG_TARGET_TRIPLET AND WIN32)
-  set(LUASEC_ROOT "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
-  set(LUASEC_BIN "${LUASEC_ROOT}/$<$<CONFIG:Debug>:debug/>bin")
-  foreach(LUASEC_NAME ssl lua-ssl luasec)
-    if(EXISTS "${LUASEC_ROOT}/bin/${LUASEC_NAME}.dll")
-      set(LUASEC_DLL "${LUASEC_NAME}.dll")
-      break()
-    endif()
-  endforeach()
-  if(LUASEC_DLL AND EXISTS "${LUASEC_ROOT}/share/lua/ssl.lua")
-    message("  LuaSec found (multiplayer encryption)")
-    add_custom_command(
-      TARGET CorsixTH
-      POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy "${LUASEC_BIN}/${LUASEC_DLL}" $<TARGET_FILE_DIR:CorsixTH>/ssl.dll
-      COMMAND ${CMAKE_COMMAND} -E copy "${LUASEC_ROOT}/share/lua/ssl.lua" $<TARGET_FILE_DIR:CorsixTH>/ssl.lua
-    )
-    file(GLOB LUASEC_OPENSSL_DLLS "${LUASEC_ROOT}/bin/libssl*.dll" "${LUASEC_ROOT}/bin/libcrypto*.dll")
-    foreach(LUASEC_OPENSSL_DLL ${LUASEC_OPENSSL_DLLS})
-      add_custom_command(
-        TARGET CorsixTH
-        POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy "${LUASEC_OPENSSL_DLL}" $<TARGET_FILE_DIR:CorsixTH>
-      )
-    endforeach()
-  endif()
-endif()
-
 # Find libpng
 find_package(PNG REQUIRED)
 target_link_libraries(CorsixTH_lib PRIVATE PNG::PNG)

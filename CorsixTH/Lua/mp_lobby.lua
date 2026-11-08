@@ -332,11 +332,6 @@ end
 --!  log       (function) optional message logger
 function MultiplayerLobby:MultiplayerLobby(params)
   self.transport = params.transport
-  -- Is the connection encrypted (mp_transport.lua)? If not, `security_note`
-  -- says why: "no_ssl" (this build has no LuaSec), "server" or "old_server"
-  -- (the server cannot), "local" (a server on this computer), "off".
-  self.encrypted = self.transport.encrypted or false
-  self.security_note = self.transport.note
   self.name = params.name
   self.build = params.build or MultiplayerLobby.buildId()
   self.address = params.address or ""
@@ -374,7 +369,6 @@ function MultiplayerLobby.connect(address, name, timeout, hello)
   if not host then return nil, "No server address" end
   local transport, err = MultiplayerTransport.join(host, port, timeout or 5)
   if not transport then return nil, tostring(err) end
-  if transport.new_server then print("multiplayer: remembered the certificate of " .. host .. ":" .. port) end
   return MultiplayerLobby({transport = transport, name = name, hello = hello,
       address = host .. ":" .. port, log = print})
 end
@@ -394,15 +388,11 @@ function MultiplayerLobby.startConnect(address, name, timeout)
 end
 
 --! A connection started by startConnect: nil while it is being made, the
---! lobby once it is, or false, why it failed and a code for some reasons
---! ("cert_changed": the server's certificate is not the remembered one).
+--! lobby once it is, or false and why it failed.
 function MultiplayerLobby.pollConnect(connecting)
-  local transport, err, code = MultiplayerTransport.pollJoin(connecting.join)
+  local transport, err = MultiplayerTransport.pollJoin(connecting.join)
   if transport == nil then return nil end
-  if not transport then return false, tostring(err), code end
-  if transport.new_server then
-    print("multiplayer: remembered the certificate of " .. connecting.host .. ":" .. connecting.port)
-  end
+  if not transport then return false, tostring(err) end
   return MultiplayerLobby({transport = transport, name = connecting.name,
       address = connecting.host .. ":" .. connecting.port, log = print})
 end

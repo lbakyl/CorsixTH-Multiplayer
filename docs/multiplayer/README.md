@@ -95,7 +95,7 @@ Gameplay code (`CorsixTH/Lua/`):
 |---|---|
 | `mp_session.lua` | `MultiplayerSession`: command queue, lockstep rule, fingerprints, desync detection, all command handlers (`place_object`, `hire`, `build_room`, `open_hospital`, `fax_choice`, `give_money`, `send_staff`), retries, remote room outlines, `actionsAreCommands()`, `blockUnsupported()` |
 | `mp_lobby.lua` | `MultiplayerLobby`: server connection, build id, rooms, start handshake; starts the level and the session; handles `SPEED`, `LEFT`, `DESYNC`, `SHOW`, `CHAT` during the game, and the repair messages (`HOLD`, `SAVE`, `LOAD`, `RESUME`: saving and loading the shared game) |
-| `mp_transport.lua` | Line-based TCP over LuaSocket; TLS through LuaSec (optional) with trust on first use (`ENCRYPTION.md`) |
+| `mp_transport.lua` | Line-based TCP over LuaSocket |
 | `mp_room_builder.lua` | Builds a finished room for `build_room` with a hidden room editor |
 | `dialogs/resizables/multiplayer.lua` | `UIMultiplayer`: the lobby window |
 | `dialogs/resizables/multiplayer_trade.lua` | `UIMultiplayerTrade`: co-op trade window |
