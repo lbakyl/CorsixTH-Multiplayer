@@ -642,15 +642,24 @@ function MultiplayerLobby:setOption(name, value)
   self:send("OPTION", {[name] = value})
 end
 --! A game option's value in this room: LOBBY gives <name>=<value> when the
---! owner chose other than the default ("1", on).
-function MultiplayerLobby:optionValue(name) return self.summary and self.summary[name] or "1" end
+--! owner chose other than the default (OPTIONS: "1", on, unless it says).
+function MultiplayerLobby:optionValue(name)
+  return self.summary and self.summary[name] or MultiplayerLobby.optionDefault(name)
+end
+--! A game option's default value (as the server's GAME_OPTIONS).
+function MultiplayerLobby.optionDefault(name)
+  for _, option in ipairs(MultiplayerLobby.OPTIONS) do
+    if option.name == name then return option.default or "1" end
+  end
+  return "1"
+end
 --! Is this game option on in this room (not "0")?
 function MultiplayerLobby:optionOn(name) return self:optionValue(name) ~= "0" end
 function MultiplayerLobby:setAuctions(on) self:setOption("auctions", on) end
 function MultiplayerLobby:auctionsOn() return self:optionOn("auctions") end
 
 --! The room's game options (UIMultiplayerRoomOptions shows a switch for
---! each; on by default): its name (OPTION, START: <name>=0 when off, the game
+--! each; on by default, unless `default` is "0"): its name (OPTION, START: <name>=0 when off, the game
 --! keeps world.mp_coop.<name>_off), the strings for on and off, the short
 --! text in the room's hint line when off, and the tooltip
 --! (_S.multiplayer_window, _S.tooltip.multiplayer_window). An option with
@@ -667,6 +676,10 @@ MultiplayerLobby.OPTIONS = {
   -- Bots sharing a person's hospital build rooms and furnish the corridors,
   -- or leave that to the person (and do the rest: staff, research, land).
   {name = "helpers", on = "helpers_on", off = "helpers_off", short = "no_helper_building", tooltip = "helpers"},
+  -- The rat attack among the dirty tricks: off unless the host allows it
+  -- (Argus: rats should cost nothing; Jan: an option, off by default).
+  -- `default` "0": off by default; `short` is then shown when on.
+  {name = "rats", default = "0", on = "rats_on", off = "rats_off", short = "rat_attacks", tooltip = "rats"},
 }
 
 --! The room owner removes a player from the room (the server answers KICKED to them).
@@ -1561,7 +1574,7 @@ function MultiplayerLobby:_beginGame(f)
         -- (tricks=2: every trick from the start, sabotage.unlockMonth; no
         -- button, for the test rooms.)
         tricks_anytime = f.tricks == "2" or nil,
-        helpers_off = f.helpers == "0" or nil}
+        helpers_off = f.helpers == "0" or nil, rats_on = f.rats == "1" or nil}
   end
   f.mode = mode -- (the menu, the bots)
 

@@ -589,7 +589,7 @@ function UIMultiplayer:_updateRoom()
       for _, choice in ipairs(option.choices) do
         if choice.value == value then short = choice.short end
       end
-    elseif not lobby:optionOn(option.name) then
+    elseif lobby:optionValue(option.name) ~= MultiplayerLobby.optionDefault(option.name) then
       short = option.short
     end
     if short then changed = changed and (changed .. ", " .. S[short]) or S[short] end

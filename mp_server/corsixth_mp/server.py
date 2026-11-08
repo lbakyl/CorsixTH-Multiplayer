@@ -95,11 +95,13 @@ BOT_START_TIMEOUT = 60.0
 # The game options the room owner may set (OPTION <name>=<value>): land
 # auctions (1 plots near other hospitals, 2 every plot, 0 off), dirty tricks
 # (in a race; 1 on, unlocked month by month in the first year, 2 on from the
-# start: no button, for the test rooms, 0 off) and research sharing (1 on,
-# 0 off). The first value is the default; any other is sent as
-# <name>=<value> in LOBBY and START.
+# start: no button, for the test rooms, 0 off), research sharing (1 on,
+# 0 off), allied bots building (1 on, 0 off) and the rat attack among the
+# dirty tricks (0 off, 1 on; off by default: Jan, 2026-11-08). The first
+# value is the default; any other is sent as <name>=<value> in LOBBY and
+# START.
 GAME_OPTIONS = {"auctions": ("1", "2", "0"), "tricks": ("1", "0", "2"), "sharing": ("1", "0"),
-                "helpers": ("1", "0")}
+                "helpers": ("1", "0"), "rats": ("0", "1")}
 # A player the room owner removed (KICK) may not come back to that room for
 # this many seconds.
 KICK_BLOCK_SECONDS = 300.0

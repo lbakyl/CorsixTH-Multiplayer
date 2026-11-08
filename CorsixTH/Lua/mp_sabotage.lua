@@ -153,10 +153,21 @@ function sabotage.unlockMonth(world, kind, level)
   return month
 end
 
+--! Does this game allow this kind of trick at all (the room's game options)?
+--! The rat attack only when the host allowed it (Argus: rats should cost
+--! nothing; Jan: an option, off by default, 2026-11-08).
+function sabotage.allowed(world, kind)
+  local coop = world.mp_coop
+  if not coop or coop.tricks_off then return false end
+  if kind == "rats" and not coop.rats_on then return false end
+  return true
+end
+
 --! Why the buyer's hospital cannot play this trick on `target` now (nil: it can).
 function sabotage.refusal(world, buyer, target, kind, level)
   if not (world.mp_coop and world.mp_coop.competitive) then return "only in a competitive game" end
   if world.mp_coop.tricks_off then return "dirty tricks are off in this game" end
+  if not sabotage.allowed(world, kind) then return "that trick is off in this game" end
   local prices = sabotage.PRICES[kind]
   if not prices or not prices[level] then return "no such trick" end
   if not target or target == buyer then return "no such hospital" end

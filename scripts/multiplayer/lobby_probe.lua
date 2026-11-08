@@ -391,8 +391,9 @@ local function run_lobby()
     log("created room " .. room)
     -- MP_OPTIONS="helpers=0;tricks=0": the room's game options. (Unset:
     -- tricks=2, every dirty trick from the start, so that the tests need not
-    -- wait for sabotage.SCHEDULE; MP_OPTIONS="tricks=1" tests the schedule.)
-    for option, value in (os.getenv("MP_OPTIONS") or "tricks=2"):gmatch("(%w+)=(%w+)") do
+    -- wait for sabotage.SCHEDULE, and rats=1, the rat attack allowed;
+    -- MP_OPTIONS="tricks=1" tests the schedule.)
+    for option, value in (os.getenv("MP_OPTIONS") or "tricks=2 rats=1"):gmatch("(%w+)=(%w+)") do
       lobby:setOption(option, value)
       log(string.format("UI: game option %s=%s", option, value))
     end

@@ -106,10 +106,16 @@ function UIMultiplayerSabotage:_showLevels()
   local month = self.world.game_date:monthOfGame()
   self.shown_month = month
   for kind, buttons in pairs(self.level_buttons or {}) do
+    local allowed = not sabotage.allowed or sabotage.allowed(self.world, kind)
     for level, button in ipairs(buttons) do
       local from = sabotage.unlockMonth(self.world, kind, level)
       local locked = from and month < from
-      if locked then
+      if not allowed then
+        -- (The room's game options leave this trick out: the rat attack.)
+        button.panel_for_sprite:setLabel(S.sabotage_level_off:format(level))
+        button:setTooltip(S.sabotage_off_tooltip)
+        locked = true
+      elseif locked then
         button.panel_for_sprite:setLabel(S.sabotage_level_locked:format(level, from))
         button:setTooltip(S.sabotage_levels[kind][level] .. " " .. S.sabotage_locked_tooltip:format(from))
       else

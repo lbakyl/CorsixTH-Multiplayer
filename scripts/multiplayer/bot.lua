@@ -2423,9 +2423,12 @@ function Bot:playTrick()
   local kinds = {}
   -- (Only tricks that can be bought yet: they unlock month by month,
   -- sabotage.unlockMonth.)
+  -- (Nor one the room's game options leave out: the rat attack unless the
+  -- host allowed it; sabotage.allowed, newer games only.)
   for _, k in ipairs(choice) do
     local from = sabotage.unlockMonth(world, k, 1)
-    if not from or world.game_date:monthOfGame() >= from then kinds[#kinds + 1] = k end
+    local allowed = not sabotage.allowed or sabotage.allowed(world, k)
+    if allowed and (not from or world.game_date:monthOfGame() >= from) then kinds[#kinds + 1] = k end
   end
   if #kinds == 0 then return false end
   local kind = pick(kinds)

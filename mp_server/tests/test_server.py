@@ -320,6 +320,25 @@ def test_owner_turns_auctions_off(run):
         assert lobby["tricks"] == "0"
         _, sb = await start(a, b)
         assert sb["auctions"] == "2" and sb["tricks"] == "0" and "sharing" not in sb
+        assert "rats" not in sb  # the rat attack is off by default
+        await a.close()
+        await b.close()
+    run(body)
+
+
+def test_owner_allows_the_rat_attack(run):
+    async def body(server, port):
+        a, b = await two_players_in_room(port)
+        a.send(encode("OPTION", rats=1))
+        assert (await b.expect("LOBBY", rats=1))["room"] == "r1"
+        a.send(encode("OPTION", rats=0))  # back to the default: not listed
+        lobby = await b.expect("LOBBY")
+        while "rats" in lobby:
+            lobby = await b.expect("LOBBY")
+        a.send(encode("OPTION", rats=1))
+        await b.expect("LOBBY", rats=1)
+        _, sb = await start(a, b)
+        assert sb["rats"] == "1"
         await a.close()
         await b.close()
     run(body)

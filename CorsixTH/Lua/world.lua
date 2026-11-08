@@ -131,7 +131,7 @@ function World:World(app, free_build_mode)
         bot_hospitals = coop.bot_hospitals, auctions_off = coop.auctions_off,
         auctions_all = coop.auctions_all,
         tricks_off = coop.tricks_off, tricks_anytime = coop.tricks_anytime, sharing_off = coop.sharing_off,
-        helpers_off = coop.helpers_off}
+        helpers_off = coop.helpers_off, rats_on = coop.rats_on}
     self.mp_local_index = coop.local_index
     for i = 1, coop.players do
       local hospital = PlayerHospital(self, avail_rooms, coop.names[i] or ("PLAYER " .. i), i)
