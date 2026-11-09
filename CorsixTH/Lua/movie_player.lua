@@ -171,6 +171,14 @@ local LETTER_BUTTON_W, LETTER_BUTTON_H = 41, 40
 -- second (Jan: 40 to 50).
 local LETTER_TYPING_CPS = 45
 
+-- The typewriter is part of the movie, whose own sound plays at full volume
+-- whatever the volume settings, so it does not follow them either. Its
+-- recording (TYPING.WAV) is quiet: it peaks at -25 dB, the movie's fanfare at
+-- -1 dB (Argus: the fanfare very loud, the typing very quiet). This volume
+-- plays it 6.3 times (16 dB) louder (Audio:playSound; the sound effects' gain
+-- is 0.01 * e^(4.6 * volume), 1 at a volume of 1).
+local LETTER_TYPING_VOLUME = 1.4
+
 --! The UTF-8 characters of `text`, in a list.
 local function utf8_chars(text)
   local chars = {}
@@ -478,12 +486,17 @@ function MoviePlayer:letterButtonAt(mx, my)
 end
 
 --! The typewriter while the win letter types itself out: the game's own key
---! strike (TYPING.WAV) round and round, until it is typed.
+--! strike (TYPING.WAV) round and round, until it is typed, unless sound
+--! effects are off.
 --!param on (boolean) typing now
 function MoviePlayer:letterTyping(on)
   if on and self.typing_sound == nil then
-    -- (false: no sound to be had, not tried again)
-    local ok, sound = pcall(self.audio.playSound, self.audio, "TYPING.WAV", nil, false, nil, nil, -1)
+    -- (false: no sound to be had, or sound effects off; not tried again)
+    local ok, sound = false, nil
+    if self.app.config.play_sounds then
+      ok, sound = pcall(self.audio.playSound, self.audio, "TYPING.WAV", nil, false, nil, nil, -1,
+          LETTER_TYPING_VOLUME)
+    end
     self.typing_sound = ok and sound or false
   elseif not on and self.typing_sound then
     self.audio:stopSound(self.typing_sound)
