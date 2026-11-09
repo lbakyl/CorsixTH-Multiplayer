@@ -246,25 +246,47 @@ local winLetterOverlay = function(me, paragraphs, choose)
     texts[i] = type(text) == "string" and text or tostring((TH.stringProxy._unwrap(text)))
   end
   local _, line_h = font:sizeOf("Ag")
-  local function layout(fit)
-    local rows, y = {}, 0
+  -- The rows in lines `line_w` font pixels wide, their height, and how many
+  -- characters they have.
+  local function layout(line_w)
+    local rows, y, total = {}, 0, 0
     for i, text in ipairs(texts) do
       if i > 1 then y = y + line_h end
-      for _, line in ipairs(wrap_lines(font, text, math.floor(width / fit))) do
-        rows[#rows + 1] = {text = line, chars = utf8_chars(line), y = y}
+      for _, line in ipairs(wrap_lines(font, text, line_w)) do
+        local chars = utf8_chars(line)
+        rows[#rows + 1] = {text = line, chars = chars, y = y}
+        total = total + #chars
         y = y + line_h
       end
     end
-    return rows, y * fit
+    return {rows = rows, total = total}, y
   end
-  local fit = 1
-  local rows, height = layout(fit)
-  while fit > 0.5 and height > bottom - top do
-    fit = fit - 0.05
-    rows, height = layout(fit)
+  -- The text on a screen with `vs` pixels to each of the letter's: a whole
+  -- number of screen pixels to each font pixel (a pixel font stretched by an
+  -- uneven 3.75 has strokes of uneven width, and on Jan's MacBook S looked
+  -- like B), the nearest one at which it fits on the paper, else a smaller
+  -- one down to half the letter's size, else smaller as it comes.
+  local page_w, page_h = width, bottom - top
+  local function textFor(vs)
+    local k = math.max(1, math.floor(vs + 0.5))
+    while k >= 1 and k >= vs * 0.5 do
+      local text, height = layout(math.floor(page_w * vs / k))
+      if height * k <= page_h * vs then
+        text.scale = k
+        return text
+      end
+      k = k - 1
+    end
+    local fit = 1
+    local text, height = layout(page_w)
+    while fit > 0.5 and height * fit > page_h do
+      fit = fit - 0.05
+      text, height = layout(math.floor(page_w / fit))
+    end
+    text.scale = vs * fit
+    return text
   end
-  local total = 0
-  for _, row in ipairs(rows) do total = total + #row.chars end
+  local laid_out, laid_out_vs
 
   local letter = {shown = false, typed = false, choose = choose}
   me.letter = letter
@@ -289,6 +311,10 @@ local winLetterOverlay = function(me, paragraphs, choose)
       end
     end
     letter.shown, letter.x, letter.y, letter.vs = true, x, y, vs
+    if laid_out_vs ~= vs then
+      laid_out, laid_out_vs = textFor(vs), vs
+    end
+    local total = laid_out.total
     -- How much of it is typed by now.
     local to_draw = total
     if not letter.typed then
@@ -296,11 +322,12 @@ local winLetterOverlay = function(me, paragraphs, choose)
       if to_draw >= total then letter.typed = true end
     end
     player:letterTyping(not letter.typed)
-    local s = vs * fit
+    local s = laid_out.scale
+    letter.text_scale = s
     player.video:scale(s)
-    local tx = math.floor(x / s + left / fit)
-    local ty = math.floor(y / s + top / fit)
-    for _, row in ipairs(rows) do
+    local tx = math.floor((x + left * vs) / s)
+    local ty = math.floor((y + top * vs) / s)
+    for _, row in ipairs(laid_out.rows) do
       if to_draw <= 0 then break end
       local n = #row.chars
       local text = row.text
