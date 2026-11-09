@@ -62,17 +62,25 @@ fi
 # FFmpeg for the game's videos (intro, level won or lost, the end of a
 # multiplayer game): only what Theme Hospital's Smacker videos need (the same
 # major version as the Windows build, avcodec 62), shared, nothing taken from
-# Homebrew; bundled with the other libraries below.
-if [[ ! -f "$P/lib/libavcodec.dylib" ]]; then
+# Homebrew; bundled with the other libraries below. Configure names the
+# decoders by their source names: "smacker" is the video one (it calls itself
+# "smackvid" at run time; that name matches nothing here, and builds before
+# this had no video decoder: every video was skipped). The stamp rebuilds an
+# FFmpeg built without it.
+ffmpeg_stamp=$P/lib/ffmpeg-smacker-video
+if [[ ! -f "$ffmpeg_stamp" ]]; then
   [[ -d ffmpeg ]] || git clone -q --depth 1 --branch n8.0 https://github.com/FFmpeg/FFmpeg.git ffmpeg
   (cd ffmpeg && ./configure --prefix="$P" --arch="$arch" --target-os=darwin --cc=clang --disable-x86asm \
     --extra-cflags="-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET" \
     --extra-ldflags="-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET" \
     --enable-shared --disable-static --disable-programs --disable-doc --disable-network \
     --disable-autodetect --disable-everything \
-    --enable-demuxer=smacker --enable-decoder=smackvid,smackaud --enable-protocol=file \
+    --enable-demuxer=smacker --enable-decoder=smacker,smackaud --enable-protocol=file \
     --enable-swscale --enable-swresample \
+    && grep -q ff_smacker_decoder libavcodec/codec_list.c \
+    && grep -q ff_smackaud_decoder libavcodec/codec_list.c \
     && make -j"$jobs" && make install)
+  touch "$ffmpeg_stamp"
 fi
 
 # 2. Lua 5.5 with LuaFileSystem, LPeg and LuaSocket.
