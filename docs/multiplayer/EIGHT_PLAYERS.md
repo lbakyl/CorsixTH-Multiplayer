@@ -6,7 +6,7 @@ Status: on `mp/team-hospitals`; first released in mp-test-d5a471a7 (eu2).
 
 - A room has 2 to 8 places, for people and bots.
 - There are 8 colours, so up to 8 hospitals. The new colours are green, blue,
-  teal and pink. There are 8 teams.
+  teal and black (pink until mp-test-c68c85b5). There are 8 teams.
 - How many hospitals a game can have depends on the level's map:
   - Theme Hospital's own maps have room for 4, so rooms on those levels have
     up to 4 places.
@@ -81,14 +81,14 @@ Status: on `mp/team-hospitals`; first released in mp-test-d5a471a7 (eu2).
 - **Room window:** a line per place. It grows by 27 pixels per place above 4,
   so a room of 8 is 403 pixels high.
 - **Level browser:** a map for 2 up to 8 players, as many as the level has.
-- **Patients:** the original game has 4 shirt colours. Colours 6, 7 and 8
-  wear the white, lavender and salmon shirts redrawn blue, teal and pink (a
-  palette map on every sprite of that clothes layer, drawn only for their
-  patients: `TH.anims:setLayerAltPalette`, `MultiplayerSession.setupShirtColours`).
-  Colour 5's mustard shirt is part of the body sprites, not a layer of its
-  own: those sprites get a second palette map (`DrawFlags.AltPalette2`) that
-  turns only the mustard shades green. The colour bars at the feet tell all
-  of them apart too.
+- **Patients:** the original game has 4 shirt colours. Colours 5 and 6
+  wear the salmon shirt redrawn green and blue, 7 the lavender one redrawn
+  teal and 8 the white one redrawn dark grey (a palette map on every sprite
+  of that clothes layer, drawn only for their patients:
+  `TH.anims:setLayerAltPalette`, `MultiplayerSession.setupShirtColours`).
+  Colour 8 was pink, but the game's palette has no pink or magenta that is
+  not close to the salmon shirt. The colour bars at the feet tell all of
+  them apart too.
 - **Auctions:** the auction room's picture has 4 bidder bars. With more
   hospitals, the bidders are the one that asks and the 3 others whose
   hospitals are nearest the plot. Each bot wants each plot a little

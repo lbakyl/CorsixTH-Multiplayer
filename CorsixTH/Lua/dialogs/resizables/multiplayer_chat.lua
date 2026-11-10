@@ -43,7 +43,7 @@ local LINES = 6
 -- private lines get a purple mark at the start, team lines a green one.
 local PLAYER_COLOURS = {
   {135, 98, 14}, {150, 62, 52}, {82, 66, 152}, {92, 104, 124},
-  {45, 115, 30}, {30, 60, 155}, {20, 110, 125}, {125, 35, 115},
+  {45, 115, 30}, {30, 60, 155}, {20, 110, 125}, {12, 12, 12},
 }
 local BOT_COLOUR, NOTICE_COLOUR, PRIVATE_MARK = {75, 75, 75}, {30, 30, 40}, {180, 90, 255}
 local TEAM_MARK = {70, 210, 90}

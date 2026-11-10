@@ -1181,12 +1181,18 @@ local split_dressed = setmetatable({}, {__mode = "k"})
 -- original game's four shirt colours, layer 1 of a patient's animation:
 -- 0 mustard, 2 white, 4 lavender, 6 salmon), its staff have a bar of it at
 -- their feet, and its player's chat lines a darker version of it
--- (UIMultiplayerChat.colourOf). Colours 5 to 8 (green, blue, teal, pink:
+-- (UIMultiplayerChat.colourOf). Colours 5 to 8 (green, blue, teal, black:
 -- a game for more than 4 hospitals) wear the shirts of colours 2 to 4
 -- redrawn in their own colour (setupShirtColours; green the salmon shirt).
+-- (8 was pink, but the game's palette has no pink or magenta shades that
+-- are not close to the salmon shirt: Argus, 2026-11-10.)
 MultiplayerSession.CLOTHES = {0, 6, 4, 2, 6, 6, 4, 2}
 local MARKER_COLOURS = {{232, 186, 52}, {236, 130, 118}, {160, 146, 232}, {236, 236, 236},
-    {100, 200, 80}, {70, 120, 235}, {60, 200, 200}, {225, 95, 200}}
+    {100, 200, 80}, {70, 120, 235}, {60, 200, 200}, {50, 50, 50}}
+-- The colour a shirt is redrawn in, where not the marker colour: black's
+-- is the white shirt darkened, its light grey (lum, 188) to a dark grey and
+-- every other shade in proportion (so the folds still show).
+local SHIRT_COLOURS = {[8] = {96, 96, 96, lum = 188}}
 
 --! The colour (1-8) of a hospital: the one its players picked in the room
 --! (world.mp_coop.colours), else its index (a game from before colours).
@@ -1288,7 +1294,7 @@ end
 
 --! Shirts of colours 5 to 8: the game has four shirt colours (CLOTHES), so a
 --! patient of colour 6 wears colour 2's shirt drawn through a palette map
---! that turns it blue (7 teal, 8 pink): every sprite of that clothes
+--! that turns it blue (7 teal, 8 black): every sprite of that clothes
 --! variant gets the map (TH.anims:setLayerAltPalette, slot 3), and those
 --! patients are drawn with DrawFlags.AltPalette3 (setFloorMarkers, on this
 --! screen only). Colour 5 (green) wears colour 2's shirt too, with its map
@@ -1298,6 +1304,7 @@ end
 --! grey.) Each entry keeps its brightness in the new colour, the nearest
 --! the game's palette has, but a coloured entry no brighter than the colour
 --! itself (one even shade of the jacket); near black stays (the outlines).
+--! Black's shirt is darker throughout (SHIRT_COLOURS).
 --! Only the shirt sprites get a map: skin and hair keep their colours.
 --! (Green used to turn the mustard shades of the body sprites green, colour
 --! 1's shirt; blonde hair has the same shades and turned green too: Argus,
@@ -1328,8 +1335,8 @@ function MultiplayerSession.setupShirtColours(app, anims)
     return best
   end
   for colour = 5, 8 do
-    local target = MARKER_COLOURS[colour]
-    local t_lum = lum(target)
+    local target = SHIRT_COLOURS[colour] or MARKER_COLOURS[colour]
+    local t_lum = target.lum or lum(target)
     local bytes = {}
     for i = 0, 255 do
       local src = pal[i]
@@ -1341,7 +1348,7 @@ function MultiplayerSession.setupShirtColours(app, anims)
         -- itself: blue is dark, and the lighter ones came out a pale cyan
         -- blue, in patches over the jacket (Argus, 2026-11-10). Greys (the
         -- T-shirt under the jacket) keep their lighter shade.
-        if math.max(src[1], src[2], src[3]) - math.min(src[1], src[2], src[3]) >= 16 then
+        if target.lum or math.max(src[1], src[2], src[3]) - math.min(src[1], src[2], src[3]) >= 16 then
           k = math.min(k, 1)
         end
         to = nearest(math.min(255, target[1] * k), math.min(255, target[2] * k), math.min(255, target[3] * k))
