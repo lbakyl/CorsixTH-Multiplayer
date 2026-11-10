@@ -1296,10 +1296,12 @@ end
 --! an object's sprites get their grey ghost there once somebody places
 --! one, and a patient drawn with it inside a toilet turned its blue cabin
 --! grey.) Each entry keeps its brightness in the new colour, the nearest
---! the game's palette has; near black stays (the outlines). Only the shirt
---! sprites get a map: skin and hair keep their colours. (Green used to turn
---! the mustard shades of the body sprites green, colour 1's shirt; blonde
---! hair has the same shades and turned green too: Argus, 2026-11-07.)
+--! the game's palette has, but a coloured entry no brighter than the colour
+--! itself (one even shade of the jacket); near black stays (the outlines).
+--! Only the shirt sprites get a map: skin and hair keep their colours.
+--! (Green used to turn the mustard shades of the body sprites green, colour
+--! 1's shirt; blonde hair has the same shades and turned green too: Argus,
+--! 2026-11-07.)
 --!return true if the maps are set
 local shirt_colours_set = setmetatable({}, {__mode = "k"}) -- anims -> done (true/false)
 function MultiplayerSession.setupShirtColours(app, anims)
@@ -1335,6 +1337,13 @@ function MultiplayerSession.setupShirtColours(app, anims)
       local to = i
       if i < 255 and l >= 24 then
         local k = l / t_lum
+        -- The shirt's own (coloured) shades are no lighter than the colour
+        -- itself: blue is dark, and the lighter ones came out a pale cyan
+        -- blue, in patches over the jacket (Argus, 2026-11-10). Greys (the
+        -- T-shirt under the jacket) keep their lighter shade.
+        if math.max(src[1], src[2], src[3]) - math.min(src[1], src[2], src[3]) >= 16 then
+          k = math.min(k, 1)
+        end
         to = nearest(math.min(255, target[1] * k), math.min(255, target[2] * k), math.min(255, target[3] * k))
       end
       bytes[i + 1] = string.char(to)
