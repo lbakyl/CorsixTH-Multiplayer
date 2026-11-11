@@ -466,6 +466,7 @@ multiplayer_window = {
   -- Co-op trades
   trade_caption = "Trade with %s",
   trade_send_money = "Send $%d",
+  trade_money_allies_only = "Money goes only to allies.",
   trade_send_staff = "Offer selected staff",
   trade_next_player = "Next player",
   trade_close = "Close",
@@ -565,6 +566,8 @@ multiplayer_window = {
   offer_gone_note = "%s is no longer available.",
   patient_on_the_way = "Referred to %s",
   patient_arrived_note = "A patient referred by %s has arrived.",
+  referral_cured_note = "%s cured the patient you referred: +%d reputation.",
+  referral_cured_here_note = "You cured a patient %s referred: +%d extra reputation.",
   refer_button = "Refer patient",
   refer_choose = "Refer to which hospital?",
   refer_fax_choice = "Refer to another hospital",

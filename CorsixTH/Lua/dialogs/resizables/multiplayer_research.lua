@@ -58,6 +58,9 @@ function UIMultiplayerResearch:UIMultiplayerResearch(ui, target)
   self.selected = {}
   self.page = 1
   self.price = 0
+  -- (A rival pays at least $1,000: Jan, 2026-11-12. An ally: free to start with.)
+  self.min_price = self.target and self.world:mpRivals(self.hospital, self.target) and
+      MultiplayerSession.RIVAL_MIN_PRICE or 0
 
   local title = self.target and S.research_caption:format(self.target.name) or S.trade_alone
   self:addBevelPanel(20, 10, WIDTH - 40, 20, col.title):setLabel(title).lowered = true
@@ -115,7 +118,7 @@ function UIMultiplayerResearch:UIMultiplayerResearch(ui, target)
   self:addBevelPanel(WIDTH - 140, y, 120, 30, col.button):setLabel(S.trade_close)
       :makeButton(0, 0, 120, 30, nil, self.close)
 
-  self:setPrice(0)
+  self:setPrice(self.min_price)
   self:_showPage()
   if #self.items == 0 then self:setStatus(S.research_none) end
 end
@@ -166,12 +169,12 @@ function UIMultiplayerResearch:toggleAll(state)
   self:_showPage()
 end
 
---! Set the price, in steps of $500 from $0 to $20,000.
+--! Set the price, in steps of $500 from $0 (a rival: $1,000) to $20,000.
 function UIMultiplayerResearch:setPrice(price)
   local S = _S.multiplayer_window
   local step = MultiplayerSession.RESEARCH_PRICE_STEP
   price = math.floor((price + step / 2) / step) * step
-  self.price = math.max(0, math.min(MultiplayerSession.RESEARCH_MAX_PRICE, price))
+  self.price = math.max(self.min_price or 0, math.min(MultiplayerSession.RESEARCH_MAX_PRICE, price))
   self.price_panel:setLabel(self.price > 0 and S.research_price:format(self.price) or S.research_free)
 end
 

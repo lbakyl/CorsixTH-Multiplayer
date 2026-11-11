@@ -89,12 +89,16 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
     return
   end
 
-  -- Money
-  for i, amount in ipairs(AMOUNTS) do
-    local w = math.floor((WIDTH - 40 - 10 * (#AMOUNTS - 1)) / #AMOUNTS)
-    self:addBevelPanel(20 + (i - 1) * (w + 10), 40, w, 30, col.button)
-        :setLabel(S.trade_send_money:format(amount))
-        :makeButton(0, 0, w, 30, nil, function() self:sendMoney(amount) end)
+  -- Money (only to an ally: a rival in a race gets none, Jan 2026-11-12)
+  if vouch then
+    for i, amount in ipairs(AMOUNTS) do
+      local w = math.floor((WIDTH - 40 - 10 * (#AMOUNTS - 1)) / #AMOUNTS)
+      self:addBevelPanel(20 + (i - 1) * (w + 10), 40, w, 30, col.button)
+          :setLabel(S.trade_send_money:format(amount))
+          :makeButton(0, 0, w, 30, nil, function() self:sendMoney(amount) end)
+    end
+  else
+    self:addBevelPanel(20, 40, WIDTH - 40, 30, col.caption):setLabel(S.trade_money_allies_only).lowered = true
   end
 
   -- Staff of this player's hospital, a page of `rows` at a time
@@ -132,7 +136,8 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
       :makeButton(0, 0, 60, 28, nil, function(window) window:turnPage(1) end)
   self:_showPage()
 
-  -- The price the other player pays for the member of staff (free by default).
+  -- The price the other player pays for the member of staff (free by
+  -- default; $1,000 to start with for a rival).
   y = y + 36
   self.price_panel = self:addBevelPanel(20, y, WIDTH - 180, 28, col.caption)
   self.price_panel.lowered = true
@@ -141,7 +146,7 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
       :makeRepeatButton(0, 0, 60, 28, nil, function(window) window:setPrice(window.price - step) end)
   self:addBevelPanel(WIDTH - 80, y, 60, 28, col.button):setLabel("+$" .. step)
       :makeRepeatButton(0, 0, 60, 28, nil, function(window) window:setPrice(window.price + step) end)
-  self:setPrice(0)
+  self:setPrice(vouch and 0 or MultiplayerSession.RIVAL_MIN_PRICE)
 
   y = y + 34
   self:addBevelPanel(20, y, 180, 30, col.button):setLabel(S.trade_send_staff)
@@ -280,10 +285,12 @@ function UIMultiplayerTrade:nextPlayer()
   local target = self:_nextTarget(self.target)
   local staff = self.selected and self.selected.staff
   local price, rep = self.price, self.reputation
+  local rival = self.world:mpRivals(self.hospital, self.target)
   self:close()
   local window = UIMultiplayerTrade(ui, target, staff)
   ui:addWindow(window)
-  if window.price_panel then window:setPrice(price) end
+  -- (The price stays from one ally to the next, or one rival to the next.)
+  if window.price_panel and rival == self.world:mpRivals(self.hospital, target) then window:setPrice(price) end
   if window.rep_panel then window:setReputation(rep) end
 end
 

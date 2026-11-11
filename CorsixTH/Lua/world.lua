@@ -1422,6 +1422,9 @@ function World:_tickCoopTransfers()
       local to = self.hospitals[t.to]
       patient.mp_in_transit = nil
       patient.speed = "normal"
+      -- (Who referred them: reputation for both once they are cured,
+      -- MultiplayerSession.referralCured.)
+      patient.mp_referred_by = t.from
       patient:setHospital(to)
       if patient.diagnosed and patient.disease then
         patient:setNextAction(SeekRoomAction(patient.disease.treatment_rooms[1]):enableTreatmentRoom())
@@ -2299,12 +2302,14 @@ function World:mpRivals(a, b)
   return not self.mp_coop.teams or self:mpTeam(a) ~= self:mpTeam(b)
 end
 
---! Multiplayer: may hospital `from` send `to` money, staff, patients or
---! research, or ask it for money? Any other hospital may, except in a race of
---! teams: only a team mate.
+--! Multiplayer: may hospital `from` offer `to` staff, patients or research?
+--! Any other hospital may, a rival in a race too (Jan, 2026-11-12: research
+--! sold to a rival for at least $1,000, staff and patients offered).
+--! Money, reputation, plots and staff sent without an offer go to allies
+--! only: their handlers check World:mpRivals as well.
 function World:mpMayTrade(from, to)
   if not (from and to) or from == to then return false end
-  return not (self.mp_coop and self.mp_coop.teams) or self:mpTeam(from) == self:mpTeam(to)
+  return true
 end
 
 --! The player list's text for a hospital's place in a competitive game, or nil.

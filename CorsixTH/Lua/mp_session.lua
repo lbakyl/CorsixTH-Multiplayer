@@ -647,7 +647,8 @@ MultiplayerSession.rejection_texts = {
                    ["the patient is leaving"] = "The patient is leaving.",
                    ["emergency patients stay"] = "Emergency patients cannot be referred.",
                    ["infected patients stay"] = "Infected patients cannot be referred."},
-  offer_research = {["nothing to share"] = "They have all of that research by now: nothing was offered."},
+  offer_research = {["nothing to share"] = "They have all of that research by now: nothing was offered.",
+                    ["a rival pays at least $1,000"] = "A rival pays at least $1,000 for research."},
   buy_plot = {["another player's side"] = "That land is on another player's side of the map.",
               ["cannot buy this plot"] = "That land cannot be bought now.",
               ["an auction is on"] = "Wait until the auction is over.",
@@ -2301,7 +2302,9 @@ function handlers.give_money(world, cmd)
   local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
   local amount = math.floor(tonumber(cmd.amount) or 0)
   if not from or not to or from == to then return false, "no such hospital" end
-  if not world:mpMayTrade(from, to) then return false, "not on your team" end
+  -- (Money only between allies: a rival in a race is not sent or asked for
+  -- any (Jan, 2026-11-12). Research and staff may be sold to a rival.)
+  if not world:mpMayTrade(from, to) or world:mpRivals(from, to) then return false, "not on your team" end
   if amount <= 0 then return false, "nothing to send" end
   if from.balance < amount then return false, "not enough money" end
   from:spendMoney(amount, _S.multiplayer_window.money_sent:format(to.name))
@@ -2420,7 +2423,7 @@ MultiplayerSession.arrivalTile = arrival_tile
 function handlers.send_staff(world, cmd)
   local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
   if not from or not to or from == to then return false, "no such hospital" end
-  if not world:mpMayTrade(from, to) then return false, "not on your team" end
+  if not world:mpMayTrade(from, to) or world:mpRivals(from, to) then return false, "not on your team" end
   local staff = find_staff(world, from, cmd)
   if not staff then return false, "no such staff member" end
   return MultiplayerSession.transferStaff(world, from, to, staff)
@@ -2741,6 +2744,35 @@ function MultiplayerSession.transferPatient(world, from, to, patient)
   return true
 end
 
+-- A referral that ends in a cure is good for both hospitals (Jan,
+-- 2026-11-12): the one that referred the patient gains REFERRAL_REPUTATION
+-- (sending them home would have cost it 3), the one that cured them
+-- REFERRAL_EXTRA on top of the usual point for a cure. Nothing more if the
+-- patient dies there or is sent home.
+MultiplayerSession.REFERRAL_REPUTATION = 3
+MultiplayerSession.REFERRAL_EXTRA = 1
+
+--! A referred patient was cured at `hospital` (Hospital:updateCuredCounts):
+--! the reputation for the referral, on every peer at the same step.
+function MultiplayerSession.referralCured(world, hospital, patient)
+  local by = world.hospitals[patient.mp_referred_by or 0]
+  patient.mp_referred_by = nil
+  if not by or by == hospital then return end
+  local S = _S.multiplayer_window
+  by:changeReputation(nil, nil, MultiplayerSession.REFERRAL_REPUTATION)
+  hospital:changeReputation(nil, nil, MultiplayerSession.REFERRAL_EXTRA)
+  MultiplayerSession.tellPlayer(world, by, S.referral_cured_note:format(hospital.name,
+      MultiplayerSession.REFERRAL_REPUTATION))
+  MultiplayerSession.tellPlayer(world, hospital, S.referral_cured_here_note:format(by.name,
+      MultiplayerSession.REFERRAL_EXTRA))
+  local session = world.app and world.app.mp_session
+  if session then
+    session.log(string.format("referred patient #%s cured at hospital %d: +%d for hospital %d",
+        tostring(patient.mp_id), world:getHospitalIndex(hospital), MultiplayerSession.REFERRAL_REPUTATION,
+        world:getHospitalIndex(by)))
+  end
+end
+
 --------------------------------------------------------------------------------
 -- Co-op research sharing: one hospital offers knowledge it has and another
 -- lacks (equipment discoveries, drug improvements, machine improvements),
@@ -2751,6 +2783,10 @@ end
 --------------------------------------------------------------------------------
 
 MultiplayerSession.RESEARCH_MAX_PRICE = 20000
+-- Research is sold to a rival for at least this much, and a member of staff
+-- is offered to one for this much unless the player changes it (Jan,
+-- 2026-11-12: free to an ally, $1,000 to start with to an opponent).
+MultiplayerSession.RIVAL_MIN_PRICE = 1000
 
 --! The text of a game string (names are translatable string objects).
 local function plain(text)
@@ -2877,6 +2913,9 @@ function handlers.offer_research(world, cmd)
   if world.mp_coop and world.mp_coop.sharing_off then return false, "research sharing is off in this game" end
   local price = math.floor(tonumber(cmd.price) or -1)
   if price < 0 or price > MultiplayerSession.RESEARCH_MAX_PRICE then return false, "invalid price" end
+  if price < MultiplayerSession.RIVAL_MIN_PRICE and world:mpRivals(from, to) then
+    return false, "a rival pays at least $1,000"
+  end
   local items = research_items_of(from, to, cmd.items)
   if #items == 0 then return false, "nothing to share" end
   local panel = world.ui and world.ui.bottom_panel
@@ -2918,7 +2957,7 @@ function handlers.ask_money(world, cmd)
   local S = _S.multiplayer_window
   local from, to = world.hospitals[cmd.hospital or 1], world.hospitals[cmd.to or 0]
   if not from or not to or from == to then return false, "no such hospital" end
-  if not world:mpMayTrade(from, to) then return false, "not on your team" end
+  if not world:mpMayTrade(from, to) or world:mpRivals(from, to) then return false, "not on your team" end
   local amount = math.floor(tonumber(cmd.amount) or 0)
   if amount < MultiplayerSession.ASK_MIN or amount > MultiplayerSession.ASK_MAX then
     return false, "invalid amount"

@@ -173,8 +173,11 @@ def teams(n):
 fail = False
 
 # 1. Seating
-want = {'ann': ('1', '3', '2'), 'ben': ('3', '1', '2'), 'cat': ('2', '', '1,3'),
-        'dee': ('1', '3', '2,4'), 'gus': ('3', '1', '2,4'), 'eli': ('2', '4', '1,3'), 'fay': ('4', '2', '1,3')}
+# (Trades with every other hospital, the other team's too: research for at
+# least $1,000, staff, patients. Money only to a team mate: check 2.)
+want = {'ann': ('1', '2,3', '2'), 'ben': ('3', '1,2', '2'), 'cat': ('2', '1,3', '1,3'),
+        'dee': ('1', '2,3,4', '2,4'), 'gus': ('3', '1,2,4', '2,4'), 'eli': ('2', '1,3,4', '1,3'),
+        'fay': ('4', '1,2,3', '1,3')}
 layouts = {}
 ok1 = True
 for n, (me, trade, tricks) in want.items():

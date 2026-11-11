@@ -1987,6 +1987,10 @@ function Hospital:updateCuredCounts(patient)
   end
 
   self:msgCured()
+  -- (Multiplayer: a patient another player referred here.)
+  if patient.mp_referred_by and self.world.mp_coop then
+    MultiplayerSession.referralCured(self.world, self, patient)
+  end
 end
 
 --! Update the 'not cured' counts of the hospital.

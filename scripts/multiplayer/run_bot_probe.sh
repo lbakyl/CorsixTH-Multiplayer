@@ -226,11 +226,16 @@ fail |= not ok3
 race_bot = next((n.split('/', 1)[1] for n in bots if n.startswith('race/')), None)
 rb = chats_from(b, race_bot) if race_bot else []
 declined = [s for s, cmd in applied(b, 2, 'fax_choice') if cmd == 'ok']
+# (Money never goes to a rival, 2026-11-12: bob's gift is refused by the
+# game, so the bot has none to send back.)
 returned = applied(b, 2, 'give_money')
+bob_gift = applied(b, 1, 'give_money')
 staff_kept = 'accepted' not in ''.join(re.findall(r'offer of staff .*', b))
 to_bob = [t for _, t in rb if 'bob' in t]
-ok4 = bool(race_bot and declined and staff_kept and returned and returned[0][1] == 'ok' and len(to_bob) >= 2)
-print(f"4. Competitive refusals:    {race_bot}: declined at {declined}; doctor stayed: {staff_kept}; money sent back: {returned}; lines to bob: {to_bob}")
+ok4 = bool(race_bot and declined and staff_kept and not returned and bob_gift and
+           all(r == 'rejected:' or r.startswith('rejected') for _, r in bob_gift) and len(to_bob) >= 2)
+print(f"4. Competitive refusals:    {race_bot}: declined at {declined}; doctor stayed: {staff_kept}; bob's gift {bob_gift}, "
+      f"money sent back: {returned}; lines to bob: {to_bob}")
 fail |= not ok4
 
 greets = {}

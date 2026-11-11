@@ -476,3 +476,75 @@ describe("A bot offered a plot", function()
     assert.is_true(accept)
   end)
 end)
+
+describe("Trading with rivals", function()
+  local function make(rivals)
+    local a = {balance = 50000, name = "A", reputation = 300}
+    local b = {balance = 50000, name = "B", reputation = 300}
+    for _, h in ipairs({a, b}) do
+      function h.spendMoney(self, n) self.balance = self.balance - n end
+      function h.receiveMoney(self, n) self.balance = self.balance + n end
+      function h.changeReputation(self, _, _, n) self.reputation = self.reputation + n end
+    end
+    local world = {hospitals = {a, b}, mp_coop = {},
+        mpMayTrade = function(_, x, y) return x ~= y end,
+        mpRivals = function() return rivals end}
+    function world.getHospitalIndex(_, h) return h == a and 1 or 2 end
+    return world, a, b
+  end
+
+  it("sends and asks for money only between allies", function()
+    with_texts(function()
+      local world, a = make(true)
+      local ok, why = handlers.give_money(world, {hospital = 1, to = 2, amount = 1000})
+      assert.is_false(ok)
+      assert.equal("not on your team", why)
+      assert.equal(50000, a.balance)
+      ok, why = handlers.ask_money(world, {hospital = 1, to = 2, amount = 1000})
+      assert.is_false(ok)
+      assert.equal("not on your team", why)
+      local b
+      world, a, b = make(false)
+      assert.is_true(handlers.give_money(world, {hospital = 1, to = 2, amount = 1000}))
+      assert.equal(49000, a.balance)
+      assert.equal(51000, b.balance)
+    end)
+  end)
+
+  it("sells research to a rival for at least $1,000", function()
+    with_texts(function()
+      local old_app = rawget(_G, "TheApp")
+      rawset(_G, "TheApp", {objects = {}})
+      local world = make(true)
+      local ok, why = handlers.offer_research(world, {hospital = 1, to = 2, items = "e:x_ray", price = 500})
+      assert.is_false(ok)
+      assert.equal("a rival pays at least $1,000", why)
+      -- (The price is fine; there is nothing to share here.)
+      ok, why = handlers.offer_research(world, {hospital = 1, to = 2, items = "e:x_ray", price = 1000})
+      assert.is_false(ok)
+      assert.equal("nothing to share", why)
+      world = make(false)
+      ok, why = handlers.offer_research(world, {hospital = 1, to = 2, items = "e:x_ray", price = 0})
+      assert.is_false(ok)
+      assert.equal("nothing to share", why)
+      rawset(_G, "TheApp", old_app)
+    end)
+  end)
+
+  it("gives reputation to both hospitals when a referred patient is cured", function()
+    with_texts(function()
+      local world, a, b = make(true)
+      local patient = {mp_id = 7, mp_referred_by = 1}
+      MultiplayerSession.referralCured(world, b, patient)
+      assert.equal(300 + MultiplayerSession.REFERRAL_REPUTATION, a.reputation)
+      assert.equal(300 + MultiplayerSession.REFERRAL_EXTRA, b.reputation)
+      assert.is_nil(patient.mp_referred_by)
+      -- Once only, and nothing for a patient of its own.
+      MultiplayerSession.referralCured(world, b, patient)
+      patient.mp_referred_by = 2
+      MultiplayerSession.referralCured(world, b, patient)
+      assert.equal(303, a.reputation)
+      assert.equal(301, b.reputation)
+    end)
+  end)
+end)
