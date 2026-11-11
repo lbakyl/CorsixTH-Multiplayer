@@ -1359,6 +1359,18 @@ function MultiplayerSession.setupShirtColours(app, anims)
     local n = anims:setLayerAltPalette(1, MultiplayerSession.CLOTHES[colour], table.concat(bytes), 0, slot)
     print(string.format("multiplayer: shirts of colour %d: %d sprites recoloured", colour, n))
   end
+  -- The map is kept per sprite, and a few sprites of the shirts are also
+  -- drawn for heads (layer 0): a whole face, bits of skin, the shower
+  -- curtain. Every patient drawn with that slot got them in a shirt's
+  -- colour: a grey face under a blue or teal shirt from black's map (Argus,
+  -- 2026-11-11). Heads keep their own colours.
+  local same = {}
+  for i = 0, 255 do same[i + 1] = string.char(i) end
+  same = table.concat(same)
+  for id = 0, 23 do
+    anims:setLayerAltPalette(0, id, same, 0, 2)
+    anims:setLayerAltPalette(0, id, same, 0, 3)
+  end
   shirt_colours_set[anims] = true
   return true
 end
