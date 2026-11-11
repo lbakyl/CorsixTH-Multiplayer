@@ -417,6 +417,7 @@ def is_ok(line):
     return re.search(r'-> ok( \(.*\))?$', line) is not None
 server = (out / 'server.log').read_text()
 fail = False
+bad = []  # (the checks that failed, by their flag: printed at the end)
 
 a, b = log('alice'), log('bob')
 lobby = re.search(r'lobby: .*', a)
@@ -447,15 +448,18 @@ print(f"1. Two players via server:  {result('alice')}; commands applied {len(ok_
 print(f"   {lobby.group(0) if lobby else 'no lobby line'}")
 print(f"   shared pause on both: {paused_both}; unpaused by the other player: {unpaused}; shared speed change: {slower_both}, voted: {votes1}")
 fail |= not ok1
+if not ok1: bad.append("ok1")
 
 refused = 'JOIN REFUSED: bad_password' in log('mallory')
 print(f"2. Wrong password:          refused: {refused}")
 fail |= not refused
+if not refused: bad.append("refused")
 
 server_desync = "room 'cheat': desync" in server
 ok3 = result('carol').startswith('DESYNC') and result('dave').startswith('DESYNC') and server_desync
 print(f"3. Local-only change:       {result('carol')} / {result('dave')}; server noticed: {server_desync}")
 fail |= not ok3
+if not ok3: bad.append("ok3")
 
 e = log('erin')
 told = re.search(r'multiplayer: peer 2 left after step \d+', e) is not None
@@ -473,6 +477,7 @@ spoken4 = re.search(r'ANNOUNCED: mp_player_left\.wav \(sound 0, handle [1-9]', e
 ok4 = told and alone and listed and taken4 and spoken4 and result('erin').startswith('IN SYNC through step 800')
 print(f"4. Player leaves:           told: {told}; spoken: {spoken4}; carried on alone to step 800: {alone}; room taken over: {taken4}; player list: {listed} {lists4[-1] if lists4 else ''}")
 fail |= not ok4
+if not ok4: bad.append("ok4")
 
 g, h = log('gina'), log('hugo')
 rooms_g = re.search(r'rooms built: (.*)', g); rooms_h = re.search(r'rooms built: (.*)', h)
@@ -491,6 +496,7 @@ ok5 = (result('gina').startswith('IN SYNC') and result('hugo').startswith('IN SY
 print(f"5. Rooms:                   {result('gina')}; built on both: {rooms_g == rooms_h} {rooms_g}; reserved outlines seen: {saw}; "
       f"own outline kept: {kept}; Y opens the chat, Enter the editor's: {enter}")
 fail |= not ok5
+if not ok5: bad.append("ok5")
 
 i, j = log('ivan'), log('judy')
 ri = re.search(r'rooms built: (.*)', i); rj = re.search(r'rooms built: (.*)', j)
@@ -526,6 +532,7 @@ print(f"6. Rooms over people:       {result('ivan')}; same rooms on both: {ri ==
 for l in sorted(set(re.findall(r'step \d+: peer 2 #\d+ build_room -> .*', j))):
     print("   " + l)
 fail |= not ok6
+if not ok6: bad.append("ok6")
 
 k, l = log('kate'), log('liam')
 choices = [x for x in applied('kate') if 'fax_choice' in x]
@@ -535,6 +542,7 @@ ok7 = (result('kate').startswith('IN SYNC') and result('liam').startswith('IN SY
        and is_ok(choices[0]))
 print(f"7. Fax decisions:           {result('kate')}; refusal clicked: {clicked}; applied on both: {applied('kate') == applied('liam')} {choices}")
 fail |= not ok7
+if not ok7: bad.append("ok7")
 
 m, n = log('mira'), log('nico')
 cm = applied('mira')
@@ -574,6 +582,7 @@ print(f"8. Co-op, a hospital each:  {result('mira')}; commands {len(cm)} all ok:
 for line in re.findall(r'hospital \d (?:[A-Z]+:|settings:).*', m)[-4:]:
     print("   " + line)
 fail |= not ok8
+if not ok8: bad.append("ok8")
 
 o, q = log('olga'), log('paul')
 co = applied('olga')
@@ -586,6 +595,7 @@ ok9 = (result('olga').startswith('IN SYNC') and result('paul').startswith('IN SY
 print(f"9. Co-op events, player 2:  {result('olga')}; emergency and VIP for hospital 2 accepted: {ok9}; commands {len(okc)}/{len(co)} ok")
 for x in co: print("   " + x)
 fail |= not ok9
+if not ok9: bad.append("ok9")
 
 xl, yl = log('xavi'), log('yuki')
 cx = applied('xavi')
@@ -601,6 +611,7 @@ okr = (result('xavi').startswith('IN SYNC through step 1100') and result('yuki')
 print(f"17. Offers and referrals:   {result('xavi')}; offers {kinds_x.count('offer_patient')} patients, "
       f"{kinds_x.count('offer_staff')} staff; arrived: {arrived_p} patients, {arrived_s} staff; identical: {cx == applied('yuki')}; nurse paid for: {paid17}")
 fail |= not okr
+if not okr: bad.append("okr")
 
 kl, ll = log('kim'), log('lea')
 ck = applied('kim')
@@ -633,6 +644,7 @@ print(f"19. Research sharing:       {result('kim')}; offers {kinds_k.count('offe
       f"chat to all and private: {'kim (to you): just for you [private]' in ll}; money asked, paid and declined: "
       f"{'paid $7500' in kl and 'hospital 2: declined' in kl}; second swing door on the corner refused: {corner_ok} {corner}")
 fail |= not okres
+if not okres: bad.append("okres")
 
 el, fl = log('ella'), log('finn')
 ce = applied('ella')
@@ -650,6 +662,7 @@ oke = oke and okv
 print(f"18. Co-op epidemic:         {result('finn')}; cover up, vaccination, result fax: {oke}; commands {' '.join(kinds_e)}; "
       f"vaccination mode by button, Esc and right-click: {okv}")
 fail |= not oke
+if not oke: bad.append("oke")
 
 nl, ol = log('nell'), log('otto')
 first_gp = re.search(r'UI: drew gp at (\d+),(\d+) size', nl)
@@ -677,6 +690,7 @@ print(f"20. Destroyed room rebuilt: {result('nell')}; cleared away: {removed}; e
       f"radiator put into it: {placed_in}; repaired where it was (door, windows, its price): {repaired}"
       f"{' $' + before.group(5) if before else ''}")
 fail |= not ok20
+if not ok20: bad.append("ok20")
 
 def ended(text):
     m = re.search(r'LEVEL ENDED at step (\d+)', text); return int(m.group(1)) if m else None
@@ -689,6 +703,7 @@ ok21 = (told21 and len(answered21) == 1 and ended(g_) is not None and ended(g_) 
 print(f"21. Co-op team win:         who is missing told: {told21}; win fax answered: {answered21[0].split(': ', 1)[1] if answered21 else '-'}; "
       f"game ended at step {ended(g_)} / {ended(h_)}; {result('gil')} / {result('hana')}")
 fail |= not ok21
+if not ok21: bad.append("ok21")
 
 i_, j_ = log('ian'), log('joy')
 warned22 = ("ADVISER: Your hospital has failed this level's goals." in j_
@@ -698,6 +713,7 @@ ok22 = (warned22 and ended(i_) is not None and ended(i_) == ended(j_) and ended(
 print(f"22. Co-op team loss:        warned at the first year end: {warned22}; game ended at step {ended(i_)} / {ended(j_)}; "
       f"{result('ian')} / {result('joy')}")
 fail |= not ok22
+if not ok22: bad.append("ok22")
 
 p_, q_ = log('pia'), log('quin')
 wall23 = re.search(r'wall seconds ([\d.]+) for (\d+) steps', p_)
@@ -718,6 +734,7 @@ print(f"23. Slowest, real time:     {result('pia')}; {ms23:.0f} ms per step; gam
       f"purchase at step {buy23.group(1) if buy23 else '-'} and hire at {hire23.group(1) if hire23 else '-'} "
       f"(clicked at 60 and 80, delay {d23}: {d23 * ms23:.0f} ms)")
 fail |= not ok23
+if not ok23: bad.append("ok23")
 
 logs25 = {n: log(n) for n in ('vic', 'wren', 'zack')}
 outcomes25 = {n: re.findall(r'speed vote \d+ for ([\w ]+): (\w+)', t) for n, t in logs25.items()}
@@ -734,6 +751,7 @@ ok25 = (all([r for _, r in o] == want25 for o in outcomes25.values()) and fax25 
 print(f"25. Speed votes:            {result('vic')}; votes {outcomes25['vic']}; same on all three: "
       f"{len(set(map(tuple, outcomes25.values()))) == 1}; answered in the fax: {fax25}; speed only changed when agreed: {max25}")
 fail |= not ok25
+if not ok25: bad.append("ok25")
 
 # The next patient entering a GP's office makes the room's code fail (test
 # command): the patient walks out and queues again in both games, and the
@@ -746,12 +764,14 @@ ok28 = same28 and layout28 and result('wade').startswith('IN SYNC through step 1
 print(f"28. Room failed on entry:   {result('wade')}; patient walked out and queued again in both games at the same step: "
       f"{same28} {fail28[0].groups() if fail28[0] else '-'}; room layout reported: {layout28}")
 fail |= not ok28
+if not ok28: bad.append("ok28")
 
 auto26 = re.search(r"UI: the room list showed 'autolist' without Refresh after ([\d.]+) s; password kept: true", log('lina'))
 ok26 = auto26 is not None and result('kai').startswith('IN SYNC') and result('lina').startswith('IN SYNC')
 print(f"26. Room list refreshes:    {result('lina')}; room shown by itself after {auto26.group(1) if auto26 else '-'} s, "
       f"password kept: {auto26 is not None}")
 fail |= not ok26
+if not ok26: bad.append("ok26")
 
 load29 = re.search(r"UI: load window listed \[(.*?)\]; picked: (.*?); level (\d+), (\d+) players; room name kept: (\w+)", log('kai'))
 x29 = re.search(r"UI: x: (.*?), continue index (\d+)", log('kai'))
@@ -760,12 +780,14 @@ ok29 = bool(load29 and load29.group(1) == "Jan's room autosave.sav | Jan's room 
             and x29 and x29.groups() == ('Load MP game', '0'))
 print(f"29. Load MP game:           {load29.groups() if load29 else '-'}; x: {x29.groups() if x29 else '-'}")
 fail |= not ok29
+if not ok29: bad.append("ok29")
 
 lv30 = re.search(r"UI: levels listed \[(.*?)\]; map drawn: (\w+); shared level 3: (.*?); chosen: level (\d+), room name kept: (\w+)", log('kai'))
 ok30 = bool(lv30 and len(lv30.group(1).split(' | ')) == 9 and lv30.group(1).endswith('CUTTHROAT | TEAM TOWN | CROSSROADS')
             and lv30.group(2) == 'true' and lv30.group(3) == 'LARGECHESTER' and lv30.groups()[3:] == ('6', 'true'))
 print(f"30. Level browser:          {lv30.groups() if lv30 else '-'}")
 fail |= not ok30
+if not ok30: bad.append("ok30")
 
 # The start pause.
 pause32 = [re.search(r'UI: step \d+ ran (\d+) ms after the start \(pause 1500 ms\)', log(n)) for n in ('rex', 'ida1')]
@@ -774,6 +796,7 @@ ok32 = (None not in pause32 and all(p >= 1500 for p in pause32)
         and result('rex').startswith('IN SYNC through step 200') and result('ida1').startswith('IN SYNC'))
 print(f"32. Start pause:            first step after {pause32} ms; {result('rex')} / {result('ida1')}")
 fail |= not ok32
+if not ok32: bad.append("ok32")
 
 # The land auction.
 sold33 = [re.findall(r'auction 1: plot \d+ sold to hospital \d+ for \$\d+', log(n)) for n in ('ana', 'ben')]
@@ -792,6 +815,7 @@ ok33 = (len(sold33[0]) == 1 and sold33 == [sold33[0], sold33[0]] and sold33[0][0
         and result('ana').startswith('IN SYNC') and result('ben').startswith('IN SYNC'))
 print(f"33. Land auction:           {sold33[0]}; screens {screens33}; closed by ben {hidden33}; {result('ana')} / {result('ben')}")
 fail |= not ok33
+if not ok33: bad.append("ok33")
 
 # The year end waits for everybody's annual report.
 closed35 = {n: re.findall(r'UI: closed the annual report at step (\d+) \(game hours (\d+)\)', log(n))
@@ -814,6 +838,7 @@ ok35 = (len(closed35['wes']) == 1 and len(closed35['xan']) == 1 and len(box35) =
 print(f"35. Year end waits:         closed {closed35}; xan's box {box35} gone {gone35}; "
       f"{result('wes')} / {result('xan')}")
 fail |= not ok35
+if not ok35: bad.append("ok35")
 
 # The host removes a player.
 menu34 = re.search(r'UI: kick menu open: (\w+)', log('kip'))
@@ -826,6 +851,7 @@ ok34 = (bool(menu34) and menu34.group(1) == 'true' and bool(after34) and 'lev' n
 print(f"34. Kick from the room:     menu {menu34 and menu34.group(1)}; after {after34 and after34.group(1)}; "
       f"lev told {told34 and told34.groups()}; joining again {again34 and again34.group(1)}")
 fail |= not ok34
+if not ok34: bad.append("ok34")
 
 # Two languages in one game.
 builds31 = [re.search(r'connected as (\S+)', log(n)) for n in ('otis', 'greta')]
@@ -842,6 +868,7 @@ print(f"31. Two languages:          otis (English) {result('otis')}, greta ({lan
       f"{builds31[0] == builds31[1]} {builds31[0]}; same commands: {applied('otis') == applied('greta')}; "
       f"hires after the new month's list: {hired31}")
 fail |= not ok31
+if not ok31: bad.append("ok31")
 
 # The reception desk moved one tile over, twice (its own tiles do not count
 # as taken while it is moved).
@@ -850,6 +877,7 @@ desk27 = [x for x in applied('kai') if 'move_object -> ok' in x]
 ok27 = len(moves27) == 2 and len(desk27) == 2 and applied('kai') == applied('lina') and result('kai').startswith('IN SYNC')
 print(f"27. Desk one tile over:     {result('kai')}; moves accepted on the screen {len(moves27)}/2, in the game {len(desk27)}/2")
 fail |= not ok27
+if not ok27: bad.append("ok27")
 
 resets24 = []
 for d in sorted(out.iterdir()):
@@ -861,6 +889,7 @@ for d in sorted(out.iterdir()):
                 resets24.append(d.name)
 print(f"24. Map clicks:             turned back on by the safety net {len(resets24)} times {sorted(set(resets24)) or ''}")
 fail |= bool(resets24)
+if resets24: bad.append("resets24")
 
 w_, y_ = log('wade'), log('yara')
 cw = applied('wade')
@@ -906,6 +935,7 @@ ok10 = moved10 and into10 and out10 and 'move_staff' in kinds10 and clean10 and 
         and 'accepted the pay rise' in y_ and 'declined the pay rise' in y_)
 print(f"10. Staff and queues:       {result('wade')}; commands {len(okw)}/{len(cw)} ok, identical: {cw == applied('yara')}; {' '.join(kinds10)}; rooms {rooms10 or 'none'}; clicks after furnishing: {clicks10}; markers left: {'/'.join(marks10) or '-'}; staff moved: {moved10} {where_w.group(2, 3) if where_w else '-'}; plant moved into the GP's office: {into10} {plant10}; and out again: {out10}")
 fail |= not ok10
+if not ok10: bad.append("ok10")
 
 ed, fl = log('ed'), log('flo')
 ce = applied('ed')
@@ -942,6 +972,7 @@ print(f"12. Room editing:           {result('ed')} / {result('flo')}; steps ok {
       f"moved {moved12.group(3, 4) if moved12 else '-'} -> {moved12.group(1, 2) if moved12 else '-'}; commands {' '.join(kinds12)}; "
       f"refused {len(bad12)}; markers {'/'.join(marks12)}; clicks {clicks12}; rooms at the end {rooms12.group(1) if rooms12 else '-'}; cardiogram room by hand: {cardio12}")
 fail |= not ok12
+if not ok12: bad.append("ok12")
 
 sa, to, t2, s2 = log('sara'), log('tom'), log('tom-2'), log('sara-2')
 saved_s = re.search(r"SAVED savegame (\S+) at step (\d+): (.*)", sa)
@@ -973,6 +1004,7 @@ print(f"11. Save and continue:      saved at step {saved_t.group(2) if saved_t e
       f"continued from it: {same_load}; own hospitals: {seats}; clicks after load: {clicks_ok}; chat key after load: {chat_ok}; {result('tom-2')} / {result('sara-2')}; "
       f"commands after it: {' '.join(kinds11)}")
 fail |= not ok11
+if not ok11: bad.append("ok11")
 
 if with_referee:
     # (savegame2 is a continued game: the referee waits for the host's save.)
@@ -989,6 +1021,7 @@ if with_referee:
           f"differs in {differ or 'none'}; confirmed through " +
           ", ".join(f"{r} {confirmed.get(r, 0)}" for r in rooms))
     fail |= not ok10
+    if not ok10: bad.append("ok10")
 
     for n, (host, join, room) in enumerate([('quinn', 'rosa', 'fix'), ('sam', 'tess', 'fixcoop')]):
         hl, jl = log(host), log(join)
@@ -1036,6 +1069,7 @@ if with_referee:
         print(f"{14 + n}. Desync repair ({room}):{' ' * (8 - len(room))}{result(host)} / {result(join)}; "
               f"{where}; commands after it ok on both: {same and later}; quiet repair, view kept: {quiet}{own}")
         fail |= not ok
+        if not ok: bad.append("ok")
 
     u, v = log('uma'), log('vera-back')
     rejoined = re.search(r"REJOINED: loaded the shared save at step (\d+)", v)
@@ -1059,5 +1093,8 @@ if with_referee:
     print(f"16. Rejoin after a crash:   {result('uma')} / {result('vera-back')}; "
           f"rejoined at step {at if rejoined else '-'}; commands after it on both: {after_u == after_v[:len(after_u)]} {kinds}")
     fail |= not ok13
+    if not ok13: bad.append("ok13")
+if bad:
+    print("failed checks: " + " ".join(bad))
 sys.exit(1 if fail else 0)
 PY
