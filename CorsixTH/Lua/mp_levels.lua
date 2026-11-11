@@ -845,10 +845,21 @@ local function tellAll(world, text)
   MultiplayerSession.tellOthers(world, nil, text)
 end
 
---! The trick of month `month`, or nil (before the rotation starts).
-function levels.trickOfTheMonth(month)
+--! The trick of month `month` in this game, or nil (before the rotation
+--! starts, or no dirty tricks in this game). Only tricks the game allows
+--! take turns (Jan, 2026-11-11: "rat attack costs half" while rats were off).
+function levels.trickOfTheMonth(world, month)
   if month < TRICK_ROTATION_FROM then return nil end
-  return TRICK_ROTATION[(month - TRICK_ROTATION_FROM) % #TRICK_ROTATION + 1]
+  -- (The game's options as in sabotage.allowed, mp_sabotage.lua: keep the
+  -- two in step.)
+  local coop = world.mp_coop
+  if not coop or coop.tricks_off then return nil end
+  local rotation = {}
+  for _, kind in ipairs(TRICK_ROTATION) do
+    if kind ~= "rats" or coop.rats_on then rotation[#rotation + 1] = kind end
+  end
+  if #rotation == 0 then return nil end
+  return rotation[(month - TRICK_ROTATION_FROM) % #rotation + 1]
 end
 
 --! The price factor of a trick for `buyer` this month on a level with its
@@ -859,7 +870,7 @@ function levels.trickPriceFactor(world, buyer, kind)
   local factor = 1
   -- (By the date: the notice of the month comes at the end of its first day.)
   if world.mp_coop and world.mp_coop.competitive and
-      levels.trickOfTheMonth(world.game_date:monthOfGame()) == kind then
+      levels.trickOfTheMonth(world, world.game_date:monthOfGame()) == kind then
     factor = factor * PRICE_OF_THE_MONTH
   end
   local rank = state.ranks and state.ranks[world:getHospitalIndex(buyer)]
@@ -970,8 +981,11 @@ local function cutthroatDay(world)
     end
     if competitive then
       state.ranks = rankRace(world)
-      state.trick_of_month = levels.trickOfTheMonth(month)
-      if month == TRICK_ROTATION_FROM then tellAll(world, _S.multiplayer_window.level7_truce_over) end
+      state.trick_of_month = levels.trickOfTheMonth(world, month)
+      -- (No truce to end in a game without dirty tricks.)
+      if month == TRICK_ROTATION_FROM and not world.mp_coop.tricks_off then
+        tellAll(world, _S.multiplayer_window.level7_truce_over)
+      end
       if state.trick_of_month then
         tellAll(world, _S.multiplayer_window.level7_trick_of_month:format(
             _S.multiplayer_window["sabotage_" .. state.trick_of_month]))

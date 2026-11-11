@@ -155,7 +155,8 @@ end
 
 --! Does this game allow this kind of trick at all (the room's game options)?
 --! The rat attack only when the host allowed it (Argus: rats should cost
---! nothing; Jan: an option, off by default, 2026-11-08).
+--! nothing; Jan: an option, off by default, 2026-11-08). (Level 7's trick of
+--! the month follows the same rules: levels.trickOfTheMonth, mp_levels.lua.)
 function sabotage.allowed(world, kind)
   local coop = world.mp_coop
   if not coop or coop.tricks_off then return false end

@@ -483,14 +483,32 @@ describe("Multiplayer levels", function()
   end)
 
   it("names a trick of the month from March, round and round", function()
-    assert.is_nil(levels.trickOfTheMonth(2))
-    assert.equal("rats", levels.trickOfTheMonth(3))
-    assert.equal("headhunter", levels.trickOfTheMonth(10))
-    assert.equal("rats", levels.trickOfTheMonth(11))
+    local world = {mp_coop = {players = 2, rats_on = true}}
+    assert.is_nil(levels.trickOfTheMonth(world, 2))
+    assert.equal("rats", levels.trickOfTheMonth(world, 3))
+    assert.equal("headhunter", levels.trickOfTheMonth(world, 10))
+    assert.equal("rats", levels.trickOfTheMonth(world, 11))
+  end)
+
+  it("names only tricks the game allows as the trick of the month", function()
+    -- Rats off (the default): the other seven take turns.
+    local world = {mp_coop = {players = 2}}
+    assert.equal("smear", levels.trickOfTheMonth(world, 3))
+    assert.equal("headhunter", levels.trickOfTheMonth(world, 9))
+    assert.equal("smear", levels.trickOfTheMonth(world, 10))
+    for month = 3, 30 do
+      assert.are_not.equal("rats", levels.trickOfTheMonth(world, month))
+    end
+    -- No dirty tricks at all: no trick of the month.
+    world.mp_coop.tricks_off = true
+    for month = 1, 30 do
+      assert.is_nil(levels.trickOfTheMonth(world, month))
+    end
   end)
 
   it("prices tricks by the month's trick and the place in the race", function()
     local world = cutthroat_world(3, true)
+    world.mp_coop.rats_on = true
     world.game_date = Date(1, 3, 1) -- March: rats are the trick of the month
     world.mp_level_events = {ranks = {[1] = "leader", [3] = "last"}}
     local h = world.hospitals
@@ -547,8 +565,11 @@ describe("Multiplayer levels", function()
     for _, t in ipairs(world.told) do texts[#texts + 1] = t.month .. ":" .. t.text end
     local all = table.concat(texts, "|")
     assert.truthy(all:find("3:truce over", 1, true))
-    assert.truthy(all:find("3:trick rats", 1, true))
-    assert.truthy(all:find("10:trick headhunter", 1, true))
+    -- (Rat attacks are off unless the host allows them: no trick of the
+    -- month for them.)
+    assert.truthy(all:find("3:trick smear", 1, true))
+    assert.truthy(all:find("9:trick headhunter", 1, true))
+    assert.falsy(all:find("trick rats", 1, true))
     assert.truthy(all:find("3:fair soon", 1, true))
     assert.truthy(all:find("4:fair", 1, true))
     assert.truthy(all:find("10:fair", 1, true))
