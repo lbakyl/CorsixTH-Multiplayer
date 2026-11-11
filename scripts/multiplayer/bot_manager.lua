@@ -76,7 +76,9 @@ local NOTICE_DAYS = {10, 18}
 local SHARE_DAYS = 21
 -- Game days between specialists sent to the same ally (of one kind), and
 -- between asking the allies for one (an emergency: sooner).
-local GIVE_DAYS, ASK_DAYS, ASK_DAYS_EMERGENCY = 20, 20, 7
+-- (Asks: the same kind at most once in 3 months, Jan 2026-11-12; an
+-- emergency sooner, it is over in days.)
+local GIVE_DAYS, ASK_DAYS, ASK_DAYS_EMERGENCY = 20, 90, 7
 -- Game days a specialist must be missing (a room waits for one, or cannot work
 -- without one) before the allies are asked for one (an emergency: sooner), and
 -- before an allied bot lends one although the ally could hire (Jan, 2026-11-07:
@@ -147,13 +149,19 @@ local function smallest_size(id)
 end
 
 --! The planned size of a room type (SIZES, else the smallest).
-local function SIZES_OF(id) return SIZES[id] or smallest_size(id) end
+-- (A bot set to research hard, Bot.research_heavy: a bigger room with four
+-- desks, a researcher at each. Jan's test of 2026-11-12.)
+local function SIZES_OF(id)
+  if id == "research" and M.research_heavy then return 7 end
+  return SIZES[id] or smallest_size(id)
+end
 
 --! The size and extras for a new room of this type.
 function M.roomPlan(id)
   local extras = EXTRAS[id] or DEFAULT_EXTRAS
   local copy = {}
   for k, v in pairs(extras) do copy[k] = v end
+  if id == "research" and M.research_heavy then copy.desk = 3 end
   return SIZES_OF(id), copy
 end
 
@@ -194,6 +202,12 @@ function M.new(bot, ctx)
   self.spent = nil         -- its last big spending, {key, cost, day} (M:noteSpent)
   self.plot_bought = {}    -- plot -> game day it asked to buy it itself (Bot:buyPlot)
   self.plot_sent = {}      -- plot -> game day it offered it to an ally (M:plotRequest)
+  self.research_need = {}  -- room id -> game day a patient needed it and it was not discovered
+  self.player_asked = {}   -- hospital index -> game day it asked them for help (M:askForHelp)
+  self.rival_bought = {}   -- rival hospital index -> game day it bought research from them
+  self.rival_staff_asked = {} -- category -> game day a rival was asked for one
+  self.s = nil             -- the last assessment (M:assess), for answers between days
+  M.research_heavy = bot.research_heavy or false
   return self
 end
 
@@ -633,6 +647,7 @@ function M:projects(s)
     if not self:available(id) then undiscovered = undiscovered + v end
   end
   if not s.rooms.research and s.room_count >= 4 then room("research", 6 + undiscovered * 0.4) end
+  if M.research_heavy and not s.rooms.research and s.room_count >= 3 then room("research", 30 + undiscovered * 0.4) end
   -- Training: a lecture room once doctors want teaching (juniors, or doctors
   -- not yet consultants) and a consultant can teach them (on the staff or
   -- the hiring list), when money allows.
@@ -667,7 +682,7 @@ function M:projects(s)
         end
       end
     end
-    local wanted = math.min(2, math.max(1, desks))
+    local wanted = math.min(M.research_heavy and 4 or 2, math.max(1, desks))
     if working < wanted then
       if spare then
         add("staff:research", working == 0 and 14 or 6, function()
@@ -1568,6 +1583,9 @@ function M:answerFaxes(s)
           if not s.rooms[r] and self:available(r) then
             missing = true
             self.demand[r] = (self.demand[r] or 0) + 1
+          elseif not s.rooms[r] and hosp.room_discoveries[r] and not SKIP_ROOMS[r] then
+            -- (Not discovered yet: research to ask for, M:askForHelp.)
+            self.research_need[r] = s.day
           end
         end
         -- (A diagnosis room it can build beats a guess: a guessed cure
@@ -1588,7 +1606,10 @@ function M:answerFaxes(s)
           if not s.rooms[r] then
             missing = true
             self.demand[r] = (self.demand[r] or 0) + 2
-            if not self:available(r) then buildable = false end
+            if not self:available(r) then
+              buildable = false
+              if hosp.room_discoveries[r] then self.research_need[r] = s.day end
+            end
           end
         end
         -- (Never "research": that is an autopsy, and it costs the hospital
@@ -2283,7 +2304,8 @@ function M:allies()
 end
 
 -- (Specialists for the rooms patients use: a research room waits.)
-local function lends(sh) return SPECIALISTS[sh.cat] and sh.room ~= "research" end
+-- (A consultant too, for the training room: Jan, 2026-11-12.)
+local function lends(sh) return (SPECIALISTS[sh.cat] or sh.cat == "Consultant") and sh.room ~= "research" end
 
 --! The name of a room type for the chat ("operating theatre").
 local function room_name(id)
@@ -2380,7 +2402,7 @@ function M:lackedStaff(s)
   local test_day, test_cat, test_room = (os.getenv("MP_BOT_TEST_LACK") or ""):match("^(%d+):(%a+):([%w_]+)$")
   if test_day and s.day >= tonumber(test_day) and not have_cat[test_cat] then
     lacks[#lacks + 1] = {room = test_room, cat = test_cat, need = 1, have = 0, built = false, building = false,
-        emergency = false}
+        emergency = false, test = true}
   end
   return lacks
 end
@@ -2408,7 +2430,10 @@ function M:askAllies(s)
   for _, sh in ipairs(lacks) do
     local wait = sh.emergency and ASK_DAYS_EMERGENCY or ASK_DAYS
     local days = s.day - self.lacking[sh.cat]
-    if days >= (sh.emergency and LACK_EMERGENCY_DAYS or LACK_DAYS) and
+    -- (Only while it cannot hire one: none on the hiring list, or no money
+    -- for the wage: Jan, 2026-11-12.)
+    local cannot_hire = sh.test or not bot:canHire(sh.cat) or s.balance < RESERVE
+    if days >= (sh.emergency and LACK_EMERGENCY_DAYS or LACK_DAYS) and cannot_hire and
         s.day - (self.asked_for[sh.cat] or -999) >= wait then
       local bot_spares, spare_peers, spare_names, everybody = false, {}, {}, {}
       for _, ally in ipairs(self:allies()) do
@@ -2695,6 +2720,389 @@ function M:rivalWatch(s)
       {names = join_names(names)})
   self:note(string.format("day %d: warns the team: %s meet the winning conditions", s.day, join_names(names)))
   bot:say(line, self.typing(line), "team")
+end
+
+--------------------------------------------------------------------------------
+-- Dealing with rivals and asking for help (Jan, 2026-11-12): a race is no
+-- reason to turn down a good deal. A bot takes a rival's referred patient it
+-- can treat, buys research its patients need (by how big it is: an X-ray
+-- is worth more than a slack tongue clinic, up to RIVAL_PAY_MAX) and a
+-- specialist it lacks badly. From month ASK_FROM_MONTH it asks for them
+-- itself: an ally to share research for free, a rival for a price, and a
+-- rival for a specialist (allies: M:askAllies), at most one ask a month and
+-- the same player at most once in ASK_PLAYER_DAYS. A bot asked by another
+-- bot answers with an offer (M:botRequest); a person answers in the game.
+--------------------------------------------------------------------------------
+
+local RIVAL_PAY_MAX = 4000      -- the most it pays a rival for research
+local RIVAL_STAFF_PAY = 3000    -- ... for a specialist it lacks
+local RIVAL_STAFF_PRICE = 2000  -- what it asks a rival for a spare specialist
+local RIVAL_QUEUE = 4           -- a rival's patient only to a queue this short (per room)
+local ASK_FROM_MONTH = 4        -- the first month it asks (after the third)
+local ASK_PLAYER_DAYS = 90      -- game days between asks to the same player
+local RIVAL_BUY_DAYS = 90       -- game days between research bought from the same rival
+local RIVAL_LACK_DAYS = 30      -- a specialist missing this long is missed badly
+local NEED_DAYS = 60            -- a room patients needed this lately is still wanted
+M.RIVAL_PAY_MAX, M.RIVAL_STAFF_PAY, M.RIVAL_STAFF_PRICE = RIVAL_PAY_MAX, RIVAL_STAFF_PAY, RIVAL_STAFF_PRICE
+
+local function round500(n) return math.floor((n + 250) / 500) * 500 end
+
+--! Dollars in a chat line: $4,000.
+local function price_text(n)
+  local text = string.format("%d", math.max(0, math.floor(n + 0.5)))
+  local out = text:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+  return "$" .. (out:gsub("^,", ""))
+end
+M.priceText = price_text
+
+--! What one piece of research (a key of MultiplayerSession.shareableResearch:
+--! e:<object>, m:<object>, d:<disease>) is worth to `mine` in dollars. A
+--! discovery that opens a room in `need` (room id -> true: its patients
+--! needed it lately): three quarters of the machine's price, a diagnosis
+--! room a quarter more (it serves many diseases), $1,000 to RIVAL_PAY_MAX.
+--! A better machine it has in a room: a quarter of its price, $500 to
+--! $1,000; a better drug for a disease it treats: $500. Anything else: 0.
+function M.researchValue(world, mine, key, need)
+  local kind, id = tostring(key):match("^(%a):([%w_]+)$")
+  local config = world.map and world.map.level_config
+  local function machine_cost(object)
+    local o = config and config.objects and object.thob and config.objects[object.thob]
+    return o and o.StartCost or 0
+  end
+  if kind == "e" or kind == "m" then
+    local object = TheApp.objects[id]
+    if not object then return 0 end
+    if kind == "e" then
+      local best = 0
+      for _, rt in ipairs(TheApp.rooms) do
+        if need[rt.id] and rt.objects_needed and rt.objects_needed[id] then
+          local v = machine_cost(object) * 0.75 * (rt.categories and rt.categories.diagnosis and 1.25 or 1)
+          best = math.max(best, math.min(RIVAL_PAY_MAX, math.max(1000, round500(v))))
+        end
+      end
+      return best
+    end
+    for _, r in pairs(world.rooms or {}) do
+      if r.hospital == mine and not r.crashed and r.room_info and r.room_info.objects_needed and
+          r.room_info.objects_needed[id] then
+        return math.min(1000, math.max(500, round500(machine_cost(object) * 0.25)))
+      end
+    end
+    return 0
+  elseif kind == "d" then
+    local case = mine.disease_casebook and mine.disease_casebook[id]
+    if case and (case.recoveries or 0) + (case.turned_away or 0) > 0 then return 500 end
+  end
+  return 0
+end
+
+--! Rooms its patients needed lately (noted from the faxes, M:answerFaxes)
+--! that it has not discovered: room id -> true.
+function M:neededRooms(s)
+  local need = {}
+  for id, day in pairs(self.research_need) do
+    if s.day - day <= NEED_DAYS and not self:available(id) then need[id] = true end
+  end
+  return need
+end
+
+--! What an offer of research (";"-separated keys) is worth to it, capped at
+--! RIVAL_PAY_MAX, and whether any of it is new knowledge it can use.
+function M:offerValue(s, keys)
+  local need = self:neededRooms(s)
+  local world = self.bot.world
+  local total, any = 0, false
+  for key in tostring(keys or ""):gmatch("[^;]+") do
+    local v = M.researchValue(world, s.hosp, key, need)
+    total = total + v
+    if v > 0 or key:sub(1, 2) == "e:" then any = true end
+  end
+  return math.min(RIVAL_PAY_MAX, total), any
+end
+
+--! How far `hosp` is on the level's goals (0 to 1; 0 without goals).
+local function goal_progress(world, hosp)
+  local r = M.requirements(world, hosp)
+  if not r then return 0 end
+  local sum = 0
+  for _, c in ipairs(r.list) do sum = sum + c.progress end
+  return #r.list > 0 and sum / #r.list or 0
+end
+
+--! Would it help rival `h` (sell it research or a specialist)? Not one
+--! that meets the goals or is well ahead of it (a fifth of the way).
+function M:helpsRival(s, h)
+  local world = self.bot.world
+  if M.meets(world, h) then return false end
+  return goal_progress(world, h) <= goal_progress(world, s.hosp) + 0.2
+end
+
+--! The kind of specialist it lacks now that `staff` is, or nil.
+function M:lackedKind(s, staff)
+  if not (staff and staff.fulfillsCriterion) then return nil end
+  for _, sh in ipairs(self:lackedStaff(s)) do
+    if staff:fulfillsCriterion(sh.cat) then return sh.cat end
+  end
+end
+
+--! A rival's offer (Bot:answerOffers): accept it?, and its answer (a line
+--! filled in), or nil for the usual refusal.
+function M:rivalOffer(offer, name)
+  local s = self.s
+  if not s then return false end
+  local bot, world = self.bot, self.bot.world
+  local L = self.lines
+  local function say(set, vars)
+    vars = vars or {}
+    vars.name = name
+    return self.fill_in(self.pick(set), vars)
+  end
+  local price = offer.price or 0
+  if offer.kind == "patient" then
+    local patient = world:getEntityById(offer.entity)
+    if not bot:canTreat(patient) then return false, say(L.rival_cannot_treat) end
+    local rooms = patient and patient.diagnosed and patient.disease and patient.disease.treatment_rooms
+    local room = rooms and rooms[1] or "gp"
+    if (s.queue[room] or 0) / math.max(1, s.rooms[room] or 1) > RIVAL_QUEUE then
+      return false, say(L.rival_patient_busy)
+    end
+    self:note(string.format("day %d: takes a patient from %s (rival)", s.day, name))
+    return true, say(L.rival_patient_yes)
+  elseif offer.kind == "research" then
+    local value, any = self:offerValue(s, offer.items)
+    if price == 0 then
+      if any then
+        self:note(string.format("day %d: takes free research from %s (rival)", s.day, name))
+        return true, say(L.rival_research_free)
+      end
+      return false, say(L.rival_research_useless)
+    end
+    if value <= 0 then return false, say(L.rival_research_useless) end
+    if price > value then
+      self:note(string.format("day %d: research from %s for $%d: too dear (worth $%d)", s.day, name, price, value))
+      return false, say(L.rival_research_dear, {value = price_text(value)})
+    end
+    local last = self.rival_bought[offer.from]
+    if last and s.day - last < RIVAL_BUY_DAYS then return false, say(L.rival_research_later) end
+    if s.balance - price < RESERVE then return false, say(L.rival_broke) end
+    self.rival_bought[offer.from] = s.day
+    self:note(string.format("day %d: buys research from %s for $%d (worth $%d)", s.day, name, price, value))
+    return true, say(L.rival_research_yes, {value = price_text(price)})
+  elseif offer.kind == "staff" then
+    local kind = self:lackedKind(s, world:getEntityById(offer.entity))
+    if not kind then return false end
+    if price > RIVAL_STAFF_PAY then
+      return false, say(L.rival_staff_dear, {value = price_text(RIVAL_STAFF_PAY), kind = kind:lower()})
+    end
+    if s.balance - price < RESERVE then return false, say(L.rival_broke) end
+    self:note(string.format("day %d: buys a %s from %s for $%d", s.day, kind, name, price))
+    return true, say(L.rival_staff_yes, {kind = kind:lower()})
+  end
+  return false
+end
+
+--! The undiscovered machine of room `room_id` that hospital `from` could
+--! give `to` (an item of MultiplayerSession.shareableResearch), or nil.
+local function research_for_room(from, to, room_id)
+  local rt = room_types()[room_id]
+  if not (rt and rt.objects_needed and MultiplayerSession.shareableResearch) then return nil end
+  for _, item in ipairs(MultiplayerSession.shareableResearch(from, to)) do
+    if item.kind == "e" and rt.objects_needed[item.object.id] then return item end
+  end
+end
+
+--! The players to ask in hospital `index`: its people, or its bot when
+--! nobody else plays it ({peers, names, bot}); nil when there is none.
+function M:contactsOf(index)
+  local bot = self.bot
+  local peers, names = bot:peopleOfHospital(index)
+  if #peers > 0 then return {peers = peers, names = names, bot = false} end
+  local peer, name, is_bot = bot:playerOfHospital(index)
+  if peer and name and is_bot then return {peers = {peer}, names = {name}, bot = true} end
+end
+
+--! The hospitals it may ask now (allies or rivals): index, hosp, contacts;
+--! not asked in ASK_PLAYER_DAYS.
+function M:askable(s, rivals)
+  local world = self.bot.world
+  local out = {}
+  for index, h in ipairs(world.hospitals) do
+    if h ~= s.hosp and not h.mp_place and world:mpMayTrade(s.hosp, h) and world:mpRivals(s.hosp, h) == rivals and
+        s.day - (self.player_asked[index] or -999) >= ASK_PLAYER_DAYS then
+      local who = self:contactsOf(index)
+      if who then out[#out + 1] = {index = index, hosp = h, who = who} end
+    end
+  end
+  return out
+end
+
+--! Once a month from ASK_FROM_MONTH: the research its patients need (an ally
+--! who has it is asked to share it, else a rival is offered money for it),
+--! or a specialist it has missed badly and cannot hire (a rival who can
+--! spare one; the allies are asked in M:askAllies). Called every day.
+function M:askForHelp(s)
+  local bot, world = self.bot, self.bot.world
+  if not world.mp_coop or s.month < ASK_FROM_MONTH or self.asked_month == s.month then return end
+  if bot:sharesWithPerson() or s.hosp.mp_place then return end
+  local function ask(target, set, vars, what)
+    vars.name = table.concat(target.who.names, " and ")
+    local line = self.fill_in(self.pick(set), vars)
+    self.player_asked[target.index] = s.day
+    self.asked_month = s.month
+    self:note(string.format("day %d: asks hospital %d (%s) for %s", s.day, target.index,
+        target.who.bot and "a bot" or "a person", what))
+    bot:say(line, self.typing(line), table.concat(target.who.peers, ","))
+  end
+  if not world.mp_coop.sharing_off then
+    local need = self:neededRooms(s)
+    -- (The room most patients asked for first.)
+    local order = sorted_keys(need)
+    table.sort(order, function(a, b)
+      local da, db = self.demand[a] or 0, self.demand[b] or 0
+      if da ~= db then return da > db end
+      return a < b
+    end)
+    for _, rid in ipairs(order) do
+      for _, rivals in ipairs({false, true}) do
+        for _, target in ipairs(self:askable(s, rivals)) do
+          local item = research_for_room(target.hosp, s.hosp, rid)
+          if item then
+            local vars = {item = plain(item.name), room = room_name(rid)}
+            if rivals then
+              vars.price = price_text(M.researchValue(world, s.hosp, item.key, need))
+              ask(target, self.lines.research_buy, vars, item.key .. " for " .. vars.price)
+            else
+              ask(target, self.lines.research_please, vars, item.key .. " (free)")
+            end
+            return
+          end
+        end
+      end
+    end
+  end
+  for _, sh in ipairs(self:lackedStaff(s)) do
+    local since = self.lacking[sh.cat]
+    if sh.built and since and s.day - since >= RIVAL_LACK_DAYS and not bot:canHire(sh.cat) and
+        s.day - (self.rival_staff_asked[sh.cat] or -999) >= ASK_PLAYER_DAYS then
+      for _, target in ipairs(self:askable(s, true)) do
+        if M.spareStaff(world, target.hosp, sh.cat, M.emergencyRooms(world, target.hosp)) > 0 then
+          self.rival_staff_asked[sh.cat] = s.day
+          ask(target, self.lines.staff_ask_rival, {kind = sh.cat:lower(), room = room_name(sh.room)},
+              "a " .. sh.cat)
+          return
+        end
+      end
+    end
+  end
+end
+
+--! Patterns that read the asks of M:askForHelp back: {pattern, names (what
+--! each capture is: item, kind, price), set}.
+local ask_patterns
+local function asks_of(lines)
+  if ask_patterns then return ask_patterns end
+  ask_patterns = {}
+  for _, set in ipairs({"research_buy", "research_please", "staff_ask_rival"}) do
+    for _, line in ipairs(lines[set] or {}) do
+      local names = {}
+      local pattern = line:gsub("[%%%^%$%(%)%.%[%]%*%+%-%?]", "%%%0"):gsub("{(%w+)}", function(k)
+        if k == "item" or k == "kind" then
+          names[#names + 1] = k
+          return "(.-)"
+        end
+        if k == "price" then
+          names[#names + 1] = k
+          return "%$([%d,]+)"
+        end
+        return ".-"
+      end)
+      ask_patterns[#ask_patterns + 1] = {pattern = "^" .. pattern .. "$", names = names, set = set}
+    end
+  end
+  return ask_patterns
+end
+
+--! Read an ask of M:askForHelp: {set, item, kind, price}, or nil.
+function M.readAsk(lines, text)
+  for _, a in ipairs(asks_of(lines)) do
+    local caps = {text:match(a.pattern)}
+    if caps[1] then
+      local out = {set = a.set}
+      for i, k in ipairs(a.names) do out[k] = caps[i] end
+      if out.price then out.price = tonumber((out.price:gsub(",", ""))) end
+      return out
+    end
+  end
+end
+
+--! Another bot asked it (privately) for research or a specialist
+--! (M:askForHelp): it answers with an offer, an ally for free, a rival for
+--! the price named (research) or RIVAL_STAFF_PRICE (a specialist), unless
+--! that rival is ahead (M:helpsRival). People decide for themselves.
+function M:botRequest(peer, name, text)
+  local s = self.s
+  local bot, world = self.bot, self.bot.world
+  if not s or not world.mp_coop or bot:sharesWithPerson() then return end
+  local ask = M.readAsk(self.lines, text)
+  if not ask then return end
+  local index = (bot.lobby.peer_hospital or {})[peer]
+  local h = index and world.hospitals[index]
+  if not h or h == s.hosp or not world:mpMayTrade(s.hosp, h) then return end
+  local rival = world:mpRivals(s.hosp, h)
+  local L = self.lines
+  local function reply(set, vars)
+    vars = vars or {}
+    vars.name = name
+    local line = self.fill_in(self.pick(set), vars)
+    bot:say(line, 3 + self.typing(line), tostring(peer))
+  end
+  if ask.set == "research_buy" or ask.set == "research_please" then
+    local item
+    local shareable = MultiplayerSession.shareableResearch and MultiplayerSession.shareableResearch(s.hosp, h) or {}
+    for _, it in ipairs(shareable) do
+      if plain(it.name) == ask.item then item = it end
+    end
+    if not item or world.mp_coop.sharing_off then
+      self:note(string.format("day %d: %s asked for %s research: none to give", s.day, name, tostring(ask.item)))
+      return reply(L.ask_research_none, {item = ask.item})
+    end
+    local price = rival and math.max(MultiplayerSession.RIVAL_MIN_PRICE or 1000, ask.price or 0) or 0
+    if rival and not self:helpsRival(s, h) then
+      self:note(string.format("day %d: %s (ahead) asked for %s research: refused", s.day, name, item.key))
+      return reply(L.ask_rival_ahead)
+    end
+    if self:issue({kind = "offer_research", to = index, items = item.key, price = price}) then
+      self:note(string.format("day %d: offers %s research to %s for $%d (asked)", s.day, item.key, name, price))
+      reply(rival and L.ask_research_sold or L.ask_research_shared, {item = ask.item, price = price_text(price)})
+    end
+  elseif ask.set == "staff_ask_rival" then
+    local cat
+    for _, c in ipairs({"Surgeon", "Psychiatrist", "Researcher", "Consultant"}) do
+      if c:lower() == ask.kind then cat = c end
+    end
+    if not cat then return end
+    if rival and not self:helpsRival(s, h) then
+      self:note(string.format("day %d: %s (ahead) asked for a %s: refused", s.day, name, cat))
+      return reply(L.ask_rival_ahead)
+    end
+    if M.spareStaff(world, s.hosp, cat, s.emergency and s.emergency.rooms) < 1 then
+      self:note(string.format("day %d: %s asked for a %s: none to spare", s.day, name, cat))
+      return reply(L.ask_staff_none, {kind = ask.kind})
+    end
+    local pick
+    for _, st in ipairs(s.hosp.staff) do
+      if not st.fired and not st.mp_saboteur and not st.mp_in_transit and not st.mp_offer and st.mp_id and
+          st:fulfillsCriterion(cat) and (not pick or (st.profile.skill or 0) < (pick.profile.skill or 0)) then
+        pick = st
+      end
+    end
+    local price = rival and RIVAL_STAFF_PRICE or 0
+    if pick and self:issue({kind = "offer_staff", to = index, staff = pick.mp_id, price = price > 0 and price or nil}) then
+      local who = plain(pick.profile:getFullName())
+      self:note(string.format("day %d: offers %s (%s) to %s for $%d (asked)", s.day, who, cat, name, price))
+      reply(L.ask_staff_sold, {who = who, kind = ask.kind, price = price_text(price)})
+    end
+  end
 end
 
 --------------------------------------------------------------------------------
@@ -3407,12 +3815,16 @@ function M:think()
   end
   self.next_daily = day + 1
   local s = self:assess()
+  self.s = s
   self:daily(s)
   -- Specialists: lent to allies who cannot hire one (a hospital out of the
   -- race or done still helps its team), asked for when it cannot hire one.
   if bot.world.mp_coop then
     self:helpAllies(s)
-    if not s.hosp.mp_place then self:askAllies(s) end
+    if not s.hosp.mp_place then
+      self:askAllies(s)
+      self:askForHelp(s)
+    end
     -- The level's requirements, in the team chat.
     self:winChat(s)
     self:rivalWatch(s)

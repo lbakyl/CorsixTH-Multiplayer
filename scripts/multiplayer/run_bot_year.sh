@@ -19,6 +19,10 @@
 # MP_YEAR_MATCH=1 plays one race instead: room "match", the watcher (its
 # hospital stays closed) and two bots of the first room's brain against each
 # other (STEPS 36000 for two game years); MP_YEAR_BOTS=3 for three bots.
+# MP_YEAR_MODE=teams makes it a race of two teams (the room seats newcomers
+# in teams 2, 1, 2, ...; with more players than hospitals the last shares the
+# watcher's, so set MP_BOT_WATCHER=wmatch: the bots then ignore the watcher).
+# MP_BOT_RESEARCH="Bot Bertie" makes that bot research hard (four desks).
 # MP_YEAR_PHOTOS="6,12" saves pictures of the bots' hospitals at those game
 # months in <output>/shots (MP_YEAR_SCREEN, default 2880x1800, sets the size).
 #
@@ -61,7 +65,7 @@ export MP_REFEREE_PROBE_SCENARIO="${scenarios#;}"
 realtime=${MP_YEAR_REALTIME:-0}
 bot_fast=1 watch="MP_FAST=1" first=""
 if [[ "$realtime" == 1 ]]; then bot_fast=0 watch="MP_FAST=0 MP_REALTIME=1" first="5:speed:Normal;"; fi
-MP_BOT_DIAG="${MP_BOT_DIAG:-}" MP_BOT_BRAIN="${brains#;}" MP_BOT_FAST=$bot_fast MP_BOT_SEED="${MP_BOT_SEED:-7}" CORSIXTH_MP_AI_STATE="$out/ai-spend.json" \
+MP_BOT_WATCHER="${MP_BOT_WATCHER:-}" MP_BOT_RESEARCH="${MP_BOT_RESEARCH:-}"   MP_BOT_DIAG="${MP_BOT_DIAG:-}" MP_BOT_BRAIN="${brains#;}" MP_BOT_FAST=$bot_fast MP_BOT_SEED="${MP_BOT_SEED:-7}" CORSIXTH_MP_AI_STATE="$out/ai-spend.json" \
   PYTHONPATH="$source_dir/mp_server" "$python" -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
 server_pid=$!
@@ -75,7 +79,7 @@ script="$script;$((steps - 5)):map:2${MP_YEAR_SCRIPT:+;$MP_YEAR_SCRIPT}"
 run_watcher() { # name room
   local name=$1 room=$2 dir="$out/$1"
   local mode=coop players=2 bots=1
-  if [[ "$match" == 1 ]]; then mode=competitive bots=${MP_YEAR_BOTS:-2} players=$((${MP_YEAR_BOTS:-2} + 1)); fi
+  if [[ "$match" == 1 ]]; then mode=${MP_YEAR_MODE:-competitive} bots=${MP_YEAR_BOTS:-2} players=$((${MP_YEAR_BOTS:-2} + 1)); fi
   local screen=${MP_YEAR_SCREEN:-2880x1800} photos=()
   if [[ -n "${MP_YEAR_PHOTOS:-}" ]]; then
     mkdir -p "$out/shots"

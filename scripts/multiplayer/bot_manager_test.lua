@@ -503,3 +503,51 @@ do
   eq(n1 == 6 or n1 == 5, true, "its size (5 or 6)")
 end
 print("training ok")
+
+-- Dealing with rivals (2026-11-12): research is worth what its machine
+-- costs (an X-ray more than a slack tongue clinic), only when patients need
+-- the room; another bot's ask is read back from the chat line.
+do
+  local saved = rawget(_G, "TheApp")
+  TheApp = {objects = {x_ray = {id = "x_ray", thob = 27}, slicer = {id = "slicer", thob = 26}},
+    rooms = {{id = "x_ray", objects_needed = {x_ray = 1, radiation_shield = 1}, categories = {diagnosis = 7}},
+      {id = "slack_tongue", objects_needed = {slicer = 1}, categories = {clinics = 1}}}}
+  local w = {map = {level_config = {objects = {[26] = {StartCost = 1500}, [27] = {StartCost = 4000}}}}, rooms = {}}
+  local mine = {disease_casebook = {}}
+  local need = {x_ray = true, slack_tongue = true}
+  eq(M.researchValue(w, mine, "e:x_ray", need), 4000, "an X-ray: $4,000")
+  eq(M.researchValue(w, mine, "e:slicer", need), 1000, "a slack tongue clinic: $1,000")
+  eq(M.researchValue(w, mine, "e:x_ray", {}), 0, "no patient needs it: nothing")
+  eq(M.researchValue(w, mine, "m:x_ray", need), 0, "a better X-ray without one: nothing")
+  w.rooms = {{hospital = mine, room_info = TheApp.rooms[1]}}
+  eq(M.researchValue(w, mine, "m:x_ray", need), 1000, "a better X-ray it has: $1,000")
+  mine.disease_casebook.bloaty_head = {recoveries = 3}
+  eq(M.researchValue(w, mine, "d:bloaty_head", need), 500, "a better drug it uses: $500")
+  eq(M.researchValue(w, mine, "d:baldness", need), 0, "a drug for a disease it never saw: nothing")
+  eq(M.priceText(4000), "$4,000", "price 4000")
+  eq(M.priceText(500), "$500", "price 500")
+  eq(M.priceText(12500), "$12,500", "price 12500")
+  TheApp = saved
+
+  local bf = assert(io.open((arg[1]:gsub("bot_manager%.lua$", "bot.lua"))))
+  local bsrc = bf:read("*a")
+  bf:close()
+  local a = assert(bsrc:find("  research_please = {", 1, true))
+  local b = assert(bsrc:find("  -- Its answers to another bot's ask", a, true))
+  local lines = assert((loadstring or load)("return {" .. bsrc:sub(a, b - 1) .. "}"))()
+  for _, set in ipairs({"research_buy", "research_please", "staff_ask_rival"}) do
+    for _, t in ipairs(lines[set]) do
+      local text = t:gsub("{name}", "Bot Clive and ann"):gsub("{item}", "X-Ray"):gsub("{price}", "$3,500")
+          :gsub("{room}", "X-ray"):gsub("{kind}", "surgeon")
+      local got = M.readAsk(lines, text)
+      eq(got and got.set, set, "read back: " .. text)
+      if set ~= "staff_ask_rival" then eq(got.item, "X-Ray", "item: " .. text) end
+      if set == "research_buy" then eq(got.price, 3500, "price: " .. text) end
+      if set == "staff_ask_rival" then eq(got.kind, "surgeon", "kind: " .. text) end
+    end
+  end
+  eq(M.readAsk(lines, "Deal, Bot Clive: my X-Ray research for $3,500. Accept it in your messages."), nil,
+      "an answer is no ask")
+  eq(M.readAsk(lines, "Hello everybody!"), nil, "small talk is no ask")
+end
+print("rivals ok")

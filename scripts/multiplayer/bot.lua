@@ -8,10 +8,13 @@
 -- it looks like somebody playing. It also talks: a greeting in the second to
 -- fourth month, answers when spoken to (and seldom otherwise), and a word
 -- when somebody sends it something. In co-op it accepts what the others offer (staff, patients,
--- research, money requests); in a competitive race it refuses all of it and
--- plays a dirty trick now and then (the first one in months 7 to 12). In a
--- race of two teams it takes what its team mates offer and plays its tricks
--- on the other team.
+-- research, money requests); in a competitive race it plays a dirty trick now
+-- and then (the first one in months 7 to 12) and takes only a good deal from
+-- a rival: a patient it can treat, research its patients need, a specialist
+-- it lacks (Manager:rivalOffer). In a race of two teams it takes what its
+-- team mates offer and plays its tricks on the other team. From month 4 it
+-- asks allies and rivals for research and specialists it needs (once a month
+-- at most), and answers another bot's ask with an offer (Manager:botRequest).
 --
 -- It never uses the game's random numbers (that would change its game and
 -- desync it); its choices come from its own generator below.
@@ -156,14 +159,66 @@ local LINES = {
   staff_for_emergency = {" It's for the emergency!", " Hurry, the emergency won't wait.",
       " The emergency is on, so please hurry.", " Quick, there is an emergency!"},
   -- (names, kind, room, how many it needs ("2 surgeons"), has, emergency)
-  staff_ask_one = {"{names}, could you spare me a {kind}? My {room} needs {needs} and I have {have}.{urgent}",
-      "{names}, do you have a {kind} to spare? My {room} is waiting for {needs}, and I have {have}.{urgent}",
-      "Could you lend me a {kind}, {names}? My {room} needs {needs} and I have {have}.{urgent}",
-      "{names}, I'm short of a {kind} for my {room} (it needs {needs}, I have {have}). Can you help?{urgent}"},
-  staff_ask_all = {"Has anybody got a {kind} to spare? My {room} needs {needs} and I have {have}.{urgent}",
-      "I'm looking for a {kind} for my {room}. It needs {needs} and I have {have}. Can anybody help?{urgent}",
-      "My {room} is stuck without a {kind}: it needs {needs} and I have {have}. Anyone got one to spare?{urgent}",
-      "Does anybody have a {kind} they could send me? My {room} needs {needs} and I have {have}.{urgent}"},
+  -- (To allies, kindly: there is nobody to hire. Jan, 2026-11-12.)
+  staff_ask_one = {"{names}, could you help a friend out? My {room} needs {needs}, I have {have}, and there's no {kind} to hire.{urgent}",
+      "{names}, would you have a {kind} to spare? My {room} needs {needs} and I only have {have}. I'd be very grateful.{urgent}",
+      "Could I borrow a {kind}, {names}? My {room} needs {needs}, I have {have}, and nobody's on the hiring list. Thank you!{urgent}",
+      "{names}, I hate to ask, but my {room} needs {needs} and I have {have}. Could you lend me a {kind}?{urgent}"},
+  staff_ask_all = {"Could anybody lend me a {kind}? My {room} needs {needs}, I have {have}, and there's nobody to hire. Thank you!{urgent}",
+      "Friends, my {room} needs {needs} and I only have {have}. Would anyone have a {kind} to spare?{urgent}",
+      "I'm stuck without a {kind} for my {room} ({needs} needed, {have} here). Could one of you help me out?{urgent}",
+      "Would anybody have a {kind} they could send me? My {room} needs {needs} and I have {have}. Much appreciated!{urgent}"},
+  -- Asks of Manager:askForHelp, once a month at most: research its patients
+  -- need, from an ally (free) or a rival (for a price); a specialist from a
+  -- rival. Another bot reads them back (Manager.readAsk): {item}, {price}
+  -- and {kind} must stay apart from other words.
+  research_please = {"{name}, could you share your {item} research with me? My patients need a {room}.",
+      "{name}, my patients keep asking for a {room}. Would you send me your {item} research? Thank you!",
+      "Could I have your {item} research, {name}? My patients need a {room} and I can't build one yet."},
+  research_buy = {"While I compete with you, {name}, to increase my chances I'm willing to pay {price} for your {item} research.",
+      "{name}, rivals can still do business: {price} for your {item} research. My patients need a {room}.",
+      "I'll be honest, {name}: my patients need a {room}. I'd pay {price} for your {item} research."},
+  staff_ask_rival = {"I would kill for a good {kind}, {name}. Got one to spare? Offer one in the trade window and name your price.",
+      "{name}, I'm not proud: I need a {kind} badly. Sell me one and we're even... for now.",
+      "Rivals or not, {name}, I'd pay well for a {kind}. My {room} sits idle without one.",
+      "My {room} has no {kind}, {name}. I'd kill for one. Name your price."},
+  -- Its answers to another bot's ask (Manager:botRequest).
+  ask_research_shared = {"Here you go, {name}: our {item} research, free. Accept it in your messages.",
+      "Of course, {name}. The {item} research is on its way, no charge.",
+      "For you, {name}, the {item} research for nothing. Check your messages."},
+  ask_research_sold = {"Deal, {name}: my {item} research for {price}. Accept it in your messages.",
+      "Business is business, {name}. The {item} research is yours for {price}.",
+      "{price} it is, {name}. The {item} research is in your messages."},
+  ask_research_none = {"Sorry {name}, I have no {item} research to give.",
+      "I can't help with {item} research, {name}. I don't have it either."},
+  ask_rival_ahead = {"Nice try, {name}. You're ahead of me already: no help from me.",
+      "Help you win? Not a chance, {name}.",
+      "You're doing too well, {name}. Ask somebody else."},
+  ask_staff_sold = {"Fine, {name}: {who}, a {kind}, for {price}. Accept the offer in your messages.",
+      "{name}, you can have {who} ({kind}) for {price}. It's in your messages.",
+      "A {kind} for you, {name}: {who}, {price}. Don't say I never gave you anything."},
+  ask_staff_none = {"Sorry {name}, I have no {kind} to spare.", "No spare {kind} here, {name}. Try the hiring list."},
+  -- Answers to a rival's offer (Manager:rivalOffer); {value}: what it pays.
+  rival_patient_yes = {"Send them over, {name}. Business is business.", "A patient is a patient, {name}. Thanks.",
+      "I'll take good care of them, {name}. Thanks for the referral."},
+  rival_patient_busy = {"My queue is long enough, {name}. Try somebody else.",
+      "Sorry {name}, my doctors are swamped. Not this one."},
+  rival_cannot_treat = {"I can't treat that one, {name}. Keep them.",
+      "No room for that here, {name}. Thanks anyway."},
+  rival_research_free = {"Free research, {name}? Don't mind if I do.", "Thanks, {name}. I won't tell anyone it was you.",
+      "Generous of you, {name}. I'll still try to beat you."},
+  rival_research_yes = {"{value}? A fair price, {name}. Pleasure doing business.",
+      "Deal, {name}. My patients thank you.", "Good research, {name}. I'm still racing you, though."},
+  rival_research_dear = {"Too dear, {name}. I'd pay {value} for that.", "{name}, that's worth {value} to me, not more.",
+      "Nice try, {name}. {value} and it's mine."},
+  rival_research_useless = {"No thanks, {name}. Nothing there I need.", "Keep it, {name}: I have no use for that."},
+  rival_research_later = {"I bought from you not long ago, {name}. Ask me again in a few months.",
+      "Not again so soon, {name}. Maybe in a few months."},
+  rival_staff_yes = {"A {kind}! Just who I needed, {name}. Pleasure doing business.",
+      "Deal, {name}. My new {kind} will be happy here."},
+  rival_staff_dear = {"Too rich for me, {name}. {value} and your {kind} is mine.",
+      "{name}, a {kind} is worth {value} to me, not more."},
+  rival_broke = {"I'd buy it, {name}, but my bank says no.", "Not now, {name}. My bank is nearly empty."},
   -- To an ally it sent its research (Manager:shareResearch): the offer in
   -- the fax says it, so the bot says nothing in the chat.
   -- To whoever asked for a project in the chat (Manager:tellWisher): {name},
@@ -756,6 +811,10 @@ function Bot.new(lobby)
   self.next_think = 0
   self.world = nil
   self.brain = brain_of(my_name)
+  -- (Tests: MP_BOT_RESEARCH names a bot that researches hard: a bigger
+  -- research room with four desks and a researcher at each.)
+  self.research_heavy = (os.getenv("MP_BOT_RESEARCH") or "") == my_name
+  if self.research_heavy then log("researches hard (four desks)") end
   if self.brain ~= "script" then
     self.manager = Manager.new(self, {log = log, rand = rand, pick = pick, sabotage = sabotage, lines = LINES, fill = fill_in,
         typing = function(text) return 1.5 + #text * 0.06 + rand() * 2 end})
@@ -807,8 +866,13 @@ function Bot:flushOutbox()
 end
 
 --! Peer -> name, and whether that player is a bot (from the room's list).
+-- (Tests: MP_BOT_WATCHER names a scripted player who only watches, seated
+-- in a bot's hospital: no player for the bots, so that hospital's bot plays
+-- it alone and is asked and answers as if alone.)
+local WATCHER = os.getenv("MP_BOT_WATCHER")
 function Bot:playerName(peer)
   local p = self.lobby.players and self.lobby.players[peer]
+  if p and WATCHER and p.name == WATCHER then return nil, false end
   if p then return p.name, p.bot == "1" end
   for _, gp in ipairs(self.lobby.game_players or {}) do
     if gp.peer == peer then return gp.name, false end
@@ -818,12 +882,15 @@ end
 
 --! The player of a hospital (index): their peer and name.
 function Bot:playerOfHospital(index)
+  local first
   for peer, h in pairs(self.lobby.peer_hospital or {}) do
     if h == index then
       local name, is_bot = self:playerName(peer)
-      return peer, name, is_bot
+      if name then return peer, name, is_bot end
+      first = first or peer
     end
   end
+  return first
 end
 
 --! The people (not bots) playing hospital `index`: peers and names, in peer
@@ -1110,7 +1177,10 @@ function Bot:onChat(f)
   local session = TheApp.mp_session
   if not session or not peer or peer == 0 or peer == session.peer_id then return end
   local name, is_bot = self:playerName(peer)
-  if is_bot or not name then return end -- bots do not chat with each other
+  -- Bots do not chat with each other; another bot's ask to it alone (help,
+  -- Manager:askForHelp) gets an answer and an offer (Manager:botRequest).
+  if is_bot and name and f.to and self.manager then self.manager:botRequest(peer, name, f.text or "") end
+  if is_bot or not name then return end
   local text = f.text or ""
   -- An ally (same hospital, same team, or anybody in a co-op game) may ask
   -- for things; in a race everybody else is a rival (Bot:isAlly).
@@ -1242,7 +1312,7 @@ function Bot:answerOffers()
       name = name or "friend"
       -- (From a team mate in a race of two teams: welcome.)
       local accept = not self.world:mpRivals(self.world.hospitals[offer.from], mine)
-      local line
+      local line, filled
       if accept and offer.kind == "plot" then
         -- (A plot from an ally: its manager decides, a loan for it is fine.)
         if self.manager then
@@ -1266,9 +1336,15 @@ function Bot:answerOffers()
               LINES.accept_research or offer.kind == "patient" and LINES.accept_patient or LINES.accept)
         end
       else
-        line = pick(LINES.refuse)
+        -- A rival's offer: a good deal is taken (Jan, 2026-11-12): a patient
+        -- it can treat, research its patients need for what it is worth to
+        -- it, a specialist it lacks. The answer comes filled in.
+        local said
+        if self.manager then accept, said = self.manager:rivalOffer(offer, name) end
+        line = said or pick(LINES.refuse)
+        filled = said ~= nil
       end
-      line = line:format(name)
+      if not filled then line = line:format(name) end
       local msg = icon.mp_id
       local delay = 3 + rand() * 5
       log(string.format("offer #%s (%s) from %s: %s in %.1f s", tostring(msg), tostring(offer.kind), name,
@@ -1287,7 +1363,9 @@ function Bot:answerOffers()
       if not self.world:mpRivals(self.world.hospitals[offer.from], mine) then
         to = "team"
       else
-        local peers = self:peopleOfHospital(offer.from)
+        -- (A rival bot hears it too: nothing in it is an ask it acts on.)
+        local who = self.manager and self.manager:contactsOf(offer.from)
+        local peers = who and who.peers or self:peopleOfHospital(offer.from)
         to = #peers > 0 and table.concat(peers, ",") or false
       end
       if to then self:say(line, delay + typing(line), to) end
