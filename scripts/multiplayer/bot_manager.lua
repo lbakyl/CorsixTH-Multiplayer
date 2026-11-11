@@ -114,7 +114,10 @@ local WISH = 50
 -- room snugly against walls and other rooms, so floor is left for the GP's
 -- offices a busy hospital needs later (a 3-year level 7 race: land gone by
 -- month 7, GP queues of 60 to 80). Extras that do not fit are sold.
-local SIZES = {ward = 7, staff_room = 6, toilets = 5, research = 6, training = 5}
+-- An X-ray room one more too: at its smallest, 6 x 6, the radiation shield
+-- found no place beside the machine in 12 of 16 rooms (a 2-year race on
+-- level 6, 2026-11-12).
+local SIZES = {ward = 7, staff_room = 6, toilets = 5, research = 6, training = 5, x_ray = 7}
 -- The training room: lecture chairs (3 to 6 in all, chosen once per bot; a chair
 -- is one student at a time, and more than 3 students at once learn slower
 -- each: 2/(n-1) of the rate), the days between reviews of the teacher (a
