@@ -474,6 +474,23 @@ function Humanoid:despawn()
   -- nearest one it can, else it leaves where it stands. (Otherwise it would
   -- try the walk again every tick, for ever.)
   local x, y = self.tile_x, self.tile_y
+  -- (Someone using an object, like a staff room sofa, stands on its tile,
+  -- where nothing is passable: no edge can be reached from there, and they
+  -- would walk back onto it for ever (Argus, 2026-11-11: a fired doctor
+  -- stuck in the staff room). The way out is looked for from a free tile
+  -- beside it, where they step off.)
+  local map = self.world.map
+  if x and y and not map.th:getCellFlags(x, y).passable then
+    local nx, ny
+    for _, d in ipairs({{0, 1}, {1, 0}, {0, -1}, {-1, 0}, {1, 1}, {-1, 1}, {1, -1}, {-1, -1}}) do
+      local tx, ty = x + d[1], y + d[2]
+      if not nx and tx >= 1 and ty >= 1 and tx <= map.width and ty <= map.height and
+          map.th:getCellFlags(tx, ty).passable then
+        nx, ny = tx, ty
+      end
+    end
+    x, y = nx, ny
+  end
   if x and y and (x ~= spawn_point.x or y ~= spawn_point.y) and
       not self.world:getPathDistance(x, y, spawn_point.x, spawn_point.y) then
     local best, best_distance
