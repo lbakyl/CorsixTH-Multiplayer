@@ -303,7 +303,10 @@ function UIStaff:onMouseUp(button, x, y)
      or button == "right" and hit_namebox then
     -- Right click goes to the next staff member of the same category (NB: Surgeon in same Category as Doctor)
     local staff_index = nil
-    for i, staff in ipairs(ui.hospital.staff) do
+    -- (In multiplayer the window may show another hospital's staff member:
+    -- the next one is then of their hospital.)
+    local list = self.staff.hospital and self.staff.hospital.staff or ui.hospital.staff
+    for i, staff in ipairs(list) do
       if staff_index and staff.profile:isType(self.staff.profile.humanoid_class) then
         ui:addWindow(UIStaff(ui, staff))
         if hit_namebox then
@@ -317,9 +320,10 @@ function UIStaff:onMouseUp(button, x, y)
         staff_index = i
       end
     end
-    -- Try again from beginning of list until staff_index
-    for i = 1, staff_index - 1 do
-      local staff = ui.hospital.staff[i]
+    -- Try again from beginning of list until staff_index (not in the list,
+    -- like someone who just left: from the beginning to the end)
+    for i = 1, (staff_index or #list + 1) - 1 do
+      local staff = list[i]
       if staff.profile:isType(self.staff.profile.humanoid_class) then
         ui:addWindow(UIStaff(ui, staff))
         if hit_namebox then
