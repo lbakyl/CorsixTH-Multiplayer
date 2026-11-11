@@ -168,7 +168,7 @@ local LINES = {
       "Friends, my {room} needs {needs} and I only have {have}. Would anyone have a {kind} to spare?{urgent}",
       "I'm stuck without a {kind} for my {room} ({needs} needed, {have} here). Could one of you help me out?{urgent}",
       "Would anybody have a {kind} they could send me? My {room} needs {needs} and I have {have}. Much appreciated!{urgent}"},
-  -- Asks of Manager:askForHelp, once a month at most: research its patients
+  -- Asks of Manager:askForNeeds, once a month at most: research its patients
   -- need, from an ally (free) or a rival (for a price); a specialist from a
   -- rival. Another bot reads them back (Manager.readAsk): {item}, {price}
   -- and {kind} must stay apart from other words.
@@ -951,8 +951,8 @@ function Bot:hospitalMates()
   local mates = {}
   for peer, h in pairs(self.lobby.peer_hospital or {}) do
     if h == mine and peer ~= (session and session.peer_id) then
-      local _, is_bot = self:playerName(peer)
-      if not is_bot then mates[#mates + 1] = peer end
+      local name, is_bot = self:playerName(peer)
+      if name and not is_bot then mates[#mates + 1] = peer end
     end
   end
   return mates
@@ -1178,7 +1178,7 @@ function Bot:onChat(f)
   if not session or not peer or peer == 0 or peer == session.peer_id then return end
   local name, is_bot = self:playerName(peer)
   -- Bots do not chat with each other; another bot's ask to it alone (help,
-  -- Manager:askForHelp) gets an answer and an offer (Manager:botRequest).
+  -- Manager:askForNeeds) gets an answer and an offer (Manager:botRequest).
   if is_bot and name and f.to and self.manager then self.manager:botRequest(peer, name, f.text or "") end
   if is_bot or not name then return end
   local text = f.text or ""
@@ -1407,6 +1407,12 @@ function Bot:answerEmergencies()
       for _, id in ipairs(rooms) do
         local rt
         for _, r in ipairs(TheApp.rooms) do if r.id == id then rt = r end end
+        -- (A room not discovered yet: research to ask for, Manager:askForNeeds.)
+        local found = mine.room_discoveries and mine.room_discoveries[id]
+        if self.manager and found and not found.is_discovered then
+          self.manager.research_need[id] = self:gameDay()
+          self.manager.demand[id] = (self.manager.demand[id] or 0) + 2
+        end
         if not rt or mine:countRoomOfType(id, 1) == 0 then can = false break end
         for cat, k in pairs(rt.required_staff or {}) do
           if mine:countStaffOfCategory(cat, k) < k and not self:canHire(cat) then can = false end
@@ -2192,6 +2198,9 @@ function Bot:drawRoom(room_type, size, extras, near)
   if self.furnishing then return nil, "busy" end
   if hospital.balance - self:roomCost(room_type) < RESERVE then return nil, "money" end
   local min = math.max(room_type.minimum_size or 4, SMALLEST[room_type.id] or 0)
+  -- (Four desks need a bigger room: a 5 x 5 one took two, a 7 x 7 one three.
+  -- Bot.research_heavy, Manager.roomPlan.)
+  if self.research_heavy and room_type.id == "research" then min = math.max(min, 6) end
   local ax, ay = self:anchor()
   size = math.max(min, size or min + 1) -- (one more than the smallest: room for a plant)
   self.reserved = self:reservedTiles()

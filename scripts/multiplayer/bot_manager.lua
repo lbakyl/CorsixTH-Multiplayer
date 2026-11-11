@@ -152,7 +152,7 @@ end
 -- (A bot set to research hard, Bot.research_heavy: a bigger room with four
 -- desks, a researcher at each. Jan's test of 2026-11-12.)
 local function SIZES_OF(id)
-  if id == "research" and M.research_heavy then return 7 end
+  if id == "research" and M.research_heavy then return 8 end
   return SIZES[id] or smallest_size(id)
 end
 
@@ -161,7 +161,8 @@ function M.roomPlan(id)
   local extras = EXTRAS[id] or DEFAULT_EXTRAS
   local copy = {}
   for k, v in pairs(extras) do copy[k] = v end
-  if id == "research" and M.research_heavy then copy.desk = 3 end
+  -- (No plant: the floor is for desks.)
+  if id == "research" and M.research_heavy then copy.desk, copy.plant = 3, nil end
   return SIZES_OF(id), copy
 end
 
@@ -203,7 +204,7 @@ function M.new(bot, ctx)
   self.plot_bought = {}    -- plot -> game day it asked to buy it itself (Bot:buyPlot)
   self.plot_sent = {}      -- plot -> game day it offered it to an ally (M:plotRequest)
   self.research_need = {}  -- room id -> game day a patient needed it and it was not discovered
-  self.player_asked = {}   -- hospital index -> game day it asked them for help (M:askForHelp)
+  self.player_asked = {}   -- hospital index -> game day it asked them for help (M:askForNeeds)
   self.rival_bought = {}   -- rival hospital index -> game day it bought research from them
   self.rival_staff_asked = {} -- category -> game day a rival was asked for one
   self.s = nil             -- the last assessment (M:assess), for answers between days
@@ -1584,7 +1585,7 @@ function M:answerFaxes(s)
             missing = true
             self.demand[r] = (self.demand[r] or 0) + 1
           elseif not s.rooms[r] and hosp.room_discoveries[r] and not SKIP_ROOMS[r] then
-            -- (Not discovered yet: research to ask for, M:askForHelp.)
+            -- (Not discovered yet: research to ask for, M:askForNeeds.)
             self.research_need[r] = s.day
           end
         end
@@ -2940,7 +2941,7 @@ end
 --! who has it is asked to share it, else a rival is offered money for it),
 --! or a specialist it has missed badly and cannot hire (a rival who can
 --! spare one; the allies are asked in M:askAllies). Called every day.
-function M:askForHelp(s)
+function M:askForNeeds(s)
   local bot, world = self.bot, self.bot.world
   if not world.mp_coop or s.month < ASK_FROM_MONTH or self.asked_month == s.month then return end
   if bot:sharesWithPerson() or s.hosp.mp_place then return end
@@ -2996,7 +2997,7 @@ function M:askForHelp(s)
   end
 end
 
---! Patterns that read the asks of M:askForHelp back: {pattern, names (what
+--! Patterns that read the asks of M:askForNeeds back: {pattern, names (what
 --! each capture is: item, kind, price), set}.
 local ask_patterns
 local function asks_of(lines)
@@ -3022,7 +3023,7 @@ local function asks_of(lines)
   return ask_patterns
 end
 
---! Read an ask of M:askForHelp: {set, item, kind, price}, or nil.
+--! Read an ask of M:askForNeeds: {set, item, kind, price}, or nil.
 function M.readAsk(lines, text)
   for _, a in ipairs(asks_of(lines)) do
     local caps = {text:match(a.pattern)}
@@ -3036,7 +3037,7 @@ function M.readAsk(lines, text)
 end
 
 --! Another bot asked it (privately) for research or a specialist
---! (M:askForHelp): it answers with an offer, an ally for free, a rival for
+--! (M:askForNeeds): it answers with an offer, an ally for free, a rival for
 --! the price named (research) or RIVAL_STAFF_PRICE (a specialist), unless
 --! that rival is ahead (M:helpsRival). People decide for themselves.
 function M:botRequest(peer, name, text)
@@ -3823,7 +3824,7 @@ function M:think()
     self:helpAllies(s)
     if not s.hosp.mp_place then
       self:askAllies(s)
-      self:askForHelp(s)
+      self:askForNeeds(s)
     end
     -- The level's requirements, in the team chat.
     self:winChat(s)

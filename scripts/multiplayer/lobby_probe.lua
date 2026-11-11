@@ -378,6 +378,9 @@ local function run_lobby()
     for _ = 1, 7 do
       if (w.new_max or 2) ~= math.max(2, math.min(8, want_players)) then w:buttonMax() end
     end
+    -- (More players than the level has hospitals: only a test server lets
+    -- them in, CORSIXTH_MP_TEST_EXTRA_PLACES; the window stops at the level's.)
+    if want_players > (w.new_max or 2) then w.new_max = math.min(8, want_players) end
     if os.getenv("MP_CONTINUE") then
       local save = w:selectContinue(os.getenv("MP_CONTINUE"))
       log("continuing saved game " .. tostring(save and save.label))

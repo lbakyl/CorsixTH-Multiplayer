@@ -700,7 +700,10 @@ class Server:
         if continue_step is None:
             preset, mode = (mode if mode != "free" else "coop"), "free"
             # A new game has as many places as the level has hospitals.
-            max_players = min(max_players, max(2, hospitals))
+            # (Tests: CORSIXTH_MP_TEST_EXTRA_PLACES more, players who share
+            # a hospital: a watcher beside four bots on a level for four.)
+            extra = int(os.environ.get("CORSIXTH_MP_TEST_EXTRA_PLACES", "0") or 0)
+            max_players = min(max_players, max(2, hospitals + extra), MAX_PLACES)
         room = Room(name=name, salt=salt,
                     password_hash=_hash_password(password, salt) if password else None,
                     build=player.build, max_players=max_players, mode=mode, preset=preset, level=level,

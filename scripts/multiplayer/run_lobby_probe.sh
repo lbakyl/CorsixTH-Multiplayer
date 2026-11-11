@@ -1014,14 +1014,14 @@ if with_referee:
     differ = re.findall(r"room '(\w+)': the players differ from the referee", server)
     confirmed = dict(re.findall(r"room '(\w+)': referee confirmed steps through (\d+)", server))
     def confirmed_after(room): return confirmed.get(room, 0)
-    ok10 = (connected == rooms and not differ and all(int(confirmed.get(r, 0)) > 300 for r in rooms)
+    ok13 = (connected == rooms and not differ and all(int(confirmed.get(r, 0)) > 300 for r in rooms)
             # (It joins a few seconds late; the fast test game ends soon after.)
             and "room 'savegame2': the referee disconnected" not in server and int(confirmed.get('savegame2', 0)) > 303)
     print(f"13. Headless referee:       connected in {len(connected)}/{len(rooms)} rooms; "
           f"differs in {differ or 'none'}; confirmed through " +
           ", ".join(f"{r} {confirmed.get(r, 0)}" for r in rooms))
-    fail |= not ok10
-    if not ok10: bad.append("ok10")
+    fail |= not ok13
+    if not ok13: bad.append("ok13")
 
     for n, (host, join, room) in enumerate([('quinn', 'rosa', 'fix'), ('sam', 'tess', 'fixcoop')]):
         hl, jl = log(host), log(join)

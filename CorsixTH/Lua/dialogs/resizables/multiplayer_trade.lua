@@ -191,6 +191,13 @@ function UIMultiplayerTrade:_nextTarget(current)
   local hospitals = self.world.hospitals
   local n = self.world.mp_coop and self.world.mp_coop.players or 1
   local start = current and self.world:getHospitalIndex(current) or 0
+  -- (Opened without one: an ally first, then a rival.)
+  if not current then
+    for i = 1, n do
+      local h = hospitals[i]
+      if h and self.world:mpMayTrade(self.hospital, h) and not self.world:mpRivals(self.hospital, h) then return h end
+    end
+  end
   for step = 1, n do
     local h = hospitals[(start + step - 1) % n + 1]
     if h and self.world:mpMayTrade(self.hospital, h) then return h end

@@ -131,11 +131,17 @@ defaults shows in the room.
 away again. A room for four can have up to three bots. A bot builds its
 hospital slowly, as a beginner would (a desk, a GP's office, then one room
 after the other), hires staff, opens, and chats a little. In co-op it accepts
-whatever you offer it and thanks you; in a competitive race it refuses
-everything, sends your money back and plays a dirty trick on you now and then
-(the first some time in months 7 to 12). In a race of two teams it is a good
-team mate and a bad rival: it takes what its team mate offers and plays its
-tricks on the other team. Bots are there for trying the game
+whatever you offer it and thanks you; in a competitive race it plays a dirty
+trick on you now and then (the first some time in months 7 to 12) and takes
+only a good deal: a patient it can treat (when its queue is short), research
+its patients need (it pays up to $4,000, more for a big machine such as the
+X-ray than for a small clinic, and says what it would pay if you ask too
+much), a specialist it lacks (up to $3,000). In a race of two teams it is a
+good team mate and a hard rival: it takes what its team mate offers and plays
+its tricks on the other team. From the fourth month a bot asks for what it
+needs, once a month at most and the same player once in three months: an
+ally for research (free) or a specialist nobody can be hired for, a rival for
+research for a price, or "I would kill for a good surgeon". Bots are there for trying the game
 out: after the first year they do not do much more. The test server runs a
 few at most.
 
@@ -206,13 +212,16 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   what a team mate bot tells you, without greetings and taunts), or nothing
   from bots. On the town map, land on
   another player's side shows that player's name and "not for sale". The
-  **MULTIPLAYER** menu, **TRADE WITH OTHER PLAYERS** sends money, or offers
-  a member of staff, free or for a price up to $10,000 (the -$500 and +$500 buttons;
-  the other player pays it on accepting, if they can afford it); patients
-  are offered with the purple **Refer** icon in
-  the patient window or the "refer" answer on a "no treatment" fax. The
-  other player gets a purple icon at the bottom and accepts or declines;
-  an accepted person walks over (it takes a few game days). Land: a plot on your side of the map (nearest
+  **MULTIPLAYER** menu, **TRADE WITH OTHER PLAYERS** sends money (to an ally
+  only), or offers a member of staff, free or for a price up to $10,000 (the
+  -$500 and +$500 buttons; to a rival it starts at $1,000; the other player
+  pays it on accepting, if they can afford it); patients are offered with the
+  purple **Refer** icon in the patient window or the "refer" answer on a "no
+  treatment" fax, to an ally or a rival. The other player gets a purple icon at
+  the bottom and accepts or declines; an accepted person walks over (it takes
+  a few game days). A referred patient who is cured there gives the hospital
+  that referred them 3 reputation points (sending them home costs 3), and the
+  one that cured them 1 more than the usual point. Land: a plot on your side of the map (nearest
   to your hospital) that no other hospital borders, you just buy. One on another player's side, or
   one that borders another hospital's land, goes to auction (see Land auctions below); if nobody else
   may bid for it (that player is away, say), you just buy it. As in the original game, you can only buy
@@ -246,12 +255,12 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   Short of money? Under the bars your balance and loan are shown: **+**
   borrows $5,000 from the bank (up to the bank's limit), **-** pays $5,000
   back, without leaving the auction.
-- **Sharing research (co-op):** **Share research** on the research
+- **Sharing research:** **Share research** on the research
   blackboard (left of the total), or **MULTIPLAYER**, **SHARE RESEARCH**
   (no research room needed). Pick what to share (equipment you have found,
   better drugs, improved machines; only what the other hospital lacks) or
-  **All**, set a price on the bar ($0 to $20,000 in $500 steps) and
-  **Offer**. The other player gets a purple icon with a flask: a fax lists
+  **All**, set a price on the bar ($0 to $20,000 in $500 steps; a rival pays
+  $1,000 at least) and **Offer**. The other player gets a purple icon with a flask: a fax lists
   the research and the price, and they accept or reject it. On acceptance
   they pay you and get what they still lack; you keep your research. No
   answer within 20 game days counts as a rejection.
@@ -441,12 +450,13 @@ they are switched on).
   walls you do see).
 
 - **Race of team hospitals:** like a race of two teams, but each team has
-  one hospital that all its players run together; there is nobody to trade
-  with, and dirty tricks go to the other team's hospital. The hospital
+  one hospital that all its players run together; you trade with the other
+  team's hospital as with a rival (no money), and dirty tricks go to it. The hospital
   counts as playing while at least one of its players is still in the game.
 
 - **Race of two teams:** team mates help each other as in co-op (money,
-  staff, patients, research; only with each other) and race the other team.
+  reputation and plots only with each other; staff, patients and research
+  with the other team too, as with a rival) and race the other team.
   A hospital that reaches the goals is told so and plays on, so it can still
   help its team mate. The team whose hospitals have all reached the goals
   takes 1st place, and the race is over. A hospital that fails the goals at

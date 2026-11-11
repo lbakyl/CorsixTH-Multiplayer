@@ -178,6 +178,7 @@ for p in (out / 'headless').glob('*-bot-*/bot.log'):
     m = re.search(r'^\[([^\]]+)\]', text, re.M)
     if m: bots[p.parent.name.split('-bot-')[0] + '/' + m.group(1)] = text
 fail = False
+bad = []
 a, b = log('ann'), log('bob')
 
 places = re.search(r'UI: room places before bot 1: (.*)', a)
@@ -188,7 +189,7 @@ ok1 = bool(places and 'add a bot' in places.group(1) and joined and joined.group
 print(f"1. Lobby:                   places offered: {places.group(1) if places else '-'}")
 print(f"                            with the bots: {joined.group(1) if joined else '-'}; bot logs: {sorted(bots)}")
 fail |= not ok1
-
+if not ok1: bad.append("ok1")
 def last_hospitals(text):
     found = re.findall(r'UI: hospitals at step (\d+) \(([^)]*)\): (.*)', text)
     return found[-1] if found else None
@@ -209,7 +210,7 @@ for host, text, idx in (('ann', a, [2, 3]), ('bob', b, [2])):
         ok2 &= good
         print(f"     hospital {i}: {h}")
 fail |= not ok2
-
+if not ok2: bad.append("ok2")
 def chats_from(text, who):
     return re.findall(rf'CHAT IN at step (\d+): {re.escape(who)}(?: \((?:private|team)\))?: (.*)', text, re.I)
 # ann's offers go to hospital 2: whichever bot joined first.
@@ -222,7 +223,7 @@ thanked = [t for _, t in agnes if 'ann' in t]
 ok3 = bool(accepted and agnes_answer and len(thanked) >= 2)
 print(f"3. Co-op offers:            {first_bot.title()}: doctor accepted: {bool(accepted)} (fax answer at {agnes_answer}); lines to ann: {thanked}")
 fail |= not ok3
-
+if not ok3: bad.append("ok3")
 race_bot = next((n.split('/', 1)[1] for n in bots if n.startswith('race/')), None)
 rb = chats_from(b, race_bot) if race_bot else []
 declined = [s for s, cmd in applied(b, 2, 'fax_choice') if cmd == 'ok']
@@ -232,12 +233,15 @@ returned = applied(b, 2, 'give_money')
 bob_gift = applied(b, 1, 'give_money')
 staff_kept = 'accepted' not in ''.join(re.findall(r'offer of staff .*', b))
 to_bob = [t for _, t in rb if 'bob' in t]
-ok4 = bool(race_bot and declined and staff_kept and not returned and bob_gift and
+# (A doctor the race bot lacks, a surgeon while MP_BOT_TEST_LACK makes every
+# bot short of one, it may buy: Manager:rivalOffer.)
+bought4 = re.findall(r'buys a \w+ from bob for \$\d+', bots.get('race/' + race_bot, '') if race_bot else '')
+ok4 = bool(race_bot and declined and (staff_kept or bought4) and not returned and bob_gift and
            all(r == 'rejected:' or r.startswith('rejected') for _, r in bob_gift) and len(to_bob) >= 2)
-print(f"4. Competitive refusals:    {race_bot}: declined at {declined}; doctor stayed: {staff_kept}; bob's gift {bob_gift}, "
+print(f"4. Competitive refusals:    {race_bot}: declined at {declined}; doctor stayed: {staff_kept} (bought: {bought4}); bob's gift {bob_gift}, "
       f"money sent back: {returned}; lines to bob: {to_bob}")
 fail |= not ok4
-
+if not ok4: bad.append("ok4")
 greets = {}
 for name, text in bots.items():
     greets[name] = re.findall(r'CHAT: (.*)', text)[:1]
@@ -250,12 +254,12 @@ grey = bool(colours) and all(c == '75,75,75' for _, c in colours)
 ok5 = len(bots) == 9 and all(greets.values()) and bool(answer) and distinct and grey
 print(f"5. Chat:                    first lines: {greets}; Bot Agnes's answer to ann: {answer[:1]}; bots grey: {grey} {sorted(colours)}")
 fail |= not ok5
-
+if not ok5: bad.append("ok5")
 tricks = applied(b, 2, 'sabotage')
 ok6 = any(r == 'ok' for _, r in tricks)
 print(f"6. Dirty trick:             {tricks}")
 fail |= not ok6
-
+if not ok6: bad.append("ok6")
 differ = re.findall(r"room '(\w+)': the players differ from the referee", server)
 repaired = re.findall(r"room '(\w+)': repaired", server)
 confirmed = dict(re.findall(r"room '(\w+)': referee confirmed steps through (\d+)", server))
@@ -264,6 +268,7 @@ ok7 = (result('ann').startswith('IN SYNC') and result('bob').startswith('IN SYNC
        and int(confirmed.get('duel', 0)) > 2500 and int(confirmed.get('lab', 0)) > 2500)
 print(f"7. In sync:                 ann {result('ann')}; bob {result('bob')}; referee differs {differ}, repairs {repaired}, confirmed {confirmed}")
 fail |= not ok7
+if not ok7: bad.append("ok7")
 c, d = log('cid'), log('dee')
 alone_votes = re.findall(r'speed vote \d+ for ([\w ]+): (\w+)', a)
 alone_set = [s for s, r in applied(a, 1, 'set_speed') if r == 'ok' and int(s) >= 2900]
@@ -277,6 +282,7 @@ print(f"8. Speed and bots:          ann alone with bots: votes {alone_votes}, sp
       f"trio: dee answered the fax before the vote ended: {answered >= 0 and agreed > answered}; votes {trio_votes}; "
       f"cid {result('cid')}; dee {result('dee')}")
 fail |= not ok8
+if not ok8: bad.append("ok8")
 # 9. Research: the co-op bot offers what it learnt to frank, for free.
 f = log('frank')
 lab_bot = next((n.split('/', 1)[1] for n in bots if n.startswith('lab/')), None)
@@ -291,7 +297,7 @@ ok9 = (any(r == 'ok' for _, r in offers9) and not research_lines and desks
 print(f"9. Research shared:         offers to frank {offers9}; research chat lines (none expected, the fax says it): {research_lines[:1]}; "
       f"research room furnished with {lab_rooms or 'none built'}; frank {result('frank')}")
 fail |= not ok9
-
+if not ok9: bad.append("ok9")
 # 10. Tricks on a bot: dealt with after a while, and a word to eve.
 e = log('eve')
 duel_bot = next((n.split('/', 1)[1] for n in bots if n.startswith('duel/')), None)
@@ -312,12 +318,14 @@ ok10 = (late_rats and late_handyman and 'smear' in noticed and 'boiler' in notic
 print(f"10. Tricks on a bot:        played {played} {tricks10}; rats shot from step {min(shots) if shots else '-'} "
       f"({len(shots)} shots), handyman out at {fired}; noticed {noticed}; to eve: {to_eve}; eve {result('eve')}")
 fail |= not ok10
+if not ok10: bad.append("ok10")
 # 11. The hidden monthly bonus, for hospitals only bots play.
 bonus_team = re.findall(r'bot bonus for hospital\(s\) ([\d,]+)', a)
 bonus_duel = re.findall(r'bot bonus for hospital\(s\) ([\d,]+)', e)
 ok11 = bool(bonus_team) and set(bonus_team) == {'2,3'} and bool(bonus_duel) and set(bonus_duel) == {'2'}
 print(f"11. Bot bonus:              team {bonus_team}; duel {bonus_duel}")
 fail |= not ok11
+if not ok11: bad.append("ok11")
 # 12. Land auctions with a bot.
 g = log('gus')
 bot_bids12 = re.findall(r'auction (\d): hospital 2 bids', g)
@@ -326,6 +334,7 @@ ok12 = (sold12 == [('1', '1'), ('2', '2')] and '1' in bot_bids12 and '2' in bot_
         and 'auction 2: hospital 1 drops out' in g and result('gus').startswith('IN SYNC'))
 print(f"12. Auctions with a bot:    bot bid in {sorted(set(bot_bids12))}; sold {sold12}; gus {result('gus')}")
 fail |= not ok12
+if not ok12: bad.append("ok12")
 # 13. A bot bids for its shared hospital while its person is away.
 j = log('jon')
 bids13 = re.findall(r'auction \d+: hospital 2 bids \$(\d+)', j)
@@ -335,6 +344,7 @@ ok13 = (bool(bids13) and sold13 == ['2'] and bool(away13)
         and result('jon').startswith('IN SYNC') and result('kay').startswith('IN SYNC'))
 print(f"13. Bot bids for away mate: bids {bids13}; sold to {sold13}; bot: {away13[:1]}; {result('jon')} / {result('kay')}")
 fail |= not ok13
+if not ok13: bad.append("ok13")
 # 14. "Allied bots build: off": the bot sharing liv's hospital builds nothing
 # and buys nothing for it (no rooms, no corridor objects, no desk).
 lv = log('liv')
@@ -345,6 +355,7 @@ said14 = any('leaves the rooms and corridors to the person' in t for t in hands)
 ok14 = ('game option helpers=0' in lv and not built14 and said14 and result('liv').startswith('IN SYNC'))
 print(f"14. Allied bots build: off: bot commands {sorted(set(bot_cmds14))}; built {built14[:5]}; said so: {said14}; {result('liv')}")
 fail |= not ok14
+if not ok14: bad.append("ok14")
 # 15. Orders only from allies; money on request. In "team" (co-op) ann asks
 # Agnes (a bot, her ally) for $1000 (to the allies), then for $9,000,000 and for some cash (to her; the chat remembers who it was for)
 # with no sum: the bot checks its own bank (it keeps $1,000 and sends at most
@@ -373,6 +384,7 @@ print(f"15. Money and orders:       Agnes sent {[l.split(': ',1)[1] for l in sen
       f"give_money commands {gives15}; her lines {sent_lines15}; the race bot refused bob {len(refused15)} times "
       f"({rb_lines15[:2]}), money sent to him early: {early_money15}")
 fail |= not ok15
+if not ok15: bad.append("ok15")
 # 16. Asking for staff. From game day 5 every bot "lacks" a surgeon for an
 # operating theatre (test hook MP_BOT_TEST_LACK); after 10 days it asks its
 # allies in the team's chat, which ann reads.
@@ -382,6 +394,7 @@ notes16 = [l for k, t in bots.items() if k.startswith('team/') for l in t.splitl
 ok16 = bool(asks16) and bool(notes16) and min(s for s, _ in asks16) >= (5 - 1) * 50 + 10 * 50
 print(f"16. Asking for staff:       lines to ann {asks16[:2]}; bot notes {[n.split('] ', 1)[1] for n in notes16][:2]}")
 fail |= not ok16
+if not ok16: bad.append("ok16")
 # 17. The level's requirements in the team chat (test hook MP_BOT_TEST_WIN:
 # ann's hospital 1 meets them from game day 10, hospitals 2 and 3 from day
 # 12). The bot of hospital 2 (the lower number) says "good job" to ann, once;
@@ -405,7 +418,7 @@ ok17 = (len(good17) == 1 and not good17_high and all(too17) and len(needs17(low_
 print(f"17. Requirements chat:      hospital 2 to ann {good17}; hospital 3 to ann {good17_high}; both also ready {[x[:1] for x in too17]}; "
       f"needs {needs17(low_lines)} / {needs17(high_lines)}")
 fail |= not ok17
-
+if not ok17: bad.append("ok17")
 # 18. A warning that an opponent meets the requirements (MP_BOT_TEST_WIN:
 # hospital 1 from game day 10, hospital 2 from day 12). In "afk" the bot shares
 # its hospital with jon or with kay (it varies) and so warns that person
@@ -419,7 +432,7 @@ ok18 = (len(warn18) == 1 and warn18[0][1] >= 450 and ('kay' in warn18[0][2] if w
         and not duel_warn18)
 print(f"18. Warning about a rival:  read by {warn18}; eve read {duel_warn18}")
 fail |= not ok18
-
+if not ok18: bad.append("ok18")
 # 19. A failing hospital asks its team for help (test hook MP_BOT_TEST_FAIL:
 # both bots of "team" count as failing from game day 20): each says in the
 # team chat that it is failing its objectives and asks ann for an amount, once
@@ -433,6 +446,7 @@ ok19 = (sorted(w for _, w, _ in help19) == ['Bot Agnes', 'Bot Bertie'] and len(n
         and min(st for st, _, _ in help19) >= 20 * 50 - 50)
 print(f"19. Failing, asks for help: {[(st, w, t) for st, w, t in help19]}; notes {[n.split('] ', 1)[1] for n in notes19]}")
 fail |= not ok19
+if not ok19: bad.append("ok19")
 # 20. The floor in one piece. Each bot that builds (team, race, duel, lab)
 # reads its own floor (Bot:floorMap) and says in its month lines in how many
 # parts it is, in how many it would be without its corridor objects (a plot
@@ -458,6 +472,7 @@ print(f"20. Floor in one piece:     (parts, without objects, entrance tiles, des
       f"{dict((k, v) for k, v in sorted(refused20.items()) if v)}; objects sold to mend it "
       f"{dict((k, v) for k, v in sorted(mended20.items()) if v)}")
 fail |= not ok20
+if not ok20: bad.append("ok20")
 # 21. A plot asked of an allied bot. In "lab" frank asks for plot 7 at
 # auction and drops out: the bot gets it. On game day 4 frank asks the bot
 # for plot 7: it keeps it for the level's value goal (worth less than the
@@ -485,8 +500,10 @@ print(f"21. A plot asked of a bot:  plot {plot21} won by the bot: {bool(won21)};
       f"its lines {lines21}; offer_plot {offers21}; frank accepted: {bool(fax21)}, handed over: {bool(handed21)}, "
       f"his now: {his21}")
 fail |= not ok21
+if not ok21: bad.append("ok21")
 for name, text in sorted(bots.items()):
     errors = [l for l in text.splitlines() if 'ERROR' in l or 'could not' in l]
     if errors: print(f"   {name} problems: {errors[:5]}")
+if bad: print("failed checks: " + " ".join(bad))
 sys.exit(1 if fail else 0)
 PY
