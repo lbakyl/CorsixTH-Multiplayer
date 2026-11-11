@@ -1279,8 +1279,18 @@ function Bot:answerOffers()
           session:issue({kind = "fax_choice", msg = msg, choice = accept and 1 or 2})
         end
       end)
-      -- (A team mate's offer: the thanks go to the team, not to the rivals.)
-      self:say(line, delay + typing(line), not self.world:mpRivals(self.world.hospitals[offer.from], mine) and "team" or nil)
+      -- (A team mate's offer: the thanks go to the team, not to the rivals.
+      -- A rival's: the refusal goes to whoever made the offer, not to
+      -- everybody (Jan, 2026-11-11: Bot Bertie's "Do I look that gullible,
+      -- Argus?" was seen by all).)
+      local to
+      if not self.world:mpRivals(self.world.hospitals[offer.from], mine) then
+        to = "team"
+      else
+        local peers = self:peopleOfHospital(offer.from)
+        to = #peers > 0 and table.concat(peers, ",") or false
+      end
+      if to then self:say(line, delay + typing(line), to) end
     end
   end
 end
@@ -1664,15 +1674,17 @@ function Bot:freeFloor()
   return n
 end
 
---! Is this tile free floor of this hospital (no room, no object on it, not on
---! a plot it is handing over)?
+--! Is this tile free floor of this hospital (no room, no object but litter on
+--! it, not on a plot it is handing over)?
 function Bot:freeTile(x, y)
   local world = self.world
   local th = world.map.th
   local mw, mh = th:size()
   if x < 1 or y < 1 or x > mw or y > mh then return false end
   if self.reserved and self.reserved[y * 1000 + x] then return false end
-  if not world.ui.hospital:isInHospital(x, y) or world:getRoom(x, y) or world:getObject(x, y) then return false end
+  if not world.ui.hospital:isInHospital(x, y) or world:getRoom(x, y) or builder.solid_object(world, x, y) then
+    return false
+  end
   local flags = th:getCellFlags(x, y)
   if self:plotsGiven()[flags.parcelId] then return false end
   return flags.buildable and flags.passable
@@ -2210,19 +2222,30 @@ function Bot:editRoom(rm, steps)
   return true
 end
 
+--! Game days a room whose shrink failed is left alone (Bot:editTick).
+local SHRINK_RETRY_DAYS = 120
+
 --! A room of its own bigger than it needs, and the side of it to take in:
---! the room with the most floor over `size_of(room id)` (its planned size,
---! the smallest plus one); the side whose last row or column has the fewest
---! things in it (they are put back elsewhere in the room). Returns room,
---! side or nil.
+--! the room with the most floor over `size_of(room id)` (its planned size);
+--! the side whose last row or column has the fewest things in it (they are
+--! put back elsewhere in the room). Only a side whose freed row or column
+--! joins a corridor: a strip shut in by the outer wall and other rooms is
+--! refused by the room editor (Bot Bertie's ward, four tries in one game,
+--! 2026-11-11). Only a room with no patient in it: the editor opens once the
+--! room is empty, and an operating theatre in use stayed closed for ten days
+--! before the edit was given up (Bot Agnes). Returns room, side or nil.
 function Bot:oversizedRoom(size_of)
   local world, hospital = self.world, self.world.ui.hospital
+  local th = world.map.th
+  local today = self:gameDay()
   local best, best_side, best_excess
   for _, rm in pairs(world.rooms) do
     local id = rm.room_info.id
     local want = size_of(id) or (rm.room_info.minimum_size or 4) + 1
+    local failed = self.edit_failed and self.edit_failed[rm.id]
     if rm.hospital == hospital and rm.built and rm.is_active and not rm.crashed and
-        (rm.width > want or rm.height > want) then
+        (rm.width > want or rm.height > want) and rm:getPatientCount() == 0 and
+        not (failed and today - failed < SHRINK_RETRY_DAYS) then
       local function things(x0, y0, x1, y1)
         local n = 0
         for ty = y0, y1 do
@@ -2232,16 +2255,35 @@ function Bot:oversizedRoom(size_of)
         end
         return n
       end
+      -- Does the strip x0,y0-x1,y1 (to be freed) touch corridor floor
+      -- outside the room (dx, dy: the way out of the room from it)?
+      local function joins(sx0, sy0, sx1, sy1, dx, dy)
+        local function open(tx, ty)
+          if not hospital:isInHospital(tx, ty) or world:getRoom(tx, ty) then return false end
+          return th:getCellFlags(tx, ty).passable
+        end
+        for ty = sy0, sy1 do
+          for tx = sx0, sx1 do
+            if open(tx + dx, ty + dy) then return true end
+          end
+        end
+        -- (Its two ends, past the room's corners.)
+        if dx ~= 0 then return open(sx0, sy0 - 1) or open(sx1, sy1 + 1) end
+        return open(sx0 - 1, sy0) or open(sx1 + 1, sy1)
+      end
       local x0, y0, x1, y1 = rm.x, rm.y, rm.x + rm.width - 1, rm.y + rm.height - 1
       local side, fewest
-      local function consider(name, n)
-        if not fewest or n < fewest then side, fewest = name, n end
+      local function consider(name, n, ok)
+        if ok and (not fewest or n < fewest) then side, fewest = name, n end
       end
       if rm.width > want then
-        consider("right", things(x1, y0, x1, y1))
-        consider("left", things(x0, y0, x0, y1))
+        consider("right", things(x1, y0, x1, y1), joins(x1, y0, x1, y1, 1, 0))
+        consider("left", things(x0, y0, x0, y1), joins(x0, y0, x0, y1, -1, 0))
       end
-      if rm.height > want then consider("top", things(x0, y0, x1, y0)) end
+      if rm.height > want then
+        consider("top", things(x0, y0, x1, y0), joins(x0, y0, x1, y0, 0, -1))
+        consider("bottom", things(x0, y1, x1, y1), joins(x0, y1, x1, y1, 0, 1))
+      end
       local excess = rm.width * rm.height - want * want
       if side and (not best or excess > best_excess or (excess == best_excess and rm.id < best.id)) then
         best, best_side, best_excess = rm, side, excess
@@ -2264,7 +2306,15 @@ end
 --! A room being edited (Bot:editRoom): one step at a time. True while busy.
 function Bot:editTick()
   if not self.editing then return false end
-  if builder.edit_tick(self.world, self.editing, log) then self.editing = nil end
+  if builder.edit_tick(self.world, self.editing, log) then
+    -- (A shrink that did not work is not tried on that room again for a
+    -- while: each try closes the room, Bot:oversizedRoom.)
+    if self.editing.failed and self.editing.room_id then
+      self.edit_failed = self.edit_failed or {}
+      self.edit_failed[self.editing.room_id] = self:gameDay()
+    end
+    self.editing = nil
+  end
   return true
 end
 

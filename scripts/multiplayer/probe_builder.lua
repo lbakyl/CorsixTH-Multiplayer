@@ -13,6 +13,17 @@ local builder = {}
 builder.hospital = nil
 local function hospital_of(world) return builder.hospital or world.hospitals[1] end
 
+--! Is something other than litter on this tile? (Rooms and objects may be
+--! put down over litter: the game sweeps it away. Bots counting litter as
+--! taken floor found no space for a 4x4 room with half their land free,
+--! 2026-11-11.)
+function builder.solid_object(world, x, y)
+  for _, obj in ipairs(world:getObjects(x, y) or {}) do
+    if obj.object_type.id ~= "litter" then return true end
+  end
+  return false
+end
+
 --! Is every tile of the rectangle (plus a one-tile margin) free hospital floor?
 local function rect_is_free(world, x, y, w, h)
   local hospital = hospital_of(world)
@@ -24,7 +35,7 @@ local function rect_is_free(world, x, y, w, h)
       if not hospital:isInHospital(tx, ty) or world:getRoom(tx, ty) then return false end
       local flags = th:getCellFlags(tx, ty)
       if not (flags.buildable and flags.passable) then return false end
-      if world:getObject(tx, ty) then return false end
+      if builder.solid_object(world, tx, ty) then return false end
     end
   end
   return true
@@ -820,6 +831,7 @@ function builder.edit_tick(world, state, log)
         log(string.format("UI: edit %s FAILED: editor did not open at step %d; the room is given back when it does",
             state.steps[state.i] or "?", step))
         state.giving_back = true
+        state.failed = true
         state.steps, state.i, state.since = {"done"}, 1, step
       elseif step - state.since > 3000 then
         state.current = state.current or state.steps[state.i]
@@ -968,6 +980,7 @@ function builder.edit_tick(world, state, log)
       local grown = dlg.room.width * dlg.room.height > state.old.w * state.old.h
       if name == "shrink" and dlg.room.width * dlg.room.height >= state.old.w * state.old.h then
         log("UI: edit shrink FAILED: drawn as it was at step " .. step)
+        state.failed = true
         state.current, state.wait = nil, nil
         state.i = state.i + 1
         return false

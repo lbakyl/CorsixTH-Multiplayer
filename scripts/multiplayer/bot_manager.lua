@@ -104,14 +104,15 @@ local EARNERS = {operating_theatre = 25, scanner = 10, x_ray = 8, cardiogram = 8
 -- The score a team mate's wish adds: before the bot's own ideas, after the
 -- basics of an opening hospital (90 and more).
 local WISH = 50
--- The size a bot gives a room (square): one more than the game's smallest,
--- so a plant and a radiator fit beside the machines (Jan). Bot:layoutSpot
--- puts it snugly against walls and other rooms, so floor is left for the
--- GP's offices a busy hospital needs later (a 3-year level 7 race: land
--- gone by month 7, GP queues of 60 to 80). Extras that do not fit are sold.
-local SIZES = {gp = 5, pharmacy = 5, general_diag = 6, psych = 6, ward = 7, staff_room = 6, toilets = 5,
-    research = 6, operating_theatre = 7, x_ray = 7, scanner = 6, decontamination = 6, dna_fixer = 6,
-    electrolysis = 6, training = 5}
+-- The size a bot gives a room (square). A room for one doctor or one machine
+-- gets the game's smallest (Jan, 2026-11-11: bots' rooms were too large and
+-- the land was gone early; a GP's office of 4x4 instead of 5x5 is a third
+-- less floor). One more than the smallest only where more floor serves more
+-- people: beds, seats, loos, desks, lecture chairs. Bot:layoutSpot puts a
+-- room snugly against walls and other rooms, so floor is left for the GP's
+-- offices a busy hospital needs later (a 3-year level 7 race: land gone by
+-- month 7, GP queues of 60 to 80). Extras that do not fit are sold.
+local SIZES = {ward = 7, staff_room = 6, toilets = 5, research = 6, training = 5}
 -- The training room: lecture chairs (3 to 6 in all, chosen once per bot; a chair
 -- is one student at a time, and more than 3 students at once learn slower
 -- each: 2/(n-1) of the rate), the days between reviews of the teacher (a
@@ -128,7 +129,8 @@ local TRAIN_HIRE_FLOOR = 10000
 local EXTRAS = {
   staff_room = {sofa = 1, tv = 1, pool_table = 1, radiator = 1, plant = 1},
   toilets = {loo = 1, sink = 1, radiator = 1},
-  ward = {bed = 2, radiator = 1, plant = 1},
+  -- (Four beds in all: Jan, 2026-11-11.)
+  ward = {bed = 3, radiator = 1, plant = 1},
   psych = {radiator = 1, plant = 1, bookcase = 1},
   -- (A second desk: room for a second researcher.)
   research = {desk = 1, radiator = 1, plant = 1},
@@ -137,9 +139,6 @@ local EXTRAS = {
 }
 local DEFAULT_EXTRAS = {radiator = 1, plant = 1, bin = 1}
 
---! The planned size of a room type (nil: the smallest plus one).
-local function SIZES_OF(id) return SIZES[id] end
-
 --! The smallest size of a room type (the game's minimum, the staff room's 5).
 local function smallest_size(id)
   for _, rt in ipairs(TheApp.rooms) do
@@ -147,12 +146,15 @@ local function smallest_size(id)
   end
 end
 
+--! The planned size of a room type (SIZES, else the smallest).
+local function SIZES_OF(id) return SIZES[id] or smallest_size(id) end
+
 --! The size and extras for a new room of this type.
 function M.roomPlan(id)
   local extras = EXTRAS[id] or DEFAULT_EXTRAS
   local copy = {}
   for k, v in pairs(extras) do copy[k] = v end
-  return SIZES[id], copy
+  return SIZES_OF(id), copy
 end
 
 --! A manager for the bot `bot` (its helpers: drawRoom, hireCategory,
@@ -693,6 +695,13 @@ function M:projects(s)
       room(id, (per - busy_q + 1) * 1.2)
     end
   end
+  -- A second operating theatre once the first works and somebody waits for
+  -- it, or the bank is full: surgery earns the most (Jan, 2026-11-11: the
+  -- people in a game built two each, the bots one, its queue never long).
+  local surgery_q = s.queue.operating_theatre or 0
+  if s.rooms.operating_theatre == 1 and (surgery_q >= 1 or s.balance > RICH) then
+    room("operating_theatre", 6 + surgery_q * 2)
+  end
 
   -- Staff: rooms that nobody works in, then busy ones.
   local want = {Doctor = 0, Nurse = 0}
@@ -837,7 +846,11 @@ function M:projects(s)
   local handymen = math.min(5, (s.room_count >= 3 and 1 or 0) + math.floor(s.litter / 12) + math.floor(machines / 4))
   -- A broken boiler: the more handymen, the sooner it is repaired.
   if hosp.heating and hosp.heating.heating_broke then handymen = math.max(handymen, 3) end
-  if (s.staff.Handyman or 0) < handymen then hire("Handyman", 3 + (handymen - (s.staff.Handyman or 0)) * 2) end
+  -- (Litter piling up makes it urgent: Bots Agnes and Bertie had 2 and 3
+  -- handymen and 90 to 100 pieces of litter in the corridors, 2026-11-11.)
+  if (s.staff.Handyman or 0) < handymen then
+    hire("Handyman", 3 + (handymen - (s.staff.Handyman or 0)) * 2 + math.min(20, math.floor(s.litter / 5)))
+  end
 
   -- Corridor comfort, once the hospital is open and has a few rooms.
   if hosp.opened and s.room_count >= 3 then
