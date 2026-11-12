@@ -472,6 +472,8 @@ multiplayer_window = {
   -- Co-op trades
   trade_caption = "Trade with %s",
   trade_send_money = "Send $%d",
+  trade_money_confirm = "Do you really want to send $%d to %s?",
+  trade_money_short = "You do not have that much money.",
   trade_money_allies_only = "Money goes only to allies.",
   -- A running game's places (taking a bot's, or a player's who left).
   running_flag = "playing",

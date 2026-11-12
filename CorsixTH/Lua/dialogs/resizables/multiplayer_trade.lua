@@ -42,7 +42,12 @@ local WIDTH = 380
 -- screen of 1080 lines at double size has 540: Jan's did not show it all).
 local MAX_STAFF_ROWS = 8
 local MIN_STAFF_ROWS = 4
-local AMOUNTS = {1000, 5000, 20000}
+-- Money to send: a slider over these amounts (as far as the bank balance
+-- goes), then a question before anything is sent (Jan, 2026-11-12: three
+-- buttons that sent $1,000, $5,000 or $20,000 at a click, and he sent
+-- $1,000 twice by mistake, meaning to set a doctor's price).
+local AMOUNTS = {1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 12000, 15000, 20000, 25000,
+    30000, 40000, 50000, 75000, 100000}
 -- The room for the reputation rows: a line of text, the points, the button.
 local REP_HEIGHT = 94
 -- The window but for the staff rows (and the reputation rows).
@@ -89,14 +94,27 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
     return
   end
 
-  -- Money (only to an ally: a rival in a race gets none, Jan 2026-11-12)
+  -- Money (only to an ally: a rival in a race gets none, Jan 2026-11-12):
+  -- the amount on a slider, the button asks before it sends.
   if vouch then
-    for i, amount in ipairs(AMOUNTS) do
-      local w = math.floor((WIDTH - 40 - 10 * (#AMOUNTS - 1)) / #AMOUNTS)
-      self:addBevelPanel(20 + (i - 1) * (w + 10), 40, w, 30, col.button)
-          :setLabel(S.trade_send_money:format(amount))
-          :makeButton(0, 0, w, 30, nil, function() self:sendMoney(amount) end)
+    self.amounts = {}
+    for _, amount in ipairs(AMOUNTS) do
+      if amount <= self.hospital.balance then self.amounts[#self.amounts + 1] = amount end
     end
+    if #self.amounts == 0 then self.amounts[1] = AMOUNTS[1] end
+    local n = #self.amounts
+    -- (The slider's knob a tenth of the bar or so: a page of that many.)
+    local page = math.max(1, math.ceil(n / 9))
+    local bar = self:addBevelPanel(20, 45, 190, 20, col.caption)
+    bar.lowered = true
+    self.money_bar = bar:makeScrollbar(col.button,
+        --[[persistable:multiplayer_trade_money_slider]] function() self:setMoney(self.money_bar.value) end,
+        1, n + page - 1, page, 1)
+    self.money_bar.direction = "x"
+    self.money_bar:setRange(1, n + page - 1, page, 1)
+    self.money_button = self:addBevelPanel(220, 40, WIDTH - 240, 30, col.button)
+    self.money_button:makeButton(0, 0, WIDTH - 240, 30, nil, self.askSendMoney)
+    self:setMoney(1)
   else
     self:addBevelPanel(20, 40, WIDTH - 40, 30, col.caption):setLabel(S.trade_money_allies_only).lowered = true
   end
@@ -206,6 +224,28 @@ end
 
 function UIMultiplayerTrade:setStatus(text)
   if self.status_panel then self.status_panel:setLabel(text or ""):setVisible((text or "") ~= "") end
+end
+
+--! The slider's place `index` (1 = the least): the amount to send.
+function UIMultiplayerTrade:setMoney(index)
+  self.money = self.amounts[math.max(1, math.min(#self.amounts, index or 1))]
+  self.money_button:setLabel(_S.multiplayer_window.trade_send_money:format(self.money))
+end
+
+--! The send button: "Do you really want to send $X to NAME?" first.
+function UIMultiplayerTrade:askSendMoney()
+  local amount, target = self.money, self.target
+  if not amount or not target then return end
+  if amount > self.hospital.balance then
+    self:setStatus(_S.multiplayer_window.trade_money_short)
+    return
+  end
+  -- (The game goes on meanwhile: no pause in multiplayer.)
+  self.ui:addWindow(UIConfirmDialog(self.ui, false,
+      _S.multiplayer_window.trade_money_confirm:format(amount, target.name),
+      --[[persistable:multiplayer_trade_money_ok]] function()
+        if self.target == target then self:sendMoney(amount) end
+      end))
 end
 
 function UIMultiplayerTrade:sendMoney(amount)

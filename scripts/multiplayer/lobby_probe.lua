@@ -1089,6 +1089,24 @@ local function run()
           else
             log("UI: no opening watch")
           end
+        elseif a == "moneyask" then
+          -- The trade window's money slider set to <amount>, the send button
+          -- clicked: the question, then No (pictures of both).
+          local trade = UIMultiplayerTrade(world.ui)
+          world.ui:addWindow(trade)
+          local want = tonumber(entry.arg) or 1000
+          local index = 1
+          for k, amount in ipairs(trade.amounts or {}) do if amount <= want then index = k end end
+          if trade.money_bar then trade.money_bar:setRange(trade.money_bar.min_value, trade.money_bar.max_value,
+              trade.money_bar.page_size, index) end
+          trade:setMoney(index)
+          shot("trade-money")
+          trade:askSendMoney()
+          local box = world.ui:getWindow(UIConfirmDialog)
+          shot("trade-money-confirm", true)
+          log(string.format("UI: money slider at $%s, question %s", tostring(trade.money), tostring(box ~= nil)))
+          if box then box:cancel() end
+          trade:close()
         elseif a == "givemoney" then
           local trade = UIMultiplayerTrade(world.ui)
           world.ui:addWindow(trade)
