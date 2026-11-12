@@ -128,7 +128,13 @@ defaults shows in the room.
 
 **Nobody to play with?** As the host, click an empty place in your room
 ("click: add a bot") and a computer player takes it; click the bot to take it
-away again. A room for four can have up to three bots. A bot builds its
+away again. A room for four can have up to three bots. A right click on a
+bot picks how good it is: **Easy** (no help from the language model, no
+hidden money), **Normal** (as described here: $2,000 a month the others do
+not see) or **Hard** ($8,000 a month, 5 reputation a month, its hospital's
+value counts a fifth more towards the goals, only every second death counts,
+and it bids higher at auctions). Whatever helps a bot stops once a person
+plays its hospital. A bot builds its
 hospital slowly, as a beginner would (a desk, a GP's office, then one room
 after the other), hires staff, opens, and chats a little. In co-op it accepts
 whatever you offer it and thanks you; in a competitive race it plays a dirty
@@ -242,9 +248,12 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   watch, and close the screen with the cross. (If the host chose **Every
   plot** in the game options, every plot goes to auction, and every
   hospital that may buy it bids.) The gavel sinks while
-  nobody bids and every bid raises it again; when nobody bids for 6
-  seconds (10 for the first bid) it is down: "going once", "going twice",
-  sold to the highest bid. Bots bid too, up to what the plot is worth to
+  nobody bids and every bid raises it again; when nobody bids for 8
+  seconds (15 for the first bid) it is down: "going once", "going twice",
+  sold to the highest bid. The seconds left show in big digits over the
+  small map, red for the last three. The small map shows the plot for
+  sale in red and the other plots still for sale in sand; **Town map
+  (F4)** opens the town map, and the auction comes back when you close it. Bots bid too, up to what the plot is worth to
   them: a little over the price while they have room, up to two and a half
   times the price once their rooms fill most of their floor. They keep
   $5,000; a bot whose rooms take 60% of its floor or more also borrows
