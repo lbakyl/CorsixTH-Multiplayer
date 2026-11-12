@@ -125,10 +125,11 @@ started with). A newcomer who takes one (`JOIN seat=`) gets `JOINED` (with
 gets `LEFT replaced=1` and is stopped; the others get `HOLD why=rejoin`, and
 everybody loads the referee's game. A person who leaves gets a stand-in bot
 after `CORSIXTH_MP_STAND_IN_DELAY` seconds (20): the server starts it with
-`MP_BOT_STANDIN=1` under their name. When nobody plays, the bots stop, the
-referee gets `HOLD why=empty` (alone it would run on), and the room waits
-`CORSIXTH_MP_EMPTY_WAIT` seconds (600); the first person back starts the bots
-again, and one load gives everybody the game. `LOAD` names `bots` (the places
+`MP_BOT_STANDIN=1` under their name. When nobody plays, the bots stop and
+the room closes; with `CORSIXTH_MP_EMPTY_WAIT` seconds (default 0) the referee
+gets `HOLD why=empty` instead (alone it would run on) and the room waits that
+long: the first person back starts the bots again, and one load gives
+everybody the game. `LOAD` names `bots` (the places
 the room's own bots play: their hospitals get the hidden bonus) and
 `standins` (their hospitals count as away; no hold waits for them), so every
 game marks the same hospitals. `ROOM` has `places` for a running room (how

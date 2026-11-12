@@ -575,9 +575,8 @@ it (with its password, if it has one):
   their name until they (or somebody else) take the place again. It says
   nothing in the chat, asks nobody for anything and plays no dirty tricks.
   In co-op the hospital still counts as away for the team's goals, as before.
-- **Everybody leaves:** the bots stop and the server keeps the game, not
-  running, for 10 minutes. Whoever comes back in that time picks a place, and
-  the bots come back to theirs.
+- **Everybody leaves:** the bots stop and the room closes (save the game
+  first if you want to go on with it later: Load MP game).
 
 Every time somebody takes a place, everybody's game loads the server's copy
 for a few seconds, as after a repair.
