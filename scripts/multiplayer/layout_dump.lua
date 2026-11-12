@@ -5,12 +5,14 @@
 --   CORSIXTH_SOURCE   checkout root
 --   MP_LAYOUT_SAVES   the saved games, separated by ";"
 --   MP_LAYOUT_OUT     file to write (JSON lines: one line per hospital)
--- Each line: the save, its date, the level's map size, and one hospital:
--- its name and index, its plots, every room (kind, corner, size, door and
--- its side, and each object in it: kind, tile, direction) and the objects in
--- its corridors (benches, plants, radiators, machines...). Positions are the
+-- Each line: the save, its date, the level (name, map size, hospitals), and
+-- one hospital: its name and index, whether a bot played it (bot: the
+-- room's own bot; standin: a bot playing for a person who left), its plots,
+-- every room (kind, corner, size, door and its side, and each object in it:
+-- kind, tile, direction and the tiles it stands on) and the objects in its
+-- corridors (benches, plants, radiators, machines...). Positions are the
 -- map's tiles; scripts/multiplayer/layout_learn.py turns them into each
--- room's layout seen from its door.
+-- room's layout seen from its door, and into what the bots learn.
 local args = {...}
 local unpack_args = table.unpack or unpack
 local source_dir = assert(os.getenv("CORSIXTH_SOURCE"), "Missing CORSIXTH_SOURCE")
@@ -41,8 +43,22 @@ local function json(v)
   return "null"
 end
 
+--! The tiles an object stands on (its footprint without the tiles people
+--! only walk on to use it), as {x, y} pairs in a fixed order.
+local function solid_tiles(object_type, x, y, direction)
+  local orientation = object_type.orientations and object_type.orientations[direction]
+  local tiles = {}
+  for _, t in ipairs(orientation and orientation.footprint or {}) do
+    if not t.only_passable then tiles[#tiles + 1] = {x + t[1], y + t[2]} end
+  end
+  if #tiles == 0 then tiles[1] = {x, y} end
+  table.sort(tiles, function(a, b) return a[2] < b[2] or (a[2] == b[2] and a[1] < b[1]) end)
+  return tiles
+end
+
 local function object_of(e)
-  return {id = e.object_type.id, x = e.tile_x, y = e.tile_y, dir = e.direction}
+  return {id = e.object_type.id, x = e.tile_x, y = e.tile_y, dir = e.direction,
+      tiles = solid_tiles(e.object_type, e.tile_x, e.tile_y, e.direction)}
 end
 
 local function dump(world, save, out)
@@ -57,9 +73,15 @@ local function dump(world, save, out)
     return p ~= 0 and by_player[th:getPlotOwner(p)] or nil, p
   end
   local per = {}
+  local coop = world.mp_coop or {}
+  local bots, standins = coop.bot_hospitals or {}, coop.standin_hospitals or {}
+  local ai = rawget(_G, "AIHospital")
   for index, hospital in ipairs(world.hospitals) do
     per[index] = {save = save, date = world:date():tostring(), map = {w, h}, index = index,
+        level = (tostring(world.map.level_name or ""):gsub("^<LocalisedString> Current value:", "")),
+        hospitals = #world.hospitals, ai = (ai and class.is(hospital, ai)) and true or false,
         name = tostring(hospital.name), rooms = {}, corridor = {}, plots = {},
+        bot = bots[index] and true or false, standin = standins[index] and true or false,
         value = hospital.value, reputation = hospital.reputation, balance = hospital.balance,
         cured = hospital.num_cured, deaths = hospital.num_deaths}
   end

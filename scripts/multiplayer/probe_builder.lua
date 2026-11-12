@@ -498,7 +498,12 @@ end
 --!param door_toward (table) optional {x, y}: the door on whichever wall is
 --!  the shortest walk from there (a bot: its reception), not the first one
 --!  found clockwise (which put every door on the south wall)
-function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at, by_hand, door_toward)
+--!param door_pref (table) optional: where an expert's room has its door
+--!  (scripts/multiplayer/bot_learned.lua; columns seen from the door, the
+--!  door's wall at the top): {wall =, col =} exactly there if it can go
+--!  there, or {width =, cols = {a, b}} on a wall `width` tiles long, at one
+--!  of those columns (a few tiles more to walk do)
+function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at, by_hand, door_toward, door_pref)
   local ui = world.ui
   local room_type = assert(TheApp.rooms[room_id], "unknown room " .. room_id)
   local x, y
@@ -560,6 +565,24 @@ function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at, by_
           or math.abs(c.y - (y + (h - 1) / 2))
       -- Each tile of floor missing in front counts as 6 tiles more to walk.
       c.cost = (d or 100000) + (9 - open) * 6 + mid * 0.1 + i * 0.001
+    end
+    table.sort(candidates, function(a, b) return a.cost < b.cost end)
+  end
+  if door_pref then
+    for i, c in ipairs(candidates) do
+      local len = (c.wall == "north" or c.wall == "south") and w or h
+      local col
+      if c.wall == "north" then col = c.x - x
+      elseif c.wall == "south" then col = w - 1 - (c.x - x)
+      elseif c.wall == "west" then col = h - 1 - (c.y - y)
+      else col = c.y - y end
+      local bonus = 0
+      if door_pref.wall then
+        if c.wall == door_pref.wall and col == door_pref.col then bonus = -1000000 end
+      elseif len == door_pref.width then
+        bonus = (col == door_pref.cols[1] or col == door_pref.cols[2]) and -16 or -8
+      end
+      c.cost = (c.cost or i * 0.001) + bonus
     end
     table.sort(candidates, function(a, b) return a.cost < b.cost end)
   end

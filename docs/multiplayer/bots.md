@@ -178,6 +178,31 @@ bot or per room (`"plan=script;smart=smart"`), for comparing the two:
 `scripts/multiplayer/run_bot_year.sh BIN DATA [LEVEL] [STEPS]` runs two co-op
 rooms side by side for a game year, one bot each.
 
+## Building like expert players (`scripts/multiplayer/bot_learned.lua`)
+
+A server can name expert players (`CORSIXTH_MP_EXPERTS`, SERVER-SETUP.md
+section 10); the referee saves their games and a nightly job
+(`corsixth_mp/learn.py`, `layout_learn.py`) writes `learned.lua`. A normal or
+hard bot reads it when it starts (an easy one does not):
+
+- **Room recipes.** For each kind of room, the size the experts build most
+  and the layout they use most at that size, seen from the door. The manager
+  plans that size and buys what the expert puts in besides what the room
+  needs (Argus: radiators by size, no plants or bins); the bot draws the room
+  that shape (`Bot:layoutSpot` with the recipe's shapes), puts the door at
+  the expert's column (or the mirrored one, `builder.ui_room` door_pref), and
+  places each object on the expert's tiles first (`Bot:furnishTick`), its own
+  rules only for what does not fit. A recipe much bigger than what the bot
+  would build (an 11 x 11 research room in its first year) is not used.
+- **Plans.** When the bot plays a level, map size, number of hospitals and
+  place an expert has played, it builds each room where the expert had one
+  of that kind, with their door and layout (`Bot:planSlot`), and puts its
+  reception desks, benches, radiators and other corridor objects on the
+  expert's spots, nearest to the reception first (`Bot:buyCorridor`).
+
+`lua scripts/multiplayer/bot_learned_test.lua scripts/multiplayer/bot_learned.lua`
+checks the turning of layouts (each door wall, mirrored) on any Lua.
+
 ## Advice from a language model (`mp_server/corsixth_mp/advisor.py`)
 
 With an Anthropic API key on the server (`/etc/corsixth-mp-secrets.env`,

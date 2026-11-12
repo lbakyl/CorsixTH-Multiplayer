@@ -173,6 +173,14 @@ function M.planRoomWanted(id, n, q)
 end
 
 function M.roomPlan(id)
+  -- What an expert player builds (bot_learned.lua, learnt from their saved
+  -- games): their size, and what they put in besides what the room needs
+  -- (Argus: radiators by the room's size, no plants or bins).
+  local recipe = M.learned and M.Learned and M.Learned.recipe(M.learned, id, SIZES_OF(id))
+  if recipe then
+    local rt = TheApp and TheApp.rooms and TheApp.rooms[id]
+    return math.max(recipe.w, recipe.d), M.Learned.extras(recipe.objects, rt and rt.objects_needed)
+  end
   local extras = EXTRAS[id] or DEFAULT_EXTRAS
   local copy = {}
   for k, v in pairs(extras) do copy[k] = v end
@@ -224,6 +232,8 @@ function M.new(bot, ctx)
   self.rival_staff_asked = {} -- category -> game day a rival was asked for one
   self.s = nil             -- the last assessment (M:assess), for answers between days
   M.research_heavy = bot.research_heavy or false
+  -- (What it learnt from experts, bot_learned.lua: Bot.learned.)
+  M.learned, M.Learned = bot.learned, ctx.learned_module
   return self
 end
 

@@ -31,6 +31,10 @@
 --   MP_BOT_STANDIN       1: it plays the place of a person who left, under their
 --                        name, until somebody takes it: quietly (no chat, no asks,
 --                        no dirty tricks)
+--   MP_BOT_LEARNED       the file of what bots learnt from expert players'
+--                        hospitals (layout_learn.py: room recipes, plans;
+--                        default: learned.lua in CORSIXTH_MP_LEARN_DIR, the
+--                        server's); an easy bot does not use it
 --   MP_LUA_CPATH, MP_LUA_PATH  where to find LuaSocket (if not standard)
 -- Tests only:
 --   MP_BOT_SEED          seed for its choices (default: from the clock)
@@ -737,7 +741,7 @@ end
 -- The bot
 --------------------------------------------------------------------------------
 
-local socket, builder, sabotage, Manager
+local socket, builder, sabotage, Manager, Learned
 local Bot = {}
 
 --! Which brain this bot uses (MP_BOT_BRAIN, see the top; a key may also
@@ -828,14 +832,33 @@ function Bot.new(lobby)
   -- (In a person's place while they are away: it plays, and says nothing.)
   self.standin = standin
   if standin then log("plays for " .. my_name .. " while they are away (quiet)") end
+  self.level = os.getenv("MP_BOT_LEVEL") or "normal"
+  -- What it learnt from expert players' hospitals (Jan, 2026-11-12: bots
+  -- should build like Argus): room recipes, and plans for the places experts
+  -- played (bot_learned.lua). An easy bot keeps to its own simple rules.
+  local learned_path = os.getenv("MP_BOT_LEARNED") or ""
+  local learn_dir = os.getenv("CORSIXTH_MP_LEARN_DIR") or ""
+  if learned_path == "" and learn_dir ~= "" then learned_path = learn_dir .. "/learned.lua" end
+  if learned_path ~= "" and self.level ~= "easy" then
+    local data, why = Learned.load(learned_path)
+    self.learned = data
+    if data then
+      local recipes, plans = 0, 0
+      for _ in pairs(data.recipes) do recipes = recipes + 1 end
+      for _ in pairs(data.plans) do plans = plans + 1 end
+      log(string.format("learnt from %s: %d room recipes, %d plans", table.concat(data.experts or {}, ", "),
+          recipes, plans))
+    else
+      log("nothing learnt from " .. learned_path .. ": " .. tostring(why))
+    end
+  end
   if self.brain ~= "script" then
     self.manager = Manager.new(self, {log = log, rand = rand, pick = pick, sabotage = sabotage, lines = LINES, fill = fill_in,
-        typing = function(text) return 1.5 + #text * 0.06 + rand() * 2 end})
+        typing = function(text) return 1.5 + #text * 0.06 + rand() * 2 end, learned_module = Learned})
   end
   -- "manager": the same brain, without the language model's advice; an easy
   -- bot never asks it either.
   if self.brain == "manager" or os.getenv("MP_BOT_LEVEL") == "easy" then self.ai = "off" end
-  self.level = os.getenv("MP_BOT_LEVEL") or "normal"
   log("brain: " .. self.brain .. ", level " .. self.level)
   return self
 end
@@ -1799,6 +1822,63 @@ function Bot:freeTile(x, y)
   return flags.buildable and flags.passable
 end
 
+--! The plan an expert left for this hospital's place (bot_learned.lua): the
+--! same level, map size, number of hospitals and place among them as a game
+--! they played, or nil.
+function Bot:learnedPlan()
+  local world = self.world
+  if not (self.learned and world and world.ui and world.ui.hospital) then return nil end
+  if self.learned_plan_world ~= world then
+    self.learned_plan_world = world
+    local w, h = world.map.th:size()
+    local key = Learned.planKey(world.map.level_name, w, h, #world.hospitals,
+        world:getHospitalIndex(world.ui.hospital))
+    self.learned_plan = Learned.plan(self.learned, key)
+    if self.learned_plan then
+      log(string.format("plays %s like %s did (%d rooms in their plan)", key, tostring(self.learned_plan.player),
+          #self.learned_plan.rooms))
+    end
+  end
+  return self.learned_plan
+end
+
+--! An expert's room of kind `id` from the plan for this place that it can
+--! build now: all of it free floor of its own, not refused by the room
+--! editor lately (`refused(x, y, w, h)`), clear of the reception's queue and
+--! the entrances, and leaving the corridor and its floor in one piece.
+function Bot:planSlot(id, refused)
+  local plan = self:learnedPlan()
+  if not plan then return nil end
+  local world, hosp = self.world, self.world.ui.hospital
+  local keep = {}
+  local function protect(cx, cy, r)
+    for ky = cy - r, cy + r do
+      for kx = cx - r, cx + r do keep[ky * 1000 + kx] = true end
+    end
+  end
+  for _, desk in ipairs(hosp:getReceptionDesks()) do
+    if desk.tile_x then protect(desk.tile_x, desk.tile_y, 2) end
+  end
+  for _, e in ipairs(world.entities) do
+    local oid = e.object_type and e.object_type.id
+    if oid and oid:find("entrance", 1, true) and e.tile_x and hosp:isInHospital(e.tile_x, e.tile_y) then
+      protect(e.tile_x, e.tile_y, 2)
+    end
+  end
+  for _, slot in ipairs(Learned.slots(plan, id)) do
+    local ok = not (refused and refused(slot.x, slot.y, slot.w, slot.h))
+    for ty = slot.y, slot.y + slot.h - 1 do
+      for tx = slot.x, slot.x + slot.w - 1 do
+        if ok and (keep[ty * 1000 + tx] or not self:freeTile(tx, ty)) then ok = false end
+      end
+    end
+    if ok and self:keepsCorridor(slot.x, slot.y, slot.w, slot.h) and
+        self:roomKeepsFloor(slot.x, slot.y, slot.w, slot.h) then
+      return slot
+    end
+  end
+end
+
 --! Would a w x h room fit at x, y with free floor below it and to its
 --! right (where its door goes)? It may stand against other walls.
 function Bot:roomFits(x, y, w, h)
@@ -1827,7 +1907,10 @@ local FLOOR_TRIES = 60
 --! a person asked to build beside) only spots within NEAR_MAX_GAP tiles of one
 --! of them count, and the nearer the better.
 --!return x, y, w, h or nil
-function Bot:layoutSpot(min, size, near)
+--!param shapes (list) optional {{w, h, side}, ...}: only these sizes (an
+--!  expert's room), each with the corridor (the door) on `side` (default south)
+--!return x, y, w, h, side
+function Bot:layoutSpot(min, size, near, shapes)
   local world = self.world
   local hosp = world.ui.hospital
   local th = world.map.th
@@ -1864,21 +1947,28 @@ function Bot:layoutSpot(min, size, near)
   local function solid(x, y) return not f(x, y) and not keep[y * 1000 + x] end
   local ax, ay = self:anchor()
   local spots = {} -- {score, x, y, w, h}
-  local shapes = {}
-  for s = size, min, -1 do
-    shapes[#shapes + 1] = {s, s}
-    if s - 1 >= min then shapes[#shapes + 1] = {s, s - 1} end
+  if not shapes then
+    shapes = {}
+    for s = size, min, -1 do
+      shapes[#shapes + 1] = {s, s}
+      if s - 1 >= min then shapes[#shapes + 1] = {s, s - 1} end
+    end
   end
   for _, shape in ipairs(shapes) do
-    local w, h = shape[1], shape[2]
-    for y = y0, y1 - h do
-      for x = x0, x1 - w + 1 do
+    local w, h, side = shape[1], shape[2], shape[3] or "south"
+    -- The room, and the row (or column) on its door's side: the corridor
+    -- (that may be floor kept clear, it is corridor anyway).
+    local sx0, sy0, sx1, sy1 = 0, 0, w - 1, h -- (south: the row below)
+    if side == "north" then sy0, sy1 = -1, h - 1
+    elseif side == "east" then sx1, sy1 = w, h - 1
+    elseif side == "west" then sx0, sy1 = -1, h - 1 end
+    for y = y0 - sy0, y1 - sy1 do
+      for x = x0 - sx0, x1 - sx1 do
         local ok = true
-        -- The room, and the row below it (the corridor at its door; that
-        -- may be floor kept clear, it is corridor anyway).
-        for ty = y, y + h do
-          for tx = x, x + w - 1 do
-            if not f(tx, ty) and not (ty == y + h and keep[ty * 1000 + tx]) then ok = false break end
+        for ty = y + sy0, y + sy1 do
+          for tx = x + sx0, x + sx1 do
+            local strip = ty < y or ty >= y + h or tx < x or tx >= x + w
+            if not f(tx, ty) and not (strip and keep[ty * 1000 + tx]) then ok = false break end
           end
           if not ok then break end
         end
@@ -1890,7 +1980,7 @@ function Bot:layoutSpot(min, size, near)
             if solid(tx, y - 1) then score = score + 1.5 end
             -- (A one tile gap above: nothing will ever fit in it.)
             if f(tx, y - 1) and solid(tx, y - 2) then score = score - 1.5 end
-            if f(tx, y + h + 1) then score = score + 0.3 end
+            if side == "south" and f(tx, y + h + 1) then score = score + 0.3 end
           end
           for ty = y, y + h - 1 do
             if solid(x - 1, ty) then score = score + 1.5 end
@@ -1908,10 +1998,10 @@ function Bot:layoutSpot(min, size, near)
             end
             if gap and gap <= NEAR_MAX_GAP then
               score = score - 1.5 * gap
-              spots[#spots + 1] = {score, x, y, w, h}
+              spots[#spots + 1] = {score, x, y, w, h, side}
             end
           else
-            spots[#spots + 1] = {score, x, y, w, h}
+            spots[#spots + 1] = {score, x, y, w, h, side}
           end
         end
       end
@@ -1955,7 +2045,7 @@ function Bot:layoutSpot(min, size, near)
       end
       if self:roomKeepsFloor(spot[2], spot[3], spot[4], spot[5]) then
         if i > 1 then log(string.format("layout: %d better spots would cut the corridor or the floor in two", i - 1)) end
-        return spot[2], spot[3], spot[4], spot[5]
+        return spot[2], spot[3], spot[4], spot[5], spot[6]
       end
     end
   end
@@ -2238,6 +2328,48 @@ function Bot:drawRoom(room_type, size, extras, near)
     return day and today - day < REFUSED_SPOT_DAYS
   end
   local x, y, w, h
+  -- An expert's room (bot_learned.lua): on the same map and place as an
+  -- expert played, their spot for it; else their size and door, the layout
+  -- put in afterwards (Bot:furnishTick).
+  local layout, door_pref
+  -- (The smart brain only: the fixed plan's rooms are furnished by the game.)
+  if self.learned and self.manager and not near then
+    local slot = self:planSlot(room_type.id, refused)
+    if slot then
+      x, y, w, h = slot.x, slot.y, slot.w, slot.h
+      layout = {w = slot.fw, d = slot.fd, layouts = {{w = slot.fw, d = slot.fd, wall = slot.wall,
+          col = slot.door, objects = slot.objects}}}
+      door_pref = {wall = slot.wall, col = slot.door}
+      log(string.format("%s where the expert had it: %dx%d at %d,%d (door in the %s wall)", room_type.id,
+          w, h, x, y, slot.wall))
+    else
+      local recipe = Learned.recipe(self.learned, room_type.id, size, 0)
+      if recipe and math.max(recipe.w, recipe.d) >= size - 1 then
+        -- A spot with the corridor on the side of a door wall the expert used
+        -- (their layout fits that room exactly), else on any side.
+        local shapes, by_side = {}, {}
+        for _, v in ipairs(recipe.variants or {}) do
+          if not by_side[v.wall] then
+            by_side[v.wall] = v
+            local across = v.wall == "north" or v.wall == "south"
+            shapes[#shapes + 1] = {across and recipe.w or recipe.d, across and recipe.d or recipe.w, v.wall}
+          end
+        end
+        if #shapes == 0 then shapes[1] = {recipe.w, recipe.d, "south"} end
+        local ok_l, lx, ly, lw, lh, side = pcall(self.layoutSpot, self, min, size, nil, shapes)
+        if ok_l and lx and not refused(lx, ly, lw, lh) then
+          x, y, w, h = lx, ly, lw, lh
+          layout = {w = recipe.w, d = recipe.d, layouts = Learned.layouts(recipe)}
+          local v = by_side[side]
+          door_pref = v and {wall = v.wall, col = v.col} or {width = recipe.w, cols = {recipe.door, recipe.w - 1 - recipe.door}}
+          log(string.format("%s as the expert builds it: %dx%d at %d,%d, door in the %s wall", room_type.id,
+              w, h, x, y, tostring(side)))
+        elseif not ok_l then
+          log("layout: " .. tostring(lx))
+        end
+      end
+    end
+  end
   -- Beside what a person asked for, if it fits within reach.
   self.near_missed = nil
   if near then
@@ -2290,12 +2422,16 @@ function Bot:drawRoom(room_type, size, extras, near)
     self.no_space_day = self:gameDay() -- (then it looks for land anywhere, cheapestPlot)
     return nil, "space"
   end
-  local by_hand = extras and next(extras) ~= nil
+  -- (A size other than the expert's: no layout of theirs.)
+  if layout and not ((w == layout.w and (h or w) == layout.d) or (w == layout.d and (h or w) == layout.w)) then
+    layout, door_pref = nil, nil
+  end
+  local by_hand = (extras and next(extras) ~= nil) or layout ~= nil
   local ok, res = pcall(builder.ui_room, self.world, ax, ay, room_type.id, w, h or w, true, log, {x, y}, by_hand,
-      {ax, ay})
+      {ax, ay}, door_pref)
   if not ok then log("could not draw " .. room_type.id .. ": " .. tostring(res)) end
   if ok and res then
-    if by_hand then self.furnishing = {extras = extras, room_id = room_type.id} end
+    if by_hand then self.furnishing = {extras = extras or {}, room_id = room_type.id, layout = layout} end
     return true
   end
   self.refused_spots = self.refused_spots or {}
@@ -2491,7 +2627,9 @@ function Bot:furnishTick()
   local o = dlg.objects[1]
   if not o then
     if dlg.confirm_button.enabled then
-      log(string.format("furnished %s #%d", job.room_id, dlg.mp_room_id))
+      log(string.format("furnished %s #%d%s", job.room_id, dlg.mp_room_id,
+          job.spots and string.format(" (%d of its %d objects at the expert's places)", job.learned_placed or 0,
+              job.total or 0) or ""))
       dlg:confirm()
     else
       log("furnishing: " .. job.room_id .. " cannot be finished; cancelled")
@@ -2501,7 +2639,44 @@ function Bot:furnishTick()
     return false
   end
   job.tried = job.tried or {}
+  job.total = job.total or count()
   local rm = dlg.room
+  -- The expert's layout (bot_learned.lua): each object where theirs stood,
+  -- seen from the door; mirrored when this door is at the other end.
+  if job.layout and job.spots == nil then
+    job.spots = false
+    local door = rm.door
+    if door and door.tile_x then
+      local f = Learned.frame(rm.x, rm.y, rm.width, rm.height, door.tile_x, door.tile_y, door.direction)
+      local placed, n = Learned.best(job.layout.layouts, f, TheApp.objects)
+      if placed then
+        job.spots = placed
+        log(string.format("furnishing %s #%d as the expert does (door in the %s wall at column %d; %d of the %d " ..
+            "objects fit their tiles)", job.room_id, dlg.mp_room_id, f.wall, f.col, n, #placed))
+      else
+        log(string.format("furnishing %s #%d: its door (column %d of %d, %d deep) suits none of the expert's " ..
+            "layouts (%d wide, %d deep)", job.room_id, dlg.mp_room_id, f.col, f.W, f.D, job.layout.w, job.layout.d))
+      end
+    end
+  end
+  for i, spot in ipairs(job.spots or {}) do
+    local key = "learned:" .. i
+    if spot.id == o.object.id and not job.tried[key] then
+      job.tried[key] = true
+      local ox, oy = Learned.origin(o.object, spot.dir, spot.tiles)
+      if ox and o.object.orientations[spot.dir] then
+        dlg:setActiveIndex(1)
+        dlg:setOrientation(spot.dir)
+        dlg:setBlueprintCell(ox, oy)
+        if dlg.object_blueprint_good and not world:anyHumanoidObscuringArea(ox, oy) then
+          job.learned_placed = (job.learned_placed or 0) + 1
+          job.pending = {count = count(), by_step = step + session.delay + 3}
+          dlg:placeObject()
+          return true
+        end
+      end
+    end
+  end
   -- Where a player puts things: the furniture against the walls first; a
   -- plant, bin, radiator, bookcase or extinguisher only into a corner or
   -- against a wall, never in the middle of the room.
@@ -2811,7 +2986,28 @@ function Bot:buyCorridor(object_id, near_x, near_y)
     return false
   end
   local x, y
-  if object_id ~= "reception_desk" then
+  -- Where the expert of this place had one (bot_learned.lua, plans), the
+  -- first such spot that is free (near a door asked for: within reach).
+  local plan = self:learnedPlan()
+  for _, spot in ipairs(plan and plan.objects or {}) do
+    if not x and spot.id == object_id and object_type.orientations[spot.dir] then
+      local ox, oy = Learned.origin(object_type, spot.dir, spot.tiles)
+      local free = ox ~= nil and (not near_x or (math.abs(ox - ax) <= max_r and math.abs(oy - ay) <= max_r))
+      for _, t in ipairs(free and spot.tiles or {}) do
+        if not self:freeTile(t[1], t[2]) then free = false end
+      end
+      if free and not world:anyHumanoidObscuringArea(ox, oy) and
+          not (next(given) and given[world.map.th:getCellFlags(ox, oy).parcelId]) then
+        place:setOrientation(spot.dir)
+        place:setBlueprintCell(ox, oy)
+        if place.object_blueprint_good and keeps_floor(ox, oy, spot.dir) then
+          x, y = ox, oy
+          log(string.format("a %s where the expert had one: %d,%d facing %s", object_id, ox, oy, spot.dir))
+        end
+      end
+    end
+  end
+  if not x and object_id ~= "reception_desk" then
     -- Nearest first, in a fixed order.
     for r = 0, max_r do
       for dy = -r, r do
@@ -3422,6 +3618,7 @@ local function run()
   if os.getenv("MP_BOT_TESTS") == "1" then builder.register_handlers() end
   sabotage = MultiplayerSession.sabotage
   Manager = assert(loadfile(source_dir .. "/scripts/multiplayer/bot_manager.lua"))()
+  Learned = assert(loadfile(source_dir .. "/scripts/multiplayer/bot_learned.lua"))()
 
   local bot
   -- Money sent to it: seen when the command runs here (the game itself
