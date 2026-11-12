@@ -100,9 +100,10 @@ BOT_LEVELS = ("easy", "normal", "hard")
 # that plays their hospital under their name until somebody takes the place
 # (after this many seconds: a dropped connection usually comes back first).
 STAND_IN_DELAY = float(os.environ.get("CORSIXTH_MP_STAND_IN_DELAY", "20"))
-# Nobody plays any more: the bots stop and the referee holds the game this
-# many seconds for somebody to come back (then the room closes).
-EMPTY_WAIT = float(os.environ.get("CORSIXTH_MP_EMPTY_WAIT", "600"))
+# Nobody plays any more: the bots stop and the room closes (Jan, 2026-11-12:
+# empty rooms stayed in the list). CORSIXTH_MP_EMPTY_WAIT > 0: the referee
+# holds the game that many seconds for somebody to come back first.
+EMPTY_WAIT = float(os.environ.get("CORSIXTH_MP_EMPTY_WAIT", "0"))
 # CORSIXTH_MP_KEEP_PLACES=0: neither (a room closes once nobody plays, as
 # before; the older test scripts expect that).
 KEEP_PLACES = os.environ.get("CORSIXTH_MP_KEEP_PLACES", "1") != "0"
@@ -1963,8 +1964,8 @@ class Server:
         if not room.humans():
             # Nobody left to play with the bots: they go too.
             self._stop_bots(room)
-            if KEEP_PLACES and room.state == "running" and room.referee is not None \
-                    and room.referee_token and self.rooms.get(room.name) is room:
+            if KEEP_PLACES and EMPTY_WAIT > 0 and room.state == "running" and \
+                    room.referee is not None and room.referee_token and self.rooms.get(room.name) is room:
                 # The game waits for somebody to come back (EMPTY_WAIT).
                 if room.empty_since is None:
                     self._room_emptied(room)

@@ -1522,6 +1522,7 @@ def test_a_bot_plays_for_a_player_who_left_until_they_come_back(monkeypatch):
 
 def test_an_empty_game_waits_and_the_bots_come_back(monkeypatch):
     monkeypatch.setattr(srv, "STAND_IN_DELAY", 30.0)
+    monkeypatch.setattr(srv, "EMPTY_WAIT", 600.0)
 
     async def body(server, port, bots, referees):
         ann, (agnes, bertie), ref = await race_with_bots(server, port, bots, referees)
@@ -1614,4 +1615,16 @@ def test_bot_levels_easy_and_hard():
         await bertie.expect("HOLD")
         bertie.send(encode("HELD", step=5))
         await load_for([ann, carl, bertie], ref, 5, bots="3", hard="", easy="3")
+    run_with_bots(body, with_referees=True)
+
+
+def test_an_empty_game_closes_at_once_by_default():
+    async def body(server, port, bots, referees):
+        ann, conns, ref = await race_with_bots(server, port, bots, referees, n_bots=1)
+        await ann.close()
+        for _ in range(100):
+            if "race" not in server.rooms:
+                break
+            await asyncio.sleep(0.02)
+        assert "race" not in server.rooms
     run_with_bots(body, with_referees=True)
