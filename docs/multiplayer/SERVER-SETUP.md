@@ -246,13 +246,19 @@ sudo bash setup-referee-host.sh --release mp-stable-NEWNUMBER --motd "Welcome to
 - **A game got out of sync:** the referee repairs it by itself within a
   moment; the log shows `state of ...` lines about it. If you want the cause
   found, send those log lines to the maintainers.
+- **The bots do not build like your experts (section 10):** only hard bots
+  do, in games started after the morning's learning. See what it learnt with
+  `sudo journalctl -u corsixth-mp-learn -n 20` (a save it could not read is
+  named there and tried again the next morning). Nothing is saved while an
+  expert plays a hospital they share with a bot, or under another name.
 
 ## 10. Bots that learn from your best players
 
 The bots can learn to build like the best players on your server: the size
 of each room, where every desk, bed and radiator goes, and, on a map and
 starting place such a player has played, their whole hospital (where each
-room is, the reception, benches, drinks machines...).
+room is, the reception, benches, drinks machines...). It needs the referee
+(this guide's setup), not the Docker server.
 
 Name those players (their names in the game, any case, separated by commas)
 when you install or update:

@@ -36,7 +36,8 @@
 # their player names (kept from the last run; --experts none: nobody). While
 # one of them plays, the referee saves the game at every year's end and at
 # the game's end into /var/lib/corsixth/learn; every morning at 6:30 (Prague)
-# the bots learn from the new saves, and the daily report says whose.
+# the bots learn from the new saves (hard bots build that way), and the
+# daily report says whose.
 #
 # Safe to run again, e.g. with the next release. Restarting the service drops
 # every connected player: check that nobody is playing first.
@@ -61,7 +62,7 @@ while [[ $# -gt 0 ]]; do
     --motd) MOTD=$2; shift 2 ;;
     --name) NAME=$2; shift 2 ;;
     --experts) EXPERTS=$2; shift 2 ;;
-    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,/^set -euo/p' "$0" | sed '$d'; exit 0 ;;
     *) echo "Unknown option $1 (see --help)" >&2; exit 2 ;;
   esac
 done
