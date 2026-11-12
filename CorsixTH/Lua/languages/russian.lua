@@ -3978,6 +3978,7 @@ multiplayer_window.auction_repay_tooltip = "Вернуть банку $5,000 з�
 multiplayer_window.auction_sold = "Участок %d продан игроку %s за $%d."
 multiplayer_window.auction_started = "%s хочет участок %d. Он может быть нужен и другим игрокам: участок уходит на аукцион."
 multiplayer_window.auction_title = "Аукцион земли: участок %d"
+multiplayer_window.auction_title_by = "Аукцион земли: %s хочет участок %d"
 multiplayer_window.auction_wait = "Идёт аукцион, подождите..."
 multiplayer_window.auction_watching = "Ваша земля не граничит с этим участком."
 multiplayer_window.auctions_all = "Все участки"

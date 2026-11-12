@@ -3405,6 +3405,7 @@ multiplayer_window.auction_repay_tooltip = "Εξοφλήστε $5,000 του δ�
 multiplayer_window.auction_sold = "Το οικόπεδο %d πουλήθηκε στον/στην %s για $%d."
 multiplayer_window.auction_started = "Ο/Η %s θέλει το οικόπεδο %d. Ίσως το θέλουν και άλλοι παίκτες: πηγαίνει σε δημοπρασία."
 multiplayer_window.auction_title = "Δημοπρασία γης: οικόπεδο %d"
+multiplayer_window.auction_title_by = "Δημοπρασία γης: ο/η %s θέλει το οικόπεδο %d"
 multiplayer_window.auction_wait = "Δημοπρασία σε εξέλιξη, παρακαλώ περιμένετε..."
 multiplayer_window.auction_watching = "Η γη σας δεν συνορεύει με αυτό το οικόπεδο."
 multiplayer_window.auctions_all = "Κάθε οικόπεδο"

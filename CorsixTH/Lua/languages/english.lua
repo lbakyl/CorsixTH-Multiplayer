@@ -520,6 +520,7 @@ multiplayer_window = {
   no_helper_building = "bots don't build",
   kicked = "%s, the room's owner, removed you from the room.",
   auction_title = "Land auction: plot %d",
+  auction_title_by = "Land auction: %s wants plot %d",
   auction_paused = "The game stands still during the auction.",
   auction_price = "Price $%d, each bid $%d more",
   auction_how = "Bid with the tick, drop out with the cross.",

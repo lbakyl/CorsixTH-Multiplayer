@@ -54,10 +54,13 @@ local MAP_BG = {44, 96, 52}
 local LOT_COLOUR = {236, 52, 28}
 local FOR_SALE_COLOUR = {196, 172, 112} -- (plots nobody owns yet: Argus, 2026-11-12)
 -- The seconds left: big digits in a box next to the gavel (Jan, 2026-11-12),
--- under the bid boxes; the town map button under the highest bid.
-local CLOCK_X, CLOCK_Y, CLOCK_W, CLOCK_H = 124, 434, 70, 38
+-- in the middle under this player's bid; the town map button in the middle
+-- under the leader's name.
+local CLOCK_W, CLOCK_H = 70, 38
+local CLOCK_X, CLOCK_Y = BID_X + math.floor((BID_W - CLOCK_W) / 2), 434
 local DIGIT_W, DIGIT_H, DIGIT_T, DIGIT_GAP = 18, 28, 4, 6
-local TOWN_X, TOWN_Y, TOWN_W, TOWN_H = 330, 438, 130, 24
+local TOWN_W, TOWN_H = 130, 24
+local TOWN_X, TOWN_Y = 407 - TOWN_W / 2, 438 -- (407: the middle of the leader's name bar)
 
 -- The gavel: frames 10 (raised) to 3 (down). As in the original game it
 -- comes down slowly while nobody bids, is raised again by every bid, and
@@ -453,7 +456,11 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
     elseif standing == "out" then status = S.auction_dropped
     elseif standing == "poor" then status = S.auction_no_money_loan
     else status = S.auction_price:format(auction.price, auction.step) .. ". " .. S.auction_how end
-    status = S.auction_title:format(auction.plot) .. ". " .. status .. " " .. S.auction_paused
+    -- Who asked for the plot (Jan: newcomers did not see who wanted it).
+    local asker = world.hospitals[auction.by or 0]
+    local title = asker and S.auction_title_by and S.auction_title_by:format(asker.name, auction.plot) or
+        S.auction_title:format(auction.plot)
+    status = title .. ". " .. status .. " " .. S.auction_paused
   end
   self.status_font:drawWrapped(canvas, status, x + STATUS_X * s, y + STATUS_Y * s, STATUS_W * s)
 end
