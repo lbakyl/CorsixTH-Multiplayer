@@ -63,7 +63,8 @@
 #      also shown: spots refused because they would cut the floor in two, and
 #      objects sold to mend a floor in parts
 #  21. a plot asked of an allied bot ("lab"): frank asks for plot 7 at auction
-#      and drops out, so the bot gets it; asked for plot 7 on game day 4 it
+#      and drops out once the bot has bid (a moment after him), so the bot gets
+#      it (the game stands still meanwhile); asked for plot 7 on game day 4 it
 #      keeps it for the level's value goal (its requirements count as met only
 #      from day 5 there, MP_BOT_TEST_WIN "lab/2:5"); asked for any plot on day 6
 #      it offers plot 7 for free (it holds more than the $1,000 it keeps here),
@@ -156,8 +157,8 @@ run_probe eve MP_ROLE=host MP_ROOM=duel MP_MODE=competitive MP_PLAYERS=2 MP_ADD_
   MP_UI_SCRIPT="20:openhospital;320:sabotage:handyman:3:2;340:sabotage:smear:1:2;900:sabotage:rats:1:2;1500:sabotage:boiler:1:2;2990:hospitals" & pids+=($!)
 run_probe frank MP_ROLE=host MP_ROOM=lab MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_LEVEL=2 MP_SCENARIO=none \
   MP_STEPS=3000 MP_STALL_LIMIT=120 \
-  MP_UI_SCRIPT="20:openhospital;100:auctionbuy;130:auctionpass;160:chat:1:Agnes, can I have plot 7?;260:chat:1:Agnes, could you spare me a plot?;320:answerplot:accept;360:plotmap;2990:hospitals" & pids+=($!)
-run_probe gus MP_ROLE=host MP_ROOM=auc MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_LEVEL=2 MP_SCENARIO=none   MP_STEPS=1300 MP_STALL_LIMIT=120   MP_UI_SCRIPT="20:openhospital;200:auctionbuy;400:auctionbid;600:auctionbid;900:auctionbuy;1100:auctionpass" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;100:auctionbuy;170:auctionpass;200:chat:1:Agnes, can I have plot 7?;300:chat:1:Agnes, could you spare me a plot?;360:answerplot:accept;400:plotmap;2990:hospitals" & pids+=($!)
+run_probe gus MP_ROLE=host MP_ROOM=auc MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_LEVEL=2 MP_SCENARIO=none   MP_STEPS=1300 MP_STALL_LIMIT=120   MP_UI_SCRIPT="20:openhospital;200:auctionbuy;300:auctionbid;400:auctionbid;900:auctionbuy;1000:auctionpass" & pids+=($!)
 run_probe cid MP_ROLE=host MP_ROOM=trio MP_MODE=coop MP_PLAYERS=3 MP_ADD_BOTS=1 MP_SCENARIO=none \
   MP_STEPS=600 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital;300:speedother" & pids+=($!)
 run_probe jon MP_ROLE=host MP_ROOM=afk MP_MODE=teamshared MP_TEAM=1 MP_PLAYERS=3 MP_ADD_BOTS=1 MP_LEVEL=2   MP_SCENARIO=none MP_STEPS=1300 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital;900:auctionbuy" & pids+=($!)
