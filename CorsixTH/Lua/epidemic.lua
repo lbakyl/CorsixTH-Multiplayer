@@ -343,11 +343,12 @@ end
  changing the icon, once a player has been marked for vaccination they may
  possibly become a vaccination candidate. Marking is done by clicking
  the player and can only happen during a cover up. ]]
-function Epidemic:markForVaccination(patient)
+function Epidemic:markForVaccination(patient, quiet)
   if patient.infected and not patient.vaccinated and
       not patient.marked_for_vaccination then
     patient:setToReadyForVaccinationStatus()
-    patient.hospital:playSound("vaccin.wav")
+    -- (quiet: multiplayer, another player marked the patient.)
+    if not quiet then patient.hospital:playSound("vaccin.wav") end
   end
 end
 

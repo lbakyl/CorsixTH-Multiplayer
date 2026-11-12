@@ -4619,7 +4619,11 @@ function handlers.mark_vaccinate(world, cmd)
       not patient.infected or patient.marked_for_vaccination then
     return false, "cannot vaccinate"
   end
-  epidemic:markForVaccination(patient)
+  -- The sound only for the player who marked the patient (Argus,
+  -- 2026-11-12: everybody heard everybody's vaccinations).
+  local session = TheApp and TheApp.mp_session
+  local own = session and not session.observer and tonumber(cmd.peer) == session.peer_id
+  epidemic:markForVaccination(patient, not own)
   return true
 end
 
