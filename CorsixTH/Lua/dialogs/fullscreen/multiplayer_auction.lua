@@ -54,13 +54,12 @@ local MAP_BG = {44, 96, 52}
 local LOT_COLOUR = {236, 52, 28}
 local FOR_SALE_COLOUR = {196, 172, 112} -- (plots nobody owns yet: Argus, 2026-11-12)
 -- The seconds left: big digits in a box next to the gavel (Jan, 2026-11-12),
--- in the middle under this player's bid; the town map button in the middle
--- under the leader's name.
+-- in the middle under this player's bid.
 local CLOCK_W, CLOCK_H = 70, 38
 local CLOCK_X, CLOCK_Y = BID_X + math.floor((BID_W - CLOCK_W) / 2), 434
 local DIGIT_W, DIGIT_H, DIGIT_T, DIGIT_GAP = 18, 28, 4, 6
-local TOWN_W, TOWN_H = 130, 24
-local TOWN_X, TOWN_Y = 407 - TOWN_W / 2, 438 -- (407: the middle of the leader's name bar)
+-- (The town map button: the map's top left corner, Jan.)
+local TOWN_X, TOWN_Y, TOWN_W, TOWN_H = MAP_X + 4, MAP_Y + 4, 120, 22
 
 -- The gavel: frames 10 (raised) to 3 (down). As in the original game it
 -- comes down slowly while nobody bids, is raised again by every bid, and
@@ -83,6 +82,8 @@ function UIMultiplayerAuction:UIMultiplayerAuction(ui)
     self.sum_font = gfx:loadFontAndSpriteTable("QData", "Font60V", false, palette, {apply_ui_scale = true})
     self.status_font = gfx:loadFontAndSpriteTable("QData", "Font01V", nil, nil,
         {ttf_shadow = true, apply_ui_scale = true})
+    -- (The line at the top, at twice the size: drawn on a scaled canvas.)
+    self.big_font = gfx:loadFontAndSpriteTable("QData", "Font01V", nil, nil, {ttf_shadow = true})
   end) then
     ui:addWindow(UIInformation(ui, {_S.errors.dialog_missing_graphics}))
     self:close()
@@ -442,27 +443,41 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
     sum_text(tostring(auction.bid), x + LEAD_VALUE_X * s, y + BID_Y * s, LEAD_VALUE_W * s, ROW_H * s)
   end
 
-  -- What is going on, at the top.
+  -- What is going on, at the top: short, big, on a dark plaque (Jan,
+  -- 2026-11-12: "XYZ wants to buy the highlighted plot. Bid $500 or more.";
+  -- the long line was barely seen). Who asked for the plot, then what this
+  -- player may do.
   local status
   if not auction then
     status = last and (last.sold and S.auction_sold:format(last.plot, last.name, last.bid) or
         S.auction_not_sold:format(last.plot)) or ""
   else
     local going = self:going_stage()
-    if going == 2 then status = S.auction_going_twice
-    elseif going == 1 then status = S.auction_going_once
-    elseif standing == "watch" then status = S.auction_watching
-    elseif standing == "lead" then status = S.auction_leading
-    elseif standing == "out" then status = S.auction_dropped
-    elseif standing == "poor" then status = S.auction_no_money_loan
-    else status = S.auction_price:format(auction.price, auction.step) .. ". " .. S.auction_how end
-    -- Who asked for the plot (Jan: newcomers did not see who wanted it).
+    local now
+    if going == 2 then now = S.auction_going_twice
+    elseif going == 1 then now = S.auction_going_once
+    elseif standing == "watch" then now = S.auction_watching
+    elseif standing == "lead" then now = S.auction_leading
+    elseif standing == "out" then now = S.auction_dropped
+    elseif standing == "poor" then now = S.auction_no_money_loan
+    else now = S.auction_bid_more:format(auction.step) end
     local asker = world.hospitals[auction.by or 0]
-    local title = asker and S.auction_title_by and S.auction_title_by:format(asker.name, auction.plot) or
-        S.auction_title:format(auction.plot)
-    status = title .. ". " .. status .. " " .. S.auction_paused
+    status = (asker and S.auction_wants:format(asker.name) or S.auction_title:format(auction.plot)) ..
+        " " .. now
   end
-  self.status_font:drawWrapped(canvas, status, x + STATUS_X * s, y + STATUS_Y * s, STATUS_W * s)
+  if status ~= "" then
+    local k = 2 * s
+    local font = self.big_font
+    local _, text_h = font:sizeOf(status, STATUS_W / 2)
+    local px, py, pw, ph = x + (STATUS_X - 6) * s, y + (STATUS_Y - 3) * s, (STATUS_W + 12) * s,
+        text_h * k + 8 * s
+    canvas:drawRect(canvas:mapRGB(236, 208, 150), px - s, py - s, pw + 2 * s, ph + 2 * s)
+    canvas:drawRect(canvas:mapRGB(56, 22, 14), px, py, pw, ph)
+    canvas:scale(k)
+    font:drawWrapped(canvas, status, math.floor((x + STATUS_X * s) / k), math.floor((y + (STATUS_Y + 1) * s) / k),
+        math.floor(STATUS_W / 2), "center")
+    canvas:scale(1)
+  end
 end
 
 -- A digit's lit bars: top, top right, bottom right, bottom, bottom left,
