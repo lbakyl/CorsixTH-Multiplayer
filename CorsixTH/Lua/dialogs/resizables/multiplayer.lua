@@ -307,19 +307,32 @@ function UIMultiplayer:_updateRooms()
   local rooms = self.lobby.rooms
   local lines = {}
   -- A line fits its row (Jan, 2026-11-12: running games' lines ran out of
-  -- the list): the room's name is shortened ("...") until it does.
+  -- the list): the mode's name is shortened ("...") first, then the room's
+  -- name, which says which room it is, down to 8 bytes at the least.
   local s = TheApp.gfx:getUIScale()
   local font = self.room_rows[1] and self.room_rows[1].panel_for_sprite.label_font or
       TheApp.gfx:loadFontAndSpriteTable("QData", "Font01V", nil, nil, {ttf_shadow = true, apply_ui_scale = true})
   local room_w = (WIDTH - 40 - 10) * s
-  local function fitted(name, make)
-    local line = make(name)
-    local n = #name
-    while n > 6 and font:sizeOf(line) > room_w do
-      n = n - 1
-      -- (Not in the middle of a letter of several bytes, UTF-8.)
-      while n > 6 and (name:byte(n + 1) or 0) >= 128 and (name:byte(n + 1) or 0) < 192 do n = n - 1 end
-      line = make(name:sub(1, n):gsub("%s+$", "") .. "...")
+  local SHORTEST = 8
+  local function cut(text, n) -- the first n bytes, whole letters only (UTF-8), and "..."
+    if n >= #text then return text end
+    while n > 0 and (text:byte(n + 1) or 0) >= 128 and (text:byte(n + 1) or 0) < 192 do n = n - 1 end
+    return (text:sub(1, n):gsub("%s+$", "")) .. "..."
+  end
+  local function fitted(name, mode, make)
+    local line = make(name, mode)
+    if mode and font:sizeOf(line) > room_w then
+      -- ("Co-op: everybody wins together" is "Co-op" first.)
+      local short = mode:match("^(.-)%s*:")
+      if short and short ~= "" then
+        mode = short
+        line = make(name, mode)
+      end
+    end
+    local n, m = #name, mode and #mode or 0
+    while font:sizeOf(line) > room_w and (m > SHORTEST or n > SHORTEST) do
+      if m > SHORTEST then m = m - 1 else n = n - 1 end
+      line = make(cut(name, n), mode and cut(mode, m))
     end
     return line
   end
@@ -330,14 +343,15 @@ function UIMultiplayer:_updateRooms()
       -- A running game: how many places a newcomer may take, and its level
       -- (the places view names the mode; players and "saved game" left out).
       local places = r.places and S.running_places:format(tonumber(r.places) or 0) or S.running_flag
-      lines[i] = fitted(r.room, function(name)
+      lines[i] = fitted(r.room, nil, function(name)
         return name .. "   " .. places .. "   " .. S.level:format(tonumber(r.level) or 1) .. flags
       end)
     else
-      lines[i] = fitted(r.room, function(name)
+      -- (The mode's name as plain text, to be shortened.)
+      local mode = tostring(MultiplayerLobby.modeLabel(r.mode)):gsub("^<LocalisedString> Current value:", "")
+      lines[i] = fitted(r.room, mode, function(name, mode_text)
         return S.room_line:format(name, tonumber(r.players) or 0, tonumber(r.max) or 0,
-            MultiplayerLobby.modeLabel(r.mode), r.level or "?",
-            flags .. (r["continue"] == "1" and S.saved_flag or ""))
+            mode_text, r.level or "?", flags .. (r["continue"] == "1" and S.saved_flag or ""))
       end)
     end
   end
