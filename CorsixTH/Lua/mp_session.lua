@@ -1376,6 +1376,20 @@ function MultiplayerSession.setupShirtColours(app, anims)
   return true
 end
 
+--! A patient drawn outside the map (the queue window, UIQueue:drawPatient,
+--! on its own animation): in their hospital's shirt colour 5 to 8 too, as
+--! on the map (Argus, 2026-11-12: the queue showed the shirt they are drawn
+--! from, white for black). Only this screen's picture changes.
+function MultiplayerSession.dressDrawing(th, patient)
+  local world = patient.world
+  if not (world and world.mp_coop and patient.hospital and th.setPartialFlag) then return end
+  if patient.humanoid_class == "Elvis Patient" or patient.humanoid_class == "Invisible Patient" then return end
+  local r = MultiplayerSession.hospitalColour(world, patient.hospital) or 1
+  if r <= 4 or not MultiplayerSession.setupShirtColours(TheApp, world.anims) then return end
+  th:setPartialFlag(DrawFlags.AltPalette3, r > 5)
+  th:setPartialFlag(DrawFlags.AltPalette2, r == 5)
+end
+
 --! Before the map is drawn (GameUI:draw): give every person the bar of
 --! their hospital's colour (or none), drawn by the engine just before them,
 --! so that whoever stands in front covers it (TH.animation:setFloorMarker).

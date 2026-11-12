@@ -400,6 +400,9 @@ function UIQueue:drawPatient(canvas, x, y, patient)
   for layer, id in pairs(patient.layers) do
     anim:setLayer(layer, id)
   end
+  -- Multiplayer: the shirt of the patient's hospital colour, as on the map.
+  local mp = rawget(_G, "MultiplayerSession")
+  if mp and mp.dressDrawing then mp.dressDrawing(anim, patient) end
   local s = TheApp.gfx:getUIScale()
   canvas:scale(s)
   anim:draw(canvas, math.floor(x / s), math.floor(y / s))
