@@ -5,6 +5,8 @@
 --   CORSIXTH_SOURCE   checkout root
 --   MP_LAYOUT_SAVES   the saved games, separated by ";"
 --   MP_LAYOUT_OUT     file to write (JSON lines: one line per hospital)
+--   MP_LUA_CPATH, MP_LUA_PATH  where the game's Lua libraries are, if not in
+--                     the standard paths (a server's referee game: lfs)
 -- Each line: the save, its date, the level (name, map size, hospitals), and
 -- one hospital: its name and index, whether a bot played it (bot: the
 -- room's own bot; standin: a bot playing for a person who left), its plots,
@@ -18,6 +20,8 @@ local unpack_args = table.unpack or unpack
 local source_dir = assert(os.getenv("CORSIXTH_SOURCE"), "Missing CORSIXTH_SOURCE")
 local saves = assert(os.getenv("MP_LAYOUT_SAVES"), "Missing MP_LAYOUT_SAVES")
 local out_path = assert(os.getenv("MP_LAYOUT_OUT"), "Missing MP_LAYOUT_OUT")
+if os.getenv("MP_LUA_CPATH") then package.cpath = os.getenv("MP_LUA_CPATH") .. ";" .. package.cpath end
+if os.getenv("MP_LUA_PATH") then package.path = os.getenv("MP_LUA_PATH") .. ";" .. package.path end
 
 local function json(v)
   local t = type(v)

@@ -107,6 +107,11 @@ def dump(env: dict[str, str], saves: list[pathlib.Path], out: pathlib.Path, work
         "SDL_VIDEODRIVER": "dummy", "SDL_AUDIO_DRIVER": "dummy", "SDL_RENDER_DRIVER": "software",
         "XDG_CONFIG_HOME": str(work / "config"),
     })
+    # (The referee's game finds its Lua libraries there, as the referee does.)
+    if env.get("CORSIXTH_MP_REFEREE_LUA_CPATH"):
+        run_env["MP_LUA_CPATH"] = env["CORSIXTH_MP_REFEREE_LUA_CPATH"]
+    if env.get("CORSIXTH_MP_REFEREE_LUA_PATH"):
+        run_env["MP_LUA_PATH"] = env["CORSIXTH_MP_REFEREE_LUA_PATH"]
     result = subprocess.run(
         [env.get("CORSIXTH_MP_REFEREE_BINARY", ""),
          f"--interpreter={source}/scripts/multiplayer/layout_dump.lua", f"--config-file={config}"],
