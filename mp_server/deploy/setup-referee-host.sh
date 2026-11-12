@@ -213,8 +213,16 @@ systemctl restart corsixth-mp.service
 sleep 2
 systemctl is-active --quiet corsixth-mp.service || die "the service did not start: journalctl -u corsixth-mp"
 python3 - "$PORT" <<'PY'
-import socket, sys
-s = socket.create_connection(("127.0.0.1", int(sys.argv[1])), 5)
+import socket, sys, time
+# The server listens after a few seconds (eu1 2026-11-12: 3.4 s).
+for attempt in range(30):
+    try:
+        s = socket.create_connection(("127.0.0.1", int(sys.argv[1])), 5)
+        break
+    except ConnectionRefusedError:
+        if attempt == 29:
+            raise
+        time.sleep(1)
 s.sendall(b"HEALTH\n")
 print("   " + s.recv(200).decode().strip())
 PY
