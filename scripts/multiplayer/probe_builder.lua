@@ -605,8 +605,11 @@ function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at, by_
     return
   end
   if with_window then
-    -- One window on each wall where one fits (not on the door): windows on
-    -- the south and east walls once left blue markers on the corridor.
+    -- A window on every wall tile that takes one (not the door's; not a wall
+    -- another room or the building has already): as many as possible, for
+    -- bots of every level (Jan, 2026-11-13: many bots' rooms had none or
+    -- one). (Windows on the south and east walls once left blue markers on
+    -- the corridor: builder.windowCell, 3fece4db.)
     local walls = {
       north = {}, west = {}, south = {}, east = {},
     }
@@ -623,10 +626,11 @@ function builder.ui_room(world, cx, cy, room_id, w, h, with_window, log, at, by_
         dlg:setWindowBlueprint(c[1], c[2], wall)
         if dlg.blueprint_window.anim and dlg.blueprint_window.valid then
           dlg:placeWindowBlueprint()
-          break
         end
       end
     end
+    -- (The last blueprint tried and not placed leaves no marker behind.)
+    dlg:setWindowBlueprint(nil, nil, nil)
   end
   dlg:confirm()
   log(string.format("UI: drew %s at %d,%d size %dx%d%s (editor %s; door on the %s wall)", room_id, x, y, w, h,
