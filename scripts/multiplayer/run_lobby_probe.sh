@@ -138,6 +138,7 @@ echo "Probe output: $out"
 export CORSIXTH_SOURCE="$source_dir"
 export USER="${USER:-corsixth-probe}"
 export SDL_VIDEODRIVER=dummy SDL_AUDIO_DRIVER=dummy SDL_RENDER_DRIVER=software
+export CORSIXTH_MP_KEEP_PLACES=0 # (rooms close once nobody plays, no stand-in bots: run_takeover_probe.sh)
 export MP_LUA_CPATH="$LUASOCKET_TREE/lib/lua/$lua_ver/?.so"
 export MP_LUA_PATH="$LUASOCKET_TREE/share/lua/$lua_ver/?.lua"
 

@@ -99,6 +99,9 @@ STAND_IN_DELAY = float(os.environ.get("CORSIXTH_MP_STAND_IN_DELAY", "20"))
 # Nobody plays any more: the bots stop and the referee holds the game this
 # many seconds for somebody to come back (then the room closes).
 EMPTY_WAIT = float(os.environ.get("CORSIXTH_MP_EMPTY_WAIT", "600"))
+# CORSIXTH_MP_KEEP_PLACES=0: neither (a room closes once nobody plays, as
+# before; the older test scripts expect that).
+KEEP_PLACES = os.environ.get("CORSIXTH_MP_KEEP_PLACES", "1") != "0"
 # The game options the room owner may set (OPTION <name>=<value>): land
 # auctions (1 plots near other hospitals, 2 every plot, 0 off), dirty tricks
 # (in a race; 1 on, unlocked month by month in the first year, 2 on from the
@@ -1914,8 +1917,8 @@ class Server:
             room.rejoin_queue = [p for p in room.rejoin_queue if p != player.peer]
             if player.replaced:
                 return
-            if not player.is_bot and room.humans() and self.referee_config is not None \
-                    and room.referee is not None:
+            if KEEP_PLACES and not player.is_bot and room.humans() and \
+                    self.referee_config is not None and room.referee is not None:
                 # A person: a bot plays their place in a while. (A bot that
                 # stops leaves its place to whoever takes it.)
                 asyncio.get_running_loop().call_later(
@@ -1925,8 +1928,8 @@ class Server:
         if not room.humans():
             # Nobody left to play with the bots: they go too.
             self._stop_bots(room)
-            if room.state == "running" and room.referee is not None and room.referee_token \
-                    and self.rooms.get(room.name) is room:
+            if KEEP_PLACES and room.state == "running" and room.referee is not None \
+                    and room.referee_token and self.rooms.get(room.name) is room:
                 # The game waits for somebody to come back (EMPTY_WAIT).
                 if room.empty_since is None:
                     self._room_emptied(room)
