@@ -2849,11 +2849,19 @@ function M:lackedKind(s, staff)
   end
 end
 
+--! Does it deal with rivals at all? Only in a race where everyone plays
+--! alone: in a race of teams only with its team mates (Jan, 2026-11-12), also
+--! where the game (build 25eb54cb) would let the other team trade.
+local function deals_with_rivals(world)
+  return not (world.mp_coop and world.mp_coop.teams)
+end
+M.dealsWithRivals = deals_with_rivals
+
 --! A rival's offer (Bot:answerOffers): accept it?, and its answer (a line
 --! filled in), or nil for the usual refusal.
 function M:rivalOffer(offer, name)
   local s = self.s
-  if not s then return false end
+  if not s or not deals_with_rivals(self.bot.world) then return false end
   local bot, world = self.bot, self.bot.world
   local L = self.lines
   local function say(set, vars)
@@ -2930,6 +2938,7 @@ end
 function M:askable(s, rivals)
   local world = self.bot.world
   local out = {}
+  if rivals and not deals_with_rivals(world) then return out end
   for index, h in ipairs(world.hospitals) do
     if h ~= s.hosp and not h.mp_place and world:mpMayTrade(s.hosp, h) and world:mpRivals(s.hosp, h) == rivals and
         s.day - (self.player_asked[index] or -999) >= ASK_PLAYER_DAYS then
@@ -3053,6 +3062,7 @@ function M:botRequest(peer, name, text)
   local h = index and world.hospitals[index]
   if not h or h == s.hosp or not world:mpMayTrade(s.hosp, h) then return end
   local rival = world:mpRivals(s.hosp, h)
+  if rival and not deals_with_rivals(world) then return end
   local L = self.lines
   local function reply(set, vars)
     vars = vars or {}

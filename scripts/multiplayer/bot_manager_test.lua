@@ -549,5 +549,8 @@ do
   eq(M.readAsk(lines, "Deal, Bot Clive: my X-Ray research for $3,500. Accept it in your messages."), nil,
       "an answer is no ask")
   eq(M.readAsk(lines, "Hello everybody!"), nil, "small talk is no ask")
+  -- Rivals only in a race where everyone plays alone.
+  eq(M.dealsWithRivals({mp_coop = {competitive = true}}), true, "a race of all against all")
+  eq(M.dealsWithRivals({mp_coop = {competitive = true, teams = {1, 2, 1, 2}}}), false, "a race of teams")
 end
 print("rivals ok")
