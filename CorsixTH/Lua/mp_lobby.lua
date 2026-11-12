@@ -989,6 +989,18 @@ function MultiplayerLobby:_onLEFT(f)
   end
 end
 
+--! A person joined the running game (or came back): the adviser says so,
+--! and the announcer (like "A player has left the game"; Jan, 2026-11-12).
+function MultiplayerLobby:_onARRIVED(f)
+  local session = TheApp and TheApp.mp_session
+  if not (session and session.lobby == self) or self.is_referee or session:isEnding() then return end
+  local S = _S.multiplayer_window
+  session.notify((f.back == "1" and S.player_rejoined_game or S.player_joined_game):format(f.name or "?"))
+  local path = TheApp:getFullPath({"Sounds", "mp_player_joined.wav"})
+  local lfs = require("lfs")
+  if TheApp.audio and lfs.attributes(path, "mode") == "file" then TheApp.audio:playOwnAnnouncement(path) end
+end
+
 function MultiplayerLobby:_onSHOW(f)
   local session = TheApp and TheApp.mp_session
   if not (session and session.lobby == self) then return end

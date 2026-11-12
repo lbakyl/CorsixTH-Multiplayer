@@ -1477,6 +1477,9 @@ def test_join_a_running_game_in_a_bots_place():
         left = await ann.expect("LEFT")
         assert left["peer"] == "2" and left["replaced"] == "1"
         await ann.expect("CHAT", text="Carl takes over Bot Agnes's place")
+        # (Said aloud in the others' games, and by the adviser: Jan.)
+        arrived = await ann.expect("ARRIVED")
+        assert arrived["name"] == "Carl" and "back" not in arrived
         await ann.expect("HOLD")
         ann.send(encode("HELD", step=9))
         await bertie.expect("HOLD")
@@ -1522,6 +1525,7 @@ def test_a_bot_plays_for_a_player_who_left_until_they_come_back(monkeypatch):
         with pytest.raises(ConnectionError):
             await standin.expect("NEVER")
         await ann.expect("CHAT", text="carl is back")
+        assert (await ann.expect("ARRIVED"))["back"] == "1"
         await ann.expect("HOLD")
         ann.send(encode("HELD", step=30))
         await agnes.expect("HOLD")

@@ -952,10 +952,15 @@ class Server:
                       active=",".join(str(p) for p in sorted(room.players)))
         player.send(encode("START", peer=peer, **fields))
         if not player.is_bot:
-            text = (f"{player.name} is back" if before.lower() == player.name.lower()
+            back = before.lower() == player.name.lower()
+            text = (f"{player.name} is back" if back
                     else f"{player.name} takes over {before}'s place" if before
                     else f"{player.name} joined")
             room.broadcast(encode("CHAT", peer=0, name="server", text=text), exclude=player)
+            # The others' games say it aloud and the adviser tells it (Jan,
+            # 2026-11-12: as when a player leaves).
+            room.broadcast(encode("ARRIVED", peer=peer, name=player.name, back=1 if back else None),
+                           exclude=player)
         room.broadcast(self._players_line(room))
         if nobody and not player.is_bot:
             self._revive_bots(room)
