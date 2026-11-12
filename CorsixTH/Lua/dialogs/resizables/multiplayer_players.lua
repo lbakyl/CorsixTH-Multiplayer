@@ -40,7 +40,7 @@ local col = {
 -- (The team has a column of its own, Jan 2026-11-12: "BOT BERTIE (team 2)"
 -- was cut off in the hospital's.)
 local COLUMNS = {
-  {"name", 80}, {"hospital", 100}, {"team", 52}, {"ping", 46}, {"status", 100},
+  {"name", 80}, {"hospital", 100}, {"team", 52}, {"ping", 56}, {"status", 100},
   {"value", 60}, {"balance", 60}, {"reputation", 44}, {"goals", 60},
 }
 local WIDTH = 20 * 2 + (#COLUMNS - 1) * 4
