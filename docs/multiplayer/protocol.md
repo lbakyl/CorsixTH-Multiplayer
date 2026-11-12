@@ -66,7 +66,7 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 | `LOAD step parts peers`, `SAVEDATA d`, `LOADEND step` | the shared save (base64 in `parts` lines); load it and restart at `step` with `peers` |
 | `RESUME step` | play on |
 | `CHAT peer name text [to] [team]` | chat (`peer=0`: a server notice); with `to`, a private line, sent to that player and back to the sender; with `team=1`, a team line, sent to the players in `to` and back to the sender |
-| `PING id` | answer with `PONG id=` (every 2 seconds during a game) |
+| `PING id` | answer with `PONG id=` (every second in the lobby, every 2 seconds during a game); no answer for 20 seconds closes the connection |
 | `PLAYERS n peerI nameI stateI rttI quietI stepI` | every 2 seconds during a game, for MULTIPLAYER > PLAYERS: each player (I = 1..n) with `state` `on` or `left`, the average round trip in ms over the last 10 seconds (`-1`: none), seconds since the server last heard from them, and their last reported step. Older clients ignore it |
 
 ## Pacing
@@ -129,7 +129,19 @@ after `CORSIXTH_MP_STAND_IN_DELAY` seconds (20): the server starts it with
 the room closes; with `CORSIXTH_MP_EMPTY_WAIT` seconds (default 0) the referee
 gets `HOLD why=empty` instead (alone it would run on) and the room waits that
 long: the first person back starts the bots again, and one load gives
-everybody the game. `LOAD` names `bots` (the places
+everybody the game. If the last person's connection was lost (it closed
+without `QUIT` or `LEAVE`, or went silent) the room waits
+`CORSIXTH_MP_DROP_WAIT` seconds (default 300) that way. The game sends `QUIT`
+when it leaves a multiplayer game or closes.
+
+The server closes a person's connection it has heard nothing from (no `PONG`
+to its `PING`s) for `CORSIXTH_MP_SILENT_DROP` seconds (default 20; 0: never),
+as if it had dropped: a connection can die without closing, through a proxy
+say. Somebody who joins a room under the name of a person in it whose
+connection has been silent for 5 seconds is that person, back: in a room
+waiting in the lobby they get the place (its colour, team and the room, if
+it was theirs), in a running game the hospital, at once; the silent
+connection is closed. `LOAD` names `bots` (the places
 the room's own bots play: their hospitals get the hidden bonus) and
 `standins` (their hospitals count as away; no hold waits for them), so every
 game marks the same hospitals. `ROOM` has `places` for a running room (how

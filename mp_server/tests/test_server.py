@@ -1522,11 +1522,11 @@ def test_a_bot_plays_for_a_player_who_left_until_they_come_back(monkeypatch):
 
 def test_an_empty_game_waits_and_the_bots_come_back(monkeypatch):
     monkeypatch.setattr(srv, "STAND_IN_DELAY", 30.0)
-    monkeypatch.setattr(srv, "EMPTY_WAIT", 600.0)
 
     async def body(server, port, bots, referees):
         ann, (agnes, bertie), ref = await race_with_bots(server, port, bots, referees)
-        # The last person leaves: the bots stop, the referee holds the game.
+        # The last person's connection drops (no QUIT): the bots stop, the
+        # referee holds the game (DROP_WAIT).
         await ann.close()
         for c in (agnes, bertie):
             with pytest.raises(ConnectionError):
@@ -1559,7 +1559,7 @@ def test_an_empty_game_waits_and_the_bots_come_back(monkeypatch):
 
 
 def test_an_empty_game_closes_when_nobody_comes_back(monkeypatch):
-    monkeypatch.setattr(srv, "EMPTY_WAIT", 0.2)
+    monkeypatch.setattr(srv, "DROP_WAIT", 0.2)
 
     async def body(server, port, bots, referees):
         ann, conns, ref = await race_with_bots(server, port, bots, referees, n_bots=1)
@@ -1621,10 +1621,90 @@ def test_bot_levels_easy_and_hard():
 def test_an_empty_game_closes_at_once_by_default():
     async def body(server, port, bots, referees):
         ann, conns, ref = await race_with_bots(server, port, bots, referees, n_bots=1)
+        # The last person leaves the game (QUIT, as the game says goodbye).
+        ann.send(encode("QUIT"))
         await ann.close()
         for _ in range(100):
             if "race" not in server.rooms:
                 break
             await asyncio.sleep(0.02)
         assert "race" not in server.rooms
+    run_with_bots(body, with_referees=True)
+
+
+def test_a_silent_connection_is_closed(run, monkeypatch):
+    # (Jan, 2026-11-12: a connection through a proxy died without closing.)
+    monkeypatch.setattr(srv, "SILENT_DROP", 0.5)
+    monkeypatch.setattr(srv, "PING_INTERVAL_LOBBY", 0.1)
+
+    async def body(server, port):
+        a, b = await two_players_in_room(port)
+        # Alice answers no PING any more (her game is gone, the connection
+        # not): she leaves, Bob owns the room.
+        await b.expect("CHAT", text="Alice left")
+        await b.expect("OWNER")
+        assert [p.name for p in server.rooms["r1"].players.values()] == ["Bob"]
+        while await asyncio.wait_for(a.reader.readline(), 3):
+            pass  # (the PINGs she never read, then the end)
+    run(body)
+
+
+def test_a_returning_name_takes_its_silent_place_in_the_room(run, monkeypatch):
+    monkeypatch.setattr(srv, "RECLAIM_SILENT", 0.2)
+    monkeypatch.setattr(srv, "SILENT_DROP", 60.0)
+
+    async def body(server, port):
+        a = await Client.connect(port, "Alice")
+        b = await Client.connect(port, "Bob")
+        a.send(encode("CREATE", room="r1", password="", max=3, mode="competitive", level=1))
+        await a.expect("JOINED")
+        b.send(encode("JOIN", room="r1", password=""))
+        await b.expect("JOINED")
+        colour = server.rooms["r1"].players[1].colour
+        # Alice's connection goes silent; she connects again and joins:
+        # her own place, colour and the room at once.
+        await asyncio.sleep(0.4)
+        a2 = await Client.connect(port, "alice")
+        a2.send(encode("JOIN", room="r1", password=""))
+        joined = await a2.expect("JOINED")
+        assert joined["peer"] == "1" and joined["owner"] == "1"
+        await b.expect("CHAT", text="alice is back")
+        room = server.rooms["r1"]
+        assert room.owner.name == "alice" and room.players[1].colour == colour
+        assert sorted(room.players) == [1, 2]
+        while await asyncio.wait_for(a.reader.readline(), 3):
+            pass
+        # A name whose connection is alive is somebody else: a new place.
+        # (Bob answers the PINGs, once a second: alive within 5 s.)
+        monkeypatch.setattr(srv, "RECLAIM_SILENT", 5.0)
+        b2 = await Client.connect(port, "Bob")
+        b2.send(encode("JOIN", room="r1", password=""))
+        assert (await b2.expect("JOINED"))["peer"] == "3"
+    run(body)
+
+
+def test_a_returning_name_takes_its_silent_place_in_a_running_game(monkeypatch):
+    monkeypatch.setattr(srv, "RECLAIM_SILENT", 0.2)
+    monkeypatch.setattr(srv, "SILENT_DROP", 60.0)
+
+    async def body(server, port, bots, referees):
+        ann, (agnes, bertie), ref = await race_with_bots(server, port, bots, referees)
+        # Ann's connection goes silent (the server still counts her in); she
+        # connects again: her place at once, as a bot's is taken; the bots
+        # play on.
+        await asyncio.sleep(0.4)
+        ann2 = await Client.connect(port, "Ann")
+        ann2.send(encode("JOIN", room="race", password=""))
+        joined = await ann2.expect("JOINED")
+        assert joined["peer"] == "1" and joined["owner"] == "1"
+        await ann2.expect("START")
+        await agnes.expect("CHAT", text="Ann is back")
+        await agnes.expect("HOLD")
+        agnes.send(encode("HELD", step=9))
+        await bertie.expect("HOLD")
+        bertie.send(encode("HELD", step=9))
+        await load_for([ann2, agnes, bertie], ref, 9, peers="1,2,3", bots="2,3")
+        assert len(bots) == 2 and server.rooms["race"].owner is server.rooms["race"].players[1]
+        while await asyncio.wait_for(ann.reader.readline(), 3):
+            pass
     run_with_bots(body, with_referees=True)

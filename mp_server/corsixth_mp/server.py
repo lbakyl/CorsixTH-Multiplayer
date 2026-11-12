@@ -104,6 +104,18 @@ STAND_IN_DELAY = float(os.environ.get("CORSIXTH_MP_STAND_IN_DELAY", "20"))
 # empty rooms stayed in the list). CORSIXTH_MP_EMPTY_WAIT > 0: the referee
 # holds the game that many seconds for somebody to come back first.
 EMPTY_WAIT = float(os.environ.get("CORSIXTH_MP_EMPTY_WAIT", "0"))
+# ... unless the last person lost the connection (it closed without QUIT or
+# LEAVE, or went silent): then the game waits this long for them (Jan,
+# 2026-11-12: his connection dropped, and his game with the bots was gone).
+DROP_WAIT = float(os.environ.get("CORSIXTH_MP_DROP_WAIT", "300"))
+# A person's connection that answers no PING (every 1-2 s) for this long is
+# closed, as if it had dropped (Jan, 2026-11-12: a connection through a proxy
+# died without closing; his old self stayed in the room as its owner, and
+# he could not take his place back). 0: never.
+SILENT_DROP = float(os.environ.get("CORSIXTH_MP_SILENT_DROP", "20"))
+# Somebody joins a room under the name of a person in it whose connection
+# has been silent this long: it is them, back; they get that place at once.
+RECLAIM_SILENT = 5.0
 # CORSIXTH_MP_KEEP_PLACES=0: neither (a room closes once nobody plays, as
 # before; the older test scripts expect that).
 KEEP_PLACES = os.environ.get("CORSIXTH_MP_KEEP_PLACES", "1") != "0"
@@ -175,6 +187,10 @@ class Player:
     next_ping_id: int = 1
     last_step: int = 0
     closed: bool = False
+    # QUIT or LEAVE: they left on purpose (else the connection was lost);
+    # gone: they have left the server (_disconnect ran).
+    said_goodbye: bool = False
+    gone: bool = False
     is_referee: bool = False
     is_bot: bool = False
     bot_proc: object = None
@@ -524,6 +540,10 @@ class Server:
                 await asyncio.sleep(PING_INTERVAL_GAME if running else PING_INTERVAL_LOBBY)
                 if not player.name:
                     continue
+                if SILENT_DROP > 0 and not player.is_bot and not player.is_referee and \
+                        time.monotonic() - player.last_heard > SILENT_DROP:
+                    self._close_silent(player, f"nothing heard for {SILENT_DROP:g} s")
+                    return
                 pid = player.next_ping_id
                 player.next_ping_id += 1
                 player.pings[pid] = time.monotonic()
@@ -768,12 +788,33 @@ class Server:
                         f"The room runs build {room.build}; you run {player.build}")
         elif room.kicked.get(player.name.lower(), 0.0) > time.monotonic():
             self._error(player, "kicked", "The room's owner removed you from this room a moment ago")
-        elif room.state != "lobby":
-            self._join_running(player, room, f.get("seat", ""))
-        elif room.is_full():
-            self._error(player, "room_full", "The room is full")
         else:
-            self._add_to_room(player, room)
+            # A person in the room under this name whose connection went
+            # silent (it died without closing): the newcomer is them, back.
+            old = self._silent_namesake(room, player)
+            if room.state != "lobby":
+                if old is not None and room.referee is not None and room.referee_token:
+                    # (Their place at once, as a bot's is taken: the game and
+                    # its bots go on.)
+                    self._take_seat(player, room, old.peer)
+                    self._close_silent(old, f"silent; {player.name!r} is back in room {room.name!r}")
+                    return
+                self._join_running(player, room, f.get("seat", ""))
+            elif old is not None:
+                self._add_to_room(player, room, place=old)
+            elif room.is_full():
+                self._error(player, "room_full", "The room is full")
+            else:
+                self._add_to_room(player, room)
+
+    @staticmethod
+    def _silent_namesake(room: Room, player: Player) -> Player | None:
+        now = time.monotonic()
+        for p in room.players.values():
+            if p is not player and not p.is_bot and not p.is_referee and \
+                    p.name.lower() == player.name.lower() and now - p.last_heard >= RECLAIM_SILENT:
+                return p
+        return None
 
     # ----------------------------------------------- a running game's places
 
@@ -1001,9 +1042,9 @@ class Server:
         step = max([p.last_step for p in room.players.values()] + [0])
         self._start_recovery(room, step, rejoining=newcomers)
 
-    def _room_emptied(self, room: Room) -> None:
+    def _room_emptied(self, room: Room, wait: float) -> None:
         """Nobody plays a running game any more: the referee holds it (alone
-        it would run on), and the room waits EMPTY_WAIT for somebody."""
+        it would run on), and the room waits `wait` seconds for somebody."""
         room.empty_since = time.monotonic()
         room.ended_at = time.time()
         room.recovery = None
@@ -1011,8 +1052,8 @@ class Server:
         assert room.referee is not None
         room.referee.send(encode("HOLD", step=room.verified_step, why="empty"))
         log.info("room %r: nobody plays; the game waits %d s for somebody to take a place",
-                 room.name, EMPTY_WAIT)
-        asyncio.get_running_loop().call_later(EMPTY_WAIT, self._empty_timeout, room,
+                 room.name, wait)
+        asyncio.get_running_loop().call_later(wait, self._empty_timeout, room,
                                               room.empty_since)
 
     def _empty_timeout(self, room: Room, since: float) -> None:
@@ -1029,12 +1070,26 @@ class Server:
             log.info("room %r: referee confirmed steps through %d", room.name, room.verified_step)
         log.info("room %r closed", room.name)
 
-    def _add_to_room(self, player: Player, room: Room, ready: bool = False) -> None:
-        peer = room.free_peer()
-        assert peer is not None
+    def _add_to_room(self, player: Player, room: Room, ready: bool = False,
+                     place: Player | None = None) -> None:
+        """`player` joins a room waiting in the lobby; place: a person in it
+        whose connection went silent, under the same name: their place (peer,
+        colour, team and the room if it was theirs) is the newcomer's, and
+        the old connection is closed."""
+        if place is None:
+            peer = room.free_peer()
+            assert peer is not None
+        else:
+            peer = place.peer
+            room.players.pop(peer, None)
+            place.room = None
+            player.colour, player.team = place.colour, place.team
+            if room.owner is place:
+                room.owner = player
         player.room, player.peer, player.ready = room, peer, ready
         room.players[peer] = player
-        room.seat_newcomer(player)
+        if place is None:
+            room.seat_newcomer(player)
         player.send(encode("JOINED", room=room.name, peer=peer, owner=room.owner is player,
                            mode=room.current_mode(), free=1 if room.mode == "free" else None,
                            level=room.level, difficulty=room.difficulty,
@@ -1042,9 +1097,12 @@ class Server:
                            date=room.continue_date if room.continue_step is not None else None,
                            bots=1 if self.referee_config is not None else None,
                            **{"continue": 1 if room.continue_step is not None else None}))
-        room.broadcast(encode("CHAT", peer=0, name="server", text=f"{player.name} joined"),
+        room.broadcast(encode("CHAT", peer=0, name="server",
+                              text=f"{player.name} {'joined' if place is None else 'is back'}"),
                        exclude=player)
         self._send_lobby(room)
+        if place is not None:
+            self._close_silent(place, f"silent; {player.name!r} is back in room {room.name!r}")
 
     def _on_leave(self, player: Player, f: dict[str, str]) -> None:
         self._leave_room(player)
@@ -1912,7 +1970,10 @@ class Server:
 
     # ------------------------------------------------------------ departures
 
-    def _leave_room(self, player: Player) -> None:
+    def _leave_room(self, player: Player, lost: bool = False) -> None:
+        """`player` leaves their room; lost: a person's connection was lost
+        (no QUIT or LEAVE): a running game they were the last person in
+        waits DROP_WAIT for them, not EMPTY_WAIT."""
         room = player.room
         if room is None:
             return
@@ -1964,11 +2025,14 @@ class Server:
         if not room.humans():
             # Nobody left to play with the bots: they go too.
             self._stop_bots(room)
-            if KEEP_PLACES and EMPTY_WAIT > 0 and room.state == "running" and \
-                    room.referee is not None and room.referee_token and self.rooms.get(room.name) is room:
-                # The game waits for somebody to come back (EMPTY_WAIT).
+            wait = DROP_WAIT if lost else EMPTY_WAIT
+            if KEEP_PLACES and (wait > 0 or room.empty_since is not None) and \
+                    room.state == "running" and room.referee is not None and room.referee_token and \
+                    self.rooms.get(room.name) is room:
+                # The game waits for somebody to come back (the bots that
+                # stop leave after this; the room stays).
                 if room.empty_since is None:
-                    self._room_emptied(room)
+                    self._room_emptied(room, wait)
                 return
         if not room.players:
             if self.rooms.get(room.name) is room:
@@ -2028,11 +2092,28 @@ class Server:
             self._cancel_pending(room, token)
 
     def _disconnect(self, player: Player) -> None:
-        self._leave_room(player)
+        if player.gone:
+            return
+        player.gone = True
+        # (Without QUIT: a person's connection was lost; they may come back.)
+        lost = not player.said_goodbye and not player.is_bot and not player.is_referee
+        self._leave_room(player, lost=lost)
         self.players.pop(player.pid, None)
-        log.info("player %d (%r) disconnected", player.pid, player.name)
+        log.info("player %d (%r) disconnected%s", player.pid, player.name,
+                 " (no QUIT: connection lost)" if lost else "")
+
+    def _close_silent(self, player: Player, why: str) -> None:
+        """A person's connection that died without closing (nothing heard):
+        they leave as if it had dropped, and it is cut."""
+        log.info("player %d (%r): %s; connection closed", player.pid, player.name, why)
+        self._disconnect(player)
+        player.closed = True
+        transport = player.writer.transport
+        if transport is not None:
+            transport.abort()
 
     def _on_quit(self, player: Player, f: dict[str, str]) -> None:
+        player.said_goodbye = True
         player.closed = True
 
 
