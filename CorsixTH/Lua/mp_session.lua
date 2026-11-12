@@ -3841,7 +3841,10 @@ end
 
 --! Why `plot` is not empty: "plot not empty" (a room, or an object other than
 --! litter and rat holes), "people on the plot", or nil when it is empty.
-function MultiplayerSession.plotNotEmpty(world, plot)
+--!param people_ok (bool) optional; people on it or walking over it do not
+--! count (a plot handed to an ally stays land to walk on; whoever walks into
+--! the fence it gets along its edge finds another way: walk.lua)
+function MultiplayerSession.plotNotEmpty(world, plot, people_ok)
   local th = world.map.th
   local tiles = MultiplayerSession.plotTiles(th, plot)
   local flags = {}
@@ -3867,7 +3870,7 @@ function MultiplayerSession.plotNotEmpty(world, plot)
       end
     end
   end
-  if person_on_plot(world, plot) then return "people on the plot" end
+  if not people_ok and person_on_plot(world, plot) then return "people on the plot" end
   return nil
 end
 
@@ -3910,13 +3913,16 @@ end
 --! is on", "plot not empty", "people on the plot", "joins your land".
 --!param answering (bool) optional; an offer being answered (an auction going
 --! on does not matter then: it would only void the offer)
-function MultiplayerSession.plotRefusal(world, hospital, plot, answering)
+--!param giving (bool) optional; handed to an ally, not sold: people walking
+--! over it do not matter (Jan, 2026-11-12: a plot people cross all the time
+--! could never be handed over). A plot sold goes back to grass: nobody on it.
+function MultiplayerSession.plotRefusal(world, hospital, plot, answering, giving)
   local th = world.map.th
   if not plot or plot < 1 or plot > th:getPlotCount() then return "no such plot" end
   if th:getPlotOwner(plot) ~= hospital:getPlayerIndex() then return "not your plot" end
   if MultiplayerSession.isStartingPlot(world, plot) then return "starting plot" end
   if world.mp_auction and not answering then return "an auction is on" end
-  local why = MultiplayerSession.plotNotEmpty(world, plot)
+  local why = MultiplayerSession.plotNotEmpty(world, plot, giving)
   if why then return why end
   if not land_stays_whole(world, hospital, plot) then return "joins your land" end
   return nil
@@ -4053,7 +4059,7 @@ function handlers.offer_plot(world, cmd)
   local price = math.floor(tonumber(cmd.price) or 0)
   if price < 0 or price > MultiplayerSession.PLOT_MAX_PRICE then return false, "invalid price" end
   local plot = math.floor(tonumber(cmd.plot) or 0)
-  local why = MultiplayerSession.plotRefusal(world, from, plot)
+  local why = MultiplayerSession.plotRefusal(world, from, plot, nil, true)
   if not why then why = MultiplayerSession.plotHandoverRefusal(world, to, plot) end
   if not why and plot_offer_pending(world, plot) then why = "already offered" end
   if why then return false, why end
@@ -4096,7 +4102,7 @@ function MultiplayerSession.resolvePlotOffer(world, offer, from, to, accept)
     MultiplayerSession.tellPlayer(world, from, S.plot_offer_declined_note:format(to.name, plot))
     return
   end
-  local why = MultiplayerSession.plotRefusal(world, from, plot, true)
+  local why = MultiplayerSession.plotRefusal(world, from, plot, true, true)
   if not why then why = MultiplayerSession.plotHandoverRefusal(world, to, plot) end
   if why then
     log("void: " .. why)

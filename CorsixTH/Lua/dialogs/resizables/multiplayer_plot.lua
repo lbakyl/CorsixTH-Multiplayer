@@ -142,7 +142,7 @@ end
 function UIMultiplayerGivePlot:give()
   local session = TheApp.mp_session
   if not session or not self.target then return end
-  local why = MultiplayerSession.plotRefusal(self.world, self.hospital, self.plot) or
+  local why = MultiplayerSession.plotRefusal(self.world, self.hospital, self.plot, nil, true) or
       MultiplayerSession.plotHandoverRefusal(self.world, self.target, self.plot)
   if why then
     local texts = MultiplayerSession.rejection_texts.offer_plot
@@ -161,7 +161,7 @@ end
 --! over now (it is not empty, ...).
 function UIMultiplayerGivePlot.open(ui, plot)
   local world = ui.app.world
-  local why = MultiplayerSession.plotRefusal(world, ui.hospital, plot)
+  local why = MultiplayerSession.plotRefusal(world, ui.hospital, plot, nil, true)
   if why then
     local texts = MultiplayerSession.rejection_texts.offer_plot
     ui:addWindow(UIInformation(ui, {texts[why] or ("That plot cannot be handed over now (" .. why .. ").")}))

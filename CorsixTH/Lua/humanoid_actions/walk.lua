@@ -227,6 +227,14 @@ local action_walk_tick; action_walk_tick = permanent"action_walk_tick"( function
   map:getCellFlags(x2, y2, flags_there)
   local avoid = (not flags_here.avoidTile) and flags_there.avoidTile
   local not_passable = flags_here.passable and (not flags_there.passable)
+  -- ... or a wall now stands between the two tiles (a route only crosses a
+  -- tile's side without one): in multiplayer, the fence along a plot handed
+  -- to another hospital.
+  if not not_passable and flags_here.passable and flags_there.passable then
+    local side = x2 > x1 and "travelEast" or x2 < x1 and "travelWest" or
+        y2 > y1 and "travelSouth" or "travelNorth"
+    not_passable = not flags_here[side]
+  end
   -- Avoided tiles (a room being drawn) only cost the pathfinder more. If the
   -- new route after the last restart steps onto the same avoided tile, it is
   -- the only way: walk on, or this would restart forever within one tick.

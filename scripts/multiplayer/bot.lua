@@ -1643,7 +1643,7 @@ function Bot:plotWaitTick()
   local w = self.plot_wait
   if not w or not self.manager then return end
   local world = self.world
-  local why = MultiplayerSession.plotRefusal(world, world.ui.hospital, w.plot)
+  local why = MultiplayerSession.plotRefusal(world, world.ui.hospital, w.plot, nil, true)
   local to = world.hospitals[w.to]
   if not why and to and MultiplayerSession.plotHandoverRefusal then
     why = MultiplayerSession.plotHandoverRefusal(world, to, w.plot)
