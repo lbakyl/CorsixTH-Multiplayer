@@ -20,9 +20,10 @@ SOFTWARE. --]]
 
 corsixth.require("mp_lobby")
 
---! Multiplayer lobby window, opened from the main menu. Shows one of three
+--! Multiplayer lobby window, opened from the main menu. Shows one of four
 --! views depending on the lobby state: connect to a server, pick or create a
---! room, or wait in a room until the host starts the game.
+--! room, a running game's places to take, or wait in a room until the host
+--! starts the game.
 class "UIMultiplayer" (UIResizable)
 
 ---@class UIMultiplayer: UIResizable
@@ -47,10 +48,12 @@ local ROOMS_REFRESH_MS = 3000
 local function view_of(lobby)
   if not lobby or lobby.state == "closed" or lobby.state == "connecting" then return "connect" end
   if lobby.state == "in_room" then return "room" end
+  if lobby.seat_choice then return "seats" end
   return "rooms"
 end
 
-local heights = {connect = 225, rooms = 435, room = 295}
+-- (The places view: a line more for each place, as the room view.)
+local heights = {connect = 225, rooms = 435, room = 295, seats = 185}
 -- The room view has a line per place: 4 in that height, 27 pixels more for
 -- each more (a room for up to 8).
 local PLACE_H = 27
@@ -70,6 +73,9 @@ end
 
 --! The height of a view of the window.
 local function viewHeight(view, lobby)
+  if view == "seats" then
+    return heights.seats + #lobby.seat_choice.seats * PLACE_H
+  end
   return heights[view] + (view == "room" and (placesOf(lobby) - 4) * PLACE_H or 0)
 end
 
@@ -100,6 +106,8 @@ function UIMultiplayer:UIMultiplayer(ui, status)
     title = S.caption
   elseif self.view == "rooms" then
     title = S.rooms_caption:format(lobby.address)
+  elseif self.view == "seats" then
+    title = S.seats_caption:format(lobby.seat_choice.room)
   else
     title = S.room_caption:format(lobby.room.room)
   end
@@ -109,13 +117,15 @@ function UIMultiplayer:UIMultiplayer(ui, status)
     self:_buildConnect()
   elseif self.view == "rooms" then
     self:_buildRooms()
+  elseif self.view == "seats" then
+    self:_buildSeats()
   else
     self:_buildRoom()
   end
   -- A line for messages (connecting, errors), shown only while it has one;
   -- in a room they go on the hint's line instead (UIMultiplayer:_updateRoom).
   if self.view ~= "room" then
-    self.status_panel = self:addBevelPanel(20, heights[self.view] - 75, WIDTH - 40, 20, col.bg)
+    self.status_panel = self:addBevelPanel(20, viewHeight(self.view, lobby) - 75, WIDTH - 40, 20, col.bg)
     self.status_panel.lowered = true
     self:setStatus(self.status_text)
   end
@@ -298,8 +308,14 @@ function UIMultiplayer:_updateRooms()
   local lines = {}
   for i = 1, math.min(ROOM_ROWS, #rooms) do
     local r = rooms[i]
+    -- (A running game: how many places a newcomer may take, where the mode
+    -- would be; the places view names the mode.)
+    local mode = MultiplayerLobby.modeLabel(r.mode)
+    if r.state == "running" then
+      mode = r.places and S.running_places:format(tonumber(r.places) or 0) or S.running_flag
+    end
     lines[i] = S.room_line:format(r.room, tonumber(r.players) or 0, tonumber(r.max) or 0,
-        MultiplayerLobby.modeLabel(r.mode), r.level or "?",
+        mode, r.level or "?",
         (r.locked == "1" and S.locked or "") .. (r.build_ok == "0" and S.other_build or "") ..
         (r["continue"] == "1" and S.saved_flag or ""))
   end
@@ -453,6 +469,57 @@ function UIMultiplayer:buttonDisconnect()
   last_room_form = nil
   self.lobby:disconnect()
   self:rebuild()
+end
+
+-- Places view ---------------------------------------------------------------
+-- A running game's places (MultiplayerLobby:_onSEATS): each with its colour
+-- and team; a click takes the place of a bot, or of a player who left.
+-- The team, colour and options stay as the game started with them.
+
+function UIMultiplayer:_buildSeats()
+  local S = _S.multiplayer_window
+  local choice = self.lobby.seat_choice
+  local seats = choice.seats
+  -- The game's mode and level (from the room list), then what to do.
+  label(self, 20, 40, WIDTH - 40, MultiplayerLobby.modeLabel(choice.mode) ..
+      (choice.level and (", " .. S.level:format(tonumber(choice.level) or 1)) or ""))
+  label(self, 20, 70, WIDTH - 40, S.seats_hint)
+  local colour_w, team_w = 30, 70
+  local line_w = WIDTH - 40 - colour_w - team_w - 10
+  for i, s in ipairs(seats) do
+    local y = 100 + (i - 1) * PLACE_H
+    local text = (s.state == "on" and S.seat_on or s.state == "bot" and S.seat_bot or
+        s.state == "standin" and S.seat_standin or S.seat_left):format(s.name)
+    local row = self:addBevelPanel(20, y, line_w, 25, col.setting):setLabel(text)
+        :makeButton(0, 0, line_w, 25, nil, function() self:clickSeat(i) end)
+    row:enable(s.state ~= "on")
+    if s.colour then
+      -- (As the room view's colour buttons, fixed.)
+      local rgb = MultiplayerSession.colourRGB(s.colour)
+      local swatch = self:addBevelPanel(WIDTH - 20 - team_w - 5 - colour_w, y, colour_w, 25, col.button)
+          :makeButton(0, 0, colour_w, 25, nil, function() end)
+      local panel = swatch.panel_for_sprite
+      panel:setColour({red = rgb[1], green = rgb[2], blue = rgb[3]})
+      panel.disabled_colour = panel.colour
+      swatch:enable(false)
+      if S.colour_names[s.colour] then swatch:setTooltip(S.colour_names[s.colour]) end
+    end
+    if s.team then
+      label(self, WIDTH - 20 - team_w, y, team_w, S.team_button:format(s.team))
+    end
+  end
+  button(self, 20, viewHeight("seats", self.lobby) - 45, 180, S.back, self.buttonSeatsBack)
+end
+
+function UIMultiplayer:clickSeat(i)
+  local choice = self.lobby.seat_choice
+  local s = choice and choice.seats[i]
+  if not s or s.state == "on" then return end
+  self.lobby:joinRoom(choice.room, choice.password, s.peer)
+end
+
+function UIMultiplayer:buttonSeatsBack()
+  self.lobby:cancelSeats()
 end
 
 -- Room view -------------------------------------------------------------------

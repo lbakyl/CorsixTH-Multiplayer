@@ -214,8 +214,9 @@ function MultiplayerSession:poll()
 end
 
 --! Stop waiting for a peer that left the game. Its commands already received
---! are still applied: they are for steps nobody has run yet.
-function MultiplayerSession:removePeer(peer)
+--! are still applied: they are for steps nobody has run yet. (replaced:
+--! somebody takes its place at once; its hospital is not away.)
+function MultiplayerSession:removePeer(peer, replaced)
   self.peer_step[peer] = nil
   for _, fps in pairs(self.peer_fps) do fps[peer] = nil end
   local remaining = {}
@@ -225,7 +226,7 @@ function MultiplayerSession:removePeer(peer)
   self.peers = remaining
   self.log(string.format("peer %d left after step %d", peer, self.step))
   self:takeOverRooms(self.world, peer)
-  self:_markPlayerAway(peer)
+  if not replaced then self:_markPlayerAway(peer) end
   -- The outline they were drawing goes with them.
   if self.remote_blueprints and self.remote_blueprints[peer] then self:showRemoteBlueprint(peer, nil) end
 end
@@ -348,10 +349,18 @@ end
 --! sets the speed at once.
 function MultiplayerSession:voterCount()
   local players = self.lobby and self.lobby.players or {}
+  -- (Who is a bot now: the server's list of the running game, PLAYERS; a
+  -- place may have changed hands since the room's list.)
+  local bot_now = {}
+  for _, p in ipairs(self.lobby and self.lobby.game_players or {}) do
+    bot_now[p.peer] = p.bot
+  end
   local n = 0
   for _, p in ipairs(self.peers or {}) do
     local player = players[p]
-    if p ~= 0 and not (player and player.bot == "1") then n = n + 1 end
+    local bot = bot_now[p]
+    if bot == nil then bot = player ~= nil and player.bot == "1" end
+    if p ~= 0 and not bot then n = n + 1 end
   end
   return n
 end
@@ -1564,6 +1573,10 @@ end
 --! editor's walls (rect.walls), shown until it is removed, and the editor
 --! waiting for the room (rect.editor), closed then.
 function MultiplayerSession:showRemoteBlueprint(peer, rect)
+  -- (A player joining a running game has no world until the shared save is
+  -- loaded; the outline comes again with the next change. It stopped the
+  -- game of a player taking a bot's place in a test, 2026-11-12.)
+  if not self.world then return end
   local old = self.remote_blueprints[peer]
   if old then
     paint_rect(self.world, old, 0)
@@ -4119,6 +4132,7 @@ MultiplayerSession.HOLD_SECONDS = {year = 180, win = 300}
 function MultiplayerSession.startHold(world, kind, msg_id, only)
   local count = world.mp_coop and world.mp_coop.players or 1
   local bots = world.mp_coop and world.mp_coop.bot_hospitals or {}
+  local standins = world.mp_coop and world.mp_coop.standin_hospitals or {}
   local hold = world.mp_hold
   if not hold then
     world.mp_hold_count = (world.mp_hold_count or 0) + 1
@@ -4130,7 +4144,9 @@ function MultiplayerSession.startHold(world, kind, msg_id, only)
   end
   for i = 1, count do
     local h = world.hospitals[i]
-    if h and not h.mp_player_away and not bots[i] and (not only or only == i) then hold.waiting[i] = true end
+    if h and not h.mp_player_away and not bots[i] and not standins[i] and (not only or only == i) then
+      hold.waiting[i] = true
+    end
   end
   if msg_id then hold.msgs[#hold.msgs + 1] = msg_id end
   if next(hold.waiting) then world.mp_hold = hold end
@@ -4163,9 +4179,10 @@ function MultiplayerSession:tickHold()
     -- bots play now: a hold saved before a game was continued with bots in
     -- people's places waited for them, Jan on eu2.)
     local bots = world.mp_coop and world.mp_coop.bot_hospitals or {}
+    local standins = world.mp_coop and world.mp_coop.standin_hospitals or {}
     for i in pairs(hold.waiting) do
       local h = world.hospitals[i]
-      if not h or h.mp_player_away or bots[i] then hold.waiting[i] = nil end
+      if not h or h.mp_player_away or bots[i] or standins[i] then hold.waiting[i] = nil end
     end
     -- (A win fax: over once it is answered, handlers.fax_choice; not from
     -- the message bar, which is each player's own screen.)

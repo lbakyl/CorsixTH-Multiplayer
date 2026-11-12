@@ -119,12 +119,16 @@ function UIMultiplayerPlayers.rows(lobby, session, world)
     local status
     if not p.connected then
       status = S.players_left
+    elseif p.standin then
+      status = S.players_standin -- (a bot plays for them until they come back)
     elseif p.quiet >= QUIET_SECONDS then
       status = S.players_quiet:format(p.quiet)
     elseif newest - p.step > BEHIND_STEPS then
       status = S.players_behind:format(newest - p.step)
     elseif session and p.peer == session.peer_id then
       status = S.players_you
+    elseif p.bot then
+      status = S.players_bot
     else
       status = S.players_playing
     end

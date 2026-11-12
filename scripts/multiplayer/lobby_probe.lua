@@ -10,6 +10,8 @@
 --   MP_NAME           player name
 --   MP_ROOM, MP_PASSWORD  room to create or join         (default probe / secret)
 --   MP_JOIN_PASSWORD  password the joiner types (default MP_PASSWORD)
+--   MP_TAKE_SEAT      join a running game in this place (peer number) from the
+--                     list of places it shows (a bot's, or a player's who left)
 --   MP_PLAYERS        players the host waits for         (default 2)
 --   MP_COOP           1: the host creates a co-op room (a hospital each)
 --   MP_ADD_BOTS       the host clicks this many empty places in the room to
@@ -122,7 +124,8 @@ local start_pause = tonumber(os.getenv("MP_START_PAUSE") or "") or 0
 -- With the server's referee a desync is repaired: keep playing through it.
 local expect_repair = os.getenv("MP_EXPECT_REPAIR") == "1"
 -- Join a running game again (this name left it earlier).
-local rejoin = os.getenv("MP_REJOIN") == "1"
+local take_seat = tonumber(os.getenv("MP_TAKE_SEAT") or "")
+local rejoin = os.getenv("MP_REJOIN") == "1" or take_seat ~= nil
 -- MP_AUTO_ROOMS=1: a joining player types the password first and never
 -- clicks Refresh; the room list must show the room by itself.
 local auto_rooms = os.getenv("MP_AUTO_ROOMS") == "1"
@@ -439,6 +442,15 @@ local function run_lobby()
       end
       return n >= want_players and ready and lobby.summary ~= nil
     end, 60)
+    -- MP_COLOURS: "peer:colour,..." the host gives those places these
+    -- hospital colours (1-8; the shirts of 5 to 8 are recoloured ones).
+    for peer, colour in (os.getenv("MP_COLOURS") or ""):gmatch("(%d+):(%d+)") do
+      peer, colour = tonumber(peer), tonumber(colour)
+      lobby:setSeat(colour, nil, peer ~= 1 and peer or nil)
+      wait_for("colour " .. colour .. " for place " .. peer, function()
+        return lobby.players[peer] and tonumber(lobby.players[peer].colour) == colour
+      end, 15)
+    end
     if room_mode == "teamshared" and not os.getenv("MP_CONTINUE") then
       -- A hospital per team: everybody takes their team's colour (the
       -- teams as they are now; the host may change anybody's).
@@ -539,8 +551,25 @@ local function run_lobby()
     if not auto_rooms then w.password_box:setText(join_password) end
     w:buttonJoin()
     wait_for("joining", function()
-      return lobby.state == "in_room" or lobby.state == "in_game" or lobby.error ~= nil
+      return lobby.state == "in_room" or lobby.state == "in_game" or lobby.error ~= nil or
+          lobby.seat_choice ~= nil
     end)
+    if lobby.seat_choice and lobby.state ~= "in_room" and lobby.state ~= "in_game" then
+      -- A running game: its places; this player takes MP_TAKE_SEAT's.
+      wait_for("the places", function() return lobby_window() and lobby_window().view == "seats" end, 10)
+      local parts, seat_index = {}, nil
+      for i, s in ipairs(lobby.seat_choice.seats) do
+        parts[#parts + 1] = string.format("%d:%s:%s:%s:%s", s.peer, s.name, s.state, tostring(s.colour),
+            tostring(s.team))
+        if s.peer == take_seat then seat_index = i end
+      end
+      log("UI: places " .. table.concat(parts, ", "))
+      shot("lobby-places")
+      lobby_window():clickSeat(assert(seat_index, "no place " .. tostring(take_seat)))
+      wait_for("taking the place", function()
+        return lobby.state == "in_room" or lobby.state == "in_game" or lobby.error ~= nil
+      end)
+    end
     if lobby.state ~= "in_room" and lobby.state ~= "in_game" then
       log("JOIN REFUSED: " .. tostring(lobby.error.code))
       return nil
@@ -1334,6 +1363,29 @@ local function run()
         elseif a == "emergency" then
           session:issue({kind = "probe_emergency", target = tonumber(entry.arg) or 1})
           log("UI: asked for an emergency at step " .. session.step)
+        elseif a == "queueshot" then
+          -- The queue window of the longest queue (any hospital's), in a
+          -- picture (its patients in their hospital's shirt colour), and the
+          -- map there.
+          local queue
+          for _, e in ipairs(world.entities) do
+            local p1 = e.queue and e.queue:reportedSize() >= 1 and e.queue:reportedHumanoid(1)
+            if p1 and (not queue or e.queue:reportedSize() > queue:reportedSize()) then
+              queue = e.queue
+            end
+          end
+          if queue then
+            local first = queue:reportedHumanoid(1)
+            world.ui:scrollMapTo(TheApp.map:WorldToScreen(first.tile_x, first.tile_y))
+            local w = UIQueue(world.ui, queue)
+            world.ui:addWindow(w)
+            shot("queue-" .. session.step)
+            w:close()
+            log(string.format("UI: queue window of %d patients at step %d, the first in shirt %s",
+                queue:reportedSize(), session.step, tostring(first.layers[1])))
+          else
+            log("UI: no queue to show at step " .. session.step)
+          end
         elseif a == "shot" then
           shot(entry.arg)
         elseif a == "staffwindow" then
@@ -2716,6 +2768,10 @@ local function run()
           session:issue({kind = "probe_" .. a})
         elseif a == "patients" then
           session:issue({kind = "probe_patients", n = tonumber(entry.arg)})
+        elseif a == "ownpatients" then
+          -- (At this player's own desk; "patients": hospital 1's.)
+          session:issue({kind = "probe_patients", n = tonumber(entry.arg),
+              hospital = world:getHospitalIndex(world.ui.hospital)})
         elseif a == "surgery" then
           session:issue({kind = "probe_surgery", n = tonumber(entry.arg)})
           log(string.format("UI: surgery patients (%s) at step %d", entry.arg, session.step))

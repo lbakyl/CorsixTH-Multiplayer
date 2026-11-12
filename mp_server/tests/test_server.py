@@ -483,7 +483,7 @@ def test_referee_follows_and_checks_the_players():
             pass
         a.send(encode("SAVEDATA", d="QUJD"))
         a.send(encode("SAVED", step=2, parts=1))
-        assert (await ref.expect("LOAD")) == {"step": "2", "parts": "1", "peers": "1,2"}
+        assert (await ref.expect("LOAD")) == {"step": "2", "parts": "1", "peers": "1,2", "bots": "", "standins": ""}
         assert (await ref.expect("SAVEDATA"))["d"] == "QUJD"
         assert (await ref.expect("LOADEND"))["step"] == "2"
         # The commands after the save, where the players have got to, go on.
@@ -571,7 +571,7 @@ def test_quorum_repairs_only_the_game_that_differs():
         assert (await ref.expect("SAVE"))["step"] == "3"
         ref.send(encode("SAVEDATA", d="QUJD"))
         ref.send(encode("SAVED", step=3, parts=1))
-        assert (await c.expect("LOAD")) == {"step": "3", "parts": "1", "peers": "1,2,3"}
+        assert (await c.expect("LOAD")) == {"step": "3", "parts": "1", "peers": "1,2,3", "bots": "", "standins": ""}
         assert (await c.expect("SAVEDATA"))["d"] == "QUJD"
         assert (await c.expect("LOADEND"))["step"] == "3"
         assert await c.expect("C") == "C kind=hire peer=1 seq=1 step=5"
@@ -670,7 +670,7 @@ def test_desync_repair_from_the_referee_save():
         ref.send(encode("SAVEDATA", d="REVG"))
         ref.send(encode("SAVED", step=3, parts=2))
         for c in (a, b, ref):
-            assert (await c.expect("LOAD")) == {"step": "3", "parts": "2", "peers": "1,2"}
+            assert (await c.expect("LOAD")) == {"step": "3", "parts": "2", "peers": "1,2", "bots": "", "standins": ""}
             assert (await c.expect("SAVEDATA"))["d"] == "QUJD=="
             assert (await c.expect("SAVEDATA"))["d"] == "REVG"
             assert (await c.expect("LOADEND"))["step"] == "3"
@@ -728,11 +728,17 @@ def test_rejoin_a_running_game_under_the_same_name():
         b.send("S 2 6 fp")
         await b.close()
         assert (await a.expect("LEFT"))["peer"] == "2"
-        # Somebody else cannot take the place.
+        # Somebody else gets the list of places; a person's is not theirs.
         eve = await Client.connect(port, "Eve")
         eve.send(encode("JOIN", room="r1", password="pw"))
-        assert (await eve.expect("ERROR"))["code"] == "running"
-        # The same name can, and gets the start without a level to load.
+        seats = await eve.expect("SEATS")
+        assert seats["n"] == "2" and (seats["name1"], seats["state1"]) == ("Alice", "on")
+        assert (seats["name2"], seats["state2"]) == ("Bob", "left")
+        eve.send(encode("JOIN", room="r1", password="pw", seat=1))
+        assert (await eve.expect("ERROR"))["code"] == "seat_taken"
+        await eve.close()
+        # The same name gets their place at once, and the start without a
+        # level to load.
         back = await Client.connect(port, "bob")
         back.send(encode("JOIN", room="r1", password="pw"))
         assert (await back.expect("JOINED"))["peer"] == "2"
@@ -744,7 +750,7 @@ def test_rejoin_a_running_game_under_the_same_name():
         ref.send(encode("SAVEDATA", d="eA=="))
         ref.send(encode("SAVED", step=7, parts=1))
         for c in (a, back, ref):
-            assert (await c.expect("LOAD")) == {"step": "7", "parts": "1", "peers": "1,2"}
+            assert (await c.expect("LOAD")) == {"step": "7", "parts": "1", "peers": "1,2", "bots": "", "standins": ""}
             assert (await c.expect("SAVEDATA"))["d"] == "eA=="
             await c.expect("LOADEND")
             assert (await c.expect("RESUME"))["step"] == "7"
@@ -802,7 +808,7 @@ def test_continue_a_saved_game(run):
         tom.send(encode("SAVEDATA", d="eHl6"))
         tom.send(encode("SAVED", step=300, parts=1))
         for c in (tom, sara):
-            assert (await c.expect("LOAD")) == {"step": "300", "parts": "1", "peers": "1,2"}
+            assert (await c.expect("LOAD")) == {"step": "300", "parts": "1", "peers": "1,2", "bots": "", "standins": ""}
             assert (await c.expect("SAVEDATA"))["d"] == "eHl6"
             await c.expect("LOADEND")
             assert (await c.expect("RESUME"))["step"] == "300"
@@ -1058,13 +1064,15 @@ def test_other_theme_hospital_edition_gets_the_referees_game():
     asyncio.run(no_referee())
 
 
-def run_with_bots(body):
+def run_with_bots(body, with_referees=False):
     """A server that can run bots (and the referee); starting either only
-    records what would have been started."""
+    records what would have been started (with_referees: the body gets the
+    referees' tokens too)."""
     bots, referees = [], []
 
-    async def fake_bot(config, port, room, token, name, mode):
-        bots.append({"room": room, "token": token, "name": name, "mode": mode})
+    async def fake_bot(config, port, room, token, name, mode, stand_in=False):
+        bots.append({"room": room, "token": token, "name": name, "mode": mode,
+                     "stand_in": stand_in})
         return None
 
     async def fake_referee(config, port, room, token):
@@ -1077,7 +1085,7 @@ def run_with_bots(body):
         server = srv.Server(referee=srv.RefereeConfig(binary="x", source="", data=""))
         port = await server.start("127.0.0.1", 0)
         try:
-            await body(server, port, bots)
+            await (body(server, port, bots, referees) if with_referees else body(server, port, bots))
         finally:
             srv.start_bot, srv.start_referee = orig
             await server.close()
@@ -1391,3 +1399,174 @@ def test_team_hospitals_continued_with_a_bot():
         st = await ann.expect("START")
         assert st["seats"] == "1:1,2:1,3:2"
     run_with_bots(body)
+
+
+async def race_with_bots(server, port, bots, referees, n_bots=2):
+    """Ann starts a race with bots (all joined) and the referee connects."""
+    ann = await Client.connect(port, "Ann")
+    ann.send(encode("CREATE", room="race", password="", max=n_bots + 1, mode="competitive", level=1))
+    await ann.expect("JOINED")
+    for _ in range(n_bots):
+        ann.send(encode("BOT", add=1))
+    await started_bots(bots, n_bots)
+    conns = []
+    for bot in bots[:n_bots]:
+        c = await connect_bot(port, bot)
+        await c.expect("JOINED")
+        conns.append(c)
+    ann.send(encode("START"))
+    st = await ann.expect("START")
+    assert st["bots"] == ",".join(str(p) for p in range(2, n_bots + 2))
+    for c in conns:
+        await c.expect("START")
+    for _ in range(100):
+        if referees:
+            break
+        await asyncio.sleep(0.01)
+    ref = await connect_referee(port, "race", referees[0])
+    await ref.expect("START")
+    return ann, conns, ref
+
+
+async def load_for(clients, ref, step, **fields):
+    """The referee sends its game (one part); everybody gets the LOAD."""
+    assert (await ref.expect("SAVE"))["step"] == str(step)
+    ref.send(encode("SAVEDATA", d="eA=="))
+    ref.send(encode("SAVED", step=step, parts=1))
+    loads = []
+    for c in list(clients) + [ref]:
+        load = await c.expect("LOAD")
+        await c.expect("RESUME")
+        loads.append(load)
+    for load in loads:
+        for k, v in fields.items():
+            assert load[k] == v, (k, load)
+    return loads
+
+
+def test_join_a_running_game_in_a_bots_place():
+    async def body(server, port, bots, referees):
+        ann, (agnes, bertie), ref = await race_with_bots(server, port, bots, referees)
+        # The room list shows the places a newcomer may take.
+        carl = await Client.connect(port, "Carl")
+        carl.send(encode("LIST"))
+        room = await carl.expect("ROOM")
+        assert room["state"] == "running" and room["places"] == "2"
+        # Joining: the list of places, then the one chosen.
+        carl.send(encode("JOIN", room="race", password=""))
+        seats = await carl.expect("SEATS")
+        assert [seats[f"state{i}"] for i in (1, 2, 3)] == ["on", "bot", "bot"]
+        assert seats["name2"] == "Bot Agnes"
+        carl.send(encode("JOIN", room="race", password="", seat=2))
+        assert (await carl.expect("JOINED"))["peer"] == "2"
+        st = await carl.expect("START")
+        # (Bot Agnes's hospital is a person's now: no hidden bonus.)
+        assert st["resume"] == "1" and st["peer"] == "2" and st["bots"] == "3"
+        with pytest.raises(ConnectionError):
+            await agnes.expect("NEVER")
+        left = await ann.expect("LEFT")
+        assert left["peer"] == "2" and left["replaced"] == "1"
+        await ann.expect("CHAT", text="Carl takes over Bot Agnes's place")
+        await ann.expect("HOLD")
+        ann.send(encode("HELD", step=9))
+        await bertie.expect("HOLD")
+        bertie.send(encode("HELD", step=9))
+        await load_for([ann, carl, bertie], ref, 9, peers="1,2,3", bots="3", standins="")
+        assert server.rooms["race"].bot_seats == {3}
+    run_with_bots(body, with_referees=True)
+
+
+def test_a_bot_plays_for_a_player_who_left_until_they_come_back(monkeypatch):
+    monkeypatch.setattr(srv, "STAND_IN_DELAY", 0.05)
+
+    async def body(server, port, bots, referees):
+        ann, (agnes, _), ref = await race_with_bots(server, port, bots, referees, n_bots=2)
+        carl = await Client.connect(port, "Carl")
+        carl.send(encode("JOIN", room="race", password="", seat=3))
+        await carl.expect("START")
+        await ann.expect("HOLD")
+        ann.send(encode("HELD", step=4))
+        await agnes.expect("HOLD")
+        agnes.send(encode("HELD", step=4))
+        await load_for([ann, agnes, carl], ref, 4, bots="2")
+        # Carl's connection drops: a bot plays his place under his name.
+        await carl.close()
+        await ann.expect("LEFT", peer=3)
+        await started_bots(bots, 3)
+        assert bots[2]["name"] == "Carl" and bots[2]["stand_in"] is True
+        standin = await connect_bot(port, bots[2])
+        joined = await standin.expect("JOINED")
+        assert joined["peer"] == "3" and joined["standin"] == "1"
+        await standin.expect("START")
+        await ann.expect("HOLD")
+        ann.send(encode("HELD", step=20))
+        await agnes.expect("HOLD")
+        agnes.send(encode("HELD", step=20))
+        await load_for([ann, agnes, standin], ref, 20, standins="3", bots="2")
+        players = await ann.expect("PLAYERS", standin3=1)
+        assert players["name3"] == "Carl" and players["bot3"] == "1"
+        # Carl is back: his place at once (no list), the bot goes.
+        back = await Client.connect(port, "carl")
+        back.send(encode("JOIN", room="race", password=""))
+        assert (await back.expect("JOINED"))["peer"] == "3"
+        with pytest.raises(ConnectionError):
+            await standin.expect("NEVER")
+        await ann.expect("CHAT", text="carl is back")
+        await ann.expect("HOLD")
+        ann.send(encode("HELD", step=30))
+        await agnes.expect("HOLD")
+        agnes.send(encode("HELD", step=30))
+        await load_for([ann, agnes, back], ref, 30, standins="")
+    run_with_bots(body, with_referees=True)
+
+
+def test_an_empty_game_waits_and_the_bots_come_back(monkeypatch):
+    monkeypatch.setattr(srv, "STAND_IN_DELAY", 30.0)
+
+    async def body(server, port, bots, referees):
+        ann, (agnes, bertie), ref = await race_with_bots(server, port, bots, referees)
+        # The last person leaves: the bots stop, the referee holds the game.
+        await ann.close()
+        for c in (agnes, bertie):
+            with pytest.raises(ConnectionError):
+                await c.expect("NEVER")
+        assert (await ref.expect("HOLD"))["why"] == "empty"
+        for _ in range(100):
+            if not server.rooms["race"].players:
+                break
+            await asyncio.sleep(0.01)
+        assert "race" in server.rooms and not server.rooms["race"].players
+        # Somebody comes: a place, and the bots come back to the others.
+        dan = await Client.connect(port, "Dan")
+        dan.send(encode("JOIN", room="race", password=""))
+        seats = await dan.expect("SEATS")
+        assert [seats[f"state{i}"] for i in (1, 2, 3)] == ["left", "left", "left"]
+        dan.send(encode("JOIN", room="race", password="", seat=1))
+        joined = await dan.expect("JOINED")
+        assert joined["peer"] == "1" and joined["owner"] == "1"
+        await dan.expect("START")
+        await started_bots(bots, 4)
+        assert [(b["name"], b["stand_in"]) for b in bots[2:]] == [("Bot Agnes", False),
+                                                                ("Bot Bertie", False)]
+        agnes2 = await connect_bot(port, bots[2])
+        await agnes2.expect("JOINED", peer=2)
+        bertie2 = await connect_bot(port, bots[3])
+        await bertie2.expect("JOINED", peer=3)
+        # One load for all three, from where the referee holds the game.
+        await load_for([dan, agnes2, bertie2], ref, 0, peers="1,2,3", bots="2,3")
+    run_with_bots(body, with_referees=True)
+
+
+def test_an_empty_game_closes_when_nobody_comes_back(monkeypatch):
+    monkeypatch.setattr(srv, "EMPTY_WAIT", 0.2)
+
+    async def body(server, port, bots, referees):
+        ann, conns, ref = await race_with_bots(server, port, bots, referees, n_bots=1)
+        await ann.close()
+        assert (await ref.expect("HOLD"))["why"] == "empty"
+        for _ in range(100):
+            if "race" not in server.rooms:
+                break
+            await asyncio.sleep(0.02)
+        assert "race" not in server.rooms
+    run_with_bots(body, with_referees=True)

@@ -26,7 +26,7 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 | `HELLO` | first line | `proto` (1), `build` (game build id, must match the room's), `name`; the server's referee adds `role=referee`, `room` and `token`; a bot the server started `role=bot`, `room` and `token` (it joins that room, ready) |
 | `LIST` | lobby | (none) |
 | `CREATE` | lobby | `room`, `password` (empty = open), `max` (2–4), optional `mode`: a new game's room is free (each player picks a colour and a team, `SEAT`), and `mode` only says how newcomers are seated at first (`coop`, the default: a colour each on the owner's team; `shared`: one colour; `competitive`: a team each; `teams`, `teamshared`: the smaller of teams 1 and 2); a saved game's `mode` is its own, `level` (1–12), `difficulty` (`easy`/`full`/`hard`), `speed_control` (`any`/`owner`); to continue a saved game also `continue=1`, `step` (the step it was saved at), `date`, `seats` (its hospitals' names, comma-separated; a shared one lists its players, "ANN + BEN"), `seat_colours`, `seat_teams` (each hospital's colour and team, shown in the room) |
-| `JOIN` | lobby | `room`, `password`; for a running room: rejoin under the name of a player who left |
+| `JOIN` | lobby | `room`, `password`; for a running room: back in one's own place (the name of a player who left, or one a stand-in bot plays for), else `seat=<peer>` takes that place (a bot's, or a player's who left); without `seat` the server answers `SEATS` |
 | `READY` | in a room | `ready` |
 | `SEAT` | in a new game's room (not a continued one: `locked`) | `colour` (1-4: the hospital; the same colour shares one) and/or `team` (1-4: the same team wins together, different teams race); the owner may add `peer` to change another player's (a bot's too). A colour somebody has brings their team; a team changes it for everybody of that colour. A new player gets the first free colour on the owner's team (error `bad_seat` for other values) |
 | `START` | room owner | (none) |
@@ -58,7 +58,8 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 | `START peer peers names seed level difficulty mode delay max_speed speed speed_control grant_wage_increase free_build_mode` | the game starts: everybody seeds the gameplay random generator with `seed`, loads `level` and plays as `peer` among `peers` (comma-separated, start order; `names` in the same order). A rejoining player also gets `resume=1` and `active` (the players now) and loads no level. A new game also has `colours` and `teams` (`peer:colour,...`, `peer:team,...`): every peer works out the hospitals from them the same way (`MultiplayerLobby.layout`: a hospital per colour; team mates' hospitals on neighbouring plots, `mp_levels.teamSeats`), and `mode` is what they make (`shared`, `coop`, `competitive`, `teams`, `teamshared` or `mixed`) |
 | `SPEED peer name speed` | a player changed the speed (or paused); every client applies it, the sender included |
 | `SHOW peer kind ...` | another player's cosmetic information, relayed unchanged with the sender's `peer` |
-| `LEFT peer step name` | a player left the game after reporting `step`; stop waiting for them |
+| `LEFT peer step name` | a player left the game after reporting `step`; stop waiting for them. `replaced=1`: somebody takes the place at once (a load follows; the hospital is not marked away) |
+| `SEATS room n peer<i> name<i> state<i> colour<i> team<i>` | answer to `JOIN` of a running room: its places in start order; `state` is `on` (a person plays it), `bot` (the room's own bot), `standin` (a bot playing for the person named, who left) or `left` (nobody) |
 | `DESYNC step` | fingerprints differed at `step` and cannot be repaired: the game is over |
 | `HOLD step why` | stop stepping and issuing commands; answer `HELD` (`why=desync` at `step`, or `why=rejoin`: a player rejoins). A game that found the desync itself waits 3 s for `HOLD` before it tells its player the games stay different; after a repaired desync (`RESUME`) only the adviser says so |
 | `SAVE step` | referee only: save once at `step` (or later) |
@@ -115,6 +116,23 @@ step that player reported. Commands of that player were all sent before the
 *s* is for step *s + delay*, and nobody can run that step before the player's
 report of *s + 1*), so every remaining peer applies the same ones and simply
 stops waiting for that peer.
+
+## A running game's places
+
+A running game on a server with a referee keeps its places (the peers it
+started with). A newcomer who takes one (`JOIN seat=`) gets `JOINED` (with
+`standin=1` for a stand-in bot) and `START resume=1`; a bot playing the place
+gets `LEFT replaced=1` and is stopped; the others get `HOLD why=rejoin`, and
+everybody loads the referee's game. A person who leaves gets a stand-in bot
+after `CORSIXTH_MP_STAND_IN_DELAY` seconds (20): the server starts it with
+`MP_BOT_STANDIN=1` under their name. When nobody plays, the bots stop, the
+referee gets `HOLD why=empty` (alone it would run on), and the room waits
+`CORSIXTH_MP_EMPTY_WAIT` seconds (600); the first person back starts the bots
+again, and one load gives everybody the game. `LOAD` names `bots` (the places
+the room's own bots play: their hospitals get the hidden bonus) and
+`standins` (their hospitals count as away; no hold waits for them), so every
+game marks the same hospitals. `ROOM` has `places` for a running room (how
+many may be taken); `PLAYERS` has `bot<i>=1` and `standin<i>=1`.
 
 ## Repair and rejoin
 

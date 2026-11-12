@@ -91,6 +91,14 @@ REFEREE_REPAIR_TIMEOUT = 20.0
 BOT_NAMES = ("Bot Agnes", "Bot Bertie", "Bot Clive", "Bot Dora", "Bot Edna", "Bot Fergus",
              "Bot Gwen", "Bot Hector")
 BOT_START_TIMEOUT = 60.0
+# A running game's places (Jan, 2026-11-12): somebody may join it and take
+# the place of a bot, or of a player who left; a player who leaves gets a bot
+# that plays their hospital under their name until somebody takes the place
+# (after this many seconds: a dropped connection usually comes back first).
+STAND_IN_DELAY = float(os.environ.get("CORSIXTH_MP_STAND_IN_DELAY", "20"))
+# Nobody plays any more: the bots stop and the referee holds the game this
+# many seconds for somebody to come back (then the room closes).
+EMPTY_WAIT = float(os.environ.get("CORSIXTH_MP_EMPTY_WAIT", "600"))
 # The game options the room owner may set (OPTION <name>=<value>): land
 # auctions (1 plots near other hospitals, 2 every plot, 0 off), dirty tricks
 # (in a race; 1 on, unlocked month by month in the first year, 2 on from the
@@ -162,6 +170,10 @@ class Player:
     is_referee: bool = False
     is_bot: bool = False
     bot_proc: object = None
+    # A bot that plays a person's place while they are away (its name is
+    # theirs), and a bot whose place somebody took (it leaves quietly).
+    stand_in: bool = False
+    replaced: bool = False
     last_ask: dict[str, float] = field(default_factory=dict)
     colour: int = 0  # the hospital's colour (1-8), a free room
     team: int = 0  # the team (1-8), a free room
@@ -267,8 +279,20 @@ class Room:
     last_report: dict[int, str] = field(default_factory=dict)
     recovery: "Recovery | None" = None  # desync repair in progress
     recoveries: int = 0
-    # Bots started but not joined yet: token -> (name, process or None).
+    # Bots started but not joined yet: token -> [name, process or None, the
+    # running game's place it takes (None: a new place in the lobby),
+    # stand-in].
     bots_pending: dict[str, list] = field(default_factory=dict)
+    # A running game's places: those the room's own bots play (a person who
+    # takes one over makes it theirs), places waiting for the shared game
+    # (taken while a repair ran, or while an empty room's bots start), the
+    # bots being started for an empty room somebody came back to, and since
+    # when nobody plays (EMPTY_WAIT; when the game was last played).
+    bot_seats: set[int] = field(default_factory=set)
+    rejoin_queue: list[int] = field(default_factory=list)
+    reviving: set[str] = field(default_factory=set)
+    empty_since: float | None = None
+    ended_at: float | None = None
     # Players the owner removed: name (lower case) -> time they may return.
     kicked: dict[str, float] = field(default_factory=dict)
     # The owner's game options that are not the default (OPTION,
@@ -575,7 +599,8 @@ class Server:
         if room.base_save is not None and room.recovery is None:
             step, parts = room.base_save
             player.send(encode("LOAD", step=step, parts=len(parts),
-                               peers=",".join(str(p) for p in sorted(room.players))))
+                               peers=",".join(str(p) for p in sorted(room.players)),
+                               **self._load_fields(room)))
             for part in parts:
                 player.send(encode("SAVEDATA", d=part))
             player.send(encode("LOADEND", step=step))
@@ -612,22 +637,25 @@ class Server:
         """PLAYERS: everybody who played in this running room, for the
         in-game player list: peer, name, average round trip over the last
         RTT_WINDOW seconds (-1: none), on (connected) or left, seconds since
-        the server last heard from them, and the last step they reported."""
+        the server last heard from them, the last step they reported, and
+        bot=1 for a bot (standin=1: one playing for the person named)."""
         now = time.monotonic()
-        seats: dict[int, tuple[str, str, int, int, int]] = {}
+        seats: dict[int, tuple[str, str, int, int, int, Player | None]] = {}
         for peer, name in room.left_names.items():
-            seats[peer] = (name, "left", -1, 0, room.left.get(peer, 0))
+            seats[peer] = (name, "left", -1, 0, room.left.get(peer, 0), None)
         for peer, pl in room.players.items():
             if pl.is_referee:
                 continue
             rtt = pl.recent_rtt(now)
             seats[peer] = (pl.name, "on", -1 if rtt is None else round(rtt),
-                           int(now - pl.last_heard), pl.last_step)
+                           int(now - pl.last_heard), pl.last_step, pl)
         fields: dict[str, object] = {"n": len(seats)}
         for i, peer in enumerate(sorted(seats), start=1):
-            name, state, rtt, quiet, step = seats[peer]
+            name, state, rtt, quiet, step, pl = seats[peer]
             fields.update({f"peer{i}": peer, f"name{i}": name, f"state{i}": state,
-                           f"rtt{i}": rtt, f"quiet{i}": quiet, f"step{i}": step})
+                           f"rtt{i}": rtt, f"quiet{i}": quiet, f"step{i}": step,
+                           f"bot{i}": 1 if pl is not None and pl.is_bot else None,
+                           f"standin{i}": 1 if pl is not None and pl.stand_in else None})
         return encode("PLAYERS", **fields)
 
     def _on_pong(self, player: Player, f: dict[str, str]) -> None:
@@ -648,6 +676,7 @@ class Server:
                                max=room.max_players, mode=room.current_mode(), level=room.level,
                                locked=room.password_hash is not None, state=room.state,
                                build_ok=room.build == player.build,
+                               places=len(self._free_seats(room)) if room.state == "running" else None,
                                **{"continue": 1 if room.continue_step is not None else None}))
         player.send(encode("ROOMS_END", count=len(self.rooms)))
 
@@ -730,41 +759,253 @@ class Server:
         elif room.kicked.get(player.name.lower(), 0.0) > time.monotonic():
             self._error(player, "kicked", "The room's owner removed you from this room a moment ago")
         elif room.state != "lobby":
-            self._rejoin(player, room)
+            self._join_running(player, room, f.get("seat", ""))
         elif room.is_full():
             self._error(player, "room_full", "The room is full")
         else:
             self._add_to_room(player, room)
 
-    def _rejoin(self, player: Player, room: Room) -> None:
-        """A player who left a running game comes back under the same name:
-        everybody, the newcomer too, loads the referee's game."""
-        peer = next((p for p, n in sorted(room.left_names.items())
-                     if n.lower() == player.name.lower()), None)
-        if peer is None or not room.referee_token:
+    # ----------------------------------------------- a running game's places
+
+    @staticmethod
+    def _start_peers(room: Room) -> list[int]:
+        return [int(p) for p in str(room.start_fields.get("peers", "")).split(",") if p.isdigit()]
+
+    def _seat_states(self, room: Room) -> list[dict[str, object]]:
+        """Each place of a running game (the peers it started with): who has
+        it (state on: a person, bot: the room's own bot, standin: a bot for
+        the person named, left: nobody), its colour and team."""
+        def pairs(key: str) -> dict[int, int]:
+            out = {}
+            for part in str(room.start_fields.get(key, "")).split(","):
+                a, _, b = part.partition(":")
+                if a.isdigit() and b.isdigit():
+                    out[int(a)] = int(b)
+            return out
+        colours, teams, saved = pairs("colours"), pairs("teams"), pairs("seats")
+        pending = {e[2]: e for e in room.bots_pending.values() if e[2] is not None}
+        out = []
+        for peer in self._start_peers(room):
+            pl = room.players.get(peer)
+            if pl is not None:
+                state = "standin" if pl.stand_in else "bot" if pl.is_bot else "on"
+                name = pl.name
+            elif peer in pending:
+                state, name = ("standin" if pending[peer][3] else "bot"), pending[peer][0]
+            else:
+                state, name = "left", room.left_names.get(peer, f"Player {peer}")
+            colour, team = colours.get(peer), teams.get(peer)
+            index = saved.get(peer)
+            if index is not None and colour is None:
+                colour = room.seat_colours[index - 1] if index <= len(room.seat_colours) else None
+                team = room.seat_teams[index - 1] if index <= len(room.seat_teams) else None
+            out.append({"peer": peer, "name": name, "state": state, "colour": colour,
+                        "team": team})
+        return out
+
+    def _free_seats(self, room: Room) -> list[int]:
+        """The places of a running game somebody may take (not a person's
+        who plays); none without a referee (it gives them the game)."""
+        if room.referee is None or not room.referee_token:
+            return []
+        return [s["peer"] for s in self._seat_states(room) if s["state"] != "on"]  # type: ignore[misc]
+
+    def _join_running(self, player: Player, room: Room, seat: str) -> None:
+        """Somebody joins a running game: back in their own place (the name a
+        bot plays for, or of a player who left), in the place they chose
+        (seat=<peer>: a bot's, or nobody's), or they get the list of places
+        (SEATS) to choose from. Everybody then loads the referee's game."""
+        if room.referee is None or not room.referee_token:
             self._error(player, "running", "The game has already started")
             return
-        if room.recovery is not None:
-            self._error(player, "busy", "The game is being repaired; try again")
+        states = {int(s["peer"]): s for s in self._seat_states(room)}  # type: ignore[call-overload]
+        mine = next((p for p, s in sorted(states.items()) if s["state"] in ("left", "standin")
+                     and str(s["name"]).lower() == player.name.lower()), None)
+        if mine is None and seat:
+            if not seat.isdigit() or int(seat) not in states:
+                self._error(player, "no_seat", "No such place")
+                return
+            if states[int(seat)]["state"] == "on":
+                self._error(player, "seat_taken", "Somebody plays that place")
+                return
+            mine = int(seat)
+        if mine is None:
+            free = [s for s in states.values() if s["state"] != "on"]
+            if not free:
+                self._error(player, "room_full", "Every place is played by somebody")
+                return
+            fields: dict[str, object] = {"room": room.name, "n": len(states)}
+            for i, s in enumerate(states.values(), start=1):
+                fields.update({f"peer{i}": s["peer"], f"name{i}": s["name"],
+                               f"state{i}": s["state"], f"colour{i}": s["colour"],
+                               f"team{i}": s["team"]})
+            player.send(encode("SEATS", **fields))
             return
-        del room.left_names[peer]
+        self._take_seat(player, room, mine)
+
+    def _take_seat(self, player: Player, room: Room, peer: int) -> None:
+        """`player` (a person, or a bot this server started for the place)
+        takes place `peer` of a running game: a bot playing it leaves, and
+        the newcomer gets the game's start and then the referee's game."""
+        occupant = room.players.get(peer)
+        if occupant is not None:
+            occupant.replaced = True
+            self._leave_room(occupant)
+            self._stop_bot(occupant)
+        for token, entry in list(room.bots_pending.items()):
+            if entry[2] == peer and not (player.is_bot and entry[0] == player.name):
+                self._cancel_pending(room, token)
+        before = room.left_names.pop(peer, None) or (occupant.name if occupant else "")
         room.left.pop(peer, None)
-        if player.name not in room.humans_seen:
-            room.humans_seen.append(player.name)
+        nobody = not room.humans()
+        if not player.is_bot and peer in room.bot_seats:
+            room.bot_seats.discard(peer)  # a person's place from now on
+            self._set_bots_field(room)
         player.room, player.peer, player.ready = room, peer, True
         room.players[peer] = player
-        log.info("room %r: %r rejoins as player %d", room.name, player.name, peer)
-        player.send(encode("JOINED", room=room.name, peer=peer, owner=False, mode=room.mode,
-                           level=room.level, difficulty=room.difficulty, max=room.max_players))
+        if not player.is_bot:
+            room.empty_since = room.ended_at = None
+            if player.name not in room.humans_seen:
+                room.humans_seen.append(player.name)
+            if nobody or room.owner not in room.players.values():
+                room.owner = player
+        if player.is_bot:
+            log.info("room %r: bot %r takes place %d", room.name, player.name, peer)
+        elif before.lower() == player.name.lower():
+            log.info("room %r: %r rejoins as player %d", room.name, player.name, peer)
+        else:
+            log.info("room %r: %r takes place %d (was %r)", room.name, player.name, peer, before)
+        player.send(encode("JOINED", room=room.name, peer=peer, owner=room.owner is player,
+                           mode=room.mode, level=room.level, difficulty=room.difficulty,
+                           max=room.max_players, standin=1 if player.stand_in else None))
         # The start as it was (hospital order, names), with today's players
         # and speed; the game itself comes with the shared save.
         fields = dict(room.start_fields, speed=room.speed, resume=1,
                       active=",".join(str(p) for p in sorted(room.players)))
         player.send(encode("START", peer=peer, **fields))
-        room.broadcast(encode("CHAT", peer=0, name="server", text=f"{player.name} is back"),
-                       exclude=player)
+        if not player.is_bot:
+            text = (f"{player.name} is back" if before.lower() == player.name.lower()
+                    else f"{player.name} takes over {before}'s place" if before
+                    else f"{player.name} joined")
+            room.broadcast(encode("CHAT", peer=0, name="server", text=text), exclude=player)
         room.broadcast(self._players_line(room))
-        self._start_recovery(room, player.last_step, rejoining=peer)
+        if nobody and not player.is_bot:
+            self._revive_bots(room)
+        room.rejoin_queue.append(peer)
+        self._maybe_start_rejoins(room)
+
+    def _set_bots_field(self, room: Room) -> None:
+        bots = ",".join(str(p) for p in sorted(room.bot_seats))
+        if bots:
+            room.start_fields["bots"] = bots
+        else:
+            room.start_fields.pop("bots", None)
+
+    def _load_fields(self, room: Room) -> dict[str, object]:
+        """For LOAD: the places the room's own bots play (their hospitals get
+        the hidden bonus) and those a bot plays for a person who left (their
+        hospital counts as away), so every game marks the same."""
+        return {"bots": ",".join(str(p) for p in sorted(room.bot_seats)),
+                "standins": ",".join(str(p) for p, pl in sorted(room.players.items())
+                                     if pl.stand_in)}
+
+    def _spawn_seat_bot(self, room: Room, peer: int, name: str, stand_in: bool) -> str | None:
+        """Start a bot for a running game's place (its own bot, or a stand-in
+        under the name of the person who left). None: this server cannot."""
+        if self.referee_config is None or room.referee is None or room.name not in self.rooms:
+            return None
+        if any(e[2] == peer for e in room.bots_pending.values()) or peer in room.players:
+            return None
+        running = sum(len(r.bots_pending) + sum(1 for p in r.players.values() if p.is_bot)
+                      for r in self.rooms.values())
+        if running >= self.max_bots:
+            log.info("room %r: no bot for place %d (the server runs as many as it can)",
+                     room.name, peer)
+            return None
+        token = secrets.token_hex(16)
+        room.bots_pending[token] = [name, None, peer, stand_in]
+        log.info("room %r: a bot for place %d (%r%s)", room.name, peer, name,
+                 ", for the player who left" if stand_in else "")
+        loop = asyncio.get_running_loop()
+        loop.create_task(self._spawn_bot(room, token, name, stand_in))
+        loop.call_later(BOT_START_TIMEOUT, self._bot_timeout, room, token)
+        return token
+
+    def _cancel_pending(self, room: Room, token: str) -> None:
+        entry = room.bots_pending.pop(token, None)
+        room.reviving.discard(token)
+        if entry is not None and entry[1] is not None and getattr(entry[1], "returncode", 0) is None:
+            try:
+                entry[1].terminate()
+            except ProcessLookupError:
+                pass
+
+    def _stand_in_due(self, room: Room, peer: int, name: str) -> None:
+        """A while after a person left: a bot plays their place, if nobody
+        took it and somebody still plays."""
+        if room.name not in self.rooms or room.state != "running" or peer in room.players:
+            return
+        if room.left_names.get(peer) != name or not room.humans():
+            return
+        self._spawn_seat_bot(room, peer, name, stand_in=peer not in room.bot_seats)
+
+    def _revive_bots(self, room: Room) -> None:
+        """Somebody came back to a running game nobody played: the bots come
+        back to the other places (the room's own bots, and a stand-in for each
+        person who left); the newcomer's game waits for them (one load)."""
+        for peer in self._start_peers(room):
+            if peer in room.players:
+                continue
+            name = room.left_names.get(peer, f"Player {peer}")
+            token = self._spawn_seat_bot(room, peer, name, stand_in=peer not in room.bot_seats)
+            if token is not None:
+                room.reviving.add(token)
+
+    def _maybe_start_rejoins(self, room: Room) -> None:
+        """Give the places taken (rejoin_queue) the referee's game: with a
+        repair that has not asked for its save yet, else in a repair of their
+        own; after the bots of a revived room have joined."""
+        if not room.rejoin_queue or room.reviving or room.name not in self.rooms:
+            return
+        rec = room.recovery
+        if rec is not None:
+            if rec.only is None and not rec.referee_only and not rec.asked:
+                for p in room.rejoin_queue:
+                    rec.held[p] = None
+                room.rejoin_queue = []
+                self._recovery_progress(room)
+            return
+        newcomers, room.rejoin_queue = list(room.rejoin_queue), []
+        step = max([p.last_step for p in room.players.values()] + [0])
+        self._start_recovery(room, step, rejoining=newcomers)
+
+    def _room_emptied(self, room: Room) -> None:
+        """Nobody plays a running game any more: the referee holds it (alone
+        it would run on), and the room waits EMPTY_WAIT for somebody."""
+        room.empty_since = time.monotonic()
+        room.ended_at = time.time()
+        room.recovery = None
+        room.rejoin_queue = []
+        assert room.referee is not None
+        room.referee.send(encode("HOLD", step=room.verified_step, why="empty"))
+        log.info("room %r: nobody plays; the game waits %d s for somebody to take a place",
+                 room.name, EMPTY_WAIT)
+        asyncio.get_running_loop().call_later(EMPTY_WAIT, self._empty_timeout, room,
+                                              room.empty_since)
+
+    def _empty_timeout(self, room: Room, since: float) -> None:
+        if room.empty_since == since and self.rooms.get(room.name) is room and not room.humans():
+            log.info("room %r: nobody came back", room.name)
+            self._stop_bots(room)
+            self._close_room(room)
+
+    def _close_room(self, room: Room) -> None:
+        self.rooms.pop(room.name, None)
+        self._stop_referee(room)
+        self._record_game(room)
+        if room.referee_token:
+            log.info("room %r: referee confirmed steps through %d", room.name, room.verified_step)
+        log.info("room %r closed", room.name)
 
     def _add_to_room(self, player: Player, room: Room, ready: bool = False) -> None:
         peer = room.free_peer()
@@ -935,17 +1176,17 @@ class Server:
             return
         name = self._bot_name(room)
         token = secrets.token_hex(16)
-        room.bots_pending[token] = [name, None]
+        room.bots_pending[token] = [name, None, None, False]
         log.info("room %r: %r adds %r", room.name, player.name, name)
         loop = asyncio.get_running_loop()
         loop.create_task(self._spawn_bot(room, token, name))
         loop.call_later(BOT_START_TIMEOUT, self._bot_timeout, room, token)
         self._send_lobby(room)
 
-    async def _spawn_bot(self, room: Room, token: str, name: str) -> None:
+    async def _spawn_bot(self, room: Room, token: str, name: str, stand_in: bool = False) -> None:
         try:
             proc = await start_bot(self.referee_config, self.port, room.name, token, name,
-                                   room.current_mode())
+                                   room.current_mode(), stand_in=stand_in)
         except OSError as exc:
             log.warning("room %r: cannot start %r: %s", room.name, name, exc)
             if token in room.bots_pending:
@@ -968,26 +1209,32 @@ class Server:
             self._bot_failed(room, token)
 
     def _bot_failed(self, room: Room, token: str) -> None:
-        name, proc = room.bots_pending.pop(token)
+        name, proc, peer, _ = room.bots_pending.pop(token)
+        room.reviving.discard(token)
         if proc is not None and getattr(proc, "returncode", 0) is None:
             try:
                 proc.terminate()
             except ProcessLookupError:
                 pass
         log.warning("room %r: %r did not join", room.name, name)
-        room.broadcast(encode("CHAT", peer=0, name="server", text=f"{name} could not start"))
+        if peer is None:
+            room.broadcast(encode("CHAT", peer=0, name="server", text=f"{name} could not start"))
         self._send_lobby(room)
+        self._maybe_start_rejoins(room)
 
     def _bot_hello(self, player: Player, f: dict[str, str]) -> bool:
         """A bot this server started joins its room."""
         room = self.rooms.get(f.get("room", ""))
         token = f.get("token", "")
         entry = room.bots_pending.get(token) if room is not None else None
-        if room is None or entry is None or room.state != "lobby":
+        if room is None or entry is None or \
+                room.state != ("lobby" if entry[2] is None else "running"):
             self._error(player, "not_bot", "Unknown room or token")
             return False
-        name, proc = room.bots_pending.pop(token)
+        name, proc, peer, stand_in = room.bots_pending.pop(token)
+        room.reviving.discard(token)
         player.name, player.build, player.is_bot, player.bot_proc = name, f.get("build", ""), True, proc
+        player.stand_in = stand_in
         self._check_own_build(name, player.build)
         if player.build != room.build:
             log.warning("room %r: %r runs build %s, the room %s", room.name, name, player.build,
@@ -999,6 +1246,14 @@ class Server:
             return False
         player.send(encode("WELCOME", proto=PROTOCOL_VERSION, id=player.pid, server=SERVER_VERSION))
         log.info("player %d is %r (a bot), build %s", player.pid, name, player.build)
+        if peer is not None:
+            # A place of a running game (somebody took it meanwhile: no).
+            if peer in room.players or room.empty_since is not None:
+                self._error(player, "seat_taken", "Somebody plays that place")
+                self._maybe_start_rejoins(room)
+                return False
+            self._take_seat(player, room, peer)
+            return True
         self._add_to_room(player, room, ready=True)
         return True
 
@@ -1133,9 +1388,8 @@ class Server:
         # The bots (computer players): a hospital only they play gets a hidden
         # monthly bonus (World:onEndMonth); every peer, the referee too, needs
         # to know which.
-        bots = [str(n) for n in sorted(room.players) if room.players[n].is_bot]
-        if bots:
-            room.start_fields["bots"] = ",".join(bots)
+        room.bot_seats = {n for n, p in room.players.items() if p.is_bot}
+        self._set_bots_field(room)
         for name, value in sorted(room.options.items()):
             room.start_fields[name] = value
         if free:
@@ -1485,6 +1739,7 @@ class Server:
         if rec is not None and room.name in self.rooms:
             room.desync_step = rec.step
             room.broadcast(encode("DESYNC", step=rec.step), referee=True)
+            room.rejoin_queue = []  # (no referee's game to give them)
 
     def _on_held(self, player: Player, f: dict[str, str]) -> None:
         room = player.room
@@ -1542,12 +1797,15 @@ class Server:
         # Everybody (the referee too) loads the save, then gets every command
         # for the steps after it, then carries on from there.
         lines = [encode("LOAD", step=step, parts=len(rec.parts),
-                        peers=",".join(str(p) for p in sorted(room.players)))]
+                        peers=",".join(str(p) for p in sorted(room.players)),
+                        **self._load_fields(room))]
         lines += [encode("SAVEDATA", d=part) for part in rec.parts]
         lines.append(encode("LOADEND", step=step))
         lines += replay
         lines.append(encode("RESUME", step=step))
         targets = list(room.players.values()) + ([room.referee] if room.referee else [])
+        # (Places taken meanwhile get this game too.)
+        room.rejoin_queue = [p for p in room.rejoin_queue if p not in room.players]
         room.base_save = (step, list(rec.parts))
         for target in targets:
             for line in lines:
@@ -1570,6 +1828,7 @@ class Server:
         room.recoveries += 1
         log.info("room %r: repaired: everybody loads the referee's game at step %d "
                  "(%d bytes, %d commands after it)", room.name, step, rec.size, len(replay))
+        self._maybe_start_rejoins(room)
 
     def _finish_partial(self, room: Room, rec: Recovery, step: int, replay: list[str]) -> None:
         """A quorum repair's save is here: only the players that differed (or
@@ -1583,7 +1842,8 @@ class Server:
             targets = [room.players[p] for p in sorted(rec.only) if p in room.players]
         repaired = {t.peer for t in targets}
         lines = [encode("LOAD", step=step, parts=len(rec.parts),
-                        peers=",".join(str(p) for p in sorted(room.players)))]
+                        peers=",".join(str(p) for p in sorted(room.players)),
+                        **self._load_fields(room))]
         lines += [encode("SAVEDATA", d=part) for part in rec.parts]
         lines.append(encode("LOADEND", step=step))
         lines += replay
@@ -1609,6 +1869,7 @@ class Server:
             p.last_step = step
         log.info("room %r: repaired only %s from the referee's game at step %d (%d bytes)",
                  room.name, ", ".join(t.name for t in targets), step, rec.size)
+        self._maybe_start_rejoins(room)
 
     # ------------------------------------------------------------ departures
 
@@ -1632,7 +1893,9 @@ class Server:
         if room.state == "running":
             room.left[player.peer] = player.last_step
             room.left_names[player.peer] = player.name
-            left = encode("LEFT", peer=player.peer, step=player.last_step, name=player.name)
+            # (replaced: somebody takes the place at once; not away.)
+            left = encode("LEFT", peer=player.peer, step=player.last_step, name=player.name,
+                          replaced=1 if player.replaced else None)
             room.last_report.pop(player.peer, None)
             room.left_log.append(left)
             room.broadcast(left, referee=True)
@@ -1648,19 +1911,29 @@ class Server:
                     if len(set(fps.values())) > 1 and room.desync_step is None:
                         self._desync(room, step)
             self._recovery_progress(room)
+            room.rejoin_queue = [p for p in room.rejoin_queue if p != player.peer]
+            if player.replaced:
+                return
+            if not player.is_bot and room.humans() and self.referee_config is not None \
+                    and room.referee is not None:
+                # A person: a bot plays their place in a while. (A bot that
+                # stops leaves its place to whoever takes it.)
+                asyncio.get_running_loop().call_later(
+                    STAND_IN_DELAY, self._stand_in_due, room, player.peer, player.name)
         else:
             room.broadcast(encode("CHAT", peer=0, name="server", text=f"{player.name} left"))
         if not room.humans():
             # Nobody left to play with the bots: they go too.
             self._stop_bots(room)
+            if room.state == "running" and room.referee is not None and room.referee_token \
+                    and self.rooms.get(room.name) is room:
+                # The game waits for somebody to come back (EMPTY_WAIT).
+                if room.empty_since is None:
+                    self._room_emptied(room)
+                return
         if not room.players:
-            del self.rooms[room.name]
-            self._stop_referee(room)
-            self._record_game(room)
-            if room.referee_token:
-                log.info("room %r: referee confirmed steps through %d", room.name,
-                         room.verified_step)
-            log.info("room %r closed", room.name)
+            if self.rooms.get(room.name) is room:
+                self._close_room(room)
             return
         if room.owner is player and room.humans():
             room.owner = min(room.humans(), key=lambda p: p.peer)
@@ -1674,7 +1947,8 @@ class Server:
         if room.started_at is None:
             return
         stats.record_game({"room": room.name, "mode": room.current_mode(), "level": room.level,
-                           "started": round(room.started_at), "ended": round(time.time()),
+                           "started": round(room.started_at),
+                           "ended": round(room.ended_at or time.time()),
                            "humans": room.humans_seen, "bots": room.bots_seen,
                            "repairs": room.recoveries})
 
@@ -1712,12 +1986,7 @@ class Server:
         for bot in [p for p in room.players.values() if p.is_bot]:
             self._stop_bot(bot)
         for token in list(room.bots_pending):
-            _, proc = room.bots_pending.pop(token)
-            if proc is not None and getattr(proc, "returncode", 0) is None:
-                try:
-                    proc.terminate()
-                except ProcessLookupError:
-                    pass
+            self._cancel_pending(room, token)
 
     def _disconnect(self, player: Player) -> None:
         self._leave_room(player)

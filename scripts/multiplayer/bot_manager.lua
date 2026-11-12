@@ -3575,7 +3575,7 @@ end
 --! 13). (Tests: MP_BOT_TEST_FAIL=<day> from that game day instead.)
 function M:rescue(s)
   local bot = self.bot
-  if s.hosp.mp_place then
+  if s.hosp.mp_place or bot.standin then
     self.rescue_wait = nil
     return
   end
@@ -3835,7 +3835,8 @@ function M:think()
   -- race or done still helps its team), asked for when it cannot hire one.
   if bot.world.mp_coop then
     self:helpAllies(s)
-    if not s.hosp.mp_place then
+    -- (Not a bot playing for a person who left: their name asks nobody.)
+    if not s.hosp.mp_place and not bot.standin then
       self:askAllies(s)
       self:askForNeeds(s)
     end

@@ -432,7 +432,8 @@ they are switched on).
   hospital gets there, everybody gets the win fax (back to the lobby or keep
   playing). If a player leaves the game, their hospital stops counting for
   the team's goals (everybody is told), so the others can still win; it
-  counts again when they rejoin (the same room, under the same name).
+  counts again when somebody plays it again (see "Joining a game that is
+  already running").
   A hospital that fails the goals at a year end is not thrown
   out: it and the others are told, and they can help it with money or
   staff. If it still fails them at the next year end, the team loses and
@@ -463,7 +464,7 @@ they are switched on).
   takes 1st place, and the race is over. A hospital that fails the goals at
   two year ends in a row is out (no more patients), but its team races on;
   a team with all its hospitals out loses. If a player leaves, their
-  hospital does not count for their team until they rejoin. You can look
+  hospital does not count for their team until a person plays it again. You can look
   into your team mate's hospital, not into the other team's. Dirty tricks
   work on the other team only. In the chat, **Tab** once (or a click on
   **To all**) picks **To team** (only your team mates read it).
@@ -543,9 +544,32 @@ Trading staff and money and sharing research work as in co-op.
 Servers that run the headless referee repair this automatically, within a
 second: everybody loads the server's copy of the game and plays on, each
 player's view stays where it was, and the adviser says "Your game got out of
-sync and was recovered successfully." (People may jump a little.) They also
-let a player who dropped out rejoin: join the same room again under the same
-name. The test server runs the referee for the current test release.
+sync and was recovered successfully." (People may jump a little.) The test
+server runs the referee for the current test release.
+
+## Joining a game that is already running
+
+On a server with the referee (eu1 and eu2) a running game stays open. The
+room list shows it as "playing, 2 free": two places somebody may take. Join
+it (with its password, if it has one):
+
+- **Your connection dropped:** join the same room under the same name and
+  you are back in your own hospital at once.
+- **Anybody else** gets the room's places: each hospital with its colour,
+  team and who plays it. Click a place a bot plays, or one whose player has
+  left, and you play that hospital from now on. Its colour, team and the
+  game's options stay as they are. The hidden bot money stops once a person
+  plays the hospital.
+- **A player who leaves:** after 20 seconds a bot plays their hospital under
+  their name until they (or somebody else) take the place again. It says
+  nothing in the chat, asks nobody for anything and plays no dirty tricks.
+  In co-op the hospital still counts as away for the team's goals, as before.
+- **Everybody leaves:** the bots stop and the server keeps the game, not
+  running, for 10 minutes. Whoever comes back in that time picks a place, and
+  the bots come back to theirs.
+
+Every time somebody takes a place, everybody's game loads the server's copy
+for a few seconds, as after a repair.
 
 Without a referee the game says so a moment later ("Multiplayer games are
 out of sync"); then continue from the last save or autosave. Either way,

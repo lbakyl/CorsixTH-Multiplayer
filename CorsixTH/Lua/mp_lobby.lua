@@ -570,9 +570,19 @@ function MultiplayerLobby:_sendContinueSave()
   self.log(string.format("multiplayer: sent %s (step %s, %d bytes)", save.label, save.info.step, #data))
 end
 
-function MultiplayerLobby:joinRoom(room, password)
+--! Join a room. A running game answers with its places (SEATS: the
+--! lobby's seat_choice) unless this player's name has one; `seat` takes
+--! the place chosen (a bot's, or a player's who left).
+function MultiplayerLobby:joinRoom(room, password, seat)
   self.error = nil
-  self:send("JOIN", {room = room, password = password or ""})
+  self.join_password = password or ""
+  self:send("JOIN", {room = room, password = password or "", seat = seat})
+end
+
+--! Back from a running game's places to the room list.
+function MultiplayerLobby:cancelSeats()
+  self.seat_choice = nil
+  self:_changed("seats")
 end
 
 function MultiplayerLobby:setReady(ready)
@@ -764,8 +774,31 @@ function MultiplayerLobby:_onROOMS_END()
   self:_changed("rooms")
 end
 
+--! A running game's places (Server._join_running): peer, name, state (on:
+--! a person plays it, bot, standin: a bot for the person named, left:
+--! nobody), colour and team of each.
+function MultiplayerLobby:_onSEATS(f)
+  local seats = {}
+  for i = 1, tonumber(f.n) or 0 do
+    seats[#seats + 1] = {peer = tonumber(f["peer" .. i]), name = f["name" .. i] or "?",
+        state = f["state" .. i] or "left", colour = tonumber(f["colour" .. i]),
+        team = tonumber(f["team" .. i])}
+  end
+  -- (The room's mode and level, as the room list showed them.)
+  local listed
+  for _, r in ipairs(self.rooms or {}) do
+    if r.room == f.room then listed = r end
+  end
+  self.seat_choice = {room = f.room, password = self.join_password or "", seats = seats,
+      mode = listed and listed.mode, level = listed and listed.level}
+  self:_changed("seats", f)
+end
+
 function MultiplayerLobby:_onJOINED(f)
   self.room = f
+  self.seat_choice = nil
+  -- (A bot the server started to play the place of a person who left.)
+  self.stand_in = f.standin == "1"
   self.state = "in_room"
   self.players, self.players_pending = {}, {}
   self.ready = false
@@ -922,7 +955,9 @@ function MultiplayerLobby:_onLEFT(f)
   end
   local session = TheApp and TheApp.mp_session
   if session and session.lobby == self then
-    session:removePeer(tonumber(f.peer))
+    -- (replaced: somebody takes the place at once, Server._take_seat.)
+    session:removePeer(tonumber(f.peer), f.replaced == "1")
+    if f.replaced == "1" then return end
     -- (Not when the game is ending for everybody: that player's game only got
     -- there first.)
     if session:isEnding() then return end
@@ -995,13 +1030,24 @@ function MultiplayerLobby:_onSAVE(f)
   end
 end
 
+--! A peer list ("1,3") as a set; nil for nil.
+local function peer_set(text)
+  if not text then return nil end
+  local set = {}
+  for p in text:gmatch("%d+") do set[tonumber(p)] = true end
+  return set
+end
+
 function MultiplayerLobby:_onLOAD(f)
   local peers
   if f.peers then
     peers = {}
     for p in f.peers:gmatch("%d+") do peers[#peers + 1] = tonumber(p) end
   end
-  self.incoming_save = {step = tonumber(f.step), parts = {}, peers = peers}
+  -- (bots, standins: the places the room's own bots play, and those a bot
+  -- plays for a person who left; from servers that let people take places.)
+  self.incoming_save = {step = tonumber(f.step), parts = {}, peers = peers,
+      places = f.bots and {bots = peer_set(f.bots), standins = peer_set(f.standins or "")} or nil}
 end
 
 function MultiplayerLobby:_onSAVEDATA(f)
@@ -1013,7 +1059,8 @@ function MultiplayerLobby:_onLOADEND()
   local save, session = self.incoming_save, self:_ownSession()
   self.incoming_save = nil
   if save and session then
-    session.load_data = {step = save.step, data = table.concat(save.parts), peers = save.peers}
+    session.load_data = {step = save.step, data = table.concat(save.parts), peers = save.peers,
+        places = save.places}
   end
 end
 
@@ -1023,8 +1070,11 @@ function MultiplayerLobby:_onRESUME(f)
   session.held = false
   self.log("multiplayer: resumed at step " .. tostring(f.step))
   -- Back in a co-op game after leaving it: this hospital counts again for
-  -- the team's goals (MultiplayerSession:_markPlayerAway).
-  if session.rejoining then
+  -- the team's goals (MultiplayerSession:_markPlayerAway). (Not a bot playing
+  -- for a person who left: that hospital stays away.)
+  if session.rejoining and self.stand_in then
+    session.rejoining = nil
+  elseif session.rejoining then
     session.rejoining = nil
     local world = session.world
     local hospital = world and world.hospitals[session.hospital_index or 0]
@@ -1077,7 +1127,7 @@ function MultiplayerLobby:serviceSaves(session)
   local load = session.load_data
   if load then
     session.load_data = nil
-    self:_loadShared(session, load.step, MultiplayerLobby.fromBase64(load.data), load.peers)
+    self:_loadShared(session, load.step, MultiplayerLobby.fromBase64(load.data), load.peers, load.places)
   end
 end
 
@@ -1154,7 +1204,25 @@ function MultiplayerLobby:_seatsFromSave(world, session)
   session.hospital_index = seats[session.peer_id]
 end
 
-function MultiplayerLobby:_loadShared(session, step, data, peers)
+--! The hospitals whose players (the peers the game started with) are all
+--! in `set`: index -> true, or nil for none.
+function MultiplayerLobby:_hospitalsOnlyOf(set)
+  local only = {}
+  for _, p in ipairs(self.start_peers or {}) do
+    local index = self.peer_hospital and self.peer_hospital[p]
+    if index then only[index] = (only[index] ~= false) and set[p] or false end
+  end
+  local out
+  for index, yes in pairs(only) do
+    if yes then
+      out = out or {}
+      out[index] = true
+    end
+  end
+  return out
+end
+
+function MultiplayerLobby:_loadShared(session, step, data, peers, places)
   local app = TheApp
   local persist = require("persist")
   local raw = assert(persist.decompress(data))
@@ -1187,11 +1255,27 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
     -- differently): each player's hospital is the one named after them.
     if session.rejoining and world.mp_coop.teams then self:_seatsFromSave(world, session) end
     world.mp_local_index = session.hospital_index
-    -- The hospitals only bots play are this game's (START), not the saved
-    -- game's: continued with a bot in a person's place, the year end waited
-    -- for that person ("waits for MATROFTT", Jan's game on eu2). Every peer
-    -- has the same START, so all set the same.
-    if app.mp_coop then world.mp_coop.bot_hospitals = app.mp_coop.bot_hospitals end
+    -- The hospitals only the room's own bots play (a hidden bonus), and
+    -- those a bot plays for a person who left (away; no hold waits for
+    -- them): from the server, as people may take places in a running game
+    -- (Jan, 2026-11-12). Every peer gets the same LOAD, so all set the same.
+    local standin = places and places.standins or {}
+    if places then
+      world.mp_coop.bot_hospitals = self:_hospitalsOnlyOf(places.bots)
+      local people, standins = {}, nil
+      for _, p in ipairs(peers or session.peers or {}) do
+        local index = p ~= 0 and self.peer_hospital and self.peer_hospital[p]
+        if index and not standin[p] then people[index] = true end
+      end
+      for p in pairs(standin) do
+        local index = self.peer_hospital and self.peer_hospital[p]
+        if index and not people[index] then
+          standins = standins or {}
+          standins[index] = true
+        end
+      end
+      world.mp_coop.standin_hospitals = standins
+    end
     app.ui.hospital = world:getUIHospital()
     -- (and this player's messages and countdowns, not the referee's)
     if app.ui.bottom_panel then app.ui.bottom_panel:showOwnMessages() end
@@ -1213,7 +1297,7 @@ function MultiplayerLobby:_loadShared(session, step, data, peers)
       local present = {}
       for _, p in ipairs(peers or session.peers or {}) do
         local index = p ~= 0 and self.peer_hospital and self.peer_hospital[p]
-        if index then present[index] = true end
+        if index and not standin[p] then present[index] = true end
       end
       for i = 1, world.mp_coop.players do
         local hospital = world.hospitals[i]
@@ -1397,6 +1481,8 @@ function MultiplayerLobby:_onPLAYERS(f)
       peer = tonumber(f["peer" .. i]), name = f["name" .. i] or "?",
       connected = f["state" .. i] == "on", rtt = tonumber(f["rtt" .. i]) or -1,
       quiet = tonumber(f["quiet" .. i]) or 0, step = tonumber(f["step" .. i]) or 0,
+      -- (A bot; standin: one playing for the person named, who left.)
+      bot = f["bot" .. i] == "1", standin = f["standin" .. i] == "1",
     }
   end
   self.game_players = list
@@ -1476,6 +1562,7 @@ function MultiplayerLobby:_beginGame(f)
   end
   local peers = {}
   for p in (f.peers or ""):gmatch("%d+") do peers[#peers + 1] = tonumber(p) end
+  self.start_peers = peers
   local resume = f.resume == "1"
   -- The players now (some may have left); `peers` stays the start order.
   local active = peers

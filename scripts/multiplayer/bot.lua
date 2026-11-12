@@ -26,6 +26,9 @@
 --   MP_BOT_TOKEN         token the server gave this bot
 --   MP_BOT_NAME          its name (also the name of its hospital)
 --   MP_BOT_MODE          the room's mode (shared, coop, competitive, teams, ...)
+--   MP_BOT_STANDIN       1: it plays the place of a person who left, under their
+--                        name, until somebody takes it: quietly (no chat, no asks,
+--                        no dirty tricks)
 --   MP_LUA_CPATH, MP_LUA_PATH  where to find LuaSocket (if not standard)
 -- Tests only:
 --   MP_BOT_SEED          seed for its choices (default: from the clock)
@@ -68,6 +71,7 @@ local token = assert(os.getenv("MP_BOT_TOKEN"), "Missing MP_BOT_TOKEN")
 local my_name = os.getenv("MP_BOT_NAME") or "Bot"
 local pace = math.max(1, tonumber(os.getenv("MP_BOT_PACE") or "1") or 1)
 local fast = os.getenv("MP_BOT_FAST") == "1"
+local standin = os.getenv("MP_BOT_STANDIN") == "1"
 
 if os.getenv("MP_LUA_CPATH") then package.cpath = os.getenv("MP_LUA_CPATH") .. ";" .. package.cpath end
 if os.getenv("MP_LUA_PATH") then package.path = os.getenv("MP_LUA_PATH") .. ";" .. package.path end
@@ -815,6 +819,9 @@ function Bot.new(lobby)
   -- research room with four desks and a researcher at each.)
   self.research_heavy = (os.getenv("MP_BOT_RESEARCH") or "") == my_name
   if self.research_heavy then log("researches hard (four desks)") end
+  -- (In a person's place while they are away: it plays, and says nothing.)
+  self.standin = standin
+  if standin then log("plays for " .. my_name .. " while they are away (quiet)") end
   if self.brain ~= "script" then
     self.manager = Manager.new(self, {log = log, rand = rand, pick = pick, sabotage = sabotage, lines = LINES, fill = fill_in,
         typing = function(text) return 1.5 + #text * 0.06 + rand() * 2 end})
@@ -849,7 +856,9 @@ function Bot:flushOutbox()
     if now >= entry.at then
       table.remove(self.outbox, i)
       if entry.fn then entry.fn() end
-      if entry.text and entry.to == "team" then
+      if entry.text and self.standin then
+        log("(quiet) " .. entry.text)
+      elseif entry.text and entry.to == "team" then
         local mates = self.lobby:teamMates(self.world, TheApp.mp_session.peer_id)
         if #mates > 0 then
           self.lobby:send("CHAT", {text = entry.text, to = table.concat(mates, ","), team = 1, banter = entry.banter})
@@ -2977,6 +2986,7 @@ end
 function Bot:playTrick()
   local world = self.world
   if world.mp_coop and world.mp_coop.tricks_off then return false end -- (switched off in this game)
+  if self.standin then return false end -- (not in a person's name)
   local mine = world.ui.hospital
   local target, choice
   if self.manager then
