@@ -63,6 +63,9 @@ local COPIES = {gp = 6, pharmacy = 2, general_diag = 3, psych = 2, ward = 2, toi
     jelly_vat = 1, decontamination = 1, operating_theatre = 2, research = 1}
 -- Queue per room above which another room of the type helps.
 local BUSY_QUEUE = 5
+-- The model's plan names a room the hospital has: another one only while at
+-- least this many patients per room wait for those (M.planRoomWanted).
+local PLAN_COPY_QUEUE = 2
 -- With this much in the bank, shorter queues are worth another room and one
 -- more copy of a type is allowed (the money is no use in the bank: the bots
 -- of 2026-11-03 ended two years with $100k-150k and a falling reputation).
@@ -160,6 +163,15 @@ local function SIZES_OF(id)
 end
 
 --! The size and extras for a new room of this type.
+--! May the model's plan add a room of type `id` (n built, q patients
+--! waiting for them)? The first one; another one within COPIES only while
+--! patients wait for those there are (Jan, 2026-11-12: Bot Edna built a
+--! second ward nobody waited for, because her plans kept naming one).
+function M.planRoomWanted(id, n, q)
+  if n == 0 then return true end
+  return n < (COPIES[id] or 1) and q / n >= PLAN_COPY_QUEUE
+end
+
 function M.roomPlan(id)
   local extras = EXTRAS[id] or DEFAULT_EXTRAS
   local copy = {}
@@ -987,7 +999,7 @@ function M:projects(s)
         local base = SPECIALISTS[what] and "Doctor" or what
         if staff(base) < math.min(cap[base] or 99, need[base] or 0) then hire(what, score) end
       elseif kind == "room" then
-        if (s.rooms[what] or 0) < (COPIES[what] or 1) then room(what, score) end
+        if M.planRoomWanted(what, s.rooms[what] or 0, s.queue[what] or 0) then room(what, score) end
       elseif kind == "buy" and what ~= "drinks_machine" then -- (drinks: the rule above)
         buy(what, score)
       end

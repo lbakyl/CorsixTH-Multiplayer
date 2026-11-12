@@ -553,4 +553,12 @@ do
   eq(M.dealsWithRivals({mp_coop = {competitive = true}}), true, "a race of all against all")
   eq(M.dealsWithRivals({mp_coop = {competitive = true, teams = {1, 2, 1, 2}}}), false, "a race of teams")
 end
+-- The model's plan names a room the hospital has: another one only for a
+-- queue (Bot Edna's second ward, nobody waiting: Jan, 2026-11-12).
+eq(M.planRoomWanted("ward", 0, 0), true, "plan: the first ward")
+eq(M.planRoomWanted("ward", 1, 0), false, "plan: no second ward without a queue")
+eq(M.planRoomWanted("ward", 1, 3), true, "plan: a second ward for a queue")
+eq(M.planRoomWanted("ward", 2, 9), false, "plan: no third ward (COPIES)")
+eq(M.planRoomWanted("dna_fixer", 1, 9), false, "plan: one DNA fixer")
+
 print("rivals ok")
