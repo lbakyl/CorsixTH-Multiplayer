@@ -134,6 +134,21 @@ function MultiplayerLobby.modeLabel(mode)
   return S.mode_shared
 end
 
+--! What a bot of this level is: "hard bot" (level: "easy", "normal" or
+--! "hard"; nil is a normal one).
+function MultiplayerLobby.botKind(level)
+  local S = _S.multiplayer_window
+  if level == "easy" then return S.bot_kind_easy end
+  if level == "hard" then return S.bot_kind_hard end
+  return S.bot_kind_normal
+end
+
+--! A bot's name with its level, as the lists show it: "Bot Agnes (hard bot)"
+--! (Jan, 2026-11-12).
+function MultiplayerLobby.botName(name, level)
+  return _S.multiplayer_window.bot_named:format(name, MultiplayerLobby.botKind(level))
+end
+
 --! The mode of a running game, from its world.
 function MultiplayerLobby.worldMode(world)
   if not (world and world.mp_coop) then return "shared" end
@@ -781,13 +796,13 @@ end
 
 --! A running game's places (Server._join_running): peer, name, state (on:
 --! a person plays it, bot, standin: a bot for the person named, left:
---! nobody), colour and team of each.
+--! nobody), colour and team of each, and a bot's level (easy, normal, hard).
 function MultiplayerLobby:_onSEATS(f)
   local seats = {}
   for i = 1, tonumber(f.n) or 0 do
     seats[#seats + 1] = {peer = tonumber(f["peer" .. i]), name = f["name" .. i] or "?",
         state = f["state" .. i] or "left", colour = tonumber(f["colour" .. i]),
-        team = tonumber(f["team" .. i])}
+        team = tonumber(f["team" .. i]), level = f["level" .. i] or "normal"}
   end
   -- (The room's mode and level, as the room list showed them.)
   local listed
@@ -1493,7 +1508,7 @@ end
 
 --! The server's list of the players in this game (every 2 seconds): name,
 --! connected or left, average round trip over the last 10 seconds, seconds
---! since it last heard from them, and their last step.
+--! since it last heard from them, their last step, and a bot's level.
 function MultiplayerLobby:_onPLAYERS(f)
   local list = {}
   for i = 1, tonumber(f.n) or 0 do
@@ -1503,6 +1518,7 @@ function MultiplayerLobby:_onPLAYERS(f)
       quiet = tonumber(f["quiet" .. i]) or 0, step = tonumber(f["step" .. i]) or 0,
       -- (A bot; standin: one playing for the person named, who left.)
       bot = f["bot" .. i] == "1", standin = f["standin" .. i] == "1",
+      level = f["level" .. i] or "normal", -- (a bot's: easy, normal, hard)
     }
   end
   self.game_players = list

@@ -93,8 +93,10 @@ BOT_NAMES = ("Bot Agnes", "Bot Bertie", "Bot Clive", "Bot Dora", "Bot Edna", "Bo
 BOT_START_TIMEOUT = 60.0
 # A bot's level (the room owner picks it: Jan, 2026-11-12): easy (no advice
 # from the language model, no hidden money), normal, hard (more hidden
-# money and other help in the game: World.MP_BOT_LEVEL_BONUS).
+# money and other help in the game: World.MP_BOT_LEVEL_BONUS). A new bot is
+# a hard one unless the owner says otherwise (Jan, 2026-11-12).
 BOT_LEVELS = ("easy", "normal", "hard")
+BOT_DEFAULT_LEVEL = "hard"
 # A running game's places (Jan, 2026-11-12): somebody may join it and take
 # the place of a bot, or of a player who left; a player who leaves gets a bot
 # that plays their hospital under their name until somebody takes the place
@@ -668,7 +670,8 @@ class Server:
         in-game player list: peer, name, average round trip over the last
         RTT_WINDOW seconds (-1: none), on (connected) or left, seconds since
         the server last heard from them, the last step they reported, and
-        bot=1 for a bot (standin=1: one playing for the person named)."""
+        bot=1 for a bot (standin=1: one playing for the person named; level:
+        an easy or hard one, none for a normal one)."""
         now = time.monotonic()
         seats: dict[int, tuple[str, str, int, int, int, Player | None]] = {}
         for peer, name in room.left_names.items():
@@ -685,8 +688,17 @@ class Server:
             fields.update({f"peer{i}": peer, f"name{i}": name, f"state{i}": state,
                            f"rtt{i}": rtt, f"quiet{i}": quiet, f"step{i}": step,
                            f"bot{i}": 1 if pl is not None and pl.is_bot else None,
-                           f"standin{i}": 1 if pl is not None and pl.stand_in else None})
+                           f"standin{i}": 1 if pl is not None and pl.stand_in else None,
+                           f"level{i}": self._shown_level(pl)})
         return encode("PLAYERS", **fields)
+
+    @staticmethod
+    def _shown_level(pl: "Player | None") -> str | None:
+        """A room's own bot's level for the lists (easy, hard; None for a
+        normal one, a person or a bot playing for one)."""
+        if pl is None or not pl.is_bot or pl.stand_in or pl.bot_level == "normal":
+            return None
+        return pl.bot_level
 
     def _on_pong(self, player: Player, f: dict[str, str]) -> None:
         sent = player.pings.pop(int(f.get("id", "0") or 0), None)
@@ -825,7 +837,8 @@ class Server:
     def _seat_states(self, room: Room) -> list[dict[str, object]]:
         """Each place of a running game (the peers it started with): who has
         it (state on: a person, bot: the room's own bot, standin: a bot for
-        the person named, left: nobody), its colour and team."""
+        the person named, left: nobody), its colour and team, and a bot's
+        level (easy, hard; none for a normal one)."""
         def pairs(key: str) -> dict[int, int]:
             out = {}
             for part in str(room.start_fields.get(key, "")).split(","):
@@ -838,11 +851,14 @@ class Server:
         out = []
         for peer in self._start_peers(room):
             pl = room.players.get(peer)
+            level = None
             if pl is not None:
                 state = "standin" if pl.stand_in else "bot" if pl.is_bot else "on"
-                name = pl.name
+                name, level = pl.name, self._shown_level(pl)
             elif peer in pending:
                 state, name = ("standin" if pending[peer][3] else "bot"), pending[peer][0]
+                if state == "bot" and pending[peer][4] != "normal":
+                    level = pending[peer][4]
             else:
                 state, name = "left", room.left_names.get(peer, f"Player {peer}")
             colour, team = colours.get(peer), teams.get(peer)
@@ -851,7 +867,7 @@ class Server:
                 colour = room.seat_colours[index - 1] if index <= len(room.seat_colours) else None
                 team = room.seat_teams[index - 1] if index <= len(room.seat_teams) else None
             out.append({"peer": peer, "name": name, "state": state, "colour": colour,
-                        "team": team})
+                        "team": team, "level": level})
         return out
 
     def _free_seats(self, room: Room) -> list[int]:
@@ -889,7 +905,7 @@ class Server:
             for i, s in enumerate(states.values(), start=1):
                 fields.update({f"peer{i}": s["peer"], f"name{i}": s["name"],
                                f"state{i}": s["state"], f"colour{i}": s["colour"],
-                               f"team{i}": s["team"]})
+                               f"team{i}": s["team"], f"level{i}": s["level"]})
             player.send(encode("SEATS", **fields))
             return
         self._take_seat(player, room, mine)
@@ -1267,7 +1283,7 @@ class Server:
             return
         name = self._bot_name(room)
         token = secrets.token_hex(16)
-        level = f.get("level") if f.get("level") in BOT_LEVELS else "normal"
+        level = f.get("level") if f.get("level") in BOT_LEVELS else BOT_DEFAULT_LEVEL
         room.bots_pending[token] = [name, None, None, False, level]
         log.info("room %r: %r adds %r", room.name, player.name, name)
         loop = asyncio.get_running_loop()

@@ -129,7 +129,7 @@ function UIMultiplayerPlayers.rows(lobby, session, world)
     elseif session and p.peer == session.peer_id then
       status = S.players_you
     elseif p.bot then
-      status = S.players_bot
+      status = MultiplayerLobby.botKind(p.level) -- ("hard bot")
     else
       status = S.players_playing
     end

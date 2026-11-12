@@ -128,13 +128,15 @@ defaults shows in the room.
 
 **Nobody to play with?** As the host, click an empty place in your room
 ("click: add a bot") and a computer player takes it; click the bot to take it
-away again. A room for four can have up to three bots. A right click on a
-bot picks how good it is: **Easy** (no help from the language model, no
-hidden money), **Normal** (as described here: $2,000 a month the others do
-not see) or **Hard** ($8,000 a month, 5 reputation a month, its hospital's
-value counts a fifth more towards the goals, only every second death counts,
-and it bids higher at auctions). Whatever helps a bot stops once a person
-plays its hospital. A bot builds its
+away again. A room for four can have up to three bots. A new bot is a hard
+one; a right click on a bot opens a small menu to pick how good it is:
+**Easy** (no help from the language model, no hidden money), **Normal** (as
+described here: $2,000 a month the others do not see) or **Hard** ($8,000 a
+month, 5 reputation a month, its hospital's value counts a fifth more towards
+the goals, only every second death counts, and it bids higher at auctions).
+The room, the places of a running game and the Players window say which:
+"Bot Agnes (hard bot)". Whatever helps a bot stops once a person plays its
+hospital. A bot builds its
 hospital slowly, as a beginner would (a desk, a GP's office, then one room
 after the other), hires staff, opens, and chats a little. In co-op it accepts
 whatever you offer it and thanks you; in a competitive race it plays a dirty

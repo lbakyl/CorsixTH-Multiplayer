@@ -1578,8 +1578,9 @@ def test_bot_levels_easy_and_hard():
         ann = await Client.connect(port, "Ann")
         ann.send(encode("CREATE", room="lv", password="", max=3, mode="competitive", level=1))
         await ann.expect("JOINED")
-        ann.send(encode("BOT", add=1, level="hard"))
+        # A bot is a hard one unless the owner says otherwise.
         ann.send(encode("BOT", add=1))
+        ann.send(encode("BOT", add=1, level="normal"))
         await started_bots(bots, 2)
         assert [b["level"] for b in bots] == ["hard", "normal"]
         agnes, bertie = await connect_bot(port, bots[0]), await connect_bot(port, bots[1])
@@ -1606,6 +1607,15 @@ def test_bot_levels_easy_and_hard():
             await asyncio.sleep(0.01)
         ref = await connect_referee(port, "lv", referees[0])
         await ref.expect("START")
+        # The lists of the running game say the bots' levels.
+        players = await ann.expect("PLAYERS")
+        assert (players["name2"], players.get("level2")) == ("Bot Agnes", "hard")
+        assert (players["name3"], players.get("level3")) == ("Bot Bertie", "easy")
+        dan = await Client.connect(port, "Dan")
+        dan.send(encode("JOIN", room="lv", password=""))
+        seats = await dan.expect("SEATS")
+        assert [(seats[f"state{i}"], seats.get(f"level{i}")) for i in (1, 2, 3)] ==             [("on", None), ("bot", "hard"), ("bot", "easy")]
+        await dan.close()
         carl = await Client.connect(port, "Carl")
         carl.send(encode("JOIN", room="lv", password="", seat=2))
         st = await carl.expect("START")

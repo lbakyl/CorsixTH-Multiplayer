@@ -101,7 +101,7 @@ wait_log() {
 }
 
 pids=()
-run_probe tia MP_ROLE=host MP_ROOM=take MP_MODE=competitive MP_PLAYERS=3 MP_ADD_BOTS=2 MP_SCENARIO=none MP_BOT_LEVELS=3:hard \
+run_probe tia MP_ROLE=host MP_ROOM=take MP_MODE=competitive MP_PLAYERS=3 MP_ADD_BOTS=2 MP_SCENARIO=none MP_BOT_LEVELS=2:normal \
   MP_REALTIME=1 MP_STEPS=3600 MP_STALL_LIMIT=180 MP_UI_SCRIPT="20:openhospital;3590:hospitals" & pids+=($!)
 run_probe vic MP_ROLE=host MP_ROOM=lone MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_SCENARIO=none \
   MP_REALTIME=1 MP_STEPS=300 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital" & pids+=($!)
@@ -152,12 +152,14 @@ print(f"1. Takes a bot's place:     places {places.group(1) if places else '-'};
 if not ok1: bad.append("ok1")
 
 # The bonus months after the take-over (tia's game held for it): hospital 2
-# not among them; before it, 2 and 3.
+# not among them; before it, 2 and 3 (3 a hard bot: a new bot is a hard one;
+# tia made the bot of 2 a normal one).
 taken = t.find('(rejoin at step')
 before = re.findall(r'bot bonus for hospital\(s\) (\S+)', t[:taken]) if taken >= 0 else []
 after = re.findall(r'bot bonus for hospital\(s\) (\S+)', t[taken:]) if taken >= 0 else []
 ok2 = (taken >= 0 and len(after) > 0 and all(h == '3:hard' for h in after)
-       and all(h == '2,3:hard' for h in before) and re.search(r'Bot \w+, hard', t) is not None)
+       and all(h == '2,3:hard' for h in before) and re.search(r'Bot \w+ \(hard bot\)', t) is not None
+       and re.search(r'Bot \w+ \(normal bot\)', t) is not None)
 print(f"2. No bonus for a person:   before the take-over {before or 'none'}, after {after or 'none'}")
 if not ok2: bad.append("ok2")
 

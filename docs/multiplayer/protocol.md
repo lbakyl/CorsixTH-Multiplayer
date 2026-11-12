@@ -30,7 +30,7 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 | `READY` | in a room | `ready` |
 | `SEAT` | in a new game's room (not a continued one: `locked`) | `colour` (1-4: the hospital; the same colour shares one) and/or `team` (1-4: the same team wins together, different teams race); the owner may add `peer` to change another player's (a bot's too). A colour somebody has brings their team; a team changes it for everybody of that colour. A new player gets the first free colour on the owner's team (error `bad_seat` for other values) |
 | `START` | room owner | (none) |
-| `BOT` | room owner, in the lobby | `add=1`: the server starts a computer player that joins the room (error `no_bots` on a server without a referee build, `room_full`, `too_many_bots`); `remove=<peer>`: that bot leaves (see `bots.md`) |
+| `BOT` | room owner, in the lobby | `add=1`: the server starts a computer player that joins the room (error `no_bots` on a server without a referee build, `room_full`, `too_many_bots`), optional `level` (`easy`, `normal` or `hard`, the default); `peer=<peer> level=<level>`: that bot's level from now on; `remove=<peer>`: that bot leaves (see `bots.md`) |
 | `LEAVE` | in a room | (none) |
 | `CHAT` | in a room or game | `text`; optional `to` (a peer): only that player gets it; `team=1` with `to=<peer>,<peer>...` (a race of two teams: the sender's team mates, as its game knows them): only those players get it |
 | `SPEED` | in game | `speed`: `Pause` or a speed name up to the room's `max_speed` |
@@ -52,14 +52,14 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 | `ERROR code=build_mismatch text need release url` | answer to `HELLO` on a server that only lets in its referee's build (`referee.md`): `need` is the Lua code checksum it wants (the last part of the build id), `release` and `url` the release to get and its download page (both optional); the server then hangs up. The game offers `url` only if it is a `https://github.com/` page |
 | `ROOM room players max mode level locked state build_ok continue` | one per room after `LIST`, then `ROOMS_END count`; `continue=1` for a saved game |
 | `JOINED room peer owner mode free level difficulty max continue date bots` | you are in the room as player `peer` (`free=1`: a new game, colours and teams can change; `mode`: what they make now; `continue`, `date`: a saved game; `bots=1`: this server can add bots) |
-| `PLAYER peer name ready rtt owner bot colour team` | one per player (`bot=1`: a computer player; `colour`, `team`: 1-4, a continued game's saved ones), followed by |
+| `PLAYER peer name ready rtt owner bot colour team level` | one per player (`bot=1`: a computer player, `level` an easy or hard one, none: normal; `colour`, `team`: 1-4, a continued game's saved ones), followed by |
 | `LOBBY room count max mode free level delay speed one_way latency starting` | (`starting`: bots the server is still starting; they keep a place) | the room summary: recommended lockstep `delay` (steps), fastest smooth `speed`, worst player-to-player one-way time (ms) and click-to-effect `latency` at Normal speed (ms). Sent about once a second while in the lobby |
 | `OWNER` | you are now the room owner |
 | `START peer peers names seed level difficulty mode delay max_speed speed speed_control grant_wage_increase free_build_mode` | the game starts: everybody seeds the gameplay random generator with `seed`, loads `level` and plays as `peer` among `peers` (comma-separated, start order; `names` in the same order). A rejoining player also gets `resume=1` and `active` (the players now) and loads no level. A new game also has `colours` and `teams` (`peer:colour,...`, `peer:team,...`): every peer works out the hospitals from them the same way (`MultiplayerLobby.layout`: a hospital per colour; team mates' hospitals on neighbouring plots, `mp_levels.teamSeats`), and `mode` is what they make (`shared`, `coop`, `competitive`, `teams`, `teamshared` or `mixed`) |
 | `SPEED peer name speed` | a player changed the speed (or paused); every client applies it, the sender included |
 | `SHOW peer kind ...` | another player's cosmetic information, relayed unchanged with the sender's `peer` |
 | `LEFT peer step name` | a player left the game after reporting `step`; stop waiting for them. `replaced=1`: somebody takes the place at once (a load follows; the hospital is not marked away) |
-| `SEATS room n peer<i> name<i> state<i> colour<i> team<i>` | answer to `JOIN` of a running room: its places in start order; `state` is `on` (a person plays it), `bot` (the room's own bot), `standin` (a bot playing for the person named, who left) or `left` (nobody) |
+| `SEATS room n peer<i> name<i> state<i> colour<i> team<i> level<i>` | answer to `JOIN` of a running room: its places in start order; `state` is `on` (a person plays it), `bot` (the room's own bot), `standin` (a bot playing for the person named, who left) or `left` (nobody); `level` an own bot's, `easy` or `hard` (none: a normal one) |
 | `DESYNC step` | fingerprints differed at `step` and cannot be repaired: the game is over |
 | `HOLD step why` | stop stepping and issuing commands; answer `HELD` (`why=desync` at `step`, or `why=rejoin`: a player rejoins). A game that found the desync itself waits 3 s for `HOLD` before it tells its player the games stay different; after a repaired desync (`RESUME`) only the adviser says so |
 | `SAVE step` | referee only: save once at `step` (or later) |
@@ -145,7 +145,8 @@ connection is closed. `LOAD` names `bots` (the places
 the room's own bots play: their hospitals get the hidden bonus) and
 `standins` (their hospitals count as away; no hold waits for them), so every
 game marks the same hospitals. `ROOM` has `places` for a running room (how
-many may be taken); `PLAYERS` has `bot<i>=1` and `standin<i>=1`.
+many may be taken); `PLAYERS` has `bot<i>=1`, `standin<i>=1` and an own
+bot's `level<i>` (`easy`, `hard`; none for a normal one).
 
 ## Repair and rejoin
 

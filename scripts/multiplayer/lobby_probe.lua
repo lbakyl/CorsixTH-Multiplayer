@@ -411,9 +411,11 @@ local function run_lobby()
       for i = 1, #win.player_panels do
         labels[i] = (tostring(win.player_panels[i].label or ""):gsub("^<LocalisedString> Current value:%s*", ""))
       end
+      -- (The line that offers a bot, in the game's language.)
+      local add_text = (tostring(_S.multiplayer_window.add_bot):gsub("^<LocalisedString> Current value:%s*", ""))
       local empty
       for i = 1, tonumber(lobby.room.max) or 2 do
-        if not empty and not lobby.players[i] and labels[i]:find("add a bot", 1, true) then empty = i end
+        if not empty and not lobby.players[i] and labels[i] == add_text then empty = i end
       end
       log(string.format("UI: room places before bot %d: %s", k, table.concat(labels, " | ")))
       if not empty then error("no empty place to click for a bot") end
@@ -430,11 +432,22 @@ local function run_lobby()
         for _, p in pairs(lobby.players) do if p.bot == "1" and p.ready == "1" then bots = bots + 1 end end
         return bots >= add_bots
       end, 60)
-      -- MP_BOT_LEVELS: "peer:level,...": the host makes those bots easy or
-      -- hard (the menu on a bot's line, UIMultiplayer:playerMenu).
+      -- MP_BOT_LEVELS: "peer:level,...": the host gives those bots that level
+      -- (easy, normal, hard; a new bot is a hard one), "all:level" every bot
+      -- (the menu on a bot's line, UIMultiplayer:playerMenu).
       -- (Lua 5.5: a loop's own variables cannot be assigned.)
-      for peer_text, level in (os.getenv("MP_BOT_LEVELS") or ""):gmatch("(%d+):(%a+)") do
-        local peer = tonumber(peer_text)
+      local wanted = {}
+      for peer_text, level in (os.getenv("MP_BOT_LEVELS") or ""):gmatch("(%w+):(%a+)") do
+        if peer_text == "all" then
+          for peer, p in pairs(lobby.players) do
+            if p.bot == "1" then wanted[#wanted + 1] = {peer, level} end
+          end
+        else
+          wanted[#wanted + 1] = {tonumber(peer_text), level}
+        end
+      end
+      for _, want in ipairs(wanted) do
+        local peer, level = want[1], want[2]
         lobby:setBotLevel(peer, level)
         wait_for("bot " .. peer .. " " .. level, function()
           local p = lobby.players[peer]
@@ -447,6 +460,24 @@ local function run_lobby()
         labels[i] = (tostring(win.player_panels[i].label or ""):gsub("^<LocalisedString> Current value:%s*", ""))
       end
       log("UI: room places with the bots: " .. table.concat(labels, " | "))
+      -- (With MP_SHOT_DIR: the level menu on the first bot's line, as a
+      -- right click opens it.)
+      for i = 1, #win.player_panels do
+        local p = lobby.players[i]
+        if shot_dir and p and p.bot == "1" then
+          win:playerMenu(i)
+          local level_menu, items = win.player_dropdown, {}
+          for k, panel in ipairs(level_menu.item_panels) do
+            items[k] = (tostring(panel.label or ""):gsub("^<LocalisedString> Current value:%s*", "")) ..
+                (level_menu.item_buttons[k].toggled and " (now)" or "")
+          end
+          log(string.format("UI: bot menu on place %d at %d,%d, %dx%d: %s", i, level_menu.x, level_menu.y,
+              level_menu.width, level_menu.height, table.concat(items, " | ")))
+          shot("bot-menu")
+          level_menu:close()
+          break
+        end
+      end
     end
     wait_for("players", function()
       local n, ready = 0, true

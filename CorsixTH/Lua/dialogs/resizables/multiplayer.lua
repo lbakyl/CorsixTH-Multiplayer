@@ -38,6 +38,9 @@ local col = {
   title          = Colours.Title,
   caption        = Colours.Caption,
   textbox        = Colours.Textbox,
+  -- A place's menu (UIMultiplayer:_placeMenu): darker than the room's lines.
+  menu           = Colours.Scrollbar,
+  menu_hover     = Colours.HotkeyBoxActive,
 }
 
 local WIDTH = 420
@@ -524,8 +527,8 @@ function UIMultiplayer:_buildSeats()
   local line_w = WIDTH - 40 - colour_w - team_w - 10
   for i, s in ipairs(seats) do
     local y = 100 + (i - 1) * PLACE_H
-    local text = (s.state == "on" and S.seat_on or s.state == "bot" and S.seat_bot or
-        s.state == "standin" and S.seat_standin or S.seat_left):format(s.name)
+    local text = s.state == "bot" and MultiplayerLobby.botName(s.name, s.level) or
+        (s.state == "on" and S.seat_on or s.state == "standin" and S.seat_standin or S.seat_left):format(s.name)
     local row = self:addBevelPanel(20, y, line_w, 25, col.setting):setLabel(text)
         :makeButton(0, 0, line_w, 25, nil, function() self:clickSeat(i) end)
     row:enable(s.state ~= "on")
@@ -609,14 +612,24 @@ function UIMultiplayer:_updateRoom()
   local bots = lobby:canAddBots()
   -- Bots the server is still starting take the first empty places.
   local starting = tonumber(lobby.summary and lobby.summary.starting) or 0
+  -- A bot's name with its level, "Bot Agnes (hard bot)" (Jan, 2026-11-12; a
+  -- right click picks the level), and for the host what a click does: after
+  -- every bot's name, or (one too long for its line) after none.
+  local scale = TheApp.gfx:getUIScale()
+  local hint = bots and S.bot_remove or nil
+  for i = 1, #self.player_panels do
+    local p, panel = lobby.players[i], self.player_panels[i]
+    if hint and p and p.bot == "1" and
+        panel.label_font:sizeOf(MultiplayerLobby.botName(p.name, p.level) .. hint) > (panel.w - 8) * scale then
+      hint = nil
+    end
+  end
   for i = 1, #self.player_panels do
     local p = lobby.players[i]
     local text = ""
     if p and p.bot == "1" then
-      -- (An easy or hard bot says so; a right click picks the level.)
-      local name = p.level == "easy" and S.bot_easy:format(p.name) or
-          p.level == "hard" and S.bot_hard:format(p.name) or p.name
-      text = S.bot_line:format(name, bots and S.bot_remove or "")
+      local name = MultiplayerLobby.botName(p.name, p.level)
+      text = hint and (name .. hint) or name
     elseif p then
       -- (The host is not asked whether they are ready.)
       text = S.player_line:format(p.name, p.owner == "1" and S.owner_mark or "", p.rtt or "?",
@@ -728,29 +741,56 @@ function UIMultiplayer:playerMenu(i)
   local lobby = self.lobby
   local p = lobby.players[i]
   if p and p.bot == "1" and lobby:canAddBots() then
-    for _, w in ipairs(self.windows or {}) do -- (one menu at a time)
-      if w == self.player_dropdown then w:close() break end
-    end
     local S, peer = _S.multiplayer_window, p.peer
     local levels = {"easy", "normal", "hard"}
-    self.player_dropdown = UIDropdown(self.ui, self, self.place_buttons[i],
-        {{text = S.bot_menu_easy}, {text = S.bot_menu_normal}, {text = S.bot_menu_hard}},
-        function(_, index) lobby:setBotLevel(peer, levels[index]) end, col.setting_active, col.scrollbar)
-    self:addWindow(self.player_dropdown)
+    local current = 2
+    for index, level in ipairs(levels) do
+      if level == (p.level or "normal") then current = index end
+    end
+    self:_placeMenu(i, {{text = S.bot_menu_easy}, {text = S.bot_menu_normal}, {text = S.bot_menu_hard}},
+        function(_, index) lobby:setBotLevel(peer, levels[index]) end, current)
     return
   end
   if not (p and p.bot ~= "1" and lobby:isOwner() and tonumber(p.peer) ~= tonumber(lobby.room.peer)) then
     return
   end
+  local peer, name = p.peer, p.name
+  self:_placeMenu(i, {{text = _S.multiplayer_window.kick_player:format(name)}},
+      function() lobby:kickPlayer(peer) end)
+end
+
+-- A place's menu: at least this wide, and this much wider than its longest
+-- item; its frame (the windows' own) is this thick.
+local MENU_MIN_W, MENU_PAD, MENU_FRAME = 90, 12, 9
+
+--! A small menu (UIDropdown) under place i's line, so that it stands out from
+--! the room's lines (Jan, 2026-11-12: the level menu looked like more of
+--! them): as wide as its longest item, in the middle of the line, darker, and
+--! framed as a window. `current`: the item shown pressed (the level now).
+function UIMultiplayer:_placeMenu(i, items, callback, current)
   for _, w in ipairs(self.windows or {}) do -- (one menu at a time)
     if w == self.player_dropdown then w:close() break end
   end
-  local peer, name = p.peer, p.name
-  local place_button = self.place_buttons[i]
-  self.player_dropdown = UIDropdown(self.ui, self, place_button,
-      {{text = _S.multiplayer_window.kick_player:format(name)}},
-      function() lobby:kickPlayer(peer) end, col.setting_active, col.scrollbar)
-  self:addWindow(self.player_dropdown)
+  local line = self.place_buttons[i].panel_for_sprite
+  local s = TheApp.gfx:getUIScale()
+  local w = 0
+  for _, item in ipairs(items) do
+    w = math.max(w, math.ceil(line.label_font:sizeOf(item.text) / s))
+  end
+  w = math.min(line.w, math.max(MENU_MIN_W, w + 2 * MENU_PAD))
+  -- (UIDropdown opens under a button's panel, as wide as it, and gives that
+  -- button the chosen item for its label: a stand-in, not the line's own.
+  -- The frame starts where the line ends.)
+  local anchor = {panel_for_sprite = {x = line.x + math.floor((line.w - w) / 2),
+      y = line.y + MENU_FRAME, w = w, h = line.h}}
+  function anchor.setLabel(b) return b end
+  function anchor.setToggleState(b) return b end
+  function anchor.toggle() end
+  local menu = UIDropdown(self.ui, self, anchor, items, callback, col.menu, col.menu_hover)
+  menu.border_sprites = TheApp.gfx:loadSpriteTable("Bitmap", "aux_ui", true)
+  if current and menu.item_buttons[current] then menu.item_buttons[current]:setToggleState(true) end
+  self.player_dropdown = menu
+  self:addWindow(menu)
 end
 
 --! A player's colour button: the next colour (a colour somebody has means
