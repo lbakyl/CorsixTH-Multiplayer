@@ -789,7 +789,9 @@ function M:projects(s)
           return bot:moveStaffInto(spare, lab)
         end, 0)
       else
-        hire("Researcher", working == 0 and 12 or 5)
+        -- (The second and third soon too: Jan, 2026-11-12, a lab with fewer
+        -- researchers than desks.)
+        hire("Researcher", working == 0 and 14 or 10)
       end
     end
   end
