@@ -87,6 +87,8 @@ local GIVE_DAYS, ASK_DAYS, ASK_DAYS_EMERGENCY = 20, 90, 7
 -- before an allied bot lends one although the ally could hire (Jan, 2026-11-07:
 -- no bot ever asked).
 local LACK_DAYS, LACK_EMERGENCY_DAYS = 10, 3
+-- Money left after a plot bought for the hospital's value (not for room).
+local VALUE_LAND_SPARE = 15000
 -- Game days between warnings that an opponent can win (4 months).
 local RIVAL_WARN_DAYS = 120
 -- A failing hospital is looked at from the second game year (Jan, 2026-11-08:
@@ -159,7 +161,54 @@ end
 -- desks, a researcher at each. Jan's test of 2026-11-12.)
 local function SIZES_OF(id)
   if id == "research" and M.research_heavy then return 8 end
+  -- (A hard bot: three desks, three researchers; a 7 x 7 room holds them.)
+  if id == "research" and M.hard then return 7 end
   return SIZES[id] or smallest_size(id)
+end
+
+-- A hard bot's research in its first two years (Jan, 2026-11-12): mostly
+-- cures (the machines that earn), then diagnosis, a share each for the rest;
+-- once every cure machine is found, or after two years, the game's even
+-- split again. (Percent of the research; the areas are the game's.)
+local HARD_RESEARCH = {cure = 70, diagnosis = 27, drugs = 1, improvements = 1, specialisation = 1}
+local EVEN_RESEARCH = {cure = 20, diagnosis = 20, drugs = 20, improvements = 20, specialisation = 20}
+local HARD_RESEARCH_DAYS = 720
+M.HARD_RESEARCH, M.EVEN_RESEARCH, M.HARD_RESEARCH_DAYS = HARD_RESEARCH, EVEN_RESEARCH, HARD_RESEARCH_DAYS
+
+--! The research shares a bot wants now (area -> percent), or nil: leave them.
+--!param policy the hospital's research_policy; day: game day; hard: a hard bot
+function M.researchWanted(policy, day, hard)
+  if not hard or not policy then return nil end
+  local cure_left = policy.cure and policy.cure.current
+  if day < HARD_RESEARCH_DAYS and cure_left then return HARD_RESEARCH end
+  return EVEN_RESEARCH
+end
+
+--! Set the research shares (lowered ones first, so the raised ones have
+--! room), a few days apart at most once.
+function M:researchPolicy(s)
+  local policy = s.hosp.research and s.hosp.research.research_policy
+  local want = M.researchWanted(policy, s.day, M.hard)
+  if not want or (self.research_set_day and s.day - self.research_set_day < 7) then return end
+  local lower, raise = {}, {}
+  for _, area in ipairs({"cure", "diagnosis", "drugs", "improvements", "specialisation"}) do
+    local now = policy[area] and policy[area].frac
+    local target = want[area]
+    -- (An area with nothing left to research stays as the game has it.)
+    if now and target and now ~= target and (target < now or policy[area].current) then
+      if target < now then lower[#lower + 1] = {area, target} else raise[#raise + 1] = {area, target} end
+    end
+  end
+  if #lower + #raise == 0 then return end
+  self.research_set_day = s.day
+  local parts = {}
+  for _, list in ipairs({lower, raise}) do
+    for _, a in ipairs(list) do
+      self:issue({kind = "research_frac", area = a[1], frac = a[2]})
+      parts[#parts + 1] = a[1] .. " " .. a[2] .. "%"
+    end
+  end
+  self:note(string.format("day %d: research %s", s.day, table.concat(parts, ", ")))
 end
 
 --! The size and extras for a new room of this type.
@@ -186,6 +235,7 @@ function M.roomPlan(id)
   for k, v in pairs(extras) do copy[k] = v end
   -- (No plant: the floor is for desks.)
   if id == "research" and M.research_heavy then copy.desk, copy.plant = 3, nil end
+  if id == "research" and M.hard and not M.research_heavy then copy.desk, copy.plant = 2, nil end
   return SIZES_OF(id), copy
 end
 
@@ -298,6 +348,9 @@ function M:assess()
 
   -- Patients: what their diseases need, comfort.
   local need = {}
+  -- Diagnosed patients in the hospital now, by the treatment room they wait
+  -- for and it does not have (M:projects builds it soon).
+  s.waiting_for = {}
   local thirst, warm, toilet, happy, n = 0, 0, 0, 0, 0
   s.patients, s.cold, s.hot = 0, 0, 0
   for _, p in ipairs(hosp.patients or {}) do
@@ -312,7 +365,10 @@ function M:assess()
       local d = p.disease
       if p.diagnosed then
         for _, room in ipairs(d.treatment_rooms or {}) do
-          if not s.rooms[room] then need[room] = (need[room] or 0) + 1 end
+          if not s.rooms[room] then
+            need[room] = (need[room] or 0) + 1
+            s.waiting_for[room] = (s.waiting_for[room] or 0) + 1
+          end
         end
       else
         for _, room in ipairs(d.diagnosis_rooms or {}) do
@@ -650,6 +706,14 @@ function M:projects(s)
   if s.desks > 0 and s.staffed_desks == 0 and (s.staff.Receptionist or 0) == 0 then hire("Receptionist", 100) end
   if not s.rooms.gp then room("gp", 90) end
   if s.rooms.gp and (s.staff.Doctor or 0) == 0 then hire("Doctor", 95) end
+  -- Then as a person opens a hospital: a pharmacy and a general diagnosis
+  -- next, before toilets and a staff room (they come once patients and staff
+  -- need them). Jan, 2026-11-12: the bots built a GP's office, then toilets
+  -- and a staff room (the model's plan named those first).
+  local opening = not (s.rooms.gp and (s.rooms.pharmacy or not self:available("pharmacy")) and
+      (s.rooms.general_diag or not self:available("general_diag")))
+  if s.rooms.gp and not s.rooms.pharmacy then room("pharmacy", 85) end
+  if s.rooms.gp and not s.rooms.general_diag then room("general_diag", 80) end
 
   -- Rooms the patients need (treatment first), by the decaying demand; a
   -- pharmacy and a general diagnosis are always worth it.
@@ -657,7 +721,14 @@ function M:projects(s)
   local destroyed = {}
   for _, r in ipairs(s.crashed) do destroyed[r.room_info.id] = true end
   for id, v in pairs(self.demand) do
-    if not s.rooms[id] and not destroyed[id] then room(id, 1 + v * 1.5) end
+    if not s.rooms[id] and not destroyed[id] and not s.waiting_for[id] then room(id, 1 + v * 1.5) end
+  end
+  -- A treatment room diagnosed patients in the hospital wait for now: soon,
+  -- before comfort, with a loan if need be (its fees go otherwise). Jan,
+  -- 2026-11-12: a patient waited for an operating theatre while the bot
+  -- bought radiators; it came only when the model's plan named it.
+  for id, n in pairs(s.waiting_for) do
+    if not destroyed[id] then room(id, 55 + 5 * math.min(n, 5) + (self.demand[id] or 0) * 0.5) end
   end
   if not s.rooms.pharmacy then room("pharmacy", 6) end
   if not s.rooms.general_diag then room("general_diag", 5) end
@@ -709,7 +780,8 @@ function M:projects(s)
         end
       end
     end
-    local wanted = math.min(M.research_heavy and 4 or 2, math.max(1, desks))
+    -- (At least two researchers, a hard bot three: Jan, 2026-11-12.)
+    local wanted = math.min(M.research_heavy and 4 or M.hard and 3 or 2, math.max(1, desks))
     if working < wanted then
       if spare then
         add("staff:research", working == 0 and 14 or 6, function()
@@ -839,10 +911,13 @@ function M:projects(s)
   -- plot is bought when the money is there, needed or not (GOAL_LEVERS
   -- raises it further).
   local value_left = s.goal_progress.value
+  -- (Only with money to spare and no loan: Jan, 2026-11-12, Bertie bought
+  -- two plots with $14,000 in the bank and $20,000 owed, its land a quarter
+  -- full.)
   if not wanted and value_left and value_left < 1 and (value_left >= 0.8 or s.goals_left == 1) and
-      s.balance > 3 * RESERVE then
+      s.balance > 3 * RESERVE and (hosp.loan or 0) == 0 then
     local _, price = bot:cheapestPlot()
-    if price and price < s.balance - RESERVE then
+    if price and price < s.balance - VALUE_LAND_SPARE then
       add("buy:land", 6, function() return bot:buyPlot() end, price)
     end
   end
@@ -908,7 +983,13 @@ function M:projects(s)
     end
     for i, d in ipairs(s.doors) do
       local benches_wanted = math.min(d.max, 1 + math.ceil(d.queue * 0.6))
-      if d.near.bench < benches_wanted then place("bench", d, 3 + (benches_wanted - d.near.bench) * 1.5 + d.queue * 0.3) end
+      -- (Patients standing in a queue: before radiators and plants. Jan,
+      -- 2026-11-12: standing patients and no benches at Bertie's.)
+      if d.near.bench < benches_wanted then
+        local missing = benches_wanted - d.near.bench
+        -- (A hard bot: a bench by every door soon, before anybody stands.)
+        place("bench", d, ((d.queue >= 2 or M.hard) and 8 or 3) + missing * 2 + d.queue * 0.5)
+      end
       if d.near.plant < 1 then place("plant", d, 2 + (1 - s.happiness)) end
       if d.near.radiator < 1 then place("radiator", d, 2 + s.cold * 0.5) end
     end
@@ -1010,7 +1091,8 @@ function M:projects(s)
         local base = SPECIALISTS[what] and "Doctor" or what
         if staff(base) < math.min(cap[base] or 99, need[base] or 0) then hire(what, score) end
       elseif kind == "room" then
-        if M.planRoomWanted(what, s.rooms[what] or 0, s.queue[what] or 0) then room(what, score) end
+        -- (Not while the opening rooms are still to come.)
+        if not opening and M.planRoomWanted(what, s.rooms[what] or 0, s.queue[what] or 0) then room(what, score) end
       elseif kind == "buy" and what ~= "drinks_machine" then -- (drinks: the rule above)
         buy(what, score)
       end
@@ -1435,6 +1517,7 @@ function M:daily(s)
   local hosp = s.hosp
   local helper = bot:sharesWithPerson()
   self:noteRoomUse(s)
+  if not helper then self:researchPolicy(s) end
   -- Machines half worn: a handyman to each (once in a while per machine).
   -- Repaired early, a machine seldom loses strength (the game takes it
   -- with the share used up) and does not explode while the handyman walks.
@@ -2460,7 +2543,17 @@ function M:askAllies(s)
     -- (Only while it cannot hire one: none on the hiring list, or no money
     -- for the wage: Jan, 2026-11-12.)
     local cannot_hire = sh.test or not bot:canHire(sh.cat) or s.balance < RESERVE
-    if days >= (sh.emergency and LACK_EMERGENCY_DAYS or LACK_DAYS) and cannot_hire and
+    -- (And still so the next day: a new month's hiring list comes on its
+    -- first day, and Bertie asked Jan for a psychiatrist that very day,
+    -- before his own list had the one Jan's had. Jan, 2026-11-12.)
+    self.cannot_hire_since = self.cannot_hire_since or {}
+    if not cannot_hire then
+      self.cannot_hire_since[sh.cat] = nil
+    elseif not self.cannot_hire_since[sh.cat] then
+      self.cannot_hire_since[sh.cat] = s.day
+    end
+    local looked_twice = sh.test or (self.cannot_hire_since[sh.cat] and s.day > self.cannot_hire_since[sh.cat])
+    if days >= (sh.emergency and LACK_EMERGENCY_DAYS or LACK_DAYS) and cannot_hire and looked_twice and
         s.day - (self.asked_for[sh.cat] or -999) >= wait then
       local bot_spares, spare_peers, spare_names, everybody = false, {}, {}, {}
       for _, ally in ipairs(self:allies()) do

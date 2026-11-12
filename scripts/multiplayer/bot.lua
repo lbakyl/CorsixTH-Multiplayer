@@ -881,7 +881,7 @@ function Bot:applyLevel(level)
   self.expert_data = level == "hard" and self.expert_data_read or nil
   if self.expert_data then log("builds as the experts do (a hard bot)") end
   self.expert_plan_world = nil -- (the plan for its place is looked up again)
-  if Manager then Manager.learned = self.expert_data end
+  if Manager then Manager.learned, Manager.hard = self.expert_data, level == "hard" end
 end
 
 function Bot:now() return socket.gettime() end
@@ -2336,7 +2336,7 @@ function Bot:drawRoom(room_type, size, extras, near)
   local min = math.max(room_type.minimum_size or 4, SMALLEST[room_type.id] or 0)
   -- (Four desks need a bigger room: a 5 x 5 one took two, a 7 x 7 one three.
   -- Bot.research_heavy, Manager.roomPlan.)
-  if self.research_heavy and room_type.id == "research" then min = math.max(min, 6) end
+  if (self.research_heavy or self.level == "hard") and room_type.id == "research" then min = math.max(min, 6) end
   local ax, ay = self:anchor()
   size = math.max(min, size or min + 1) -- (one more than the smallest: room for a plant)
   self.reserved = self:reservedTiles()
@@ -2480,6 +2480,11 @@ end
 function Bot:extraAllowed(rm, id)
   return extra_allowed(self.world, rm, id)
 end
+
+-- What a player puts in a corner or against a wall of a room, never in the
+-- middle (a sink too: Jan, 2026-11-12).
+local AGAINST_WALL = {plant = true, bin = true, radiator = true, bookcase = true, extinguisher = true, skeleton = true,
+    sink = true}
 
 --! Edit one of this hospital's rooms like a person would (a team mate asked
 --! for it): steps as in builder.edit_tick ("buy:skeleton", "place", "done";
@@ -2682,6 +2687,18 @@ function Bot:furnishTick()
   end
   for i, spot in ipairs(job.spots or {}) do
     local key = "learned:" .. i
+    -- (A sink, plant, bin or the like the expert had in the middle of the
+    -- room goes against a wall instead: the rules below. Jan, 2026-11-12:
+    -- a sink in the middle of the toilets, as in Argus's.)
+    if spot.id == o.object.id and not job.tried[key] and AGAINST_WALL[spot.id] then
+      local edge = false
+      for _, t in ipairs(spot.tiles) do
+        if t[1] == rm.x or t[2] == rm.y or t[1] == rm.x + rm.width - 1 or t[2] == rm.y + rm.height - 1 then
+          edge = true
+        end
+      end
+      if not edge then job.tried[key] = true end
+    end
     if spot.id == o.object.id and not job.tried[key] then
       job.tried[key] = true
       local ox, oy = Learned.origin(o.object, spot.dir, spot.tiles)
@@ -2701,7 +2718,7 @@ function Bot:furnishTick()
   -- Where a player puts things: the furniture against the walls first; a
   -- plant, bin, radiator, bookcase or extinguisher only into a corner or
   -- against a wall, never in the middle of the room.
-  local small = {plant = true, bin = true, radiator = true, bookcase = true, extinguisher = true, skeleton = true}
+  local small = AGAINST_WALL
   local tiles = {}
   for ty = rm.y, rm.y + rm.height - 1 do
     for tx = rm.x, rm.x + rm.width - 1 do
@@ -2891,7 +2908,37 @@ function Bot:anchor()
     if a.tile_y ~= b.tile_y then return a.tile_y < b.tile_y end
     return a.tile_x < b.tile_x
   end)
+  -- The entrance the patients come in by: the shortest walk from where they
+  -- come onto the map (World.spawn_points). (Jan, 2026-11-12: a bot put its
+  -- desk at the door to the helipad, where no patient comes; the first door
+  -- on the map was the one taken.)
   local door = doors[1]
+  if self.entrance_world ~= world then
+    self.entrance_world, self.entrance = world, nil
+    -- (One door of each doorway, and every fourth place patients come
+    -- from: a few dozen walks, once a game.)
+    local best, seen = nil, {}
+    local spawns = world.spawn_points or {}
+    for _, d in ipairs(doors) do
+      local twin = false
+      for _, s in ipairs(seen) do
+        if math.abs(s.tile_x - d.tile_x) + math.abs(s.tile_y - d.tile_y) <= 2 then twin = true end
+      end
+      if not twin then
+        seen[#seen + 1] = d
+        for k = 1, #spawns, 4 do
+          local sp = spawns[k]
+          local walk = world:getPathDistance(sp.x, sp.y, d.tile_x, d.tile_y)
+          if walk and (not best or walk < best) then best, self.entrance = walk, d end
+        end
+      end
+    end
+    if self.entrance then
+      log(string.format("the patients' entrance: %d,%d (%d tiles from where they come)", self.entrance.tile_x,
+          self.entrance.tile_y, best))
+    end
+  end
+  door = self.entrance or door
   local th = world.map.th
   local best, best_cost
   for y = door.tile_y - 6, door.tile_y + 6 do
@@ -2993,13 +3040,29 @@ function Bot:buyCorridor(object_id, near_x, near_y)
     return ok
   end
   local given = self:plotsGiven()
+  -- A bench with its back to a wall, facing the corridor, so benches stand
+  -- in rows along the walls (Jan, 2026-11-12: Bertie's stood in a block at a
+  -- door, each facing another way). Its front is its tile people use.
+  local function back_to_wall(tx, ty)
+    local out = {}
+    for _, facing in ipairs(facings) do
+      local front
+      for _, t in ipairs(object_type.orientations[facing].footprint or {}) do
+        if t.only_passable then front = t end
+      end
+      if front and wall(tx - front[1], ty - front[2]) and not wall(tx + front[1], ty + front[2]) then
+        out[#out + 1] = facing
+      end
+    end
+    return out
+  end
   local function fits(tx, ty)
     if next(given) and given[world.map.th:getCellFlags(tx, ty).parcelId] then return false end
     for _, e in ipairs(apart) do
       if math.abs(e.tile_x - tx) <= DRINKS_APART and math.abs(e.tile_y - ty) <= DRINKS_APART then return false end
     end
     if world:anyHumanoidObscuringArea(tx, ty) then return false end
-    for _, facing in ipairs(facings) do
+    for _, facing in ipairs(object_id == "bench" and back_to_wall(tx, ty) or facings) do
       place:setOrientation(facing)
       place:setBlueprintCell(tx, ty)
       if place.object_blueprint_good and keeps_floor(tx, ty, facing) then return true end

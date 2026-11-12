@@ -560,5 +560,13 @@ eq(M.planRoomWanted("ward", 1, 0), false, "plan: no second ward without a queue"
 eq(M.planRoomWanted("ward", 1, 3), true, "plan: a second ward for a queue")
 eq(M.planRoomWanted("ward", 2, 9), false, "plan: no third ward (COPIES)")
 eq(M.planRoomWanted("dna_fixer", 1, 9), false, "plan: one DNA fixer")
+-- A hard bot's research (Jan, 2026-11-12): 70% cures, 27% diagnosis for two
+-- years while cure machines are left; then the even split. Others: as set.
+local policy = {cure = {frac = 20, current = "x"}, diagnosis = {frac = 20, current = "y"}}
+eq(M.researchWanted(policy, 100, false), nil, "research: a normal bot leaves it")
+eq(M.researchWanted(policy, 100, true).cure, 70, "research: a hard bot, cures first")
+eq(M.researchWanted(policy, 100, true).diagnosis, 27, "research: then diagnosis")
+eq(M.researchWanted(policy, 800, true).cure, 20, "research: even after two years")
+eq(M.researchWanted({cure = {frac = 70}}, 100, true).cure, 20, "research: even once every cure is found")
 
 print("rivals ok")
