@@ -187,7 +187,9 @@ a, b = log('ann'), log('bob')
 
 places = re.search(r'UI: room places before bot 1: (.*)', a)
 joined = re.search(r'UI: room places with the bots: (.*)', a)
-ok1 = bool(places and 'add a bot' in places.group(1) and joined and joined.group(1).count('(bot)') == 2
+# (The bots' lines say their level: the hosts make them normal ones.)
+ok1 = bool(places and 'add a bot' in places.group(1) and joined
+           and len(re.findall(r'Bot \w+ \(normal bot\)', joined.group(1))) == 2
            and 'Bot Agnes' in joined.group(1) and re.search(r"room 'race' starts", server)
            and re.search(r"room 'team' starts", server))
 print(f"1. Lobby:                   places offered: {places.group(1) if places else '-'}")
