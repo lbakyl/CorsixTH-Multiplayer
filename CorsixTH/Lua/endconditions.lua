@@ -257,9 +257,18 @@ end
 -- Fetch the attribute value, through the get_custom_criteria table of
 --  functions if there is one for this attribute.
 function EndConditions:getAttribute(hospital, attribute)
+  local value
   if get_custom_criteria[attribute] then
-    return get_custom_criteria[attribute](hospital)
+    value = get_custom_criteria[attribute](hospital)
   else
-    return hospital[attribute]
+    value = hospital[attribute]
   end
+  -- Multiplayer: a hard bot's hospital counts a fifth more value towards the
+  -- goals (World.MP_BOT_LEVEL_BONUS).
+  local world = hospital.world
+  if attribute == "value" and value and world and world.mp_coop and world.mp_coop.bot_levels and
+      MultiplayerSession.botLevel(world, world:getHospitalIndex(hospital)) == "hard" then
+    value = math.floor(value * World.MP_BOT_HARD_VALUE)
+  end
+  return value
 end

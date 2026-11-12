@@ -91,6 +91,10 @@ REFEREE_REPAIR_TIMEOUT = 20.0
 BOT_NAMES = ("Bot Agnes", "Bot Bertie", "Bot Clive", "Bot Dora", "Bot Edna", "Bot Fergus",
              "Bot Gwen", "Bot Hector")
 BOT_START_TIMEOUT = 60.0
+# A bot's level (the room owner picks it: Jan, 2026-11-12): easy (no advice
+# from the language model, no hidden money), normal, hard (more hidden
+# money and other help in the game: World.MP_BOT_LEVEL_BONUS).
+BOT_LEVELS = ("easy", "normal", "hard")
 # A running game's places (Jan, 2026-11-12): somebody may join it and take
 # the place of a bot, or of a player who left; a player who leaves gets a bot
 # that plays their hospital under their name until somebody takes the place
@@ -177,6 +181,7 @@ class Player:
     # theirs), and a bot whose place somebody took (it leaves quietly).
     stand_in: bool = False
     replaced: bool = False
+    bot_level: str = "normal"
     last_ask: dict[str, float] = field(default_factory=dict)
     colour: int = 0  # the hospital's colour (1-8), a free room
     team: int = 0  # the team (1-8), a free room
@@ -292,6 +297,7 @@ class Room:
     # bots being started for an empty room somebody came back to, and since
     # when nobody plays (EMPTY_WAIT; when the game was last played).
     bot_seats: set[int] = field(default_factory=set)
+    bot_levels: dict[int, str] = field(default_factory=dict)  # place -> easy/hard (else normal)
     rejoin_queue: list[int] = field(default_factory=list)
     reviving: set[str] = field(default_factory=set)
     empty_since: float | None = None
@@ -863,6 +869,7 @@ class Server:
         nobody = not room.humans()
         if not player.is_bot and peer in room.bot_seats:
             room.bot_seats.discard(peer)  # a person's place from now on
+            room.bot_levels.pop(peer, None)
             self._set_bots_field(room)
         player.room, player.peer, player.ready = room, peer, True
         room.players[peer] = player
@@ -898,11 +905,19 @@ class Server:
         self._maybe_start_rejoins(room)
 
     def _set_bots_field(self, room: Room) -> None:
-        bots = ",".join(str(p) for p in sorted(room.bot_seats))
-        if bots:
-            room.start_fields["bots"] = bots
-        else:
-            room.start_fields.pop("bots", None)
+        """START's bots (the places the room's own bots play) and their
+        levels (hard=, easy=: the places of such bots)."""
+        for key, peers in (("bots", sorted(room.bot_seats)),
+                           ("hard", self._level_seats(room, "hard")),
+                           ("easy", self._level_seats(room, "easy"))):
+            if peers:
+                room.start_fields[key] = ",".join(str(p) for p in peers)
+            else:
+                room.start_fields.pop(key, None)
+
+    @staticmethod
+    def _level_seats(room: Room, level: str) -> list[int]:
+        return sorted(p for p in room.bot_seats if room.bot_levels.get(p) == level)
 
     def _load_fields(self, room: Room) -> dict[str, object]:
         """For LOAD: the places the room's own bots play (their hospitals get
@@ -910,7 +925,9 @@ class Server:
         hospital counts as away), so every game marks the same."""
         return {"bots": ",".join(str(p) for p in sorted(room.bot_seats)),
                 "standins": ",".join(str(p) for p, pl in sorted(room.players.items())
-                                     if pl.stand_in)}
+                                     if pl.stand_in),
+                "hard": ",".join(str(p) for p in self._level_seats(room, "hard")),
+                "easy": ",".join(str(p) for p in self._level_seats(room, "easy"))}
 
     def _spawn_seat_bot(self, room: Room, peer: int, name: str, stand_in: bool) -> str | None:
         """Start a bot for a running game's place (its own bot, or a stand-in
@@ -926,11 +943,12 @@ class Server:
                      room.name, peer)
             return None
         token = secrets.token_hex(16)
-        room.bots_pending[token] = [name, None, peer, stand_in]
+        level = "normal" if stand_in else room.bot_levels.get(peer, "normal")
+        room.bots_pending[token] = [name, None, peer, stand_in, level]
         log.info("room %r: a bot for place %d (%r%s)", room.name, peer, name,
                  ", for the player who left" if stand_in else "")
         loop = asyncio.get_running_loop()
-        loop.create_task(self._spawn_bot(room, token, name, stand_in))
+        loop.create_task(self._spawn_bot(room, token, name, stand_in, level))
         loop.call_later(BOT_START_TIMEOUT, self._bot_timeout, room, token)
         return token
 
@@ -1158,6 +1176,17 @@ class Server:
             return
         if room.state != "lobby":
             return
+        if f.get("level") and f.get("peer"):
+            # A bot's level (BOT_LEVELS).
+            bot = room.players.get(int(f["peer"])) if f["peer"].isdigit() else None
+            if bot is None or not bot.is_bot or f["level"] not in BOT_LEVELS:
+                self._error(player, "not_bot", "That player is not a bot")
+                return
+            bot.bot_level = f["level"]
+            log.info("room %r: %r is a%s %s bot", room.name, bot.name,
+                     "n" if bot.bot_level == "easy" else "", bot.bot_level)
+            self._send_lobby(room)
+            return
         if f.get("remove"):
             bot = room.players.get(int(f["remove"])) if f["remove"].isdigit() else None
             if bot is None or not bot.is_bot:
@@ -1179,17 +1208,19 @@ class Server:
             return
         name = self._bot_name(room)
         token = secrets.token_hex(16)
-        room.bots_pending[token] = [name, None, None, False]
+        level = f.get("level") if f.get("level") in BOT_LEVELS else "normal"
+        room.bots_pending[token] = [name, None, None, False, level]
         log.info("room %r: %r adds %r", room.name, player.name, name)
         loop = asyncio.get_running_loop()
-        loop.create_task(self._spawn_bot(room, token, name))
+        loop.create_task(self._spawn_bot(room, token, name, False, level))
         loop.call_later(BOT_START_TIMEOUT, self._bot_timeout, room, token)
         self._send_lobby(room)
 
-    async def _spawn_bot(self, room: Room, token: str, name: str, stand_in: bool = False) -> None:
+    async def _spawn_bot(self, room: Room, token: str, name: str, stand_in: bool = False,
+                         level: str = "normal") -> None:
         try:
             proc = await start_bot(self.referee_config, self.port, room.name, token, name,
-                                   room.current_mode(), stand_in=stand_in)
+                                   room.current_mode(), stand_in=stand_in, level=level)
         except OSError as exc:
             log.warning("room %r: cannot start %r: %s", room.name, name, exc)
             if token in room.bots_pending:
@@ -1212,7 +1243,7 @@ class Server:
             self._bot_failed(room, token)
 
     def _bot_failed(self, room: Room, token: str) -> None:
-        name, proc, peer, _ = room.bots_pending.pop(token)
+        name, proc, peer = room.bots_pending.pop(token)[:3]
         room.reviving.discard(token)
         if proc is not None and getattr(proc, "returncode", 0) is None:
             try:
@@ -1234,10 +1265,10 @@ class Server:
                 room.state != ("lobby" if entry[2] is None else "running"):
             self._error(player, "not_bot", "Unknown room or token")
             return False
-        name, proc, peer, stand_in = room.bots_pending.pop(token)
+        name, proc, peer, stand_in, level = room.bots_pending.pop(token)
         room.reviving.discard(token)
         player.name, player.build, player.is_bot, player.bot_proc = name, f.get("build", ""), True, proc
-        player.stand_in = stand_in
+        player.stand_in, player.bot_level = stand_in, level
         self._check_own_build(name, player.build)
         if player.build != room.build:
             log.warning("room %r: %r runs build %s, the room %s", room.name, name, player.build,
@@ -1271,7 +1302,8 @@ class Server:
             self._error(player, "not_bot", "Only bots ask for advice")
             return
         qid, kind = f.get("id", ""), f.get("kind", "")
-        if self.advisor is None or not self.advisor.enabled:
+        # (An easy bot plays without the language model.)
+        if self.advisor is None or not self.advisor.enabled or player.bot_level == "easy":
             player.send(encode("ANSWER", id=qid, error="off"))
             return
         now = time.monotonic()
@@ -1326,6 +1358,7 @@ class Server:
             room.broadcast(encode("PLAYER", peer=peer, name=pl.name, ready=pl.ready,
                                   rtt=round(pl.rtt), owner=room.owner is pl,
                                   bot=1 if pl.is_bot else None, colour=pl.colour or None,
+                                  level=pl.bot_level if pl.is_bot and pl.bot_level != "normal" else None,
                                   team=pl.team or None))
         room.broadcast(encode("LOBBY", room=room.name, count=len(room.players),
                               starting=len(room.bots_pending) or None,
@@ -1392,6 +1425,8 @@ class Server:
         # monthly bonus (World:onEndMonth); every peer, the referee too, needs
         # to know which.
         room.bot_seats = {n for n, p in room.players.items() if p.is_bot}
+        room.bot_levels = {n: p.bot_level for n, p in room.players.items()
+                           if p.is_bot and p.bot_level != "normal"}
         self._set_bots_field(room)
         for name, value in sorted(room.options.items()):
             room.start_fields[name] = value

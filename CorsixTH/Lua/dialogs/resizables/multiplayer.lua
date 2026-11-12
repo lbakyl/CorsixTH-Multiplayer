@@ -577,7 +577,10 @@ function UIMultiplayer:_updateRoom()
     local p = lobby.players[i]
     local text = ""
     if p and p.bot == "1" then
-      text = S.bot_line:format(p.name, bots and S.bot_remove or "")
+      -- (An easy or hard bot says so; a right click picks the level.)
+      local name = p.level == "easy" and S.bot_easy:format(p.name) or
+          p.level == "hard" and S.bot_hard:format(p.name) or p.name
+      text = S.bot_line:format(name, bots and S.bot_remove or "")
     elseif p then
       -- (The host is not asked whether they are ready.)
       text = S.player_line:format(p.name, p.owner == "1" and S.owner_mark or "", p.rtt or "?",
@@ -589,6 +592,8 @@ function UIMultiplayer:_updateRoom()
       text = bots and S.add_bot or S.waiting_player
     end
     self.player_panels[i]:setLabel(text)
+    self.place_buttons[i]:setTooltip(p and p.bot == "1" and bots and
+        _S.tooltip.multiplayer_window.bot_level or nil)
     -- (Only one's own, and the host anybody's, in a new game.)
     local seated = p ~= nil and tonumber(p.colour) ~= nil
     local may = seated and lobby:isFreeRoom() and (lobby:isOwner() or p.peer == lobby.room.peer)
@@ -681,10 +686,23 @@ function UIMultiplayer:buttonOptions()
   options:setPosition(math.max(0, math.floor((self.width - options.width) / 2)), 80)
 end
 
---! The host's menu on another person's line: remove them from the room.
+--! The host's menu on another person's line: remove them from the room; on a
+--! bot's line: its level (easy, normal, hard: Jan, 2026-11-12).
 function UIMultiplayer:playerMenu(i)
   local lobby = self.lobby
   local p = lobby.players[i]
+  if p and p.bot == "1" and lobby:canAddBots() then
+    for _, w in ipairs(self.windows or {}) do -- (one menu at a time)
+      if w == self.player_dropdown then w:close() break end
+    end
+    local S, peer = _S.multiplayer_window, p.peer
+    local levels = {"easy", "normal", "hard"}
+    self.player_dropdown = UIDropdown(self.ui, self, self.place_buttons[i],
+        {{text = S.bot_menu_easy}, {text = S.bot_menu_normal}, {text = S.bot_menu_hard}},
+        function(_, index) lobby:setBotLevel(peer, levels[index]) end, col.setting_active, col.scrollbar)
+    self:addWindow(self.player_dropdown)
+    return
+  end
   if not (p and p.bot ~= "1" and lobby:isOwner() and tonumber(p.peer) ~= tonumber(lobby.room.peer)) then
     return
   end

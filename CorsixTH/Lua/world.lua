@@ -125,10 +125,12 @@ function World:World(app, free_build_mode)
     -- teams: a race of teams, hospital index -> team (1-4), World:mpTeam;
     -- colours: hospital index -> the colour its players picked (1-4);
     -- mode: what the players' colours and teams made, MultiplayerLobby.MODES)
-    -- (bot_hospitals: hospital index -> true for those only bots play)
+    -- (bot_hospitals: hospital index -> true for those only bots play;
+    -- bot_levels: index -> "easy" or "hard" for those whose bots are not
+    -- normal ones, MultiplayerSession.botLevel)
     self.mp_coop = {players = coop.players, competitive = coop.competitive or nil, teams = coop.teams,
         team_hospitals = coop.team_hospitals, colours = coop.colours, mode = coop.mode,
-        bot_hospitals = coop.bot_hospitals, auctions_off = coop.auctions_off,
+        bot_hospitals = coop.bot_hospitals, bot_levels = coop.bot_levels, auctions_off = coop.auctions_off,
         auctions_all = coop.auctions_all,
         tricks_off = coop.tricks_off, tricks_anytime = coop.tricks_anytime, sharing_off = coop.sharing_off,
         helpers_off = coop.helpers_off, rats_on = coop.rats_on}
@@ -1708,8 +1710,17 @@ function World:checkIfGameWon()
   end
 end
 
--- Multiplayer: what a hospital only bots play gets every month, hidden.
+-- Multiplayer: what a hospital only bots play gets every month, hidden, by
+-- the bots' level (the room owner picks it in the room; Jan, 2026-11-12):
+-- normal bots MP_BOT_BONUS, easy ones nothing, hard ones more, and 5
+-- reputation a month too; a hard bot's hospital also counts a fifth more
+-- value towards the goals (EndConditions:getAttribute), every second death
+-- only (Hospital:humanoidDeath) and bids higher at auctions (botPlotWorth).
+-- All of it stops once a person plays the hospital.
 World.MP_BOT_BONUS = 2000
+World.MP_BOT_LEVEL_BONUS = {easy = 0, hard = 8000}
+World.MP_BOT_HARD_REPUTATION = 5
+World.MP_BOT_HARD_VALUE = 1.2
 
 --- Called immediately prior to the ingame month changing.
 --- @return boolean # true if the game was killed due to the player losing
@@ -1742,15 +1753,26 @@ function World:onEndMonth()
   local paid = {}
   for bot_index in pairs(self.mp_coop and self.mp_coop.bot_hospitals or {}) do
     local hospital = self.hospitals[bot_index]
+    local level = MultiplayerSession.botLevel(self, bot_index)
     if hospital then
-      hospital.balance = hospital.balance + World.MP_BOT_BONUS
+      hospital.balance = hospital.balance + (World.MP_BOT_LEVEL_BONUS[level] or World.MP_BOT_BONUS)
+      if level == "hard" then
+        hospital.reputation = math.min(hospital.reputation + World.MP_BOT_HARD_REPUTATION,
+            hospital.reputation_max or 1000)
+      end
       paid[#paid + 1] = bot_index
     end
   end
   local session = self.app.mp_session
   if #paid > 0 and session then
     table.sort(paid)
-    session.log("bot bonus for hospital(s) " .. table.concat(paid, ","))
+    -- (2,3:hard: hospital 3's bots are hard ones.)
+    local shown = {}
+    for i, index in ipairs(paid) do
+      local level = MultiplayerSession.botLevel(self, index)
+      shown[i] = level == "normal" and tostring(index) or (index .. ":" .. level)
+    end
+    session.log("bot bonus for hospital(s) " .. table.concat(shown, ","))
   end
   for _, entity in ipairs(self.entities) do
     if entity.checkForDeadlock and not entity.to_destroy then

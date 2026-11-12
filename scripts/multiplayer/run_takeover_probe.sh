@@ -18,8 +18,9 @@
 # Checks:
 #   1. ugo sees the places (tia playing, two bots) and takes place 2; Bot
 #      Agnes leaves; the room list showed the game running with 2 places
-#   2. Bot Agnes's hospital is a person's now: no hidden bot bonus for
-#      hospital 2 after that (the server's LOAD names only place 3)
+#   2. the bot's hospital is a person's now: no hidden bot bonus for it
+#      after that; place 3's bot is a hard one (tia made it so in the room):
+#      its bonus says so (the server's LOAD names it)
 #   3. ugo leaves: a stand-in bot named ugo takes place 2, says nothing,
 #      plays no trick, asks nobody
 #   4. ugo comes back by name: place 2 at once, the stand-in leaves
@@ -100,12 +101,12 @@ wait_log() {
 }
 
 pids=()
-run_probe tia MP_ROLE=host MP_ROOM=take MP_MODE=competitive MP_PLAYERS=3 MP_ADD_BOTS=2 MP_SCENARIO=none \
+run_probe tia MP_ROLE=host MP_ROOM=take MP_MODE=competitive MP_PLAYERS=3 MP_ADD_BOTS=2 MP_SCENARIO=none MP_BOT_LEVELS=3:hard \
   MP_REALTIME=1 MP_STEPS=3600 MP_STALL_LIMIT=180 MP_UI_SCRIPT="20:openhospital;3590:hospitals" & pids+=($!)
 run_probe vic MP_ROLE=host MP_ROOM=lone MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_SCENARIO=none \
   MP_REALTIME=1 MP_STEPS=300 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital" & pids+=($!)
 
-run_probe wes MP_ROLE=host MP_ROOM=shirt MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_COLOURS=1:8,2:7 MP_SCENARIO=none MP_STEPS=1200 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital;30:buy:reception_desk;50:hire:Receptionist;600:ownpatients:8;660:queueshot;900:ownpatients:8;980:queueshot" & pids+=($!)
+run_probe wes MP_ROLE=host MP_ROOM=shirt MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_COLOURS=1:8,2:7 MP_SCENARIO=none MP_STEPS=1400 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital;30:buy:reception_desk;50:hire:Receptionist;600:ownpatients:8;660:queueshot;900:ownpatients:8;980:queueshot;1100:auctionbuy;1106:auctionshot;1110:auctionmap;1116:auctionmapclose;1122:auctionshot" & pids+=($!)
 
 # A newcomer takes Bot Agnes's place in the running race, then leaves.
 wait_log "room 'take' starts" 60 && sleep 5
@@ -155,8 +156,8 @@ if not ok1: bad.append("ok1")
 taken = t.find('(rejoin at step')
 before = re.findall(r'bot bonus for hospital\(s\) (\S+)', t[:taken]) if taken >= 0 else []
 after = re.findall(r'bot bonus for hospital\(s\) (\S+)', t[taken:]) if taken >= 0 else []
-ok2 = (taken >= 0 and len(after) > 0 and all('2' not in h.split(',') for h in after)
-       and all(h == '2,3' for h in before))
+ok2 = (taken >= 0 and len(after) > 0 and all(h == '3:hard' for h in after)
+       and all(h == '2,3:hard' for h in before) and re.search(r'Bot \w+, hard', t) is not None)
 print(f"2. No bonus for a person:   before the take-over {before or 'none'}, after {after or 'none'}")
 if not ok2: bad.append("ok2")
 

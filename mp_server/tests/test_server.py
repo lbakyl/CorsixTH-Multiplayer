@@ -483,7 +483,7 @@ def test_referee_follows_and_checks_the_players():
             pass
         a.send(encode("SAVEDATA", d="QUJD"))
         a.send(encode("SAVED", step=2, parts=1))
-        assert (await ref.expect("LOAD")) == {"step": "2", "parts": "1", "peers": "1,2", "bots": "", "standins": ""}
+        assert (await ref.expect("LOAD")) == {"step": "2", "parts": "1", "peers": "1,2", "bots": "", "standins": "", "hard": "", "easy": ""}
         assert (await ref.expect("SAVEDATA"))["d"] == "QUJD"
         assert (await ref.expect("LOADEND"))["step"] == "2"
         # The commands after the save, where the players have got to, go on.
@@ -571,7 +571,7 @@ def test_quorum_repairs_only_the_game_that_differs():
         assert (await ref.expect("SAVE"))["step"] == "3"
         ref.send(encode("SAVEDATA", d="QUJD"))
         ref.send(encode("SAVED", step=3, parts=1))
-        assert (await c.expect("LOAD")) == {"step": "3", "parts": "1", "peers": "1,2,3", "bots": "", "standins": ""}
+        assert (await c.expect("LOAD")) == {"step": "3", "parts": "1", "peers": "1,2,3", "bots": "", "standins": "", "hard": "", "easy": ""}
         assert (await c.expect("SAVEDATA"))["d"] == "QUJD"
         assert (await c.expect("LOADEND"))["step"] == "3"
         assert await c.expect("C") == "C kind=hire peer=1 seq=1 step=5"
@@ -670,7 +670,7 @@ def test_desync_repair_from_the_referee_save():
         ref.send(encode("SAVEDATA", d="REVG"))
         ref.send(encode("SAVED", step=3, parts=2))
         for c in (a, b, ref):
-            assert (await c.expect("LOAD")) == {"step": "3", "parts": "2", "peers": "1,2", "bots": "", "standins": ""}
+            assert (await c.expect("LOAD")) == {"step": "3", "parts": "2", "peers": "1,2", "bots": "", "standins": "", "hard": "", "easy": ""}
             assert (await c.expect("SAVEDATA"))["d"] == "QUJD=="
             assert (await c.expect("SAVEDATA"))["d"] == "REVG"
             assert (await c.expect("LOADEND"))["step"] == "3"
@@ -750,7 +750,7 @@ def test_rejoin_a_running_game_under_the_same_name():
         ref.send(encode("SAVEDATA", d="eA=="))
         ref.send(encode("SAVED", step=7, parts=1))
         for c in (a, back, ref):
-            assert (await c.expect("LOAD")) == {"step": "7", "parts": "1", "peers": "1,2", "bots": "", "standins": ""}
+            assert (await c.expect("LOAD")) == {"step": "7", "parts": "1", "peers": "1,2", "bots": "", "standins": "", "hard": "", "easy": ""}
             assert (await c.expect("SAVEDATA"))["d"] == "eA=="
             await c.expect("LOADEND")
             assert (await c.expect("RESUME"))["step"] == "7"
@@ -808,7 +808,7 @@ def test_continue_a_saved_game(run):
         tom.send(encode("SAVEDATA", d="eHl6"))
         tom.send(encode("SAVED", step=300, parts=1))
         for c in (tom, sara):
-            assert (await c.expect("LOAD")) == {"step": "300", "parts": "1", "peers": "1,2", "bots": "", "standins": ""}
+            assert (await c.expect("LOAD")) == {"step": "300", "parts": "1", "peers": "1,2", "bots": "", "standins": "", "hard": "", "easy": ""}
             assert (await c.expect("SAVEDATA"))["d"] == "eHl6"
             await c.expect("LOADEND")
             assert (await c.expect("RESUME"))["step"] == "300"
@@ -1070,9 +1070,9 @@ def run_with_bots(body, with_referees=False):
     referees' tokens too)."""
     bots, referees = [], []
 
-    async def fake_bot(config, port, room, token, name, mode, stand_in=False):
+    async def fake_bot(config, port, room, token, name, mode, stand_in=False, level="normal"):
         bots.append({"room": room, "token": token, "name": name, "mode": mode,
-                     "stand_in": stand_in})
+                     "stand_in": stand_in, "level": level})
         return None
 
     async def fake_referee(config, port, room, token):
@@ -1569,4 +1569,49 @@ def test_an_empty_game_closes_when_nobody_comes_back(monkeypatch):
                 break
             await asyncio.sleep(0.02)
         assert "race" not in server.rooms
+    run_with_bots(body, with_referees=True)
+
+
+def test_bot_levels_easy_and_hard():
+    async def body(server, port, bots, referees):
+        ann = await Client.connect(port, "Ann")
+        ann.send(encode("CREATE", room="lv", password="", max=3, mode="competitive", level=1))
+        await ann.expect("JOINED")
+        ann.send(encode("BOT", add=1, level="hard"))
+        ann.send(encode("BOT", add=1))
+        await started_bots(bots, 2)
+        assert [b["level"] for b in bots] == ["hard", "normal"]
+        agnes, bertie = await connect_bot(port, bots[0]), await connect_bot(port, bots[1])
+        assert (await agnes.expect("JOINED"))["peer"] == "2"
+        assert (await bertie.expect("JOINED"))["peer"] == "3"
+        # The owner makes Bot Bertie an easy one; the room shows the levels.
+        ann.send(encode("BOT", peer=3, level="easy"))
+        await ann.expect("PLAYER", name="Bot Bertie", level="easy")
+        # Nobody else changes a bot.
+        ben = await Client.connect(port, "Ben")
+        ben.send(encode("JOIN", room="lv", password=""))
+        assert (await ben.expect("ERROR"))["code"] == "room_full"
+        ann.send(encode("START"))
+        st = await ann.expect("START")
+        assert st["bots"] == "2,3" and st["hard"] == "2" and st["easy"] == "3"
+        # An easy bot gets no advice (the server has none here anyway).
+        await bertie.expect("START")
+        bertie.send(encode("ASK", id="q1", kind="plan", text="x", menu="a"))
+        assert (await bertie.expect("ANSWER"))["error"] == "off"
+        # A person who takes the hard bot's place: no level any more.
+        for _ in range(100):
+            if referees:
+                break
+            await asyncio.sleep(0.01)
+        ref = await connect_referee(port, "lv", referees[0])
+        await ref.expect("START")
+        carl = await Client.connect(port, "Carl")
+        carl.send(encode("JOIN", room="lv", password="", seat=2))
+        st = await carl.expect("START")
+        assert st["bots"] == "3" and "hard" not in st and st["easy"] == "3"
+        await ann.expect("HOLD")
+        ann.send(encode("HELD", step=5))
+        await bertie.expect("HOLD")
+        bertie.send(encode("HELD", step=5))
+        await load_for([ann, carl, bertie], ref, 5, bots="3", hard="", easy="3")
     run_with_bots(body, with_referees=True)

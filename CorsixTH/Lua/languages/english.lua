@@ -456,6 +456,11 @@ multiplayer_window = {
   bot_starting = "a bot is starting...",
   bot_line = "%s   (bot)%s",
   bot_remove = "   click: take away",
+  bot_easy = "%s, easy",
+  bot_hard = "%s, hard",
+  bot_menu_easy = "Easy: no hidden money, no language model",
+  bot_menu_normal = "Normal",
+  bot_menu_hard = "Hard: more money, reputation and value",
   recommendation = "Up to %s; actions take %s ms",
   measuring = "Measuring the connection...",
   ready = "Ready",
@@ -985,6 +990,7 @@ multiplayer_window = {
 }
 
 tooltip.multiplayer_window = {
+  bot_level = "Right click: an easy, normal or hard bot",
   player_row = "Click: look at this player's hospital (N: the next hospital)",
   chat_target = "Who the message is for: everybody, your team (in a race of teams) or one player. Click or press Tab for the next",
   auctions = "The host decides which plots of land go to auction when a player asks to buy one",

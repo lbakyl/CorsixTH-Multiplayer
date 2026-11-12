@@ -1691,8 +1691,12 @@ function Hospital:humanoidDeath(patient)
     local case = self.disease_casebook[patient.disease.id]
     case.fatalities = case.fatalities + 1
   end
-  self.num_deaths = self.num_deaths + 1
-  self.num_deaths_this_year = self.num_deaths_this_year + 1
+  -- Multiplayer: a hard bot's hospital counts every second death only (a
+  -- death as half, rounded up: Jan, 2026-11-12; World.MP_BOT_LEVEL_BONUS).
+  if MultiplayerSession.countsDeath(self) then
+    self.num_deaths = self.num_deaths + 1
+    self.num_deaths_this_year = self.num_deaths_this_year + 1
+  end
 
   self:changeReputation("death", patient.disease)
   self:updatePercentages()

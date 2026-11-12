@@ -1288,6 +1288,25 @@ function MultiplayerSession.drawIcon(canvas, name, ix, iy, s)
   end
 end
 
+--! The level of the bots that alone play hospital `index`: "easy", "hard",
+--! or "normal" (also for nil, or a hospital a person plays). From the
+--! server (START, LOAD), the same on every peer.
+function MultiplayerSession.botLevel(world, index)
+  local coop = world and world.mp_coop
+  if not (coop and index and coop.bot_hospitals and coop.bot_hospitals[index]) then return "normal" end
+  return coop.bot_levels and coop.bot_levels[index] or "normal"
+end
+
+--! Does this death count in `hospital`'s death figures? Not every second one
+--! of a hard bot's hospital (half, rounded up; World.MP_BOT_LEVEL_BONUS).
+function MultiplayerSession.countsDeath(hospital)
+  local world = hospital.world
+  if not (world and world.mp_coop and world.mp_coop.bot_levels) then return true end
+  if MultiplayerSession.botLevel(world, world:getHospitalIndex(hospital)) ~= "hard" then return true end
+  hospital.mp_hard_deaths = (hospital.mp_hard_deaths or 0) + 1
+  return hospital.mp_hard_deaths % 2 == 1
+end
+
 --! Multiplayer with a hospital each: dress a patient in their hospital's
 --! colour (the shirt; only what is drawn changes, alike on every machine).
 --! Patients without the shirt colours (the King, the invisible) stay as
@@ -3342,6 +3361,7 @@ local function auction_frames(seconds) return math.ceil(seconds * 1000 / 18) end
 -- as any other bot would go.
 local BOT_AUCTION_LOW, BOT_AUCTION_HIGH, BOT_AUCTION_OWN = 1.3, 2.5, 1.6
 local BOT_AUCTION_APPETITE = 0.45
+local BOT_AUCTION_HARD = 1.4
 MultiplayerSession.BOT_AUCTION_RESERVE = 5000
 -- How full a bot's land is (landFill) when it starts looking for a plot to
 -- buy, and when it is willing to borrow for one (at an auction too).
@@ -3403,6 +3423,8 @@ function MultiplayerSession.botPlotWorth(world, i, auction)
   local factor = BOT_AUCTION_LOW + (BOT_AUCTION_HIGH - BOT_AUCTION_LOW) * need +
       BOT_AUCTION_APPETITE * MultiplayerSession.botAppetite(auction, i)
   if i == auction.by then factor = math.max(factor, BOT_AUCTION_OWN) end
+  -- (Hard bots bid harder: World.MP_BOT_LEVEL_BONUS.)
+  if MultiplayerSession.botLevel(world, i) == "hard" then factor = factor * BOT_AUCTION_HARD end
   return math.floor(auction.price * factor), need, fill
 end
 

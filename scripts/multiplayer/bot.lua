@@ -26,6 +26,8 @@
 --   MP_BOT_TOKEN         token the server gave this bot
 --   MP_BOT_NAME          its name (also the name of its hospital)
 --   MP_BOT_MODE          the room's mode (shared, coop, competitive, teams, ...)
+--   MP_BOT_LEVEL         easy (no advice from the language model; the game gives
+--                        it no hidden money), normal or hard (the game helps it more)
 --   MP_BOT_STANDIN       1: it plays the place of a person who left, under their
 --                        name, until somebody takes it: quietly (no chat, no asks,
 --                        no dirty tricks)
@@ -830,9 +832,11 @@ function Bot.new(lobby)
     self.manager = Manager.new(self, {log = log, rand = rand, pick = pick, sabotage = sabotage, lines = LINES, fill = fill_in,
         typing = function(text) return 1.5 + #text * 0.06 + rand() * 2 end})
   end
-  -- "manager": the same brain, without the language model's advice.
-  if self.brain == "manager" then self.ai = "off" end
-  log("brain: " .. self.brain)
+  -- "manager": the same brain, without the language model's advice; an easy
+  -- bot never asks it either.
+  if self.brain == "manager" or os.getenv("MP_BOT_LEVEL") == "easy" then self.ai = "off" end
+  self.level = os.getenv("MP_BOT_LEVEL") or "normal"
+  log("brain: " .. self.brain .. ", level " .. self.level)
   return self
 end
 

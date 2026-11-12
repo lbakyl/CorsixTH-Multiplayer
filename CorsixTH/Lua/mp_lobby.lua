@@ -634,6 +634,11 @@ end
 --! like a player, ready at once) or takes one away by its peer number.
 function MultiplayerLobby:addBot() self.error = nil; self:send("BOT", {add = 1}) end
 function MultiplayerLobby:removeBot(peer) self.error = nil; self:send("BOT", {remove = peer}) end
+--! The room owner sets a bot's level: "easy", "normal" or "hard".
+function MultiplayerLobby:setBotLevel(peer, level)
+  self.error = nil
+  self:send("BOT", {peer = peer, level = level})
+end
 --! The room owner sets a game option (auctions, tricks, sharing): true or
 --! false, or one of its values ("0" is off; see OPTIONS).
 function MultiplayerLobby:setOption(name, value)
@@ -1047,7 +1052,8 @@ function MultiplayerLobby:_onLOAD(f)
   -- (bots, standins: the places the room's own bots play, and those a bot
   -- plays for a person who left; from servers that let people take places.)
   self.incoming_save = {step = tonumber(f.step), parts = {}, peers = peers,
-      places = f.bots and {bots = peer_set(f.bots), standins = peer_set(f.standins or "")} or nil}
+      places = f.bots and {bots = peer_set(f.bots), standins = peer_set(f.standins or ""),
+          hard = peer_set(f.hard or ""), easy = peer_set(f.easy or "")} or nil}
 end
 
 function MultiplayerLobby:_onSAVEDATA(f)
@@ -1222,6 +1228,19 @@ function MultiplayerLobby:_hospitalsOnlyOf(set)
   return out
 end
 
+--! The hospitals whose bots are all hard (or all easy): index -> level, or
+--! nil for none.
+function MultiplayerLobby:_botLevels(hard, easy)
+  local levels
+  for level, set in pairs({hard = hard, easy = easy}) do
+    for index in pairs(set and self:_hospitalsOnlyOf(set) or {}) do
+      levels = levels or {}
+      levels[index] = level
+    end
+  end
+  return levels
+end
+
 function MultiplayerLobby:_loadShared(session, step, data, peers, places)
   local app = TheApp
   local persist = require("persist")
@@ -1262,6 +1281,7 @@ function MultiplayerLobby:_loadShared(session, step, data, peers, places)
     local standin = places and places.standins or {}
     if places then
       world.mp_coop.bot_hospitals = self:_hospitalsOnlyOf(places.bots)
+      world.mp_coop.bot_levels = self:_botLevels(places.hard, places.easy)
       local people, standins = {}, nil
       for _, p in ipairs(peers or session.peers or {}) do
         local index = p ~= 0 and self.peer_hospital and self.peer_hospital[p]
@@ -1638,6 +1658,8 @@ function MultiplayerLobby:_beginGame(f)
         bot_hospitals[index] = true
       end
     end
+    -- (Their bots' level, easy or hard: World.MP_BOT_LEVEL_BONUS.)
+    local bot_levels = self:_botLevels(peer_set(f.hard or ""), peer_set(f.easy or ""))
     -- A saved game continued: the server gave every player a hospital.
     for p, index in (f.seats or ""):gmatch("(%d+):(%d+)") do
       if tonumber(p) == tonumber(f.peer) then my_index = tonumber(index) end
@@ -1645,7 +1667,8 @@ function MultiplayerLobby:_beginGame(f)
     app.mp_coop = {players = count, local_index = my_index, names = names,
         competitive = MultiplayerLobby.isRace(mode), teams = layout and layout.teams,
         team_hospitals = mode == "teamshared" or nil, colours = layout and layout.colours,
-        mode = mode, bot_hospitals = bot_hospitals, auctions_off = f.auctions == "0" or nil,
+        mode = mode, bot_hospitals = bot_hospitals, bot_levels = bot_levels,
+        auctions_off = f.auctions == "0" or nil,
         auctions_all = f.auctions == "2" or nil,
         tricks_off = f.tricks == "0" or nil, sharing_off = f.sharing == "0" or nil,
         -- (tricks=2: every trick from the start, sabotage.unlockMonth; no

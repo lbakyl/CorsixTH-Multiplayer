@@ -109,11 +109,14 @@ async def start_referee(config: RefereeConfig, port: int, room: str, token: str,
 
 
 async def start_bot(config: RefereeConfig, port: int, room: str, token: str, name: str,
-                    mode: str, stand_in: bool = False) -> asyncio.subprocess.Process:
+                    mode: str, stand_in: bool = False, level: str = "normal",
+                    ) -> asyncio.subprocess.Process:
     """Start a computer player (scripts/multiplayer/bot.lua) for `room`: it
     joins the room under `name` like a player and plays its own hospital
-    (stand_in: the place of a person who left, under their name, quietly)."""
-    extra = {"MP_BOT_ROOM": room, "MP_BOT_TOKEN": token, "MP_BOT_NAME": name, "MP_BOT_MODE": mode}
+    (stand_in: the place of a person who left, under their name, quietly;
+    level: easy, normal or hard)."""
+    extra = {"MP_BOT_ROOM": room, "MP_BOT_TOKEN": token, "MP_BOT_NAME": name, "MP_BOT_MODE": mode,
+             "MP_BOT_LEVEL": level}
     if stand_in:
         extra["MP_BOT_STANDIN"] = "1"
     return await _start_headless(config, port, room, token, script="bot.lua", what="bot",

@@ -428,7 +428,18 @@ local function run_lobby()
         for _, p in pairs(lobby.players) do if p.bot == "1" and p.ready == "1" then bots = bots + 1 end end
         return bots >= add_bots
       end, 60)
+      -- MP_BOT_LEVELS: "peer:level,...": the host makes those bots easy or
+      -- hard (the menu on a bot's line, UIMultiplayer:playerMenu).
+      for peer, level in (os.getenv("MP_BOT_LEVELS") or ""):gmatch("(%d+):(%a+)") do
+        peer = tonumber(peer)
+        lobby:setBotLevel(peer, level)
+        wait_for("bot " .. peer .. " " .. level, function()
+          local p = lobby.players[peer]
+          return p and (p.level or "normal") == level
+        end, 15)
+      end
       local win, labels = lobby_window(), {}
+      win:_updateRoom()
       for i = 1, #win.player_panels do
         labels[i] = (tostring(win.player_panels[i].label or ""):gsub("^<LocalisedString> Current value:%s*", ""))
       end
