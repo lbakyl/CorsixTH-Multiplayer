@@ -20,9 +20,11 @@ SOFTWARE. --]]
 
 --! Multiplayer: the land auction (world.mp_auction, see the auctions in
 --! mp_session.lua), on the game's auction room picture: the bidders with
---! their bids, the town with the lot in red, this player's next bid (the
---! tick) and the highest bid. Every player sees it; those whose land borders
---! the lot bid. Bids are commands (auction_bid, auction_pass).
+--! their bids, the town with the lot in red and the other plots for sale in
+--! sand, this player's next bid (the tick), the highest bid, and the seconds
+--! left in big digits. Every player sees it; those whose land borders the
+--! lot bid. Bids are commands (auction_bid, auction_pass). The town map
+--! button opens the game's town map; the auction comes back after it.
 class "UIMultiplayerAuction" (UIFullscreen)
 
 ---@class UIMultiplayerAuction: UIFullscreen
@@ -50,6 +52,11 @@ local loan_col = {
 }
 local MAP_BG = {44, 96, 52}
 local LOT_COLOUR = {236, 52, 28}
+local FOR_SALE_COLOUR = {196, 172, 112} -- (plots nobody owns yet: Argus, 2026-11-12)
+-- The seconds left: big digits in a box over the map's top right corner.
+local CLOCK_W, CLOCK_H = 64, 50
+local CLOCK_X, CLOCK_Y = MAP_X + MAP_W - CLOCK_W - 4, MAP_Y + 4
+local TOWN_X, TOWN_Y, TOWN_W, TOWN_H = MAP_X + 4, MAP_Y + 4, 120, 22 -- the town map button (map top left)
 
 -- The gavel: frames 10 (raised) to 3 (down). As in the original game it
 -- comes down slowly while nobody bids, is raised again by every bid, and
@@ -92,6 +99,9 @@ function UIMultiplayerAuction:UIMultiplayerAuction(ui)
       :makeButton(0, 0, 32, LOAN_H, nil, self.repayLoan):setTooltip(_S.multiplayer_window.auction_repay_tooltip)
   self.borrow_button = self:addBevelPanel(LOAN_X + LOAN_W + 42, LOAN_Y, 32, LOAN_H, loan_col.button):setLabel("+")
       :makeButton(0, 0, 32, LOAN_H, nil, self.borrow):setTooltip(_S.multiplayer_window.auction_borrow_tooltip)
+  self.town_button = self:addBevelPanel(TOWN_X, TOWN_Y, TOWN_W, TOWN_H, loan_col.button)
+      :setLabel(_S.tooltip.toolbar.town_map:format("F4"))
+      :makeButton(0, 0, TOWN_W, TOWN_H, nil, self.openTownMap)
   self.gavel_frame = GAVEL_UP
   self.going = 0
   self.timer = 0
@@ -119,6 +129,7 @@ function UIMultiplayerAuction:makeRuns()
     if c then owners[hospital:getPlayerIndex()] = {floor = rgb(c, 1), room = rgb(c, 0.78)} end
   end
   local lot = rgb(LOT_COLOUR, 1)
+  local for_sale = rgb(FOR_SALE_COLOUR, 1)
   local wall = video:mapRGB(36, 28, 24)
   -- Each tile: what it shows (nil: grass), and the part of the map with land.
   local flags = {}
@@ -132,8 +143,13 @@ function UIMultiplayerAuction:makeRuns()
         if auction and p == auction.plot then
           c = lot
         else
-          local owner = owners[th:getPlotOwner(p)]
-          if owner then c = world:getRoom(x, y) and owner.room or owner.floor end
+          local who = th:getPlotOwner(p)
+          local owner = owners[who]
+          if owner then
+            c = world:getRoom(x, y) and owner.room or owner.floor
+          elseif who == 0 then
+            c = for_sale
+          end
         end
       end
       if c then
@@ -176,7 +192,7 @@ function UIMultiplayerAuction:makeRuns()
   local line = math.max(1, math.floor(px / 3)) / px -- in tiles
   local function owned(x, y)
     local c = x >= 1 and y >= 1 and x <= w and y <= h and tile[(y - 1) * w + x]
-    return c and c ~= lot
+    return c and c ~= lot and c ~= for_sale
   end
   local function is_wall(block) block = block % 256 return block >= 82 and block <= 164 end
   for y = y0, y0 + bh - 1 do
@@ -253,6 +269,14 @@ function UIMultiplayerAuction:repayLoan()
   self.ui:playSound("selectx.wav")
 end
 
+--! The town map (to see every plot), over this screen; the auction comes
+--! back when it is closed (MultiplayerSession:syncAuction).
+function UIMultiplayerAuction:openTownMap()
+  local town = rawget(_G, "UITownMap")
+  if not town then return end
+  self.ui:addWindow(town(self.ui))
+end
+
 --! The cross: a bidder drops out (and the screen closes); for the others it
 --! only closes the screen.
 function UIMultiplayerAuction:dropOut()
@@ -312,11 +336,19 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
   canvas:scale(s, "bitmap")
   self.background:draw(canvas, self.x * s + x_, self.y * s + y_)
   canvas:scale(1, "bitmap")
-  UIFullscreen.draw(self, canvas, x_, y_)
   local x, y = self.x * s + x_, self.y * s + y_
   local world = self.world
   local auction = world.mp_auction
   if auction and auction.id ~= self.auction_id then auction = nil end
+  -- The town, the lot in red (blinking); before the buttons (the town map
+  -- button sits on it).
+  local mx, my = x + MAP_X * s, y + MAP_Y * s
+  local lot_on = math.floor(self.timer / 12) % 2 == 0 or not auction
+  canvas:drawRect(canvas:mapRGB(MAP_BG[1], MAP_BG[2], MAP_BG[3]), mx, my, MAP_W * s, MAP_H * s)
+  for _, r in ipairs(self.rects) do
+    if lot_on or not r[6] then canvas:drawRect(r[5], mx + r[1] * s, my + r[2] * s, r[3] * s, r[4] * s) end
+  end
+  UIFullscreen.draw(self, canvas, x_, y_)
   local last = not auction and world.mp_auction_last
   if last and last.id ~= self.auction_id then last = nil end
   local shown = auction or last
@@ -374,12 +406,22 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
     end
   end
 
-  -- The town, the lot in red (blinking).
-  local mx, my = x + MAP_X * s, y + MAP_Y * s
-  local lot_on = math.floor(self.timer / 12) % 2 == 0 or not auction
-  canvas:drawRect(canvas:mapRGB(MAP_BG[1], MAP_BG[2], MAP_BG[3]), mx, my, MAP_W * s, MAP_H * s)
-  for _, r in ipairs(self.rects) do
-    if lot_on or not r[6] then canvas:drawRect(r[5], mx + r[1] * s, my + r[2] * s, r[3] * s, r[4] * s) end
+  -- The seconds left, big (Argus: he could not tell 1 from 2).
+  if auction and auction.limit > 0 then
+    local left = math.max(0, math.ceil((auction.limit - auction.frames) * 18 / 1000))
+    local cx, cy = x + CLOCK_X * s, y + CLOCK_Y * s
+    canvas:drawRect(canvas:mapRGB(250, 240, 200), cx - s, cy - s, (CLOCK_W + 2) * s, (CLOCK_H + 2) * s)
+    canvas:drawRect(canvas:mapRGB(40, 24, 20), cx, cy, CLOCK_W * s, CLOCK_H * s)
+    local colour = left <= 3 and canvas:mapRGB(250, 70, 50) or canvas:mapRGB(250, 220, 90)
+    local digits = tostring(math.min(left, 99))
+    local dw, dh, t, gap = 22, 38, 5, 6
+    local total = #digits * dw + (#digits - 1) * gap
+    local dx = cx + math.floor((CLOCK_W - total) / 2) * s
+    for i = 1, #digits do
+      UIMultiplayerAuction.drawDigit(canvas, colour, tonumber(digits:sub(i, i)), dx, cy + 6 * s, dw * s,
+          dh * s, t * s)
+      dx = dx + (dw + gap) * s
+    end
   end
 
   -- The gavel.
@@ -410,10 +452,31 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
     elseif standing == "lead" then status = S.auction_leading
     elseif standing == "out" then status = S.auction_dropped
     elseif standing == "poor" then status = S.auction_no_money_loan
-    else status = S.auction_price:format(auction.price, auction.step) end
+    else status = S.auction_price:format(auction.price, auction.step) .. ". " .. S.auction_how end
     status = S.auction_title:format(auction.plot) .. ". " .. status .. " " .. S.auction_paused
   end
   self.status_font:drawWrapped(canvas, status, x + STATUS_X * s, y + STATUS_Y * s, STATUS_W * s)
+end
+
+-- A digit's lit bars: top, top right, bottom right, bottom, bottom left,
+-- top left, middle.
+local SEGMENTS = {[0] = "abcdef", "bc", "abged", "abgcd", "fgbc", "afgcd", "afgedc", "abc", "abcdefg",
+    "abcdfg"}
+
+--! Draw digit `d` (0-9) as lit bars, w x h at (x, y), bars t thick.
+function UIMultiplayerAuction.drawDigit(canvas, colour, d, x, y, w, h, t)
+  local lit = SEGMENTS[d] or ""
+  local half = math.floor(h / 2)
+  local function bar(name, bx, by, bw, bh)
+    if lit:find(name, 1, true) then canvas:drawRect(colour, bx, by, bw, bh) end
+  end
+  bar("a", x, y, w, t)
+  bar("b", x + w - t, y, t, half)
+  bar("c", x + w - t, y + half, t, h - half)
+  bar("d", x, y + h - t, w, t)
+  bar("e", x, y + half, t, h - half)
+  bar("f", x, y, t, half)
+  bar("g", x, y + half - math.floor(t / 2), w, t)
 end
 
 --------------------------------------------------------------------------------

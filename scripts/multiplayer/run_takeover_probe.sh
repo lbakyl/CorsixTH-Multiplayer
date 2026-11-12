@@ -27,6 +27,9 @@
 #      bot comes back, one load for both
 #   6. every game IN SYNC to its end, no desync, the referee differs from nobody
 #   7. "shirt": the queue window shown with patients in it (pictures queue-*)
+#   8. "shirt": wes asks for a plot the bot may want too: the auction screen
+#      (plots for sale in sand, the seconds left big), its town map button
+#      opens the map, and the auction comes back when it is closed
 # Exits 0 only if all checks behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
@@ -191,6 +194,13 @@ shots = re.findall(r'UI: queue window of (\d+) patients at step (\d+), the first
 ok7 = bool(shots) and result('wes').startswith('IN SYNC') and 'colour 8' in w
 print(f"7. Queue window, colour 8:  {shots or 'no queue'}; {result('wes')}")
 if not ok7: bad.append("ok7")
+# The auction screen: its town map button opens the map, the auction
+# comes back after it (8. below; pictures auction-* and auctionmap-*).
+opened = re.search(r'UI: auctionmap at step \d+: town map true, auction screen false', w)
+back = re.search(r'UI: auctionshot at step 112\d: screen true', w)
+ok8 = bool(opened and back)
+print(f"8. Auction, town map:       map opened from the auction: {bool(opened)}; auction screen back: {bool(back)}")
+if not ok8: bad.append("ok8")
 print("failed checks:", " ".join(bad) if bad else "none")
 sys.exit(1 if bad else 0)
 PY

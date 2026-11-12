@@ -3325,8 +3325,11 @@ end
 -- scripts/multiplayer/bot.lua, Bot:bidAtAuction.)
 --------------------------------------------------------------------------------
 
-MultiplayerSession.AUCTION_SECONDS = 6 -- (the original game's gavel takes 5-6 s)
-MultiplayerSession.AUCTION_OPEN_SECONDS = 10
+-- (The original game's gavel takes 5-6 s; Argus, 2026-11-12: 7-8 s after
+-- the last bid, it ended before he saw it coming. The first bid: time to
+-- read the screen.)
+MultiplayerSession.AUCTION_SECONDS = 8
+MultiplayerSession.AUCTION_OPEN_SECONDS = 15
 local function auction_frames(seconds) return math.ceil(seconds * 1000 / 18) end -- world ticks
 -- A bot bids up to this much of the price: the first with plenty of room,
 -- the second with its land full (MultiplayerSession.landNeed), at least the
@@ -3693,7 +3696,11 @@ function MultiplayerSession:syncAuction(world)
     window:close()
     window = nil
   end
-  if auction and not window and self.auction_closed ~= auction.id then
+  -- (The town map opened from the auction, to see the plots: the auction
+  -- comes back when it is closed. Argus, 2026-11-12: it could not be opened.)
+  local town = rawget(_G, "UITownMap")
+  local map_open = town and ui:getWindow(town)
+  if auction and not window and self.auction_closed ~= auction.id and not map_open then
     ui:addWindow(class_(ui))
   elseif window and not auction then
     window:finish() -- the gavel, then it closes

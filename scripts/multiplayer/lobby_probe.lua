@@ -1625,6 +1625,21 @@ local function run()
           end
           log(string.format("UI: asking for plot %s at step %d", tostring(best), session.step))
           if best then session:issue({kind = "buy_plot", plot = best}) end
+        elseif a == "auctionmap" or a == "auctionmapclose" then
+          -- The town map button on the auction screen (a picture of the map),
+          -- then the map closed again: the auction screen comes back.
+          local auction_class, town_class = rawget(_G, "UIMultiplayerAuction"), rawget(_G, "UITownMap")
+          local window = world.ui:getWindow(auction_class)
+          local map = world.ui:getWindow(town_class)
+          if a == "auctionmap" and window then
+            window:openTownMap()
+            map = world.ui:getWindow(town_class)
+            shot("auctionmap-" .. session.step)
+          elseif a == "auctionmapclose" and map then
+            map:close()
+          end
+          log(string.format("UI: %s at step %d: town map %s, auction screen %s", a, session.step,
+              tostring(world.ui:getWindow(town_class) ~= nil), tostring(world.ui:getWindow(auction_class) ~= nil)))
         elseif a == "auctionhide" or a == "auctionback" then
           -- Close the auction screen as a player who only watches does, or
           -- press "Back to the auction" in the box shown meanwhile.
