@@ -112,12 +112,13 @@
 #      3 is a majority), one nobody answers lapses after 30 s of play; the
 #      speed changes only for the agreed one -> IN SYNC
 # With MP_REFEREE=1 the local server also runs its headless referee for every
-# room, and four more checks: 13. the referee agrees with the players in every
+# room, and five more checks: 13. the referee agrees with the players in every
 # room except 'cheat' (that one desyncs before the referee is there); 14, 15.
 # desync repair in a shared and a co-op game (in the shared one rosa has
 # transparent walls and other warmth colours, kept through the repair, and
 # each player still sees the hospital under their own name); 16.
-# rejoin after a quit.
+# rejoin after a quit; 36. a quorum repair with three players: only the one
+# whose game differs loads the referee's game, the others go on, not told.
 # Exits 0 only if all checks behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
@@ -384,6 +385,15 @@ if [[ "${MP_REFEREE:-0}" == 1 ]]; then
   sleep 1
   run_probe tess MP_ROLE=join MP_ROOM=fixcoop MP_STEPS=1000 MP_EXPECT_REPAIR=1 \
     MP_UI_SCRIPT="310:vip:2;450:openhospital;520:hire:Nurse" & pids+=($!)
+  # A quorum repair (check 36): three players, jody's game alone differs;
+  # only jody loads the referee's game, hal and ines play on and are told
+  # nothing (a loaded game once printed its money 50000 as 50000.0, so jody
+  # differed again at once; and hal and ines got "out of sync" after 3 s).
+  run_probe hal MP_ROLE=host MP_ROOM=quorum MP_PLAYERS=3 MP_STEPS=1000 MP_EXPECT_REPAIR=1     MP_UI_SCRIPT="500:buy:bench" & pids+=($!)
+  sleep 1
+  run_probe ines MP_ROLE=join MP_ROOM=quorum MP_STEPS=1000 MP_EXPECT_REPAIR=1 & pids+=($!)
+  sleep 1
+  run_probe jody MP_ROLE=join MP_ROOM=quorum MP_STEPS=1000 MP_EXPECT_REPAIR=1     MP_UI_SCRIPT="300:cheat;520:hire:Nurse" & pids+=($!)
   # Rejoin: a player quits (as after a crash) and joins the running game
   # again under the same name, in a new game process.
   # The host pauses after the other one quits, until the rejoin is done.
@@ -1095,6 +1105,26 @@ if with_referee:
           f"rejoined at step {at if rejoined else '-'}; commands after it on both: {after_u == after_v[:len(after_u)]} {kinds}")
     fail |= not ok13
     if not ok13: bad.append("ok13")
+
+    # The quorum repair: only jody, once, and the others are not held.
+    hl, il, jl = log('hal'), log('ines'), log('jody')
+    only = re.search(r"room 'quorum': repaired only jody from the referee's game at step (\d+)", server)
+    again = re.findall(r"room 'quorum': (a quorum agrees|repairing the desync|the quorum repair timed out|"
+                       r"the referee differs|desync repair timed out)", server)
+    healthy = all('the server repairs' in x and 'Multiplayer games are out of sync' not in x
+                  and 'held at step' not in x and 'recovered successfully' not in x for x in (hl, il))
+    told = 'REPAIRED' in jl and 'notice: Your game got out of sync and was recovered successfully.' in jl
+    synced = all(result(n).startswith('IN SYNC through step 1000') for n in ('hal', 'ines', 'jody'))
+    same = applied('hal') == applied('ines') == applied('jody')
+    ok36 = (only is not None and again == ['a quorum agrees'] and healthy and told and synced and same
+            and int(confirmed_after('quorum')) >= 900)
+    alone = re.findall(r"room '(\w+)': repaired the referee from", server)
+    print(f"36. Quorum repair (3):      {result('hal')} / {result('ines')} / {result('jody')}; "
+          f"only jody {'at step ' + only.group(1) if only else 'not'}; repairs {again}; "
+          f"others go on, not told: {healthy}; jody told: {told}; same commands: {same}; "
+          f"referee confirmed {confirmed_after('quorum')} (referee repaired alone in: {alone or 'none'})")
+    fail |= not ok36
+    if not ok36: bad.append("ok36")
 if bad:
     print("failed checks: " + " ".join(bad))
 sys.exit(1 if fail else 0)

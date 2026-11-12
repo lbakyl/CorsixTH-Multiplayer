@@ -202,10 +202,12 @@ function MultiplayerSession:poll()
         local own = self.own_fps[step]
         if own then
           self:_compare(step, own, fp, peer)
-        else
+        elseif step > self.step then
           self.peer_fps[step] = self.peer_fps[step] or {}
           self.peer_fps[step][peer] = fp
         end
+        -- (A step this game ran and no longer has its own fingerprint of:
+        -- a repaired player running steps again. Nothing to compare.)
       elseif self.control then
         self.control(line)
       end
@@ -461,6 +463,7 @@ function MultiplayerSession:restartAt(world, step, peers)
   self.own_fps, self.peer_fps = {}, {}
   self.desync = nil
   self.desync_notice_at = nil
+  self.repairing = nil
   self.remote_blueprints = {}
   for p in pairs(self.peer_step) do self.peer_step[p] = step end
   self.wait_started, self.wait_notified = nil, false
@@ -811,8 +814,37 @@ function MultiplayerSession:afterStep(unchanged)
 end
 
 function MultiplayerSession:_compare(step, own, other, peer)
-  if own ~= other then
+  if own ~= other and not (self.repairing and self.repairing[peer]) then
     self:_reportDesync(step, "fingerprints differ", peer, own, other)
+  end
+end
+
+--! The server repairs other players' games (REPAIRING): most players' games
+--! agree with the referee's, this one too, so this game goes on and only
+--! those players load the referee's game. Their fingerprints until then are
+--! wrong: a difference from them is theirs, not this game's (no "out of
+--! sync" notice here).
+--!param peers (list) the players being repaired
+function MultiplayerSession:othersRepairing(peers)
+  self.repairing = self.repairing or {}
+  for _, peer in ipairs(peers) do
+    self.repairing[peer] = true
+    for _, fps in pairs(self.peer_fps) do fps[peer] = nil end
+  end
+  local desync = self.desync
+  if desync and desync.peer and self.repairing[desync.peer] then
+    self.log(string.format("the server repairs peer %d; this game goes on", desync.peer))
+    self.desync, self.desync_notice_at = nil, nil
+  end
+end
+
+--! Those players have loaded the referee's game (REPAIRED): what they report
+--! from now on is compared again.
+--!param peers (list) the players repaired
+function MultiplayerSession:othersRepaired(peers)
+  for _, peer in ipairs(peers) do
+    if self.repairing then self.repairing[peer] = nil end
+    for _, fps in pairs(self.peer_fps) do fps[peer] = nil end
   end
 end
 

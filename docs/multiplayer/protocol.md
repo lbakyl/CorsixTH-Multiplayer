@@ -62,7 +62,8 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 | `SEATS room n peer<i> name<i> state<i> colour<i> team<i> level<i>` | answer to `JOIN` of a running room: its places in start order; `state` is `on` (a person plays it), `bot` (the room's own bot), `standin` (a bot playing for the person named, who left) or `left` (nobody); `level` an own bot's, `easy` or `hard` (none: a normal one) |
 | `DESYNC step` | fingerprints differed at `step` and cannot be repaired: the game is over |
 | `HOLD step why` | stop stepping and issuing commands; answer `HELD` (`why=desync` at `step`, or `why=rejoin`: a player rejoins). A game that found the desync itself waits 3 s for `HOLD` before it tells its player the games stay different; after a repaired desync (`RESUME`) only the adviser says so |
-| `SAVE step` | referee only: save once at `step` (or later) |
+| `SAVE step why` | referee only: save once at `step` (or later). `why=quorum`: only some players load it, the referee plays on (no hold) |
+| `REPAIRING step peers`, `REPAIRED step peers` | a quorum repair: most players agree with the referee and only `peers` (comma-separated) load its game; the others play on. Their games ignore what `peers` report until `REPAIRED` (no "out of sync" notice of their own) |
 | `LOAD step parts peers`, `SAVEDATA d`, `LOADEND step` | the shared save (base64 in `parts` lines); load it and restart at `step` with `peers` |
 | `RESUME step` | play on |
 | `CHAT peer name text [to] [team]` | chat (`peer=0`: a server notice); with `to`, a private line, sent to that player and back to the sender; with `team=1`, a team line, sent to the players in `to` and back to the sender |
@@ -155,6 +156,14 @@ further lines once it has `LOADEND`: everything after it (the replayed
 commands, `RESUME`) belongs to the loaded game and is read after the load.
 The server replays every command for a step after the save, also to the
 player who sent it, because loading drops every pending command.
+
+With three or more players, when most of them agree with each other and with
+the referee (a quorum), only the others are held and load the referee's game
+(`REPAIRING` and `REPAIRED` to the rest); when every player agrees and only
+the referee differs, one player sends its game and only the referee loads it.
+A save keeps every number as it was, an integer an integer and a float a
+float (Lua 5.3 and later), so a game loaded alone is the same as the ones
+that were not.
 
 ## Saving and continuing
 

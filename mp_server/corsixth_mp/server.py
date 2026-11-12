@@ -1712,8 +1712,12 @@ class Server:
                     room.recovery = None
                     self._desync(room, rec.step)
             return
-        if room.desync_step is not None or rec is not None:
-            return  # (repairing the referee: what it says until then is wrong)
+        if room.desync_step is not None:
+            return
+        if rec is not None and (rec.only is None or rec.waiting_referee):
+            return  # (repairing the referee or everybody: what it says until then is wrong)
+        # (A quorum repair of players: the referee is right, its word is
+        # kept for the steps the players report once repaired.)
         self._check_with_referee(room, step, None, fp)
 
     def _check_with_referee(self, room: Room, step: int, players_fp: str | None,
@@ -1790,6 +1794,10 @@ class Server:
         names = ", ".join(room.players[p].name for p in dissenters if p in room.players)
         log.warning("room %r: a quorum agrees at step %d; repairing only %s", room.name, step, names)
         rec = room.recovery = Recovery(step=step, only=set(dissenters), quorum_fp=fp)
+        # The others go on: their games noticed the difference too, and
+        # would tell their players that the games are out of sync.
+        self._tell_others(room, rec.only, encode("REPAIRING", step=step,
+                                                 peers=",".join(str(p) for p in dissenters)))
         referee_fp = room.referee_fps.pop(step, None)
         if referee_fp is None:
             # (The referee follows the players: its word on this step comes soon.)
@@ -1802,6 +1810,13 @@ class Server:
                         room.name, step)
             room.recovery = None
             self._desync(room, step)
+
+    @staticmethod
+    def _tell_others(room: Room, peers: set[int], line: str) -> None:
+        """Send `line` to the room's players not in `peers`."""
+        for peer, p in sorted(room.players.items()):
+            if peer not in peers:
+                p.send(line)
 
     def _quorum_timeout(self, room: Room, rec: Recovery) -> None:
         if room.recovery is rec and rec.waiting_referee:
@@ -1878,7 +1893,11 @@ class Server:
             rec.saver = room.referee
             steps = [rec.held[p] for p in targets if rec.held[p] is not None]
             # Nobody but a rejoining player: the referee saves where it is.
-            room.referee.send(encode("SAVE", step=min(steps) if steps else 0))
+            # (A quorum repair: the referee carries on, nobody else loads.)
+            fields: dict[str, object] = {"step": min(steps) if steps else 0}
+            if rec.only is not None:
+                fields["why"] = "quorum"
+            room.referee.send(encode("SAVE", **fields))
 
     def _on_savedata(self, player: Player, f: dict[str, str]) -> None:
         room = player.room
@@ -1974,6 +1993,8 @@ class Server:
             log.info("room %r: repaired the referee from %r's game at step %d (%d bytes)",
                      room.name, rec.saver.name if rec.saver else "?", step, rec.size)
             return
+        self._tell_others(room, repaired, encode("REPAIRED", step=step,
+                                                 peers=",".join(str(p) for p in sorted(repaired))))
         # The repaired players run the steps after the save again: those were
         # compared already (or skipped during the repair).
         room.fingerprints.clear()

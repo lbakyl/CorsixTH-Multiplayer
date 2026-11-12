@@ -1042,11 +1042,14 @@ function MultiplayerLobby:_onSAVE(f)
   if not session then return end
   if self.is_referee then
     session.save_at = tonumber(f.step) or session.step
+    -- A quorum repair: only the players that differ load it; the referee
+    -- carries on (no hold: nothing would resume it).
+    session.save_goes_on = f.why == "quorum" or nil
   elseif f.why == "referee" and not session.observer then
     -- Every player agrees and only the referee differs: this game goes to
     -- the referee, and this player carries on (no hold).
     session.save_at = tonumber(f.step) or session.step
-    session.save_for_referee = true
+    session.save_goes_on = true
   end
 end
 
@@ -1083,6 +1086,28 @@ function MultiplayerLobby:_onLOADEND()
     session.load_data = {step = save.step, data = table.concat(save.parts), peers = save.peers,
         places = save.places}
   end
+end
+
+--! A peer list ("1,3") in order; {} for nil.
+local function peer_list(text)
+  local list = {}
+  for p in (text or ""):gmatch("%d+") do list[#list + 1] = tonumber(p) end
+  return list
+end
+
+-- A quorum repair: most players agree with the referee, so only the others
+-- (peers=) load its game. The players that agree hear about it and go on.
+function MultiplayerLobby:_onREPAIRING(f)
+  local session = self:_ownSession()
+  if not session then return end
+  self.log(string.format("multiplayer: the server repairs player(s) %s from step %s; this game goes on",
+      tostring(f.peers), tostring(f.step)))
+  session:othersRepairing(peer_list(f.peers))
+end
+
+function MultiplayerLobby:_onREPAIRED(f)
+  local session = self:_ownSession()
+  if session then session:othersRepaired(peer_list(f.peers)) end
 end
 
 function MultiplayerLobby:_onRESUME(f)
@@ -1138,8 +1163,8 @@ function MultiplayerLobby:serviceSaves(session)
       self:send("SAVEDATA", {d = text:sub(i, i + MultiplayerLobby.SAVE_CHUNK - 1)})
     end
     self:send("SAVED", {step = session.step, parts = parts})
-    if session.save_for_referee then
-      session.save_for_referee = nil -- (only the referee loads it)
+    if session.save_goes_on then
+      session.save_goes_on = nil -- (only the referee, or only some players, load it)
     else
       session.held = true -- until everybody, the referee too, has loaded it
     end

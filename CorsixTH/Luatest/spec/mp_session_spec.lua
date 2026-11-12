@@ -281,6 +281,38 @@ describe("MultiplayerSession notices", function()
     assert.equal(0, #notes)
   end)
 
+  it("goes on while the server repairs another player's game", function()
+    local now = {0}
+    local a, notes, inbox = pair_with_clock(now)
+    a:beforeStep() a:afterStep()
+    inbox[#inbox + 1] = "S 2 1 different"
+    a:poll()
+    assert.is_not_nil(a.desync)
+    -- REPAIRING peers=2: this game agrees with the referee's; only peer 2
+    -- loads it.
+    a:othersRepairing({2})
+    assert.is_nil(a.desync)
+    -- What peer 2 reports until then is not compared...
+    inbox[#inbox + 1] = "S 2 2 wrong-too"
+    a:poll()
+    a:beforeStep() a:afterStep()
+    assert.is_nil(a.desync)
+    now[1] = MultiplayerSession.DESYNC_NOTICE_MS * 2
+    a:checkDesyncNotice()
+    assert.equal(0, #notes)
+    -- ...what it reports with the referee's game is (REPAIRED). It runs
+    -- steps again: those this game no longer has a fingerprint of are not
+    -- kept.
+    a:othersRepaired({2})
+    inbox[#inbox + 1] = "S 2 1 x"
+    a:poll()
+    assert.is_nil(a.peer_fps[1])
+    a:beforeStep() a:afterStep()
+    inbox[#inbox + 1] = "S 2 3 different"
+    a:poll()
+    assert.is_not_nil(a.desync)
+  end)
+
   it("reports a game that stops for no visible reason once, not a shared pause", function()
     local now = {0}
     local sent = {}

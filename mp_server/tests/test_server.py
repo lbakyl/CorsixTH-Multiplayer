@@ -562,13 +562,19 @@ def test_quorum_repairs_only_the_game_that_differs():
         await asyncio.sleep(0.05)
         room = server.rooms["r1"]
         assert room.recovery is not None and room.recovery.waiting_referee
+        # Ann and Bob hear at once that Cid is repaired: their games go on
+        # (no "out of sync" notice of their own).
+        for x in (a, b):
+            assert await x.expect("REPAIRING") == {"step": "3", "peers": "3"}
+        assert not any(x.startswith("REPAIRING") for x in c.inbox)
         ref.send("S 0 3 fp-good")
         # Only Cid holds; the others carry on.
         assert (await c.expect("HOLD"))["step"] == "3"
         a.send("S 1 4 fp-on")
         b.send("S 2 4 fp-on")
         c.send(encode("HELD", step=3))
-        assert (await ref.expect("SAVE"))["step"] == "3"
+        # (The referee carries on after saving: why=quorum.)
+        assert (await ref.expect("SAVE")) == {"step": "3", "why": "quorum"}
         ref.send(encode("SAVEDATA", d="QUJD"))
         ref.send(encode("SAVED", step=3, parts=1))
         assert (await c.expect("LOAD")) == {"step": "3", "parts": "1", "peers": "1,2,3", "bots": "", "standins": "", "hard": "", "easy": ""}
@@ -579,7 +585,11 @@ def test_quorum_repairs_only_the_game_that_differs():
         assert await c.expect("S") == "S 1 4 fp-on"
         assert await c.expect("S") == "S 2 4 fp-on"
         assert (await c.expect("RESUME"))["step"] == "3"
+        # ...and when Cid has the referee's game (they compare again).
+        for x in (a, b):
+            assert await x.expect("REPAIRED") == {"step": "3", "peers": "3"}
         assert not any(x.startswith(("HOLD", "LOAD")) for x in a.inbox + b.inbox + ref.inbox)
+        assert not any(x.startswith("REPAIRED") for x in c.inbox + ref.inbox)
         assert room.recovery is None and room.recoveries == 1
         # Cid runs step 4 again (not compared twice), then all go on together.
         c.send("S 3 4 fp-on")
