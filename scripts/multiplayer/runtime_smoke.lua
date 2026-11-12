@@ -21,6 +21,18 @@ local function run()
   assert(initial_date ~= saved_date, "Game date did not advance")
   print("SMOKE: 600 application callbacks completed; date=" .. saved_date)
 
+  -- Numbers load as they were saved: on Lua 5.3 and later an integer stays
+  -- an integer and a float a float (50000 came back as 50000.0, 3.0 as 3,
+  -- and a game loaded in a multiplayer repair differed from the others).
+  local numbers = {50000, 3.0, -5, 16383, 16384, 0.5, -2.0, 2 ^ 40, 7}
+  if math.type then numbers[#numbers + 1] = math.tointeger(2 ^ 40) end
+  TheApp.world.smoke_numbers = numbers
+  local function shown(list)
+    local out = {}
+    for i, v in ipairs(list) do out[i] = tostring(v) end
+    return table.concat(out, " ")
+  end
+  local numbers_text = shown(numbers)
   local save_path = output_dir .. "/baseline.sav"
   TheApp:save(save_path)
   local lfs = require("lfs")
@@ -28,6 +40,9 @@ local function run()
   TheApp:load(save_path)
   assert(TheApp.world and TheApp.map, "Reload did not create a world")
   assert(TheApp.world.game_date:tostring() == saved_date, "Reload changed the date")
+  local loaded_text = shown(TheApp.world.smoke_numbers or {})
+  assert(loaded_text == numbers_text, "Numbers changed in the save: " .. numbers_text .. " -> " .. loaded_text)
+  print("SMOKE: numbers kept in the save: " .. loaded_text)
   for _ = 1, 120 do
     TheApp:onTick()
   end
