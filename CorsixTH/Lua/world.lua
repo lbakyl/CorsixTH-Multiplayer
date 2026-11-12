@@ -1768,9 +1768,9 @@ function World:onEndMonth()
     table.sort(paid)
     -- (2,3:hard: hospital 3's bots are hard ones.)
     local shown = {}
-    for i, index in ipairs(paid) do
-      local level = MultiplayerSession.botLevel(self, index)
-      shown[i] = level == "normal" and tostring(index) or (index .. ":" .. level)
+    for i, paid_index in ipairs(paid) do
+      local level = MultiplayerSession.botLevel(self, paid_index)
+      shown[i] = level == "normal" and tostring(paid_index) or (paid_index .. ":" .. level)
     end
     session.log("bot bonus for hospital(s) " .. table.concat(shown, ","))
   end

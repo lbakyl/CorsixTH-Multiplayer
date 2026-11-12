@@ -1644,7 +1644,6 @@ local function run()
           local map = world.ui:getWindow(town_class)
           if a == "auctionmap" and window then
             window:openTownMap()
-            map = world.ui:getWindow(town_class)
             shot("auctionmap-" .. session.step)
           elseif a == "auctionmapclose" and map then
             map:close()
