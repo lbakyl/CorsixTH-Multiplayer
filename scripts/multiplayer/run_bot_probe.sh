@@ -290,7 +290,9 @@ lab_bot = next((n.split('/', 1)[1] for n in bots if n.startswith('lab/')), None)
 lb = bots.get('lab/' + lab_bot, '') if lab_bot else ''
 offers9 = applied(f, 2, 'offer_research')
 offer_text = re.findall(r'research offer[^\n]*', f)
-research_lines = [t for _, t in chats_from(f, lab_bot) if 'research' in t] if lab_bot else []
+# (Not its money ask when it fails its goals: "send me $10,000 so I can build
+# a new research room".)
+research_lines = [t for _, t in chats_from(f, lab_bot) if 'research' in t and '$' not in t] if lab_bot else []
 lab_rooms = re.findall(r'furnishing research #\d+: buying ([^\n]*)', lb)
 desks = all('desk:1' in r for r in lab_rooms)
 ok9 = (any(r == 'ok' for _, r in offers9) and not research_lines and desks
