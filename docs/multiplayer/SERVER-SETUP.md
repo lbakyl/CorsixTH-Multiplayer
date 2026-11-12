@@ -271,9 +271,10 @@ What happens then:
   `/var/lib/corsixth/learn/saves` (a few MB each). A hospital a bot played at
   any time, even for a while for a player who left, is never learnt from.
 - Every morning at 6:30 (Prague time) the server reads the new saves and
-  writes what the bots learnt to `/var/lib/corsixth/learn/learned.lua`. Bots
-  of games started after that build that way; easy bots keep their own
-  simple rules.
+  writes what the bots learnt to `/var/lib/corsixth/learn/learned.lua`. Hard
+  bots of games started after that build that way (a new bot is a hard one
+  unless the room's owner picks another level); easy and normal bots keep
+  their own rules.
 - The daily Discord report names the saves and players learnt from that
   night (nothing is said on a night without new ones).
 

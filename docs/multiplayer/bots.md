@@ -182,8 +182,9 @@ rooms side by side for a game year, one bot each.
 
 A server can name expert players (`CORSIXTH_MP_EXPERTS`, SERVER-SETUP.md
 section 10); the referee saves their games and a nightly job
-(`corsixth_mp/learn.py`, `layout_learn.py`) writes `learned.lua`. A normal or
-hard bot reads it when it starts (an easy one does not):
+(`corsixth_mp/learn.py`, `layout_learn.py`) writes `learned.lua`. A hard bot
+reads it when it starts; easy and normal bots, and a bot standing in for a
+person who left, keep their own rules:
 
 - **Room recipes.** For each kind of room, the size the experts build most
   and the layout they use most at that size, seen from the door. The manager

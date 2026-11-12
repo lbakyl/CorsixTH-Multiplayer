@@ -34,7 +34,7 @@
 --   MP_BOT_LEARNED       the file of what bots learnt from expert players'
 --                        hospitals (layout_learn.py: room recipes, plans;
 --                        default: learned.lua in CORSIXTH_MP_LEARN_DIR, the
---                        server's); an easy bot does not use it
+--                        server's); only a hard bot uses it (Jan)
 --   MP_LUA_CPATH, MP_LUA_PATH  where to find LuaSocket (if not standard)
 -- Tests only:
 --   MP_BOT_SEED          seed for its choices (default: from the clock)
@@ -835,19 +835,22 @@ function Bot.new(lobby)
   self.level = os.getenv("MP_BOT_LEVEL") or "normal"
   -- What it learnt from expert players' hospitals (Jan, 2026-11-12: bots
   -- should build like Argus): room recipes, and plans for the places experts
-  -- played (bot_learned.lua). An easy bot keeps to its own simple rules.
+  -- played (bot_learned.lua). Only a hard bot (Jan, the same night: easy and
+  -- normal bots are not changed); not one standing in for a person who left,
+  -- whose hospital it keeps going.
+  -- (Read here; used only while its level is hard: Bot:applyLevel.)
   local learned_path = os.getenv("MP_BOT_LEARNED") or ""
   local learn_dir = os.getenv("CORSIXTH_MP_LEARN_DIR") or ""
   if learned_path == "" and learn_dir ~= "" then learned_path = learn_dir .. "/learned.lua" end
-  if learned_path ~= "" and self.level ~= "easy" then
+  if learned_path ~= "" and not standin then
     local data, why = Learned.load(learned_path)
-    self.learned = data
+    self.expert_data_read = data
     if data then
       local recipes, plans = 0, 0
       for _ in pairs(data.recipes) do recipes = recipes + 1 end
       for _ in pairs(data.plans) do plans = plans + 1 end
-      log(string.format("learnt from %s: %d room recipes, %d plans", table.concat(data.experts or {}, ", "),
-          recipes, plans))
+      log(string.format("learnt from %s: %d room recipes, %d plans (a hard bot builds by them)",
+          table.concat(data.experts or {}, ", "), recipes, plans))
     else
       log("nothing learnt from " .. learned_path .. ": " .. tostring(why))
     end
@@ -857,10 +860,28 @@ function Bot.new(lobby)
         typing = function(text) return 1.5 + #text * 0.06 + rand() * 2 end, learned_module = Learned})
   end
   -- "manager": the same brain, without the language model's advice; an easy
-  -- bot never asks it either.
-  if self.brain == "manager" or os.getenv("MP_BOT_LEVEL") == "easy" then self.ai = "off" end
+  -- bot never asks it either (Bot:applyLevel).
+  if self.brain == "manager" then self.ai = "off" end
+  self:applyLevel(self.level)
   log("brain: " .. self.brain .. ", level " .. self.level)
   return self
+end
+
+--! Play at this level (easy, normal, hard): an easy bot asks the language
+--! model nothing, only a hard one builds as the experts do. MP_BOT_LEVEL is
+--! the level it was started at; the room's owner may change it in the room
+--! before the game starts, and the game's own (START) wins: Bot:attach.
+function Bot:applyLevel(level)
+  self.level = level
+  if level == "easy" and self.ai ~= "off" then
+    self.ai, self.ai_easy = "off", true
+  elseif level ~= "easy" and self.ai_easy then
+    self.ai, self.ai_easy = nil, nil
+  end
+  self.expert_data = level == "hard" and self.expert_data_read or nil
+  if self.expert_data then log("builds as the experts do (a hard bot)") end
+  self.expert_plan_world = nil -- (the plan for its place is looked up again)
+  if Manager then Manager.learned = self.expert_data end
 end
 
 function Bot:now() return socket.gettime() end
@@ -1827,19 +1848,19 @@ end
 --! they played, or nil.
 function Bot:learnedPlan()
   local world = self.world
-  if not (self.learned and world and world.ui and world.ui.hospital) then return nil end
-  if self.learned_plan_world ~= world then
-    self.learned_plan_world = world
+  if not (self.expert_data and world and world.ui and world.ui.hospital) then return nil end
+  if self.expert_plan_world ~= world then
+    self.expert_plan_world = world
     local w, h = world.map.th:size()
     local key = Learned.planKey(world.map.level_name, w, h, #world.hospitals,
         world:getHospitalIndex(world.ui.hospital))
-    self.learned_plan = Learned.plan(self.learned, key)
-    if self.learned_plan then
-      log(string.format("plays %s like %s did (%d rooms in their plan)", key, tostring(self.learned_plan.player),
-          #self.learned_plan.rooms))
+    self.expert_plan = Learned.plan(self.expert_data, key)
+    if self.expert_plan then
+      log(string.format("plays %s like %s did (%d rooms in their plan)", key, tostring(self.expert_plan.player),
+          #self.expert_plan.rooms))
     end
   end
-  return self.learned_plan
+  return self.expert_plan
 end
 
 --! An expert's room of kind `id` from the plan for this place that it can
@@ -2333,7 +2354,7 @@ function Bot:drawRoom(room_type, size, extras, near)
   -- put in afterwards (Bot:furnishTick).
   local layout, door_pref
   -- (The smart brain only: the fixed plan's rooms are furnished by the game.)
-  if self.learned and self.manager and not near then
+  if self.expert_data and self.manager and not near then
     local slot = self:planSlot(room_type.id, refused)
     if slot then
       x, y, w, h = slot.x, slot.y, slot.w, slot.h
@@ -2343,7 +2364,7 @@ function Bot:drawRoom(room_type, size, extras, near)
       log(string.format("%s where the expert had it: %dx%d at %d,%d (door in the %s wall)", room_type.id,
           w, h, x, y, slot.wall))
     else
-      local recipe = Learned.recipe(self.learned, room_type.id, size, 0)
+      local recipe = Learned.recipe(self.expert_data, room_type.id, size, 0)
       if recipe and math.max(recipe.w, recipe.d) >= size - 1 then
         -- A spot with the corridor on the side of a door wall the expert used
         -- (their layout fits that room exactly), else on any side.
@@ -3283,6 +3304,13 @@ end
 function Bot:attach(world)
   self.world = world
   builder.hospital = world.ui.hospital
+  -- Its level as the game has it (the room's owner may have changed it
+  -- after this bot was started).
+  local level = MultiplayerSession.botLevel and MultiplayerSession.botLevel(world, self:hospitalIndex())
+  if level and level ~= self.level and not self.standin then
+    log(string.format("level %s (started as %s)", level, self.level))
+    self:applyLevel(level)
+  end
   if not self.plan then
     local day = self:gameDay()
     local month = world:date():monthOfGame()

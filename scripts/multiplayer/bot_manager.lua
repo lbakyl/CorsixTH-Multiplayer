@@ -232,8 +232,9 @@ function M.new(bot, ctx)
   self.rival_staff_asked = {} -- category -> game day a rival was asked for one
   self.s = nil             -- the last assessment (M:assess), for answers between days
   M.research_heavy = bot.research_heavy or false
-  -- (What it learnt from experts, bot_learned.lua: Bot.learned.)
-  M.learned, M.Learned = bot.learned, ctx.learned_module
+  -- (What it learnt from experts, bot_learned.lua, while it is a hard bot:
+  -- Bot:applyLevel sets M.learned.)
+  M.learned, M.Learned = bot.expert_data, ctx.learned_module
   return self
 end
 
