@@ -39,8 +39,9 @@ end
 
 local learn_dir = (os.getenv("CORSIXTH_MP_LEARN_DIR") or ""):gsub("[/\\]+$", "")
 local experts = {}
-for name in (os.getenv("CORSIXTH_MP_EXPERTS") or ""):gmatch("[^,]+") do
-  name = name:gsub("^%s+", ""):gsub("%s+$", "")
+-- (A new local: Lua 5.5 does not let a loop variable be assigned to.)
+for each in (os.getenv("CORSIXTH_MP_EXPERTS") or ""):gmatch("[^,]+") do
+  local name = each:gsub("^%s+", ""):gsub("%s+$", "")
   if name ~= "" then experts[name:upper()] = true end
 end
 local learning = learn_dir ~= "" and next(experts) ~= nil
