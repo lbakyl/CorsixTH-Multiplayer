@@ -3370,8 +3370,11 @@ end
 -- up (auction.step). It is sold when nobody bids for AUCTION_SECONDS (the
 -- first bid may take AUCTION_OPEN_SECONDS), or when all the others dropped
 -- out. Time is counted in steps on every peer alike, like a speed vote.
--- Bots bid in the game (bots_bid): no command, no waiting. Each bids up to
--- what the plot is worth to it (botPlotWorth): more, the fuller its land.
+-- Bots bid in the game (bots_bid): no command. Each bids up to what the
+-- plot is worth to it (botPlotWorth): more, the fuller its land. With a
+-- person among the bidders the bots bid one at a time, each a moment after
+-- the last bid (BOT_BID_SECONDS), so several of them stay in and bid
+-- against the person; among bots only it is settled at once.
 -- (A bot sharing a person's hospital bids by command while they are away:
 -- scripts/multiplayer/bot.lua, Bot:bidAtAuction.)
 --------------------------------------------------------------------------------
@@ -3381,6 +3384,13 @@ end
 -- read the screen.)
 MultiplayerSession.AUCTION_SECONDS = 8
 MultiplayerSession.AUCTION_OPEN_SECONDS = 15
+-- A bot answers the last bid after this many seconds and up to
+-- BOT_BID_SPREAD more (each bot, each bid a little differently: the same on
+-- every peer). Jan, 2026-11-12: only one bot ever seemed to bid against
+-- him; the bots had settled it among themselves in an instant, before the
+-- screen showed it, and only the strongest was left.
+MultiplayerSession.BOT_BID_SECONDS = 1.5
+MultiplayerSession.BOT_BID_SPREAD = 1.5
 local function auction_frames(seconds) return math.ceil(seconds * 1000 / 18) end -- world ticks
 -- A bot bids up to this much of the price: the first with plenty of room,
 -- the second with its land full (MultiplayerSession.landNeed), at least the
@@ -3591,33 +3601,69 @@ local function place_bid(auction, index, amount)
   auction_log(string.format("auction %d: hospital %d bids $%d", auction.id, index, amount))
 end
 
---! Bots' bids: a bot outbid bids again while the next bid is within what
---! the plot is worth to it (worked out once an auction, kept in it) and it
---! keeps its reserve; otherwise it drops out.
+--! Is a person still bidding (one of the bidders no bot plays, not out)?
+local function person_bidding(world, auction)
+  local bots = world.mp_coop.bot_hospitals or {}
+  for _, i in ipairs(auction.bidders) do
+    if not bots[i] and not auction.out[i] then return true end
+  end
+  return false
+end
+
+--! Bot hospital `i`'s turn at the auction: it bids if the next bid is
+--! within what the plot is worth to it (worked out once an auction, kept in
+--! it) and it keeps its reserve; otherwise it drops out. True if it bid.
+local function bot_turn(world, auction, i)
+  auction.worth = auction.worth or {}
+  auction.borrow = auction.borrow or {}
+  if not auction.worth[i] then
+    local worth, _, fill = MultiplayerSession.botPlotWorth(world, i, auction)
+    auction.worth[i] = worth
+    auction.borrow[i] = MultiplayerSession.botCanBorrow(world, i, fill)
+    auction_log(string.format("auction %d: plot worth $%d to bot hospital %d (land %d%% full, may borrow $%d)",
+        auction.id, worth, i, math.floor(fill * 100 + 0.5), auction.borrow[i]))
+  end
+  local amount = auction.bid + auction.step
+  if amount <= auction.worth[i] and world.hospitals[i].balance + (auction.borrow[i] or 0) -
+      amount >= MultiplayerSession.BOT_AUCTION_RESERVE then
+    place_bid(auction, i, amount)
+    return true
+  end
+  auction.out[i] = true
+  auction_log(string.format("auction %d: bot hospital %d drops out at $%d", auction.id, i, auction.bid))
+  return false
+end
+
+--! World ticks after the last bid before bot hospital `i` answers it
+--! (BOT_BID_SECONDS and part of BOT_BID_SPREAD: from the auction, the bid
+--! and the hospital only, the same on every peer, no random numbers).
+function MultiplayerSession.botBidPause(auction, i)
+  local spread = ((auction.id * 7919 + auction.bid * 13 + i * 104729) % 1000) / 999
+  return auction_frames(MultiplayerSession.BOT_BID_SECONDS + MultiplayerSession.BOT_BID_SPREAD * spread)
+end
+
+--! Bots' bids. With a person still bidding: the bot whose pause after the
+--! last bid is over first (if any yet) takes its turn, one bot at a time.
+--! Among bots only: they bid against each other at once until one is left.
 local function bots_bid(world, auction)
   local bots = world.mp_coop.bot_hospitals or {}
+  if person_bidding(world, auction) then
+    local next_bot, next_due
+    for _, i in ipairs(auction.bidders) do
+      if bots[i] and auction.leader ~= i and not auction.out[i] then
+        local due = MultiplayerSession.botBidPause(auction, i)
+        if auction.frames >= due and (not next_due or due < next_due) then next_bot, next_due = i, due end
+      end
+    end
+    if next_bot then bot_turn(world, auction, next_bot) end
+    return
+  end
   local again = true
   while again do
     again = false
     for _, i in ipairs(auction.bidders) do
-      if bots[i] and auction.leader ~= i and not auction.out[i] then
-        auction.worth = auction.worth or {}
-        auction.borrow = auction.borrow or {}
-        if not auction.worth[i] then
-          local worth, _, fill = MultiplayerSession.botPlotWorth(world, i, auction)
-          auction.worth[i] = worth
-          auction.borrow[i] = MultiplayerSession.botCanBorrow(world, i, fill)
-          auction_log(string.format("auction %d: plot worth $%d to bot hospital %d (land %d%% full, may borrow $%d)",
-              auction.id, worth, i, math.floor(fill * 100 + 0.5), auction.borrow[i]))
-        end
-        local amount = auction.bid + auction.step
-        if amount <= auction.worth[i] and world.hospitals[i].balance + (auction.borrow[i] or 0) -
-            amount >= MultiplayerSession.BOT_AUCTION_RESERVE then
-          place_bid(auction, i, amount)
-          again = true
-        else
-          auction.out[i] = true
-        end
+      if bots[i] and auction.leader ~= i and not auction.out[i] and bot_turn(world, auction, i) then
+        again = true
       end
     end
   end
@@ -3714,6 +3760,8 @@ function handlers.auction_pass(world, cmd)
   if auction.leader == index or auction.out[index] then return false, "cannot drop out" end
   auction.out[index] = true
   auction_log(string.format("auction %d: hospital %d drops out", auction.id, index))
+  -- (No person left in it: the bots settle it at once.)
+  bots_bid(world, auction)
   if auction_decided(auction) then end_auction(world) end
   return true
 end
@@ -3729,6 +3777,8 @@ function MultiplayerSession:tickAuction()
       if i ~= auction.leader and hospital and hospital.mp_player_away then auction.out[i] = true end
     end
     auction.frames = auction.frames + world:_mpStepFrames(world.mp_speed or "Normal")
+    -- (The bots' turns, a moment after each bid: bots_bid.)
+    bots_bid(world, auction)
     if auction.frames >= auction.limit or auction_decided(auction) then
       end_auction(world)
       self.applied_this_step = true

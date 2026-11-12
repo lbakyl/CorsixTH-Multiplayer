@@ -30,8 +30,10 @@
 #  11. the hidden monthly bonus: in "team" hospitals 2 and 3 (bots), never
 #      ann's; in "duel" hospital 2 (the bot)
 #  12. land auctions with a bot ("auc", co-op on level 2: gus and one bot):
-#      gus asks for a plot on the bot's side, the bot bids, gus outbids it
-#      twice and gets it (the bot stops at its limit); a second one gus drops out
+#      gus asks for a plot on the bot's side, the bot bids (a moment after
+#      each bid, not at once: MultiplayerSession.BOT_BID_SECONDS), gus outbids
+#      it twice and gets it (the bot stops at its limit); a second one gus
+#      drops out
 #      of and the bot gets
 #  13. a bot bids for the hospital it shares while its person is away
 #      ("afk", a race of team hospitals on level 2: jon alone; kay and one
@@ -155,7 +157,7 @@ run_probe eve MP_ROLE=host MP_ROOM=duel MP_MODE=competitive MP_PLAYERS=2 MP_ADD_
 run_probe frank MP_ROLE=host MP_ROOM=lab MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_LEVEL=2 MP_SCENARIO=none \
   MP_STEPS=3000 MP_STALL_LIMIT=120 \
   MP_UI_SCRIPT="20:openhospital;100:auctionbuy;130:auctionpass;160:chat:1:Agnes, can I have plot 7?;260:chat:1:Agnes, could you spare me a plot?;320:answerplot:accept;360:plotmap;2990:hospitals" & pids+=($!)
-run_probe gus MP_ROLE=host MP_ROOM=auc MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_LEVEL=2 MP_SCENARIO=none   MP_STEPS=1100 MP_STALL_LIMIT=120   MP_UI_SCRIPT="20:openhospital;200:auctionbuy;260:auctionbid;270:auctionbid;700:auctionbuy;760:auctionpass" & pids+=($!)
+run_probe gus MP_ROLE=host MP_ROOM=auc MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_LEVEL=2 MP_SCENARIO=none   MP_STEPS=1300 MP_STALL_LIMIT=120   MP_UI_SCRIPT="20:openhospital;200:auctionbuy;400:auctionbid;600:auctionbid;900:auctionbuy;1100:auctionpass" & pids+=($!)
 run_probe cid MP_ROLE=host MP_ROOM=trio MP_MODE=coop MP_PLAYERS=3 MP_ADD_BOTS=1 MP_SCENARIO=none \
   MP_STEPS=600 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital;300:speedother" & pids+=($!)
 run_probe jon MP_ROLE=host MP_ROOM=afk MP_MODE=teamshared MP_TEAM=1 MP_PLAYERS=3 MP_ADD_BOTS=1 MP_LEVEL=2   MP_SCENARIO=none MP_STEPS=1300 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital;900:auctionbuy" & pids+=($!)
