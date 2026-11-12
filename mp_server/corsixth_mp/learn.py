@@ -138,14 +138,19 @@ def run(env: dict[str, str] | None = None, now: float | None = None, dry_run: bo
     summary["saves"] = len(saves)
     want = {n.upper() for n in names}
     new_records = []
+    read = []  # (the saves read; one that could not be read is tried again the next night)
     if saves:
         out = folder / "work" / "dump.jsonl"
         if out.exists():
             out.unlink()
         text = dump(env, saves, out, folder / "work")
         for save in saves:
-            if f"dumped {save}" not in text:
+            if f"dumped {save}" in text:
+                read.append(save)
+            else:
                 summary["errors"].append(f"could not read {save.name}")
+                # (Why: the game's last lines.)
+                summary.setdefault("output", text[-600:])
         by_path = {str(s): s for s in saves}
         lines = out.read_text(encoding="utf-8").splitlines() if out.is_file() else []
         for line in lines:
@@ -175,7 +180,7 @@ def run(env: dict[str, str] | None = None, now: float | None = None, dry_run: bo
         learner.write_lua(data, str(folder / "learned.lua"))
         summary["recipes"], summary["plans"] = len(data["recipes"]), len(data["plans"])
     state = _read_json(folder / "state.json", {})
-    state["done"] = sorted(set(state.get("done", [])) | {s.name for s in saves})
+    state["done"] = sorted(set(state.get("done", [])) | {s.name for s in read})
     _write_json(folder / "state.json", state)
     with (folder / "runs.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(summary, sort_keys=True) + "\n")
@@ -207,6 +212,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"learnt from {e['player']}: {e['save']} ({e['level']}, {e['date']}, {e['rooms']} rooms)")
     for err in summary["errors"]:
         print(err, file=sys.stderr)
+    if summary.get("output"):
+        print(summary["output"], file=sys.stderr)
     print(f"{summary['saves']} new saves; {summary.get('recipes', 0)} room recipes, "
           f"{summary.get('plans', 0)} plans")
     return 0

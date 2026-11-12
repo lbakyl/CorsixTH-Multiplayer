@@ -82,6 +82,13 @@ def test_a_night_reads_new_saves_once_and_learns(tmp_path):
     # The next night: nothing new.
     again = learn.run(env, now=1763071200.0)
     assert again["saves"] == 0 and again["learnt"] == [] and again["recipes"] == 1
+    # A save the game could not read is tried again the next night.
+    broken = folder / "saves" / "20261113-210000 trio y1-03-01.sav"
+    broken.write_bytes(b"broken")
+    game.write_text("#!/bin/sh\necho could not load\n")
+    third = learn.run(env, now=1763157600.0)
+    assert third["saves"] == 1 and third["errors"] == [f"could not read {broken.name}"]
+    assert learn.run(env, now=1763244000.0)["saves"] == 1
 
 
 def test_the_learned_file_loads_in_lua(tmp_path):

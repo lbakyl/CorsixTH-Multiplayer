@@ -119,8 +119,9 @@ curl -fsSL "$url" | tar xz -C "$R"
 mv "$R/CorsixTH-Multiplayer" "$R/game"
 ln -s game "$R/CorsixTH" # referee.lua loads <source>/CorsixTH/CorsixTH.lua
 # The referee, and the bots (computer players) a room owner adds, if this
-# release has them.
-for f in referee.lua probe_builder.lua bot.lua bot_manager.lua; do
+# release has them, and what the bots learn with (bot_learned.lua; the
+# nightly learning reads saves with layout_dump.lua and layout_learn.py).
+for f in referee.lua probe_builder.lua bot.lua bot_manager.lua bot_learned.lua layout_dump.lua layout_learn.py; do
   if [[ -f "$BASE/src/scripts/multiplayer/$f" ]]; then cp "$BASE/src/scripts/multiplayer/$f" "$R/scripts/multiplayer/"; fi
 done
 chown -R root:corsixth "$BASE/referee" "$BASE/src" && chmod -R g+rX,o= "$BASE/referee"
