@@ -250,8 +250,8 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   hospital that may buy it bids.) The gavel sinks while
   nobody bids and every bid raises it again; when nobody bids for 8
   seconds (15 for the first bid) it is down: "going once", "going twice",
-  sold to the highest bid. The seconds left show in big digits over the
-  small map, red for the last three. The small map shows the plot for
+  sold to the highest bid. The seconds left show in big digits next to the
+  gavel, red for the last three. The small map shows the plot for
   sale in red and the other plots still for sale in sand; **Town map
   (F4)** opens the town map, and the auction comes back when you close it. Bots bid too, up to what the plot is worth to
   them: a little over the price while they have room, up to two and a half

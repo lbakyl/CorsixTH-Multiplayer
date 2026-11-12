@@ -53,10 +53,11 @@ local loan_col = {
 local MAP_BG = {44, 96, 52}
 local LOT_COLOUR = {236, 52, 28}
 local FOR_SALE_COLOUR = {196, 172, 112} -- (plots nobody owns yet: Argus, 2026-11-12)
--- The seconds left: big digits in a box over the map's top right corner.
-local CLOCK_W, CLOCK_H = 64, 50
-local CLOCK_X, CLOCK_Y = MAP_X + MAP_W - CLOCK_W - 4, MAP_Y + 4
-local TOWN_X, TOWN_Y, TOWN_W, TOWN_H = MAP_X + 4, MAP_Y + 4, 120, 22 -- the town map button (map top left)
+-- The seconds left: big digits in a box next to the gavel (Jan, 2026-11-12),
+-- under the bid boxes; the town map button under the highest bid.
+local CLOCK_X, CLOCK_Y, CLOCK_W, CLOCK_H = 124, 434, 70, 38
+local DIGIT_W, DIGIT_H, DIGIT_T, DIGIT_GAP = 18, 28, 4, 6
+local TOWN_X, TOWN_Y, TOWN_W, TOWN_H = 330, 438, 130, 24
 
 -- The gavel: frames 10 (raised) to 3 (down). As in the original game it
 -- comes down slowly while nobody bids, is raised again by every bid, and
@@ -340,8 +341,7 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
   local world = self.world
   local auction = world.mp_auction
   if auction and auction.id ~= self.auction_id then auction = nil end
-  -- The town, the lot in red (blinking); before the buttons (the town map
-  -- button sits on it).
+  -- The town, the lot in red (blinking).
   local mx, my = x + MAP_X * s, y + MAP_Y * s
   local lot_on = math.floor(self.timer / 12) % 2 == 0 or not auction
   canvas:drawRect(canvas:mapRGB(MAP_BG[1], MAP_BG[2], MAP_BG[3]), mx, my, MAP_W * s, MAP_H * s)
@@ -414,12 +414,12 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
     canvas:drawRect(canvas:mapRGB(40, 24, 20), cx, cy, CLOCK_W * s, CLOCK_H * s)
     local colour = left <= 3 and canvas:mapRGB(250, 70, 50) or canvas:mapRGB(250, 220, 90)
     local digits = tostring(math.min(left, 99))
-    local dw, dh, t, gap = 22, 38, 5, 6
+    local dw, dh, t, gap = DIGIT_W, DIGIT_H, DIGIT_T, DIGIT_GAP
     local total = #digits * dw + (#digits - 1) * gap
     local dx = cx + math.floor((CLOCK_W - total) / 2) * s
     for i = 1, #digits do
-      UIMultiplayerAuction.drawDigit(canvas, colour, tonumber(digits:sub(i, i)), dx, cy + 6 * s, dw * s,
-          dh * s, t * s)
+      UIMultiplayerAuction.drawDigit(canvas, colour, tonumber(digits:sub(i, i)), dx,
+          cy + math.floor((CLOCK_H - dh) / 2) * s, dw * s, dh * s, t * s)
       dx = dx + (dw + gap) * s
     end
   end
