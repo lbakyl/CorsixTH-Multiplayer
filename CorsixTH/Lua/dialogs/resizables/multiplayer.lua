@@ -306,18 +306,40 @@ function UIMultiplayer:_updateRooms()
   local S = _S.multiplayer_window
   local rooms = self.lobby.rooms
   local lines = {}
+  -- A line fits its row (Jan, 2026-11-12: running games' lines ran out of
+  -- the list): the room's name is shortened ("...") until it does.
+  local s = TheApp.gfx:getUIScale()
+  local font = self.room_rows[1] and self.room_rows[1].panel_for_sprite.label_font or
+      TheApp.gfx:loadFontAndSpriteTable("QData", "Font01V", nil, nil, {ttf_shadow = true, apply_ui_scale = true})
+  local room_w = (WIDTH - 40 - 10) * s
+  local function fitted(name, make)
+    local line = make(name)
+    local n = #name
+    while n > 6 and font:sizeOf(line) > room_w do
+      n = n - 1
+      -- (Not in the middle of a letter of several bytes, UTF-8.)
+      while n > 6 and (name:byte(n + 1) or 0) >= 128 and (name:byte(n + 1) or 0) < 192 do n = n - 1 end
+      line = make(name:sub(1, n):gsub("%s+$", "") .. "...")
+    end
+    return line
+  end
   for i = 1, math.min(ROOM_ROWS, #rooms) do
     local r = rooms[i]
-    -- (A running game: how many places a newcomer may take, where the mode
-    -- would be; the places view names the mode.)
-    local mode = MultiplayerLobby.modeLabel(r.mode)
+    local flags = (r.locked == "1" and S.locked or "") .. (r.build_ok == "0" and S.other_build or "")
     if r.state == "running" then
-      mode = r.places and S.running_places:format(tonumber(r.places) or 0) or S.running_flag
+      -- A running game: how many places a newcomer may take, and its level
+      -- (the places view names the mode; players and "saved game" left out).
+      local places = r.places and S.running_places:format(tonumber(r.places) or 0) or S.running_flag
+      lines[i] = fitted(r.room, function(name)
+        return name .. "   " .. places .. "   " .. S.level:format(tonumber(r.level) or 1) .. flags
+      end)
+    else
+      lines[i] = fitted(r.room, function(name)
+        return S.room_line:format(name, tonumber(r.players) or 0, tonumber(r.max) or 0,
+            MultiplayerLobby.modeLabel(r.mode), r.level or "?",
+            flags .. (r["continue"] == "1" and S.saved_flag or ""))
+      end)
     end
-    lines[i] = S.room_line:format(r.room, tonumber(r.players) or 0, tonumber(r.max) or 0,
-        mode, r.level or "?",
-        (r.locked == "1" and S.locked or "") .. (r.build_ok == "0" and S.other_build or "") ..
-        (r["continue"] == "1" and S.saved_flag or ""))
   end
   -- (Labels are localised strings: compared by their text.)
   local shown = {}

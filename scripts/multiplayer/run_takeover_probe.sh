@@ -28,7 +28,7 @@
 #      bot comes back, one load for both
 #   6. every game IN SYNC to its end, no desync, the referee differs from nobody
 #   7. "shirt": the queue window shown with patients in it (pictures queue-*)
-#   8. "shirt": wes asks for a plot the bot may want too: the auction screen
+#   8. "shirt": wes asks for a plot the bot may want too, on the town map: the auction screen comes to the front
 #      (plots for sale in sand, the seconds left big), its town map button
 #      opens the map, and the auction comes back when it is closed
 # Exits 0 only if all checks behave as expected.
@@ -106,7 +106,7 @@ run_probe tia MP_ROLE=host MP_ROOM=take MP_MODE=competitive MP_PLAYERS=3 MP_ADD_
 run_probe vic MP_ROLE=host MP_ROOM=lone MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_SCENARIO=none \
   MP_REALTIME=1 MP_STEPS=300 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital" & pids+=($!)
 
-run_probe wes MP_ROLE=host MP_ROOM=shirt MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_COLOURS=1:8,2:7 MP_SCENARIO=none MP_STEPS=1400 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital;30:buy:reception_desk;50:hire:Receptionist;600:ownpatients:8;660:queueshot;900:ownpatients:8;980:queueshot;1100:auctionbuy;1106:auctionshot;1110:auctionmap;1116:auctionmapclose;1122:auctionshot" & pids+=($!)
+run_probe wes MP_ROLE=host MP_ROOM=shirt MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_COLOURS=1:8,2:7 MP_SCENARIO=none MP_STEPS=1400 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital;30:buy:reception_desk;50:hire:Receptionist;600:ownpatients:8;660:queueshot;900:ownpatients:8;980:queueshot;1096:townmap;1100:auctionbuy;1106:auctionshot;1110:auctionmap;1116:auctionmapclose;1122:auctionshot" & pids+=($!)
 
 # A newcomer takes Bot Agnes's place in the running race, then leaves.
 wait_log "room 'take' starts" 60 && sleep 5
@@ -199,8 +199,11 @@ if not ok7: bad.append("ok7")
 # comes back after it (8. below; pictures auction-* and auctionmap-*).
 opened = re.search(r'UI: auctionmap at step \d+: town map true, auction screen false', w)
 back = re.search(r'UI: auctionshot at step 112\d: screen true', w)
-ok8 = bool(opened and back)
-print(f"8. Auction, town map:       map opened from the auction: {bool(opened)}; auction screen back: {bool(back)}")
+# (Asked on the town map: the auction comes to the front at once. Jan.)
+map_first = re.search(r'UI: townmap at step \d+: town map true', w)
+front = re.search(r'UI: auctionshot at step 110\d: screen true', w)
+ok8 = bool(opened and back and map_first and front)
+print(f"8. Auction, town map:       in front over the town map: {bool(map_first and front)}; map opened from the auction: {bool(opened)}; auction screen back: {bool(back)}")
 if not ok8: bad.append("ok8")
 print("failed checks:", " ".join(bad) if bad else "none")
 sys.exit(1 if bad else 0)

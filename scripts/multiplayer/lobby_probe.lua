@@ -1637,6 +1637,11 @@ local function run()
           end
           log(string.format("UI: asking for plot %s at step %d", tostring(best), session.step))
           if best then session:issue({kind = "buy_plot", plot = best}) end
+        elseif a == "townmap" then
+          -- The town map, as a player opens it to ask for a plot there.
+          world.ui:addWindow(UITownMap(world.ui))
+          log(string.format("UI: townmap at step %d: town map %s", session.step,
+              tostring(world.ui:getWindow(UITownMap) ~= nil)))
         elseif a == "auctionmap" or a == "auctionmapclose" then
           -- The town map button on the auction screen (a picture of the map),
           -- then the map closed again: the auction screen comes back.

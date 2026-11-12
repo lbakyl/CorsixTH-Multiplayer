@@ -3718,11 +3718,16 @@ function MultiplayerSession:syncAuction(world)
     window:close()
     window = nil
   end
-  -- (The town map opened from the auction, to see the plots: the auction
-  -- comes back when it is closed. Argus, 2026-11-12: it could not be opened.)
+  -- (The town map opened during the auction, to see the plots: the auction
+  -- comes back when it is closed. Argus, 2026-11-12: it could not be opened.
+  -- Not at the auction's start: then the auction comes to the front, over
+  -- the town map the plot was asked for on. Jan: it stayed behind it.)
   local town = rawget(_G, "UITownMap")
   local map_open = town and ui:getWindow(town)
-  if auction and not window and self.auction_closed ~= auction.id and not map_open then
+  if window and auction then self.auction_seen = auction.id end
+  if auction and not window and self.auction_closed ~= auction.id and
+      not (map_open and self.auction_seen == auction.id) then
+    self.auction_seen = auction.id
     ui:addWindow(class_(ui))
   elseif window and not auction then
     window:finish() -- the gavel, then it closes
