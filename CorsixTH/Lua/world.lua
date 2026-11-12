@@ -2303,13 +2303,14 @@ function World:mpRivals(a, b)
 end
 
 --! Multiplayer: may hospital `from` offer `to` staff, patients or research?
---! Any other hospital may, a rival in a race too (Jan, 2026-11-12: research
---! sold to a rival for at least $1,000, staff and patients offered).
---! Money, reputation, plots and staff sent without an offer go to allies
---! only: their handlers check World:mpRivals as well.
+--! Any other hospital may, except in a race of teams: only a team mate (Jan,
+--! 2026-11-12: with the other team too, the lists offer too many). In a race
+--! where everyone plays alone a rival may be offered research (for $1,000 at
+--! least), staff and patients; money, reputation, plots and staff sent
+--! without an offer go to allies only: their handlers check World:mpRivals.
 function World:mpMayTrade(from, to)
   if not (from and to) or from == to then return false end
-  return true
+  return not (self.mp_coop and self.mp_coop.teams) or self:mpTeam(from) == self:mpTeam(to)
 end
 
 --! The player list's text for a hospital's place in a competitive game, or nil.

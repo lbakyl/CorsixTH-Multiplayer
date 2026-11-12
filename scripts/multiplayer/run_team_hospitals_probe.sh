@@ -9,9 +9,8 @@
 # referee catches up). Checks:
 #   1. seating: two hospitals named after their players ("ANN + BEN", "CAT";
 #      "DEE + GUS", "ELI + FAY"), every player in their team's hospital, the
-#      same on every peer; the trade windows offer the other team's
-#      hospital (research, staff, patients; no money), the dirty tricks
-#      window only the other team's hospital
+#      same on every peer; nobody has a hospital to trade with, the dirty
+#      tricks window offers only the other team's hospital
 #   2. team mates build together: ann's bench, ben's doctor and ben's GP's
 #      office all go into hospital 1, applied the same on every peer
 #   3. tricks: ann's rat attack on cat's hospital and cat's smear campaign on
@@ -145,9 +144,8 @@ def teams(n):
 fail = False
 
 # 1. Seating
-# (The other team's hospital may be offered research, staff and patients.)
-want = {'ann': ('1', '2', '2'), 'ben': ('1', '2', '2'), 'cat': ('2', '1', '1'),
-        'dee': ('1', '2', '2'), 'gus': ('1', '2', '2'), 'eli': ('2', '1', '1'), 'fay': ('2', '1', '1')}
+want = {'ann': ('1', '', '2'), 'ben': ('1', '', '2'), 'cat': ('2', '', '1'),
+        'dee': ('1', '', '2'), 'gus': ('1', '', '2'), 'eli': ('2', '', '1'), 'fay': ('2', '', '1')}
 layouts = {}
 ok1 = True
 for n, (me, trade, tricks) in want.items():
