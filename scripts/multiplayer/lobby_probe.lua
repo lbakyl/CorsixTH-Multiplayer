@@ -241,6 +241,8 @@ local function shot(what, keep_info)
       if class.is(win, UIInformation) then win:close() end
     end
   end
+  -- (Twice: a screenshot shows the frame before the last one drawn.)
+  TheApp:drawFrame()
   TheApp:drawFrame()
   local path = shot_dir .. "/" .. name .. "-" .. what .. ".png"
   local ok, err = TheApp.video:takeScreenshot(path)
@@ -2666,7 +2668,7 @@ local function run()
                 session.step, h2 and h2.name or "-",
                 tostring(click_from[1] ~= world.ui.screen_offset_x or click_from[2] ~= world.ui.screen_offset_y),
                 tostring(not world.ui:getWindow(UIMultiplayerPlayers))))
-          else
+          elseif entry.arg ~= "keep" then -- (keep: open, for a later shot:<name>)
             win:close()
           end
         elseif a == "nexthospital" then
