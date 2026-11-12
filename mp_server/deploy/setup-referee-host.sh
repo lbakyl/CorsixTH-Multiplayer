@@ -4,7 +4,7 @@
 # (docs/multiplayer/referee.md). Ubuntu or Debian; run as root (sudo).
 #
 #   sudo bash setup-referee-host.sh --release mp-test-c364e17a [--data DIR] [--port 47800] [--motd TEXT]
-#        [--name eu2]
+#        [--name eu2] [--experts "Argus,Matroftt"]
 #   (a stable release is named mp-stable-<commit>)
 #
 # --release  a test release of lbakyl/CorsixTH-Multiplayer: its Linux package
@@ -32,6 +32,12 @@
 # Without it nothing is posted. --name names this server in the report
 # (default: the host's name; kept from the last run).
 #
+# Bots that learn from expert players (corsixth_mp/learn.py): --experts lists
+# their player names (kept from the last run; --experts none: nobody). While
+# one of them plays, the referee saves the game at every year's end and at
+# the game's end into /var/lib/corsixth/learn; every morning at 6:30 (Prague)
+# the bots learn from the new saves, and the daily report says whose.
+#
 # Safe to run again, e.g. with the next release. Restarting the service drops
 # every connected player: check that nobody is playing first.
 set -euo pipefail
@@ -42,6 +48,7 @@ DATA=""
 PORT=47800
 MOTD="CorsixTH multiplayer server (with referee)"
 NAME=""
+EXPERTS="-"
 REPO=lbakyl/CorsixTH-Multiplayer
 BASE=/opt/corsixth-mp
 
@@ -53,6 +60,7 @@ while [[ $# -gt 0 ]]; do
     --port) PORT=$2; shift 2 ;;
     --motd) MOTD=$2; shift 2 ;;
     --name) NAME=$2; shift 2 ;;
+    --experts) EXPERTS=$2; shift 2 ;;
     -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
     *) echo "Unknown option $1 (see --help)" >&2; exit 2 ;;
   esac
@@ -74,7 +82,7 @@ apt-get install -y -q --no-install-recommends python3 python3-venv git curl ca-c
 say "Service account corsixth"
 id corsixth >/dev/null 2>&1 || useradd --system --home /var/lib/corsixth --create-home \
   --shell /usr/sbin/nologin corsixth
-mkdir -p "$BASE/referee" /var/lib/corsixth/referee-work
+mkdir -p "$BASE/referee" /var/lib/corsixth/referee-work /var/lib/corsixth/learn
 chown -R corsixth:corsixth /var/lib/corsixth
 
 if [[ -n "$DATA" ]]; then
@@ -124,6 +132,10 @@ if [[ -z "$NAME" && -f /etc/corsixth-mp.env ]]; then
   NAME=$(sed -n 's/^CORSIXTH_MP_SERVER_NAME=//p' /etc/corsixth-mp.env)
 fi
 NAME=${NAME:-$(hostname)}
+if [[ "$EXPERTS" == "-" ]]; then
+  EXPERTS=$( (sed -n 's/^CORSIXTH_MP_EXPERTS=//p' /etc/corsixth-mp.env 2>/dev/null || true) | head -1)
+fi
+[[ "$EXPERTS" == "none" ]] && EXPERTS=""
 cat > /etc/corsixth-mp.env <<EOF
 # Written by setup-referee-host.sh for $RELEASE. The referee build must match
 # the players' build: players of other builds are told to get this release.
@@ -137,6 +149,9 @@ CORSIXTH_MP_REFEREE_LUA_PATH=$R/game/lua/?.lua;$R/game/lua/?/init.lua
 CORSIXTH_MP_REFEREE_WORKDIR=/var/lib/corsixth/referee-work
 LD_LIBRARY_PATH=$R/game/lib
 CORSIXTH_MP_SERVER_NAME=$NAME
+# Bots learn from these players' games (setup --experts; empty: nobody).
+CORSIXTH_MP_LEARN_DIR=/var/lib/corsixth/learn
+CORSIXTH_MP_EXPERTS=$EXPERTS
 EOF
 chmod 644 /etc/corsixth-mp.env
 cat > /etc/systemd/system/corsixth-mp.service <<EOF
@@ -206,8 +221,40 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 EOF
+# The bots learn from the night's saves of expert players, before the report.
+cat > /etc/systemd/system/corsixth-mp-learn.service <<EOF
+[Unit]
+Description=CorsixTH multiplayer: the bots learn from expert players' saved games
+
+[Service]
+Type=oneshot
+User=corsixth
+Group=corsixth
+WorkingDirectory=$BASE/src/mp_server
+EnvironmentFile=/etc/corsixth-mp.env
+ExecStart=$BASE/venv/bin/python -m corsixth_mp.learn
+Nice=10
+TimeoutStartSec=2h
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/corsixth
+PrivateTmp=yes
+EOF
+cat > /etc/systemd/system/corsixth-mp-learn.timer <<EOF
+[Unit]
+Description=CorsixTH multiplayer: the bots learn at 6:30 Prague time
+
+[Timer]
+OnCalendar=*-*-* 06:30:00 Europe/Prague
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
 systemctl daemon-reload
 systemctl enable --now corsixth-mp-report.timer >/dev/null 2>&1
+systemctl enable --now corsixth-mp-learn.timer >/dev/null 2>&1
 systemctl enable corsixth-mp.service >/dev/null 2>&1
 systemctl restart corsixth-mp.service
 sleep 2
@@ -230,3 +277,6 @@ PY
 find "$BASE/referee" -mindepth 1 -maxdepth 1 -type d ! -name "$SHA" -exec rm -rf {} +
 say "Done: the server runs $RELEASE with the referee on port $PORT"
 echo "   Logs: journalctl -u corsixth-mp -f; referee logs in /var/lib/corsixth/referee-work"
+if [[ -n "$EXPERTS" ]]; then
+  echo "   Bots learn from: $EXPERTS (saves in /var/lib/corsixth/learn; journalctl -u corsixth-mp-learn)"
+fi

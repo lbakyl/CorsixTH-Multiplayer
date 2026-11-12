@@ -1,6 +1,7 @@
 """The server's daily report to Discord, a short summary of a day: how many
 games, how long in all, how many people and bots played, and what the bots'
-advice cost (from the files the server keeps, stats.py), posted to a
+advice cost (from the files the server keeps, stats.py), and which expert
+players' saves the bots learnt from that night (learn.py), posted to a
 Discord webhook.
 
     python -m corsixth_mp.daily_report [--date YYYY-MM-DD] [--dry-run]
@@ -23,7 +24,7 @@ import sys
 import urllib.error
 import urllib.request
 
-from . import stats
+from . import learn, stats
 
 DISCORD_LIMIT = 2000
 
@@ -78,6 +79,12 @@ def report(day: str, env: dict[str, str] | None = None) -> str:
         lines.append(f"Human players: {len(people)}")
         lines.append(f"Bots: {bots}")
     lines.append(f"Bot advice (Haiku): ${advice['usd']:.2f}")
+    # What the bots learnt that night from expert players' saves (learn.py);
+    # nothing said when nothing was new (Jan, 2026-11-12).
+    for entry in learn.learnt_on(day, env):
+        day_part = str(entry.get("date", "")).split("T")[0]
+        lines.append(f"Bots learnt from {entry.get('player', '?')}: {entry.get('save', '?')} "
+                     f"({entry.get('level', '')} {day_part}, {entry.get('rooms', 0)} rooms)")
     text = "\n".join(lines)
     return text if len(text) <= DISCORD_LIMIT else text[:DISCORD_LIMIT - 3] + "..."
 

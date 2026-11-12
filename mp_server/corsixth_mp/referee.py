@@ -13,6 +13,12 @@ Configuration (environment variables; the referee is off without BINARY):
   CORSIXTH_MP_REFEREE_LUA_CPATH, CORSIXTH_MP_REFEREE_LUA_PATH
                                where LuaSocket is, if not in the standard paths
   CORSIXTH_MP_REFEREE_WORKDIR  scratch folder for configs and logs (default /tmp/corsixth-referee)
+
+The referee and the bots get the server's whole environment, so also:
+  CORSIXTH_MP_LEARN_DIR        bots learn from expert players' games there
+                               (learned.lua; the referee saves their games
+                               into it: learn.py)
+  CORSIXTH_MP_EXPERTS          the experts' player names ("Argus,Matroftt")
 """
 
 from __future__ import annotations

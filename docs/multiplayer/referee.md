@@ -185,6 +185,23 @@ sudo journalctl -u corsixth-mp --since today | python3 scripts/multiplayer/compa
 Fax answers are logged with what they answered (`fax_choice -> ok (mp_offer:
 mp_offer_accept)`), so a desync after one can be traced to it.
 
+## Learning from expert players
+
+With `CORSIXTH_MP_LEARN_DIR` and `CORSIXTH_MP_EXPERTS` (player names) set
+for the server (setup-referee-host.sh `--experts`), the referee
+(scripts/multiplayer/referee.lua) saves its game for learning while a person
+named like an expert plays their own hospital: at the end of every game year
+and when the game ends, into `<dir>/saves/<time> <room> y<Y>-<MM>-<DD>.sav`
+with a `.json` beside it (room, date, level, each hospital and whether a bot
+ever played it), and it notes the experts' building commands as they run in
+`<dir>/builds/<room>.jsonl`. The referee's state does not change: the save is
+the same as for a repair. Once a night `python -m corsixth_mp.learn` reads
+the new saves with layout_dump.lua and writes `<dir>/learned.lua`
+(layout_learn.py), which the bots read when they start (bot_learned.lua):
+room recipes (size, door, every object's tiles seen from the door) and plans
+(every room and corridor object of an expert's hospital, for the same level,
+map size, number of hospitals and place).
+
 ## Tests
 
 - `mp_server/tests/test_server.py`: referee hello and token, catching up,

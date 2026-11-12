@@ -225,6 +225,8 @@ sudo bash setup-referee-host.sh --release mp-stable-NEWNUMBER --motd "Welcome to
 | Addresses blocked by fail2ban | `sudo fail2ban-client status sshd` |
 | Settings (welcome text, release) | `/etc/corsixth-mp.env` (restart after a change) |
 | One game's referee log | `/var/lib/corsixth/referee-work/<room>-<number>/referee.log` |
+| What the bots learnt last | `sudo journalctl -u corsixth-mp-learn -n 20` |
+| Let the bots learn now (not wait for the morning) | `sudo systemctl start corsixth-mp-learn` |
 
 ## 9. When something goes wrong
 
@@ -245,7 +247,46 @@ sudo bash setup-referee-host.sh --release mp-stable-NEWNUMBER --motd "Welcome to
   moment; the log shows `state of ...` lines about it. If you want the cause
   found, send those log lines to the maintainers.
 
-## 10. Good to know
+## 10. Bots that learn from your best players
+
+The bots can learn to build like the best players on your server: the size
+of each room, where every desk, bed and radiator goes, and, on a map and
+starting place such a player has played, their whole hospital (where each
+room is, the reception, benches, drinks machines...).
+
+Name those players (their names in the game, any case, separated by commas)
+when you install or update:
+
+```bash
+sudo bash setup-referee-host.sh --release mp-stable-NEWNUMBER --experts "Argus,Matroftt"
+```
+
+The names are kept for later updates; `--experts none` stops it. (Or edit
+`CORSIXTH_MP_EXPERTS=` in `/etc/corsixth-mp.env` and restart the service.)
+
+What happens then:
+
+- While one of them plays **their own hospital**, the game's referee saves the
+  game at the end of every game year and when the game ends, into
+  `/var/lib/corsixth/learn/saves` (a few MB each). A hospital a bot played at
+  any time, even for a while for a player who left, is never learnt from.
+- Every morning at 6:30 (Prague time) the server reads the new saves and
+  writes what the bots learnt to `/var/lib/corsixth/learn/learned.lua`. Bots
+  of games started after that build that way; easy bots keep their own
+  simple rules.
+- The daily Discord report names the saves and players learnt from that
+  night (nothing is said on a night without new ones).
+
+Tell the players you name that their games are saved on your server for
+this. To start over, stop the service and delete
+`/var/lib/corsixth/learn/layouts.jsonl` and `learned.lua` (the saves stay;
+delete `state.json` too to learn from them again).
+
+To give another server what this one learnt, copy `layouts.jsonl` there
+(into the same folder, owned by `corsixth`) and run
+`sudo systemctl start corsixth-mp-learn` on it.
+
+## 11. Good to know
 
 - Passwords and game traffic are **not encrypted**. Room passwords only keep
   strangers out of a room; do not use a password you use anywhere else.
