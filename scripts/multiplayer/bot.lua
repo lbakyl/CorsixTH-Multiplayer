@@ -786,6 +786,10 @@ function Bot.teacherScore(profile)
 end
 -- Kept in the bank when building or buying.
 local RESERVE = 3000
+-- After another rival's dirty trick on a player, a bot leaves that player
+-- alone this many game days (Argus, 2026-11-12: two bots sent their evil
+-- handymen at the same time).
+local TRICK_GAP_DAYS = 30
 -- Staff care (Bot:careForStaff): once a game week everybody under half
 -- happiness gets two bonuses (each 10% of their wage and +50% happiness),
 -- while the balance stays above BONUS_FLOOR (Jan, 2026-11-03).
@@ -1672,6 +1676,14 @@ function Bot:plotsGiven()
 end
 
 --! Money arrived from another player (give_money, seen as it happens).
+--! A dirty trick was played (any player's, as the game applies it): who on
+--! whom, when (Bot:playTrick waits after another rival's).
+function Bot:trickSeen(to_index, kind, from_index)
+  if not (to_index and self.world) then return end
+  self.tricks_seen = self.tricks_seen or {}
+  self.tricks_seen[to_index] = {day = self:gameDay(), kind = kind, by = from_index}
+end
+
 function Bot:moneyReceived(from_index, amount)
   local _, name = self:playerOfHospital(from_index)
   name = name or "friend"
@@ -2994,6 +3006,24 @@ function Bot:playTrick()
     local hosp, name = self.manager:trickTarget()
     if not hosp then return false end
     target, choice = {hosp, name}, self.manager:trickKind(hosp)
+    -- Another rival tricked that player lately: not now; and no second evil
+    -- handyman while one is there (TRICK_GAP_DAYS).
+    local seen = self.tricks_seen and self.tricks_seen[world:getHospitalIndex(hosp)]
+    if seen and seen.by ~= world:getHospitalIndex(mine) and self:gameDay() - seen.day < TRICK_GAP_DAYS then
+      log(string.format("no trick on %s: %s got a %s trick %d days ago", tostring(name), tostring(name),
+          tostring(seen.kind), self:gameDay() - seen.day))
+      return false
+    end
+    for i = #choice, 1, -1 do
+      if choice[i] == "handyman" then
+        for _, e in ipairs(world.entities) do
+          if e.mp_saboteur and e.mp_saboteur.target == world:getHospitalIndex(hosp) then
+            table.remove(choice, i)
+            break
+          end
+        end
+      end
+    end
   else
     local targets = {}
     for index, hospital in ipairs(world.hospitals) do
@@ -3393,6 +3423,15 @@ local function run()
   -- Money sent to it: seen when the command runs here (the game itself
   -- does the same on every computer).
   local handlers = MultiplayerSession.default_handlers
+  -- Dirty tricks played (anybody's): Bot:trickSeen.
+  local sabotage_command = handlers.sabotage
+  handlers.sabotage = function(world, cmd)
+    local ok, why = sabotage_command(world, cmd)
+    if ok and bot then
+      keepRandom("trick", bot.trickSeen, bot, tonumber(cmd.to), cmd.trick, tonumber(cmd.hospital))
+    end
+    return ok, why
+  end
   local give_money = handlers.give_money
   handlers.give_money = function(world, cmd)
     local ok, why = give_money(world, cmd)
