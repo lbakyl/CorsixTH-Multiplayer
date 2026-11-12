@@ -430,8 +430,9 @@ local function run_lobby()
       end, 60)
       -- MP_BOT_LEVELS: "peer:level,...": the host makes those bots easy or
       -- hard (the menu on a bot's line, UIMultiplayer:playerMenu).
-      for peer, level in (os.getenv("MP_BOT_LEVELS") or ""):gmatch("(%d+):(%a+)") do
-        peer = tonumber(peer)
+      -- (Lua 5.5: a loop's own variables cannot be assigned.)
+      for peer_text, level in (os.getenv("MP_BOT_LEVELS") or ""):gmatch("(%d+):(%a+)") do
+        local peer = tonumber(peer_text)
         lobby:setBotLevel(peer, level)
         wait_for("bot " .. peer .. " " .. level, function()
           local p = lobby.players[peer]
@@ -455,8 +456,8 @@ local function run_lobby()
     end, 60)
     -- MP_COLOURS: "peer:colour,..." the host gives those places these
     -- hospital colours (1-8; the shirts of 5 to 8 are recoloured ones).
-    for peer, colour in (os.getenv("MP_COLOURS") or ""):gmatch("(%d+):(%d+)") do
-      peer, colour = tonumber(peer), tonumber(colour)
+    for peer_text, colour_text in (os.getenv("MP_COLOURS") or ""):gmatch("(%d+):(%d+)") do
+      local peer, colour = tonumber(peer_text), tonumber(colour_text)
       lobby:setSeat(colour, nil, peer ~= 1 and peer or nil)
       wait_for("colour " .. colour .. " for place " .. peer, function()
         return lobby.players[peer] and tonumber(lobby.players[peer].colour) == colour
