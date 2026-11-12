@@ -2605,6 +2605,7 @@ multiplayer_window.auction_started = "%s 님이 %d번 부지를 원합니다. �
 multiplayer_window.auction_title = "토지 경매: %d번 부지"
 multiplayer_window.auction_wants = "%s 님이 표시된 부지를 사려고 합니다."
 multiplayer_window.auction_bid_more = "$%d 이상 입찰하세요."
+multiplayer_window.auction_winning = "최고 입찰자"
 multiplayer_window.auction_wait = "경매 진행 중입니다. 기다려 주세요..."
 multiplayer_window.auction_watching = "당신의 토지는 이 부지와 맞닿아 있지 않습니다."
 multiplayer_window.auctions_all = "모든 부지"

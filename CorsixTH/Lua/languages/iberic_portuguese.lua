@@ -874,6 +874,7 @@ multiplayer_window.auction_started = "%s quer o terreno %d. Outros jogadores tam
 multiplayer_window.auction_title = "Leiläo de terrenos: terreno %d"
 multiplayer_window.auction_wants = "%s quer comprar o terreno destacado."
 multiplayer_window.auction_bid_more = "Lance de $%d ou mais."
+multiplayer_window.auction_winning = "Lance vencedor"
 multiplayer_window.auction_wait = "Leiläo a decorrer, aguarda..."
 multiplayer_window.auction_watching = "O teu terreno näo faz fronteira com este terreno."
 multiplayer_window.auctions_all = "Todos"

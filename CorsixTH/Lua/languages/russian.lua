@@ -3979,6 +3979,7 @@ multiplayer_window.auction_started = "%s хочет участок %d. Он мо
 multiplayer_window.auction_title = "Аукцион земли: участок %d"
 multiplayer_window.auction_wants = "%s хочет купить выделенный участок."
 multiplayer_window.auction_bid_more = "Ставка от $%d."
+multiplayer_window.auction_winning = "Лидер торгов"
 multiplayer_window.auction_wait = "Идёт аукцион, подождите..."
 multiplayer_window.auction_watching = "Ваша земля не граничит с этим участком."
 multiplayer_window.auctions_all = "Все участки"

@@ -3244,6 +3244,7 @@ multiplayer_window.auction_started = "%s haluaa tontin %d. Muutkin voivat haluta
 multiplayer_window.auction_title = "Tonttihuutokauppa: tontti %d"
 multiplayer_window.auction_wants = "%s haluaa ostaa korostetun tontin."
 multiplayer_window.auction_bid_more = "Tarjoa $%d tai enemmän."
+multiplayer_window.auction_winning = "Voittava tarjoaja"
 multiplayer_window.auction_wait = "Huutokauppa käynnissä, odota..."
 multiplayer_window.auction_watching = "Maasi ei rajoitu tähän tonttiin."
 multiplayer_window.auctions_all = "Kaikki tontit"

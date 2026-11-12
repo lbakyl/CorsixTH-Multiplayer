@@ -3905,6 +3905,7 @@ multiplayer_window.auction_started = "%s chce pozemek %d. Mohou ho chtít i dal�
 multiplayer_window.auction_title = "Dražba pozemku: %d"
 multiplayer_window.auction_wants = "%s chce koupit vyznačený pozemek."
 multiplayer_window.auction_bid_more = "Přihoďte $%d nebo víc."
+multiplayer_window.auction_winning = "Vítězná nabídka"
 multiplayer_window.auction_wait = "Probíhá dražba, vyčkejte..."
 multiplayer_window.auction_watching = "Váš pozemek s touto parcelou nesousedí."
 multiplayer_window.auctions_all = "Každý pozemek"

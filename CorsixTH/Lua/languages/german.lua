@@ -1130,6 +1130,7 @@ multiplayer_window.auction_started = "%s will Grundstück %d. Andere Spieler wol
 multiplayer_window.auction_title = "Landauktion: Grundstück %d"
 multiplayer_window.auction_wants = "%s will das markierte Grundstück kaufen."
 multiplayer_window.auction_bid_more = "Biete $%d oder mehr."
+multiplayer_window.auction_winning = "Höchstbietender"
 multiplayer_window.auction_wait = "Auktion läuft, bitte warten..."
 multiplayer_window.auction_watching = "Ihr Land grenzt nicht an dieses Grundstück."
 multiplayer_window.auctions_all = "Alle Grundstücke"

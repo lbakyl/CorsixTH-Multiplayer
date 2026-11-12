@@ -3753,6 +3753,7 @@ multiplayer_window.auction_started = "%s vil ha tomt %d. Andre spillere kan ogs�
 multiplayer_window.auction_title = "Tomteauksjon: tomt %d"
 multiplayer_window.auction_wants = "%s vil kjöpe den markerte tomten."
 multiplayer_window.auction_bid_more = "By $%d eller mer."
+multiplayer_window.auction_winning = "Vinnende budgiver"
 multiplayer_window.auction_wait = "Auksjon pågår, vent litt..."
 multiplayer_window.auction_watching = "Tomten din grenser ikke til denne tomten."
 multiplayer_window.auctions_all = "Alle tomter"

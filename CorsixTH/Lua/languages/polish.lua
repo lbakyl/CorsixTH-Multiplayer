@@ -3335,6 +3335,7 @@ multiplayer_window.auction_started = "%s chce działkę %d. Inni gracze też mog
 multiplayer_window.auction_title = "Aukcja ziemi: działka %d"
 multiplayer_window.auction_wants = "%s chce kupić zaznaczoną działkę."
 multiplayer_window.auction_bid_more = "Licytuj $%d lub więcej."
+multiplayer_window.auction_winning = "Zwycięski licytant"
 multiplayer_window.auction_wait = "Trwa aukcja, poczekaj..."
 multiplayer_window.auction_watching = "Twój teren nie graniczy z tą działką."
 multiplayer_window.auctions_all = "Wszystkie działki"

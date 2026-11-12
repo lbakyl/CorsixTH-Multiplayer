@@ -3674,6 +3674,7 @@ multiplayer_window.auction_started = "%s想要地塊 %d。其他玩家可能也�
 multiplayer_window.auction_title = "土地拍賣：地塊 %d"
 multiplayer_window.auction_wants = "%s想買下醒目的地塊。"
 multiplayer_window.auction_bid_more = "出價 $%d 或更多。"
+multiplayer_window.auction_winning = "最高出價者"
 multiplayer_window.auction_wait = "拍賣進行中，請稍候..."
 multiplayer_window.auction_watching = "您的土地與這塊地塊不相鄰。"
 multiplayer_window.auctions_all = "所有地塊"

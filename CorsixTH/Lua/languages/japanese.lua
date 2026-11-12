@@ -2500,6 +2500,7 @@ multiplayer_window.auction_started = "%sが区画%dを希望しています。�
 multiplayer_window.auction_title = "土地オークション: 区画%d"
 multiplayer_window.auction_wants = "%sが強調された区画を買いたがっています。"
 multiplayer_window.auction_bid_more = "$%d以上で入札してください。"
+multiplayer_window.auction_winning = "最高入札者"
 multiplayer_window.auction_wait = "オークション中です。お待ちください..."
 multiplayer_window.auction_watching = "あなたの土地はこの区画と隣り合っていません。"
 multiplayer_window.auctions_all = "全区画"

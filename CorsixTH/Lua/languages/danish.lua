@@ -2760,6 +2760,7 @@ multiplayer_window.auction_started = "%s vil have grund %d. Andre spillere vil m
 multiplayer_window.auction_title = "Grundauktion: grund %d"
 multiplayer_window.auction_wants = "%s vil köbe den markerede grund."
 multiplayer_window.auction_bid_more = "Byd $%d eller mere."
+multiplayer_window.auction_winning = "Vindende byder"
 multiplayer_window.auction_wait = "Auktion i gang, vent venligst..."
 multiplayer_window.auction_watching = "Din jord grænser ikke op til denne grund."
 multiplayer_window.auctions_all = "Alle grunde"

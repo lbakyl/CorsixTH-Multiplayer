@@ -1058,6 +1058,7 @@ multiplayer_window.auction_started = "%s vuole il lotto %d. Anche altri giocator
 multiplayer_window.auction_title = "Asta di terreni: lotto %d"
 multiplayer_window.auction_wants = "%s vuole comprare il lotto evidenziato."
 multiplayer_window.auction_bid_more = "Offri $%d o più."
+multiplayer_window.auction_winning = "Miglior offerente"
 multiplayer_window.auction_wait = "Asta in corso, attendi..."
 multiplayer_window.auction_watching = "Il tuo terreno non confina con questo lotto."
 multiplayer_window.auctions_all = "Tutti"

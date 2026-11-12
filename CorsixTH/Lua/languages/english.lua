@@ -522,6 +522,7 @@ multiplayer_window = {
   auction_title = "Land auction: plot %d",
   auction_wants = "%s wants to buy the highlighted plot.",
   auction_bid_more = "Bid $%d or more.",
+  auction_winning = "Winning bidder",
   auction_paused = "The game stands still during the auction.",
   auction_price = "Price $%d, each bid $%d more",
   auction_leader = "Highest bid: $%d, %s",

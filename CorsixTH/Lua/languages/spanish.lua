@@ -2020,6 +2020,7 @@ multiplayer_window.auction_started = "%s quiere la parcela %d. Otros jugadores t
 multiplayer_window.auction_title = "Subasta de terreno: parcela %d"
 multiplayer_window.auction_wants = "%s quiere comprar la parcela resaltada."
 multiplayer_window.auction_bid_more = "Puja $%d o más."
+multiplayer_window.auction_winning = "Mejor postor"
 multiplayer_window.auction_wait = "Subasta en curso, espera..."
 multiplayer_window.auction_watching = "Tu terreno no linda con esta parcela."
 multiplayer_window.auctions_all = "Todas"

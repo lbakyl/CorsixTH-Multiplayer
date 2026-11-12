@@ -1834,6 +1834,7 @@ multiplayer_window.auction_started = "%s veut la parcelle %d. D'autres joueurs l
 multiplayer_window.auction_title = "Enchères de terrain : parcelle %d"
 multiplayer_window.auction_wants = "%s veut acheter la parcelle en surbrillance."
 multiplayer_window.auction_bid_more = "Enchérissez de $%d ou plus."
+multiplayer_window.auction_winning = "Meilleur enchérisseur"
 multiplayer_window.auction_wait = "Enchères en cours, patientez..."
 multiplayer_window.auction_watching = "Votre terrain ne touche pas cette parcelle."
 multiplayer_window.auctions_all = "Toutes"

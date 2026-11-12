@@ -1958,6 +1958,7 @@ multiplayer_window.auction_started = "%s meg akarja venni a(z) %d. telket. Máso
 multiplayer_window.auction_title = "Telekárverés: %d. telek"
 multiplayer_window.auction_wants = "%s meg akarja venni a kiemelt telket."
 multiplayer_window.auction_bid_more = "Licitálj $%d-t vagy többet."
+multiplayer_window.auction_winning = "Nyerő licitáló"
 multiplayer_window.auction_wait = "Árverés folyik, kérlek várj..."
 multiplayer_window.auction_watching = "A földed nem határos ezzel a telekkel."
 multiplayer_window.auctions_all = "Minden telek"

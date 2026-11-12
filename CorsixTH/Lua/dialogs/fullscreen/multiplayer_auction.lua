@@ -55,9 +55,14 @@ local LOT_COLOUR = {236, 52, 28}
 local FOR_SALE_COLOUR = {196, 172, 112} -- (plots nobody owns yet: Argus, 2026-11-12)
 -- The seconds left: big digits in a box next to the gavel (Jan, 2026-11-12),
 -- in the middle under this player's bid.
+-- The leader (Jan: the box under the map looked like a mistake, the same
+-- name twice): their bar framed, "Winning bidder" under the box.
+local BAR_X, BAR_W, BAR_H = 12, 285, 47 -- a bidder bar (from ROW_Y)
+local WIN_Y, WIN_W = 434, 220 -- the caption under the leader's box
 local CLOCK_W, CLOCK_H = 70, 38
 local CLOCK_X, CLOCK_Y = BID_X + math.floor((BID_W - CLOCK_W) / 2), 434
 local DIGIT_W, DIGIT_H, DIGIT_T, DIGIT_GAP = 18, 28, 4, 6
+local TOWN_LEADER_MID = 461 -- the middle of the leader's box (name and sum)
 -- (The town map button: the map's top left corner, Jan.)
 local TOWN_X, TOWN_Y, TOWN_W, TOWN_H = MAP_X + 4, MAP_Y + 4, 120, 22
 
@@ -394,11 +399,19 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
     sum_font:draw(canvas, text, tx, ty + 4 * s, w, h, "center")
   end
 
-  -- The bidders: name, bid (or "out"), colour.
+  -- The bidders: name, bid (or "out"), colour; the leader's bar framed.
   if shown then
     for row, index in ipairs(shown.bidders) do
       local ry = ROW_Y[row]
       if not ry then break end
+      if auction and index == auction.leader then
+        local frame = canvas:mapRGB(250, 220, 90)
+        local fx, fy, fw, fh = x + (BAR_X - 2) * s, y + (ry - 3) * s, (BAR_W + 4) * s, (BAR_H + 4) * s
+        canvas:drawRect(frame, fx, fy, fw, 2 * s)
+        canvas:drawRect(frame, fx, fy + fh - 2 * s, fw, 2 * s)
+        canvas:drawRect(frame, fx, fy, 2 * s, fh)
+        canvas:drawRect(frame, fx + fw - 2 * s, fy, 2 * s, fh)
+      end
       local hospital = world.hospitals[index]
       name_text(hospital and hospital.name or "?", x + NAME_X * s, y + ry * s, NAME_W * s, ROW_H * s)
       local value = shown.out[index] and S.auction_out or tostring(shown.bids[index] or 0)
@@ -441,6 +454,21 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
     local leader = world.hospitals[auction.leader]
     name_text(leader and leader.name or "", x + LEAD_X * s, y + BID_Y * s, LEAD_W * s, ROW_H * s)
     sum_text(tostring(auction.bid), x + LEAD_VALUE_X * s, y + BID_Y * s, LEAD_VALUE_W * s, ROW_H * s)
+    -- "Winning bidder" under that box, big, on a dark plaque.
+    local caption = S.auction_winning
+    if caption then
+      local k = 2 * s
+      local _, text_h = self.big_font:sizeOf(caption, WIN_W / 2)
+      local cx = x + (TOWN_LEADER_MID - WIN_W / 2) * s
+      local cy = y + WIN_Y * s
+      local ch = text_h * k + 6 * s
+      canvas:drawRect(canvas:mapRGB(236, 208, 150), cx - s, cy - s, (WIN_W + 2) * s, ch + 2 * s)
+      canvas:drawRect(canvas:mapRGB(56, 22, 14), cx, cy, WIN_W * s, ch)
+      canvas:scale(k)
+      self.big_font:drawWrapped(canvas, caption, math.floor(cx / k), math.floor((cy + 3 * s) / k),
+          math.floor(WIN_W / 2), "center")
+      canvas:scale(1)
+    end
   end
 
   -- What is going on, at the top: short, big, on a dark plaque (Jan,

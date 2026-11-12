@@ -3618,6 +3618,7 @@ multiplayer_window.auction_started = "%s wil perceel %d. Andere spelers willen h
 multiplayer_window.auction_title = "Landveiling: perceel %d"
 multiplayer_window.auction_wants = "%s wil het gemarkeerde perceel kopen."
 multiplayer_window.auction_bid_more = "Bied $%d of meer."
+multiplayer_window.auction_winning = "Hoogste bieder"
 multiplayer_window.auction_wait = "Veiling bezig, even wachten..."
 multiplayer_window.auction_watching = "Jouw land grenst niet aan dit perceel."
 multiplayer_window.auctions_all = "Elk perceel"
