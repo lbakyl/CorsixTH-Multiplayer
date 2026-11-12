@@ -252,7 +252,9 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   seconds (15 for the first bid) it is down: "going once", "going twice",
   sold to the highest bid. The seconds left show in big digits next to the
   gavel, red for the last three. The small map shows the plot for
-  sale in red and the other plots still for sale in sand; **Town map
+  sale in red, the other plots still for sale in sand, and every plot's
+  number (as on the town map) with a thin line between the plots; who
+  leads has a yellow frame round their bar; **Town map
   (F4)** opens the town map, and the auction comes back when you close it. Bots bid too, up to what the plot is worth to
   them: a little over the price while they have room, up to two and a half
   times the price once their rooms fill most of their floor. They keep

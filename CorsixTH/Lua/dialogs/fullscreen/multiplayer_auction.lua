@@ -58,7 +58,7 @@ local FOR_SALE_COLOUR = {196, 172, 112} -- (plots nobody owns yet: Argus, 2026-1
 -- The leader (Jan: the box under the map looked like a mistake, the same
 -- name twice): their bar framed, "Winning bidder" under the box.
 local BAR_X, BAR_W, BAR_H = 12, 285, 47 -- a bidder bar (from ROW_Y)
-local WIN_Y, WIN_W = 434, 220 -- the caption under the leader's box
+local WIN_Y, WIN_W = 434, 260 -- the caption under the leader's box (one row in all 22 languages)
 local CLOCK_W, CLOCK_H = 70, 38
 local CLOCK_X, CLOCK_Y = BID_X + math.floor((BID_W - CLOCK_W) / 2), 434
 local DIGIT_W, DIGIT_H, DIGIT_T, DIGIT_GAP = 18, 28, 4, 6
@@ -140,6 +140,8 @@ function UIMultiplayerAuction:makeRuns()
   end
   local lot = rgb(LOT_COLOUR, 1)
   local for_sale = rgb(FOR_SALE_COLOUR, 1)
+  local border = video:mapRGB(28, 36, 28)
+  local parcel = {} -- each tile's plot (0: none)
   local wall = video:mapRGB(36, 28, 24)
   -- Each tile: what it shows (nil: grass), and the part of the map with land.
   local flags = {}
@@ -148,6 +150,7 @@ function UIMultiplayerAuction:makeRuns()
   for y = 1, h do
     for x = 1, w do
       local p = th:getCellFlags(x, y, flags).parcelId or 0
+      parcel[(y - 1) * w + x] = p
       local c
       if p ~= 0 then
         if auction and p == auction.plot then
@@ -214,6 +217,51 @@ function UIMultiplayerAuction:makeRuns()
       end
     end
   end
+  -- Thin lines between the plots (and round them), and each plot's number
+  -- in its middle (Argus, 2026-11-12: as on the town map, to see how many
+  -- plots there are).
+  local function plot_at(x, y)
+    return x >= 1 and y >= 1 and x <= w and y <= h and parcel[(y - 1) * w + x] or 0
+  end
+  local one = 1 / px -- (a screen pixel, in tiles)
+  local tiles_of = {}
+  for y = y0, y0 + bh - 1 do
+    for x = x0, x0 + bw - 1 do
+      local p = plot_at(x, y)
+      if p ~= 0 then
+        local t = tiles_of[p] or {n = 0, sx = 0, sy = 0}
+        tiles_of[p] = t
+        t.n, t.sx, t.sy = t.n + 1, t.sx + x, t.sy + y
+      end
+      if p ~= plot_at(x + 1, y) and (p ~= 0 or plot_at(x + 1, y) ~= 0) then
+        add(x - one, y - 1, one, 1, border)
+      end
+      if p ~= plot_at(x, y + 1) and (p ~= 0 or plot_at(x, y + 1) ~= 0) then
+        add(x - 1, y - one, 1, one, border)
+      end
+    end
+  end
+  self.plot_labels = {}
+  for p, t in pairs(tiles_of) do
+    -- (The tile of the plot nearest its middle: an L-shaped plot's middle
+    -- may be outside it.)
+    local mx, my = t.sx / t.n, t.sy / t.n
+    local best, best_d
+    for y = y0, y0 + bh - 1 do
+      for x = x0, x0 + bw - 1 do
+        if plot_at(x, y) == p then
+          local d = (x - mx) ^ 2 + (y - my) ^ 2
+          if not best_d or d < best_d then best, best_d = {x, y}, d end
+        end
+      end
+    end
+    -- (Only where the number fits: a plot of a few pixels gets none.)
+    if best and t.n * px * px >= 120 then
+      self.plot_labels[#self.plot_labels + 1] = {p, math.floor(ox + (best[1] - 0.5) * px),
+          math.floor(oy + (best[2] - 0.5) * px)}
+    end
+  end
+  table.sort(self.plot_labels, function(a, b) return a[1] < b[1] end)
   if px >= 3 then
     for _, e in ipairs(world.entities) do
       local x, y = e.tile_x, e.tile_y
@@ -357,6 +405,18 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
   for _, r in ipairs(self.rects) do
     if lot_on or not r[6] then canvas:drawRect(r[5], mx + r[1] * s, my + r[2] * s, r[3] * s, r[4] * s) end
   end
+  -- Each plot's number, small: dark digits on a light tag.
+  local tag, ink = canvas:mapRGB(250, 244, 220), canvas:mapRGB(40, 24, 20)
+  for _, label in ipairs(self.plot_labels or {}) do
+    local digits = tostring(label[1])
+    local tw = #digits * 4 + 1 -- (digits 3 wide, 1 apart, a pixel's margin)
+    local lx, ly = mx + (label[2] - math.floor(tw / 2)) * s, my + (label[3] - 4) * s
+    canvas:drawRect(tag, lx, ly, tw * s, 7 * s)
+    for i = 1, #digits do
+      UIMultiplayerAuction.drawDigit(canvas, ink, tonumber(digits:sub(i, i)), lx + (1 + (i - 1) * 4) * s, ly + s,
+          3 * s, 5 * s, s)
+    end
+  end
   UIFullscreen.draw(self, canvas, x_, y_)
   local last = not auction and world.mp_auction_last
   if last and last.id ~= self.auction_id then last = nil end
@@ -455,19 +515,8 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
     name_text(leader and leader.name or "", x + LEAD_X * s, y + BID_Y * s, LEAD_W * s, ROW_H * s)
     sum_text(tostring(auction.bid), x + LEAD_VALUE_X * s, y + BID_Y * s, LEAD_VALUE_W * s, ROW_H * s)
     -- "Winning bidder" under that box, big, on a dark plaque.
-    local caption = S.auction_winning
-    if caption then
-      local k = 2 * s
-      local _, text_h = self.big_font:sizeOf(caption, WIN_W / 2)
-      local cx = x + (TOWN_LEADER_MID - WIN_W / 2) * s
-      local cy = y + WIN_Y * s
-      local ch = text_h * k + 6 * s
-      canvas:drawRect(canvas:mapRGB(236, 208, 150), cx - s, cy - s, (WIN_W + 2) * s, ch + 2 * s)
-      canvas:drawRect(canvas:mapRGB(56, 22, 14), cx, cy, WIN_W * s, ch)
-      canvas:scale(k)
-      self.big_font:drawWrapped(canvas, caption, math.floor(cx / k), math.floor((cy + 3 * s) / k),
-          math.floor(WIN_W / 2), "center")
-      canvas:scale(1)
+    if S.auction_winning then
+      self:drawPlaque(canvas, S.auction_winning, x + (TOWN_LEADER_MID - WIN_W / 2) * s, y + WIN_Y * s, WIN_W, 0)
     end
   end
 
@@ -494,18 +543,30 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
         " " .. now
   end
   if status ~= "" then
-    local k = 2 * s
-    local font = self.big_font
-    local _, text_h = font:sizeOf(status, STATUS_W / 2)
-    local px, py, pw, ph = x + (STATUS_X - 6) * s, y + (STATUS_Y - 3) * s, (STATUS_W + 12) * s,
-        text_h * k + 8 * s
-    canvas:drawRect(canvas:mapRGB(236, 208, 150), px - s, py - s, pw + 2 * s, ph + 2 * s)
-    canvas:drawRect(canvas:mapRGB(56, 22, 14), px, py, pw, ph)
-    canvas:scale(k)
-    font:drawWrapped(canvas, status, math.floor((x + STATUS_X * s) / k), math.floor((y + (STATUS_Y + 1) * s) / k),
-        math.floor(STATUS_W / 2), "center")
-    canvas:scale(1)
+    self:drawPlaque(canvas, status, x + (STATUS_X - 6) * s, y + (STATUS_Y - 3) * s, STATUS_W + 12, 6)
   end
+end
+
+--! Text at twice the size, centred on a dark plaque `w` wide (in the
+--! picture's pixels) with its top left corner at (px, py) on the screen,
+--! `inset` pixels from its sides. The plaque is as high as the text's rows.
+function UIMultiplayerAuction:drawPlaque(canvas, text, px, py, w, inset)
+  local s = TheApp.gfx:getUIScale()
+  local k = 2 * s
+  local font = self.big_font
+  local text_w = w - 2 * inset
+  local _, text_h = font:sizeOf(text, text_w / 2)
+  local ph = text_h * k + 8 * s
+  canvas:drawRect(canvas:mapRGB(236, 208, 150), px - s, py - s, (w + 2) * s, ph + 2 * s)
+  canvas:drawRect(canvas:mapRGB(56, 22, 14), px, py, w * s, ph)
+  -- (The letters fill a row's top part, a row is 12 of the font's pixels:
+  -- their middle in the plaque's middle. Jan: "Winning bidder" sat too high.)
+  local letters_h = text_h * k - 10 * s
+  local top = py + math.floor((ph - letters_h) / 2) - 2 * s
+  canvas:scale(k)
+  font:drawWrapped(canvas, text, math.floor((px + inset * s) / k), math.floor(top / k), math.floor(text_w / 2),
+      "center")
+  canvas:scale(1)
 end
 
 -- A digit's lit bars: top, top right, bottom right, bottom, bottom left,
