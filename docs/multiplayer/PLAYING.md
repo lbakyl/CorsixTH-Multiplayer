@@ -298,9 +298,10 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   balance, and they pay or decline. No answer within 20 game days counts
   as no.
 - **Players:** the **MULTIPLAYER** menu, **PLAYERS** lists everybody in the
-  game: their ping (average of the last 10 seconds), whether they are still
-  connected (or have not answered for a while, or are behind), and their
-  hospital's value, balance and reputation. When a player leaves, the
+  game: their hospital and team, their ping (average of the last 10
+  seconds), whether they are still connected (or have not answered for a
+  while, or are behind), and their hospital's value, balance and
+  reputation (Rep). When a player leaves, the
   announcer says "Warning! A player has left the game." (with the
   announcements on).
 - **Destroyed rooms** (an earthquake, or a machine used until it blew up):
@@ -565,7 +566,10 @@ room list shows it as "playing, 2 free": two places somebody may take. Join
 it (with its password, if it has one):
 
 - **Your connection dropped:** join the same room under the same name and
-  you are back in your own hospital at once.
+  you are back in your own hospital at once (also while the server still
+  counts your old connection in: one it has not heard from for 5 seconds is
+  yours, and it closes it). The server notices a connection that died
+  without closing after 20 seconds; until then your place shows as yours.
 - **Anybody else** gets the room's places: each hospital with its colour,
   team and who plays it. Click a place a bot plays, or one whose player has
   left, and you play that hospital from now on. Its colour, team and the
@@ -576,7 +580,9 @@ it (with its password, if it has one):
   nothing in the chat, asks nobody for anything and plays no dirty tricks.
   In co-op the hospital still counts as away for the team's goals, as before.
 - **Everybody leaves:** the bots stop and the room closes (save the game
-  first if you want to go on with it later: Load MP game).
+  first if you want to go on with it later: Load MP game). If the last
+  player's connection dropped instead, the game waits 5 minutes for them
+  (or anybody) to come back; the bots start again then.
 
 Every time somebody takes a place, everybody's game loads the server's copy
 for a few seconds, as after a repair.

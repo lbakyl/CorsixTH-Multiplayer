@@ -36,11 +36,12 @@ local col = {
   row     = Colours.Setting,
 }
 
--- Columns: key, width (all of them fit a 640 pixel wide screen).
--- (The hospital column takes "BOT BERTIE (team 2)": at 75 it was cut off.)
+-- Columns: key, width (measured with the game's fonts in every language).
+-- (The team has a column of its own, Jan 2026-11-12: "BOT BERTIE (team 2)"
+-- was cut off in the hospital's.)
 local COLUMNS = {
-  {"name", 80}, {"hospital", 110}, {"ping", 50}, {"status", 100},
-  {"value", 65}, {"balance", 65}, {"reputation", 70}, {"goals", 60},
+  {"name", 80}, {"hospital", 100}, {"team", 52}, {"ping", 46}, {"status", 100},
+  {"value", 60}, {"balance", 60}, {"reputation", 44}, {"goals", 60},
 }
 local WIDTH = 20 * 2 + (#COLUMNS - 1) * 4
 for _, c in ipairs(COLUMNS) do WIDTH = WIDTH + c[2] end
@@ -103,7 +104,7 @@ local function money(n)
   return "$" .. tostring(math.floor(tonumber(n) or 0))
 end
 
---! The rows to show: {name, hospital, ping, status, value, balance, reputation}.
+--! The rows to show: {name, hospital, team, ping, status, value, balance, reputation, goals}.
 function UIMultiplayerPlayers.rows(lobby, session, world)
   local S = _S.multiplayer_window
   local rows = {}
@@ -132,14 +133,13 @@ function UIMultiplayerPlayers.rows(lobby, session, world)
     else
       status = S.players_playing
     end
-    -- (A race of teams: the team's number after the hospital.)
+    -- (A game of teams: the team's number.)
     local team = hospital and world:mpTeam(hospital)
-    local hospital_text = hospital and hospital.name or "-"
-    if team then hospital_text = S.players_team:format(hospital_text, team) end
     rows[#rows + 1] = {
       hospital_entity = hospital, -- (its colour tab)
       name = p.name,
-      hospital = hospital_text,
+      hospital = hospital and hospital.name or "-",
+      team = team and tostring(team) or "-",
       ping = (p.connected and p.rtt >= 0) and S.players_ms:format(p.rtt) or "-",
       status = status,
       value = hospital and money(hospital.value) or "-",

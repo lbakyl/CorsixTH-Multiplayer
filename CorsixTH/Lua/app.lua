@@ -2057,8 +2057,16 @@ function App:mapEdit(size)
   self:loadLevel("", nil, nil, nil, nil, true, _S.errors.load_map_prefix, nil)
 end
 
+--- Multiplayer: tell the server this player leaves on purpose (QUIT). It
+--- closes a game nobody plays any more at once; a connection that was lost
+--- instead gets a few minutes to come back.
+function App:_leaveMultiplayer()
+  if self.mp_lobby then pcall(self.mp_lobby.disconnect, self.mp_lobby) end
+end
+
 --- Exits the game completely (no confirmation window)
 function App:exit()
+  self:_leaveMultiplayer()
   -- Save config before exiting
   self:saveConfig()
   self:saveHotkeys()
@@ -2067,6 +2075,7 @@ end
 
 --- Exits the game completely without saving the config i.e. Alt+F4 for Quit Application
 function App:abandon()
+  self:_leaveMultiplayer()
   SDL.quit()
 end
 

@@ -792,7 +792,7 @@ multiplayer_window = {
   team_race_reached_other = "%s has reached this level's goals (team %s).",
   team_member_out = "Your hospital failed this level's goals two years running and is out of the race. Your team races on.",
   team_member_out_other = "%s failed the goals two years running and is out of the race; its team races on.",
-  players_team = "%s (team %d)",
+  players_team = "Team",
   -- Competitive: dirty tricks
   sabotage_caption = "Dirty tricks against %s",
   sabotage_alone = "There is no rival left to play tricks on.",
@@ -963,7 +963,7 @@ multiplayer_window = {
   players_status = "Status",
   players_value = "Value",
   players_balance = "Balance",
-  players_reputation = "Reputation",
+  players_reputation = "Rep",
   players_goals = "Goals",
   goals_done = "reached",
   goals_failing = "failing",
