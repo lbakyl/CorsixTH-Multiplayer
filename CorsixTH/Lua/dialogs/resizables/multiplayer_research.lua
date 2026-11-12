@@ -259,8 +259,19 @@ end
 function UIMultiplayerResearch:nextPlayer()
   local ui = self.ui
   local target = self:_nextTarget(self.target)
+  local price, selected = self.price, self.selected
   self:close()
-  ui:addWindow(UIMultiplayerResearch(ui, target))
+  local window = UIMultiplayerResearch(ui, target)
+  ui:addWindow(window)
+  -- The price and the items chosen stay (Argus, 2026-11-12: the price was
+  -- reset at every player); a rival still pays at least $1,000 (setPrice).
+  if window.price_panel then
+    window:setPrice(price or 0)
+    for _, item in ipairs(window.items or {}) do
+      if selected and selected[item.key] then window.selected[item.key] = true end
+    end
+    window:_showPage()
+  end
 end
 
 --! Open the window (Multiplayer menu or the research blackboard): co-op only.

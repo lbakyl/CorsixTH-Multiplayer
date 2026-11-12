@@ -292,12 +292,11 @@ function UIMultiplayerTrade:nextPlayer()
   local target = self:_nextTarget(self.target)
   local staff = self.selected and self.selected.staff
   local price, rep = self.price, self.reputation
-  local rival = self.world:mpRivals(self.hospital, self.target)
   self:close()
   local window = UIMultiplayerTrade(ui, target, staff)
   ui:addWindow(window)
-  -- (The price stays from one ally to the next, or one rival to the next.)
-  if window.price_panel and rival == self.world:mpRivals(self.hospital, target) then window:setPrice(price) end
+  -- (The price stays as it was set, for any player: Argus, 2026-11-12.)
+  if window.price_panel and price then window:setPrice(price) end
   if window.rep_panel then window:setReputation(rep) end
 end
 
