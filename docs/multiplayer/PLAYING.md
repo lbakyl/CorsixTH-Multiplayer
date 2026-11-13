@@ -221,7 +221,10 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   what a team mate bot tells you, without greetings and taunts), or nothing
   from bots. On the town map, land on
   another player's side shows that player's name and "not for sale". The
-  **MULTIPLAYER** menu, **TRADE WITH OTHER PLAYERS** sends money (to an ally
+  **MULTIPLAYER** menu, **TRADE WITH OTHER PLAYERS** deals with one player at
+  a time: their name, on their colour and with "your ally" or "your rival", is
+  at the top between **Previous** and **Next**, and every button names them.
+  It sends money (to an ally
   only), or offers a member of staff, free or for a price up to $10,000 (the
   -$500 and +$500 buttons; to a rival in a race where everyone plays alone it
   starts at $1,000; the other player

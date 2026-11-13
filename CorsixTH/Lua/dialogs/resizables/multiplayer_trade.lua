@@ -37,7 +37,10 @@ local col = {
   caption        = Colours.Caption,
 }
 
-local WIDTH = 380
+-- (Wider than it was: the buttons name the player now. Argus, 2026-11-13:
+-- who you deal with was shown in one place, the button to change it in
+-- another.)
+local WIDTH = 440
 -- Rows of the staff list: as many as the screen has room for, 4 to 8 (a
 -- screen of 1080 lines at double size has 540: Jan's did not show it all).
 local MAX_STAFF_ROWS = 8
@@ -55,6 +58,16 @@ local REP_HEIGHT = 94
 local REQUEST_HEIGHT = 36
 -- The window but for the staff rows (and the reputation and request rows).
 local FIXED_HEIGHT = 85 + 36 + 34 + 30 + 10 + 30 + 10
+
+--! Label `panel` with `long` (the player named), or with `short` where the
+--! long one is too wide for it (a long name, a long language).
+local function fit_label(panel, long, short)
+  panel:setLabel(long)
+  local s = panel.apply_ui_scale and TheApp.gfx:getUIScale() or 1
+  local font = panel.label_font
+  if font and font.sizeOf and font:sizeOf(long) > (panel.w - 10) * s then panel:setLabel(short) end
+  return panel
+end
 
 --! How many staff rows fit on the screen, with the ally's rows or not.
 local function staff_rows(vouch)
@@ -90,8 +103,28 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
   self.price = 0
   self.reputation = 10
 
-  local title = self.target and S.trade_caption:format(self.target.name) or S.trade_alone
-  self:addBevelPanel(20, 10, WIDTH - 40, 20, col.title):setLabel(title).lowered = true
+  if not self.target then
+    self:addBevelPanel(20, 10, WIDTH - 40, 20, col.title):setLabel(S.trade_alone).lowered = true
+  else
+    -- Who you deal with, and the buttons to change it, in one row at the
+    -- top: the name on the player's colour, ally or rival.
+    local c = world.mp_coop and MultiplayerSession.markerColour(world, self.target)
+    local band = c and {red = c[1], green = c[2], blue = c[3]} or col.title
+    -- (A dark colour lightened: the name is black.)
+    if c and c[1] * 0.3 + c[2] * 0.59 + c[3] * 0.11 < 110 then
+      band = {red = math.floor((c[1] + 255) / 2), green = math.floor((c[2] + 255) / 2),
+          blue = math.floor((c[3] + 255) / 2)}
+    end
+    local bots = world.mp_coop and world.mp_coop.bot_hospitals or {}
+    local relation = world:mpRivals(self.hospital, self.target) and S.trade_rival or S.trade_ally
+    if bots[world:getHospitalIndex(self.target)] then relation = relation .. ", " .. S.trade_is_bot end
+    self:addBevelPanel(20, 8, 76, 26, col.button):setLabel(S.trade_previous_player)
+        :makeButton(0, 0, 76, 26, nil, self.previousPlayer)
+    self.who_panel = self:addBevelPanel(102, 8, WIDTH - 204, 26, band)
+    fit_label(self.who_panel, S.trade_who:format(self.target.name, relation), self.target.name)
+    self:addBevelPanel(WIDTH - 96, 8, 76, 26, col.button):setLabel(S.trade_next_player_short)
+        :makeButton(0, 0, 76, 26, nil, self.nextPlayer)
+  end
   if not self.target then
     self:addBevelPanel(WIDTH - 140, height - 45, 120, 30, col.button):setLabel(S.trade_close)
         :makeButton(0, 0, 120, 30, nil, self.close)
@@ -109,15 +142,15 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
     local n = #self.amounts
     -- (The slider's knob a tenth of the bar or so: a page of that many.)
     local page = math.max(1, math.ceil(n / 9))
-    local bar = self:addBevelPanel(20, 45, 190, 20, col.caption)
+    local bar = self:addBevelPanel(20, 45, 170, 20, col.caption)
     bar.lowered = true
     self.money_bar = bar:makeScrollbar(col.button,
         --[[persistable:multiplayer_trade_money_slider]] function() self:setMoney(self.money_bar.value) end,
         1, n + page - 1, page, 1)
     self.money_bar.direction = "x"
     self.money_bar:setRange(1, n + page - 1, page, 1)
-    self.money_button = self:addBevelPanel(220, 40, WIDTH - 240, 30, col.button)
-    self.money_button:makeButton(0, 0, WIDTH - 240, 30, nil, self.askSendMoney)
+    self.money_button = self:addBevelPanel(200, 40, WIDTH - 220, 30, col.button)
+    self.money_button:makeButton(0, 0, WIDTH - 220, 30, nil, self.askSendMoney)
     self:setMoney(1)
     -- Ask them for money: the button left, its slider right (the other
     -- player pays or declines in a fax; MultiplayerSession ask_money).
@@ -129,9 +162,9 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
     end
     local rn = #self.request_amounts
     local rpage = math.max(1, math.ceil(rn / 9))
-    self.request_button = self:addBevelPanel(20, 76, 160, 30, col.button)
-    self.request_button:makeButton(0, 0, 160, 30, nil, self.requestMoney)
-    local rbar = self:addBevelPanel(190, 81, WIDTH - 210, 20, col.caption)
+    self.request_button = self:addBevelPanel(20, 76, 230, 30, col.button)
+    self.request_button:makeButton(0, 0, 230, 30, nil, self.requestMoney)
+    local rbar = self:addBevelPanel(260, 81, WIDTH - 280, 20, col.caption)
     rbar.lowered = true
     self.request_bar = rbar:makeScrollbar(col.button,
         --[[persistable:multiplayer_trade_request_slider]] function() self:setRequest(self.request_bar.value) end,
@@ -192,10 +225,9 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
   self:setPrice(vouch and 0 or MultiplayerSession.RIVAL_MIN_PRICE)
 
   y = y + 34
-  self:addBevelPanel(20, y, 180, 30, col.button):setLabel(S.trade_send_staff)
-      :makeButton(0, 0, 180, 30, nil, self.sendStaff)
-  self:addBevelPanel(210, y, WIDTH - 230, 30, col.button):setLabel(S.trade_next_player)
-      :makeButton(0, 0, WIDTH - 230, 30, nil, self.nextPlayer)
+  self.offer_button = self:addBevelPanel(20, y, WIDTH - 40, 30, col.button)
+  fit_label(self.offer_button, S.trade_send_staff_to:format(self.target.name), S.trade_send_staff)
+  self.offer_button:makeButton(0, 0, WIDTH - 40, 30, nil, self.sendStaff)
   if vouch then
     -- Vouch for the ally: points of reputation (1 to 100) from this hospital
     -- to theirs. (The title names them; the button says whose points go:
@@ -228,6 +260,19 @@ end
 function UIMultiplayerTrade:draw(canvas, x_, y_)
   UIResizable.draw(self, canvas, x_, y_)
   MultiplayerSession.drawTitleTabs(canvas, self, x_, y_, self.target)
+  -- A dark frame round the player's name (a lavender player stood out
+  -- little from the window's own purple).
+  local who = self.who_panel
+  if who then
+    local s = TheApp.gfx:getUIScale()
+    local fx, fy = self.x * s + x_ + (who.x - 2) * s, self.y * s + y_ + (who.y - 2) * s
+    local fw, fh = (who.w + 4) * s, (who.h + 4) * s
+    local dark = canvas:mapRGB(48, 32, 64)
+    canvas:drawRect(dark, fx, fy, fw, 2 * s)
+    canvas:drawRect(dark, fx, fy + fh - 2 * s, fw, 2 * s)
+    canvas:drawRect(dark, fx, fy, 2 * s, fh)
+    canvas:drawRect(dark, fx + fw - 2 * s, fy, 2 * s, fh)
+  end
 end
 
 function UIMultiplayerTrade:_nextTarget(current)
@@ -254,7 +299,9 @@ end
 --! The slider's place `index` (1 = the least): the amount to send.
 function UIMultiplayerTrade:setMoney(index)
   self.money = self.amounts[math.max(1, math.min(#self.amounts, index or 1))]
-  self.money_button:setLabel(_S.multiplayer_window.trade_send_money:format(self.money))
+  local S = _S.multiplayer_window
+  fit_label(self.money_button, S.trade_send_money_to:format(self.money, self.target.name),
+      S.trade_send_money:format(self.money))
 end
 
 --! The send button: "Do you really want to send $X to NAME?" first.
@@ -276,7 +323,9 @@ end
 --! The request slider's place `index` (1 = the least): the amount to ask for.
 function UIMultiplayerTrade:setRequest(index)
   self.request = self.request_amounts[math.max(1, math.min(#self.request_amounts, index or 1))]
-  self.request_button:setLabel(_S.multiplayer_window.trade_request_money:format(self.request))
+  local S = _S.multiplayer_window
+  fit_label(self.request_button, S.trade_request_money_from:format(self.target.name, self.request),
+      S.trade_request_money:format(self.request))
 end
 
 --! Ask the ally for the amount: a command, so every peer makes the request
@@ -300,7 +349,9 @@ function UIMultiplayerTrade:setReputation(points)
   self.reputation = math.max(1, math.min(MultiplayerSession.REP_MAX_GIVE, points))
   self.rep_panel:setLabel(_S.multiplayer_window.rep_amount:format(self.reputation))
   if self.rep_button then
-    self.rep_button:setLabel(_S.multiplayer_window.rep_give_button:format(self.reputation))
+    local S = _S.multiplayer_window
+    fit_label(self.rep_button, S.rep_give_button_to:format(self.target.name, self.reputation),
+        S.rep_give_button:format(self.reputation))
   end
 end
 
@@ -367,9 +418,23 @@ function UIMultiplayerTrade:sendStaff()
   self:_showPage()
 end
 
-function UIMultiplayerTrade:nextPlayer()
+--! The player before this one (wrapping), as nextPlayer goes the other way.
+function UIMultiplayerTrade:previousPlayer()
+  local hospitals = self.world.hospitals
+  local n = self.world.mp_coop and self.world.mp_coop.players or 1
+  local start = self.world:getHospitalIndex(self.target) or 1
+  for step = 1, n do
+    local h = hospitals[(start - step - 1) % n + 1]
+    if h and h ~= self.target and self.world:mpMayTrade(self.hospital, h) then
+      return self:nextPlayer(h)
+    end
+  end
+end
+
+--!param target (Hospital) optional: this player instead of the next one
+function UIMultiplayerTrade:nextPlayer(target)
   local ui = self.ui
-  local target = self:_nextTarget(self.target)
+  target = target or self:_nextTarget(self.target)
   local staff = self.selected and self.selected.staff
   local price, rep = self.price, self.reputation
   self:close()

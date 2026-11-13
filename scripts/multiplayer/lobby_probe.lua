@@ -3223,6 +3223,22 @@ local function run()
           world.ui:addWindow(board)
           shot("research-board")
           board:close()
+        elseif a == "tradeshots" then
+          -- The trade window with each other player in turn (pictures).
+          UIMultiplayerTrade.open(world.ui)
+          for turn = 1, (world.mp_coop and world.mp_coop.players or 2) - 1 do
+            local w = world.ui:getWindow(UIMultiplayerTrade)
+            if not w or not w.target then break end
+            if w.request_bar then
+              w.request_bar:setRange(w.request_bar.min_value, w.request_bar.max_value, w.request_bar.page_size, 7)
+              w:setRequest(7)
+            end
+            shot("trade-" .. turn)
+            log(string.format("UI: trade window with %s", tostring(w.target.name)))
+            w:nextPlayer()
+          end
+          local w = world.ui:getWindow(UIMultiplayerTrade)
+          if w then w:close() end
         elseif a == "researchlists" then
           -- MULTIPLAYER > SHARE RESEARCH, then "Next player" round all the
           -- players: what the list offers each of them.
