@@ -495,12 +495,12 @@ do
   eq(m:studentsAway(800), 1, "the junior counts as staff")
   eq(m:traineeChair({day = 800}) ~= nil, true, "a free chair for a junior hired for a need")
   eq(m:traineeChair({day = 700}), nil, "not before the 3rd year")
-  -- Chairs: 3 to 6, chosen once.
+  -- Chairs: 3 (Argus, 2026-11-13: more students learn very slowly).
   local n1 = m:trainingPlan()
   local _, extra = m:trainingPlan()
-  eq(extra >= 2 and extra <= 5, true, "3 to 6 chairs")
+  eq(extra, 2, "3 chairs: 2 besides the one the room needs")
   eq(m.training_chairs - 1, extra, "the same number every time")
-  eq(n1 == 6 or n1 == 5, true, "its size (5 or 6)")
+  eq(n1, 5, "its size")
 end
 print("training ok")
 

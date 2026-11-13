@@ -154,14 +154,16 @@ local WISH = 50
 -- found no place beside the machine in 12 of 16 rooms (a 2-year race on
 -- level 6, 2026-11-12).
 local SIZES = {ward = 7, staff_room = 6, toilets = 5, research = 6, training = 5, x_ray = 7}
--- The training room: lecture chairs (3 to 6 in all, chosen once per bot; a chair
--- is one student at a time, and more than 3 students at once learn slower
--- each: 2/(n-1) of the rate), the days between reviews of the teacher (a
+-- The training room: 3 lecture chairs, at most 3 students at once (more
+-- learn slower each: 2/(n-1) of the rate; Argus, 2026-11-13: with 4 to 6
+-- the students learned very slowly, so no more than 3 even where an older
+-- room has more chairs), the days between reviews of the teacher (a
 -- year, first in the 2nd month) and, from the 3rd year, of the staff. Until
 -- the 3rd year its chairs are kept full, with students hired while the bank
 -- holds TRAIN_HIRE_FLOOR; from then on new doctors are juniors trained first
 -- (M:training).
-local CHAIRS_MIN, CHAIRS_MAX = 3, 6
+local CHAIRS_MIN, CHAIRS_MAX = 3, 3
+local MAX_STUDENTS = 3
 local TEACHER_REVIEW_DAYS, FIRST_TEACHER_REVIEW = 360, 31
 local STAFF_REVIEW_FROM, STAFF_REVIEW_DAYS = tonumber(os.getenv("MP_BOT_STAFF_REVIEW_FROM") or "") or 720, 30
 local TRAIN_HIRE_FLOOR = 10000
@@ -1253,8 +1255,9 @@ function M:doctorsWhere(test)
 end
 
 --! The size and the extra chairs of a new training room: this bot's number of
---! lecture chairs (3 to 6 in all, picked once from its own random numbers)
---! less the one the room needs. Six chairs want a bigger room.
+--! lecture chairs (CHAIRS_MIN to CHAIRS_MAX, now 3, picked once from its own
+--! random numbers) less the one the room needs. Five or six chairs want a
+--! bigger room.
 function M:trainingPlan()
   self.training_chairs = self.training_chairs or self.rand(CHAIRS_MIN, CHAIRS_MAX)
   return self.training_chairs >= 5 and 6 or SIZES.training, self.training_chairs - 1
@@ -1312,7 +1315,8 @@ function M:trainingRoom()
       students[#students + 1] = st
     end
   end
-  return {room = room, teacher = teacher, chairs = chairs, students = students}
+  -- (Chairs beyond MAX_STUDENTS stay empty.)
+  return {room = room, teacher = teacher, chairs = math.min(chairs, MAX_STUDENTS), students = students}
 end
 
 --! Is this student in the training room a trainee: from the 3rd year
@@ -1433,12 +1437,15 @@ function M:training(s)
   -- Back to work, one at a time: a student now a consultant; or, when the
   -- hospital lacks a doctor, the most skilled student (until the 3rd year
   -- only when none can be hired; from then on never a junior in training).
+  -- (More students than MAX_STUDENTS, in an older game: the most skilled
+  -- goes back to work too.)
+  local over = #students > chairs
   local leaving, leaving_skill
   for _, st in ipairs(students) do
     if not st.pickup and st.mp_id then
       if bot.flag(st.profile, "is_consultant") then
         leaving, leaving_skill = st, 99
-      elseif lacking and (not full or not bot:canHire("Doctor")) and not self:isTrainee(st, s.day) and
+      elseif ((lacking and (not full or not bot:canHire("Doctor"))) or over) and not self:isTrainee(st, s.day) and
           (st.profile.skill or 0) > (leaving_skill or -1) then
         leaving, leaving_skill = st, st.profile.skill or 0
       end
@@ -1446,7 +1453,7 @@ function M:training(s)
   end
   if leaving then
     local target = short or self:roomShortOf("Consultant")
-    if not target and bot.flag(leaving.profile, "is_consultant") then target = self:roomOf("staff_room") end
+    if not target and (over or bot.flag(leaving.profile, "is_consultant")) then target = self:roomOf("staff_room") end
     if target and bot:moveStaffInto(leaving, target) then
       self.student_day = s.day
       self:note(string.format("day %d: %s trained, back to the %s", s.day,
