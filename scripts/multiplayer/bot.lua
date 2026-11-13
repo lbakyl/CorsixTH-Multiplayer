@@ -2599,6 +2599,31 @@ function Bot:editTick()
   return true
 end
 
+-- Colder than this on the heat map (0..1; 50 is degrees: 0.25 is 12.5, a
+-- patient is cold below 0.22) a radiator is wanted.
+Bot.COLD = 0.25
+
+--! The average of the heat map over its hospital's tiles within r of x, y
+--! (nil: none of them).
+function Bot:temperatureAround(x, y, r)
+  local th, hosp = self.world.map.th, self.world.ui.hospital
+  local sum, n = 0, 0
+  for ty = y - r, y + r do
+    for tx = x - r, x + r do
+      if hosp:isInHospital(tx, ty) then
+        sum, n = sum + th:getCellTemperature(tx, ty), n + 1
+      end
+    end
+  end
+  return n > 0 and sum / n or nil
+end
+
+--! Is it cold there on the heat map (a radiator wanted)?
+function Bot:coldAround(x, y, r)
+  local t = self:temperatureAround(x, y, r)
+  return t ~= nil and t < Bot.COLD
+end
+
 --! A room drawn for hand furnishing (Bot:drawRoom with extras): buy the
 --! extras in its editor (room_buy), then put every object down one at a
 --! time like clicks (room_object), then confirm (room_finish). Extras with
@@ -2626,7 +2651,16 @@ function Bot:furnishTick()
     job.bought = true
     local buy, cost = {}, 0
     local hospital = world.ui.hospital
-    for id, n in pairs(job.extras) do
+    for id, wanted in pairs(job.extras) do
+      -- (A second or third radiator, as an expert puts in a big room, only
+      -- where the heat map is cold: Jan, 2026-11-13.)
+      local n = wanted
+      local r = dlg.room
+      if id == "radiator" and n > 1 and r and r.width and
+          not self:coldAround(r.x + math.floor(r.width / 2), r.y + math.floor(r.height / 2),
+              math.floor(math.max(r.width, r.height) / 2)) then
+        n = 1
+      end
       if extra_allowed(world, dlg.room, id) then
         local each = hospital:getObjectBuildCost(id)
         if hospital.balance - cost - each * n >= RESERVE then

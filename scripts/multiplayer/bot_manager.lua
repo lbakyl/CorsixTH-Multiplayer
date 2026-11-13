@@ -91,6 +91,26 @@ local LACK_DAYS, LACK_EMERGENCY_DAYS = 10, 3
 -- the queue needs, M:projects). (Were 4 and 6: Jan, 2026-11-13, seven
 -- patients waited for Bertie's operating theatre, four of them standing.)
 local BENCHES_AT_DOOR, BENCHES_AT_DESK = 8, 10
+-- A radiator or a plant in the corridor only with none of its kind this
+-- many tiles near, and a radiator only where the heat map is cold there
+-- (Bot.COLD, about 12 degrees). Jan, 2026-11-13: Clive had 84 radiators
+-- and 40 plants, rows of them between the doors.
+local COMFORT_APART = 5
+-- Reception: a desk (and a receptionist for it) for every DESK_PATIENTS
+-- patients in the hospital, at most MAX_DESKS; one more while the queue
+-- is long with every desk staffed. (Jan, 2026-11-13. A receptionist checks
+-- in a patient every 4 + 50 x (1 - skill) game hours, a day being 50:
+-- about two a day at average skill; while the only one is on a break,
+-- nobody is checked in.)
+local DESK_PATIENTS, MAX_DESKS, DESK_QUEUE = 40, 3, 8
+
+--! Is there a corridor object `id` within r tiles of x, y (s.comfort)?
+local function comfort_near(s, id, x, y, r)
+  for _, c in ipairs(s.comfort or {}) do
+    if c[1] == id and math.abs(c[2] - x) <= r and math.abs(c[3] - y) <= r then return true end
+  end
+  return false
+end
 -- Money left after a plot bought for the hospital's value (not for room).
 local VALUE_LAND_SPARE = 15000
 -- Game days between warnings that an opponent can win (4 months).
@@ -955,8 +975,14 @@ function M:projects(s)
     end
   end
 
-  -- Reception: another desk and receptionist when the queue grows.
-  if s.desks < 2 and s.reception_queue > 10 then buy("reception_desk", (s.reception_queue - 8) * 0.6) end
+  -- Reception: more desks for more patients, or a long queue.
+  local desks_wanted = math.min(MAX_DESKS, 1 + math.floor((s.patients or 0) / DESK_PATIENTS))
+  if (s.reception_queue or 0) > DESK_QUEUE and (s.staffed_desks or 0) >= s.desks then
+    desks_wanted = math.max(desks_wanted, math.min(MAX_DESKS, s.desks + 1))
+  end
+  if s.desks > 0 and s.desks < desks_wanted then
+    buy("reception_desk", 8 + (desks_wanted - s.desks) * 4 + s.reception_queue * 0.5)
+  end
   if (s.staff.Receptionist or 0) < s.desks then hire("Receptionist", 12) end
   -- Handymen: litter, machines, plants.
   local machines = 0
@@ -997,8 +1023,11 @@ function M:projects(s)
         -- (A hard bot: a bench by every door soon, before anybody stands.)
         place("bench", d, ((d.queue >= 2 or M.hard) and 8 or 3) + missing * 2 + d.queue * 0.5)
       end
-      if d.near.plant < 1 then place("plant", d, 2 + (1 - s.happiness)) end
-      if d.near.radiator < 1 then place("radiator", d, 2 + s.cold * 0.5) end
+      if not comfort_near(s, "plant", d.x, d.y, COMFORT_APART) then place("plant", d, 2 + (1 - s.happiness)) end
+      if not comfort_near(s, "radiator", d.x, d.y, COMFORT_APART) and
+          (not bot.coldAround or bot:coldAround(d.x, d.y, WAITING_R)) then
+        place("radiator", d, 2 + s.cold * 0.5)
+      end
     end
     -- Drinks machines: one per 25 patients (one at least), each by the
     -- busiest waiting place with none within DRINKS_R tiles. (Before, every
