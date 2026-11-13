@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Make CorsixTH/Sounds/mp_player_left.wav, the multiplayer announcement
-"Warning! A player has left the game." (a two-tone chime, then the voice
-through a loudspeaker-like filter).
+"""Make the multiplayer announcements in CorsixTH/Sounds: mp_player_left.wav
+"Warning! A player has left the game." (a falling two-tone chime) and
+mp_player_joined.wav "A player has joined the game." (a rising one), each
+chime then the voice through a loudspeaker-like filter.
 
 The voice is Piper (pip install piper-tts scipy) with en_GB-cori-high from
 https://huggingface.co/rhasspy/piper-voices (trained on public domain
-LibriVox recordings). Usage: make_announcement.py OUT.wav en_GB-cori-high.onnx
+LibriVox recordings).
+Usage: make_announcement.py OUT.wav en_GB-cori-high.onnx [left|joined]
 """
 import io
 import sys
@@ -17,14 +19,15 @@ from piper import PiperVoice
 
 out = sys.argv[1]
 voice = PiperVoice.load(sys.argv[2])
+kind = sys.argv[3] if len(sys.argv) > 3 else "left"
+TEXT = {"left": "Warning! A player has left the game.", "joined": "A player has joined the game."}[kind]
 buf = io.BytesIO()
 with wave.open(buf, "wb") as w:
     try:
         from piper import SynthesisConfig
-        voice.synthesize_wav("Warning! A player has left the game.", w,
-                             syn_config=SynthesisConfig(length_scale=1.08, noise_scale=0.6))
+        voice.synthesize_wav(TEXT, w, syn_config=SynthesisConfig(length_scale=1.08, noise_scale=0.6))
     except ImportError:
-        voice.synthesize_wav("Warning! A player has left the game.", w)
+        voice.synthesize_wav(TEXT, w)
 buf.seek(0)
 with wave.open(buf) as w:
     sr = w.getframerate()
@@ -52,7 +55,8 @@ def tone(f, dur):
     env = np.exp(-t * 3.2) * np.minimum(1, t * 400)
     s = sum(amp * np.sin(2 * np.pi * f * k * t) for k, amp in ((1, 1), (2, 0.35), (3, 0.12), (4.2, 0.06)))
     return s * env
-chime = np.concatenate([tone(784, 0.42), tone(622, 0.9)])
+# (Down for a player who left, up for one who joined.)
+chime = np.concatenate([tone(784, 0.42), tone(622, 0.9)] if kind == "left" else [tone(622, 0.42), tone(784, 0.9)])
 chime = chime / np.max(np.abs(chime)) * 0.55
 gap = np.zeros(int(0.12 * SR))
 z = np.concatenate([np.zeros(int(0.03 * SR)), chime, gap, y * 0.9, np.zeros(int(0.1 * SR))])

@@ -134,7 +134,7 @@ Tests and tools (`scripts/multiplayer/` unless noted):
 | `setup_lua55_linux.sh` | Lua 5.5 build on Linux (to play with Windows builds) |
 | `run_s0_fingerprints.sh`, `compare_fingerprints.py` | Cross-platform determinism check |
 | `run_lobby_player.sh` | One scripted player against any server (tests across machines) |
-| `make_announcement.py` | Makes `CorsixTH/Sounds/mp_player_left.wav` (Piper text to speech, public domain voice, chime and loudspeaker filter) |
+| `make_announcement.py` | Makes `CorsixTH/Sounds/mp_player_left.wav` and `mp_player_joined.wav` (Piper text to speech, public domain voice, chime and loudspeaker filter) |
 | `lobby_probe.lua` with `MP_SHOT_DIR` | Saves screenshots (PNG) of the lobby views and of game moments (reserved outline, fax, trade window, `shot:<name>` in the UI script). They show graphics from the game data: never commit them |
 | `lobby_probe.lua`, `ingame_probe.lua`, `probe_builder.lua` | Scripted players |
 
