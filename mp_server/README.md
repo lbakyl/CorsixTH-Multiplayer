@@ -161,6 +161,19 @@ Environment variables only:
 | `DISCORD_WEBHOOK_URL`, `CORSIXTH_MP_SERVER_NAME` | The daily report to Discord (`python3 -m corsixth_mp.daily_report`), and the server's name in it |
 | `CORSIXTH_MP_STATS_DIR`, `CORSIXTH_MP_REPORT_TZ` | Where the games are noted for the report (default `/var/lib/corsixth` if it exists) and its time zone (default `Europe/Prague`) |
 
+In the test builds (`mp-test-...` releases from the `mp/team-hospitals`
+branch; not in the stable release `mp-stable-a03adfdc` yet) there are also:
+
+| Variable | What it does |
+|---|---|
+| `CORSIXTH_MP_EXPERTS` | The players hard bots learn to build from: their names in the game, any case, separated by commas (`Argus,Matroftt`). While one of them plays their own hospital, the referee saves the game every game year and when it ends; a job every night learns from the new saves (`python3 -m corsixth_mp.learn`). Needs `CORSIXTH_MP_LEARN_DIR` too. Default: none, no learning. `setup-referee-host.sh --experts "..."` sets it; see [`SERVER-SETUP.md`](../docs/multiplayer/SERVER-SETUP.md) section 10 |
+| `CORSIXTH_MP_LEARN_DIR` | The folder for that learning: the experts' saves, what was learnt from them (`learned.lua`, which the bots read) and a line per night's run (the daily report names it). `/var/lib/corsixth/learn` with `setup-referee-host.sh`. Default: none |
+| `CORSIXTH_MP_STAND_IN_DELAY` | Seconds after a person leaves a running game before a bot plays their hospital under their name, until somebody takes the place. Default `20` |
+| `CORSIXTH_MP_SILENT_DROP` | Seconds a person's connection may stay silent (no answer to the server's ping) before it counts as dropped. A dropped player who joins again under the same name gets their place back. `0`: never. Default `20` |
+| `CORSIXTH_MP_DROP_WAIT` | Seconds a game waits for the last person when their connection dropped (they did not quit), before the room closes. Default `300` |
+| `CORSIXTH_MP_EMPTY_WAIT` | Seconds a game is kept for somebody to come back once the last person quit, before the room closes. Default `0`: it closes at once |
+| `CORSIXTH_MP_KEEP_PLACES` | `0`: nobody can join a running game, a player who leaves gets no bot in their place, and a room closes once nobody plays (the behaviour before these test builds; some older test scripts need it). Default `1` |
+
 On a server set up with `setup-referee-host.sh`, the settings live in
 `/etc/corsixth-mp.env`, and the API key and the webhook in
 `/etc/corsixth-mp-secrets.env` (see [`SERVER-SETUP.md`](../docs/multiplayer/SERVER-SETUP.md)).
