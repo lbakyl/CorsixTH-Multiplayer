@@ -976,7 +976,7 @@ function MultiplayerLobby:_onLEFT(f)
   local session = TheApp and TheApp.mp_session
   if session and session.lobby == self then
     -- (replaced: somebody takes the place at once, Server._take_seat.)
-    session:removePeer(tonumber(f.peer), f.replaced == "1")
+    session:removePeer(tonumber(f.peer), f.replaced == "1", f.name)
     if f.replaced == "1" then return end
     -- (Not when the game is ending for everybody: that player's game only got
     -- there first.)
@@ -1137,7 +1137,7 @@ function MultiplayerLobby:_onRESUME(f)
     local world = session.world
     local hospital = world and world.hospitals[session.hospital_index or 0]
     if hospital and hospital.mp_player_away then
-      session:issue({kind = "player_away", seat = session.hospital_index, away = 0})
+      session:issue({kind = "player_away", seat = session.hospital_index, away = 0, name = self.name})
     end
   end
   -- Only a word from the adviser: the game goes on where it was.

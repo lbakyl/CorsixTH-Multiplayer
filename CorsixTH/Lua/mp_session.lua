@@ -218,7 +218,7 @@ end
 --! Stop waiting for a peer that left the game. Its commands already received
 --! are still applied: they are for steps nobody has run yet. (replaced:
 --! somebody takes its place at once; its hospital is not away.)
-function MultiplayerSession:removePeer(peer, replaced)
+function MultiplayerSession:removePeer(peer, replaced, name)
   self.peer_step[peer] = nil
   for _, fps in pairs(self.peer_fps) do fps[peer] = nil end
   local remaining = {}
@@ -228,7 +228,7 @@ function MultiplayerSession:removePeer(peer, replaced)
   self.peers = remaining
   self.log(string.format("peer %d left after step %d", peer, self.step))
   self:takeOverRooms(self.world, peer)
-  if not replaced then self:_markPlayerAway(peer) end
+  if not replaced then self:_markPlayerAway(peer, name) end
   -- The outline they were drawing goes with them.
   if self.remote_blueprints and self.remote_blueprints[peer] then self:showRemoteBlueprint(peer, nil) end
 end
@@ -258,7 +258,7 @@ end
 --! counting for the team's goals until they rejoin (World:checkIfGameWon),
 --! else the others could never win. The remaining player with the lowest
 --! number sends it as a command, so every peer marks it at the same step.
-function MultiplayerSession:_markPlayerAway(peer)
+function MultiplayerSession:_markPlayerAway(peer, name)
   local world = self.world
   if self.observer or not (world and world.mp_coop) then return end
   if world.mp_coop.competitive and not world.mp_coop.teams then return end
@@ -275,7 +275,11 @@ function MultiplayerSession:_markPlayerAway(peer)
   for _, p in ipairs(self.peers) do
     if p ~= peer and p ~= 0 and seats[p] == index then return end
   end
-  self:issue({kind = "player_away", seat = index, away = 1})
+  -- (The player's name for the notice: the hospital keeps the name it
+  -- started with, "BOT CLIVE" after Claude took Bot Clive's place and left.
+  -- Jan, 2026-11-13.)
+  name = name or (self.peer_name and self.peer_name(peer))
+  self:issue({kind = "player_away", seat = index, away = 1, name = name})
 end
 
 --! The relay server found differing fingerprints at `step`.
@@ -724,9 +728,18 @@ function MultiplayerSession.refuseOthers(window)
   end
 end
 
+--! Commands a peer sends for the game, not for its player (a room handed
+--! over, a hospital marked away): a refusal is only logged.
+MultiplayerSession.quiet_rejections = {room_takeover = true, player_away = true}
+
 --! Tell this player that one of their actions could not be done. Every peer
 --! turns it down alike; only the player who asked sees the notice.
 function MultiplayerSession:_tellRejected(cmd, why)
+  -- (Not the game's own housekeeping, sent for a player who left: nobody
+  -- asked for it. Jan, 2026-11-13: "That could not be done (nothing to take
+  -- over)" when a person took a bot's place and everybody loaded the
+  -- referee's game, where the bot's room was already gone.)
+  if MultiplayerSession.quiet_rejections[cmd.kind] then return end
   if cmd.kind == "place_object" then self:_returnObject(cmd) end
   if cmd.kind == "hire" and why == "no longer available" then self:_reopenHire(cmd.category) end
   local ui = self.world and self.world.ui
@@ -3320,8 +3333,10 @@ function handlers.player_away(world, cmd)
   hospital.mp_player_away = away or nil
   local S = _S.multiplayer_window
   if world.mp_coop.players > 1 and (not world.mp_coop.competitive or world.mp_coop.teams) then
+    -- {name}: the player who left or came back (older games: the hospital).
+    local who = cmd.name ~= nil and tostring(cmd.name) ~= "" and tostring(cmd.name) or hospital.name
     MultiplayerSession.tellOthers(world, hospital,
-        (away and S.player_away_note or S.player_back_note):format(hospital.name))
+        (away and S.player_away_note or S.player_back_note):format(who))
   end
   return true
 end
