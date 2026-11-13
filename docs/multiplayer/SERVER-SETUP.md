@@ -135,7 +135,7 @@ page: <https://github.com/lbakyl/CorsixTH-Multiplayer/releases>
 - **Test** releases are called `mp-test-<number>` (marked *Pre-release*). eu2
   runs the newest test one.
 
-Note the name of the release you want, for example `mp-stable-ee780da1`.
+Note the name of the release you want, for example `mp-stable-a03adfdc`.
 Your players download the same release for Windows, Mac or Linux.
 
 ## 5. Install the server
@@ -146,7 +146,7 @@ connect) with your own:
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/lbakyl/CorsixTH-Multiplayer/master/mp_server/deploy/setup-referee-host.sh
-sudo bash setup-referee-host.sh --release mp-stable-ee780da1 --data ~/themehos --motd "Welcome to my CorsixTH server"
+sudo bash setup-referee-host.sh --release mp-stable-a03adfdc --data ~/themehos --motd "Welcome to my CorsixTH server"
 ```
 
 Add `--port 47900` if you want another port than 47800 (then open that one in
@@ -159,7 +159,7 @@ and starts the server as a system service that also starts by itself after a
 reboot. It ends with:
 
 ```
-== Done: the server runs mp-stable-ee780da1 with the referee on port 47800
+== Done: the server runs mp-stable-a03adfdc with the referee on port 47800
 ```
 
 Once it says Done, you can delete your copy in `~/themehos` if you like
@@ -177,7 +177,7 @@ You should see these lines (the numbers differ):
 
 ```
 headless referee enabled: /opt/corsixth-mp/referee/.../game/corsix-th
-players must have build 8f59465a (mp-stable-ee780da1)
+players must have build 8f59465a (mp-stable-a03adfdc)
 players must have Theme Hospital data 899c66d0
 ```
 
@@ -252,6 +252,40 @@ sudo bash setup-referee-host.sh --release mp-stable-NEWNUMBER --motd "Welcome to
 - Keep the server updated (`sudo apt update && sudo apt upgrade`), log in
   with SSH keys only, and keep fail2ban on (step 2).
 - Without a referee, a lighter server without game files exists too (Docker,
-  `vps-guide.md`), but there a game that gets out of sync ends, a player who
-  left cannot come back, and there are no bots. The technical details of the
-  referee are in `referee.md`.
+  `vps-guide.md`, or plain Python on any computer), but there a game that gets
+  out of sync ends, a player who left cannot come back, and there are no bots.
+  The technical details of the referee are in `referee.md`.
+- **On a LAN without the internet:** the plain server runs on any computer on
+  your network, Windows included; see "Playing on a LAN" in
+  [`mp_server/README.md`](../../mp_server/README.md). This setup with the
+  referee works on a LAN too (a Linux x86-64 computer); it needs the internet
+  only while the script downloads the release.
+
+## 11. Optional: advice for the bots, and a daily report
+
+Both read their secrets from `/etc/corsixth-mp-secrets.env`, a file the script
+never writes. Make it yourself, readable only by root and the service:
+
+```bash
+sudo touch /etc/corsixth-mp-secrets.env
+sudo chown root:corsixth /etc/corsixth-mp-secrets.env
+sudo chmod 640 /etc/corsixth-mp-secrets.env
+sudo nano /etc/corsixth-mp-secrets.env
+```
+
+- **Advice for the bots:** normal and hard bots ask a language model
+  (Claude Haiku, through the Anthropic API) for a plan now and then, and use
+  it to answer players in the chat. Add a line `ANTHROPIC_API_KEY=...` with
+  your key. Optional in the same file: `CORSIXTH_MP_AI_MODEL` (default
+  `claude-haiku-5-5`) and `CORSIXTH_MP_AI_DAILY_USD`, the most it may cost a
+  day (default 3 dollars). Without a key, or over the budget, the bots play on
+  their own rules; easy bots never ask.
+- **Daily report to Discord** at 7:00 (Europe/Prague): yesterday's games, how
+  long, people and bots, and what the advice cost. Add a line
+  `DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...`. To name the
+  server in the report, add `--name myserver` when you run the script (step 5
+  or 7; default: the computer's name, and the script remembers it). Without
+  the webhook nothing is posted.
+
+Restart the service after changing the file:
+`sudo systemctl restart corsixth-mp` (this drops everybody who is playing).
