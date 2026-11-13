@@ -1918,6 +1918,8 @@ local NEAR_MAX_GAP = 8
 -- Spots for a room checked against its whole floor (Bot:roomKeepsFloor) in one
 -- search at most.
 local FLOOR_TRIES = 60
+-- Points off a room's spot for each tile of a one tile wide gap it leaves.
+local THIN_GAP = 4
 
 --! Where a player would put a w x h room (squares from `size` down to
 --! `min`, and one tile shorter): against the building's walls and the other
@@ -1997,17 +1999,22 @@ function Bot:layoutSpot(min, size, near, shapes)
           -- (Against walls and other rooms, and the size asked: the
           -- smallest only where nothing bigger fits snugly.)
           local score = w * h * 0.5
+          -- (A gap one tile wide beside it: nothing fits in it, and as a
+          -- corridor patients jam in it and no bench fits. Worse than a wall
+          -- touched is good, on the door's side too. Jan, 2026-11-13: Agnes
+          -- reached her rooms on the left through one narrow passage.)
           for tx = x, x + w - 1 do
             if solid(tx, y - 1) then score = score + 1.5 end
-            -- (A one tile gap above: nothing will ever fit in it.)
-            if f(tx, y - 1) and solid(tx, y - 2) then score = score - 1.5 end
+            if f(tx, y - 1) and solid(tx, y - 2) then score = score - THIN_GAP end
+            if solid(tx, y + h) then score = score + 1.5 end
+            if f(tx, y + h) and solid(tx, y + h + 1) then score = score - THIN_GAP end
             if side == "south" and f(tx, y + h + 1) then score = score + 0.3 end
           end
           for ty = y, y + h - 1 do
             if solid(x - 1, ty) then score = score + 1.5 end
             if solid(x + w, ty) then score = score + 1.5 end
-            if f(x - 1, ty) and solid(x - 2, ty) then score = score - 1.5 end
-            if f(x + w, ty) and solid(x + w + 1, ty) then score = score - 1.5 end
+            if f(x - 1, ty) and solid(x - 2, ty) then score = score - THIN_GAP end
+            if f(x + w, ty) and solid(x + w + 1, ty) then score = score - THIN_GAP end
           end
           score = score - 0.12 * (math.abs(x + w / 2 - ax) + math.abs(y + h / 2 - ay))
           if near then
@@ -2788,23 +2795,71 @@ function Bot:buildNextRoom()
   return nil, "done"
 end
 
---! Buy the cheapest plot of land it may buy (on its side of the map) if it
---! can afford it and still keep money for a room.
---! The cheapest plot this hospital may buy and its price, or nil. On its own
---! side of the map; with none left there and its land filling up (or a room
---! that did not fit in the last month), on another's side too (that goes to
---! auction).
+-- Each plot's bounding box {x1, y1, x2, y2}, per map (the plots never change).
+local plot_boxes = setmetatable({}, {__mode = "k"})
+local function plot_box(th, plot)
+  local boxes = plot_boxes[th]
+  if not boxes then
+    boxes = {}
+    plot_boxes[th] = boxes
+  end
+  local b = boxes[plot]
+  if not b then
+    local t = MultiplayerSession.plotTiles(th, plot)
+    b = {math.huge, math.huge, -math.huge, -math.huge}
+    for i = 1, #t, 2 do
+      b[1], b[2] = math.min(b[1], t[i]), math.min(b[2], t[i + 1])
+      b[3], b[4] = math.max(b[3], t[i]), math.max(b[4], t[i + 1])
+    end
+    boxes[plot] = b
+  end
+  return b
+end
+
+--! How far a plot is from this hospital's land, in tiles (0: it touches it):
+--! from the nearest of its tiles to the nearest plot the hospital owns.
+function Bot:plotDistance(plot)
+  local th = self.world.map.th
+  local me = self.world.ui.hospital:getPlayerIndex()
+  local owned = {}
+  for p = 1, th:getPlotCount() do
+    if th:getPlotOwner(p) == me then owned[#owned + 1] = plot_box(th, p) end
+  end
+  if #owned == 0 then return 0 end
+  local t = MultiplayerSession.plotTiles(th, plot)
+  local best = math.huge
+  for i = 1, #t, 2 do
+    local x, y = t[i], t[i + 1]
+    for _, b in ipairs(owned) do
+      local d = math.max(0, b[1] - x, x - b[3]) + math.max(0, b[2] - y, y - b[4])
+      if d < best then best = d end
+    end
+    if best <= 1 then break end
+  end
+  return best
+end
+
+--! The plot this hospital would buy next and its price, or nil: the
+--! nearest to its land (so the hospital stays in one piece; Jan, 2026-11-13:
+--! Clive bought the cheapest, far across the map), the cheaper of two as
+--! near. On its own side of the map; with none left there and its land
+--! filling up (or a room that did not fit in the last month), on another's
+--! side too (that goes to auction). (The name is from when it was the
+--! cheapest.)
 function Bot:cheapestPlot()
   local world = self.world
   local th, hospital = world.map.th, world.ui.hospital
   local me = world:getHospitalIndex(hospital)
   local function cheapest(anywhere)
-    local best, best_price
+    local best, best_price, best_d
     for plot = 1, th:getPlotCount() do
       local side = world.mp_coop and MultiplayerSession.plotSide(world, plot)
       if (anywhere or not side or side == me) and th:isParcelPurchasable(plot, hospital:getPlayerIndex()) then
         local price = world.map:getParcelPrice(plot)
-        if not best or price < best_price then best, best_price = plot, price end
+        local d = self:plotDistance(plot)
+        if not best or d < best_d or (d == best_d and price < best_price) then
+          best, best_price, best_d = plot, price, d
+        end
       end
     end
     return best, best_price
@@ -2881,7 +2936,7 @@ function Bot:buyPlot()
     log(string.format("plot %d costs $%d: not enough money yet", best, best_price))
     return false
   end
-  log(string.format("buying plot %d for $%d", best, best_price))
+  log(string.format("buying plot %d for $%d (%d tiles from our land)", best, best_price, self:plotDistance(best)))
   TheApp.mp_session:issue({kind = "buy_plot", plot = best})
   -- (Bought for rooms to come: kept if an ally asks for it soon, Manager:plotRequest.)
   if self.manager then self.manager:notePlotBought(best) end
@@ -3056,13 +3111,17 @@ function Bot:buyCorridor(object_id, near_x, near_y)
     end
     return out
   end
+  -- (With no such spot free near the door, a bench any way round, as long as
+  -- the floor stays in one piece: better than patients standing. Jan,
+  -- 2026-11-13: Agnes found no place for a bench 28 times.)
+  local loose = false
   local function fits(tx, ty)
     if next(given) and given[world.map.th:getCellFlags(tx, ty).parcelId] then return false end
     for _, e in ipairs(apart) do
       if math.abs(e.tile_x - tx) <= DRINKS_APART and math.abs(e.tile_y - ty) <= DRINKS_APART then return false end
     end
     if world:anyHumanoidObscuringArea(tx, ty) then return false end
-    for _, facing in ipairs(object_id == "bench" and back_to_wall(tx, ty) or facings) do
+    for _, facing in ipairs(object_id == "bench" and not loose and back_to_wall(tx, ty) or facings) do
       place:setOrientation(facing)
       place:setBlueprintCell(tx, ty)
       if place.object_blueprint_good and keeps_floor(tx, ty, facing) then return true end
@@ -3091,7 +3150,7 @@ function Bot:buyCorridor(object_id, near_x, near_y)
       end
     end
   end
-  if not x and object_id ~= "reception_desk" then
+  local function nearest()
     -- Nearest first, in a fixed order.
     for r = 0, max_r do
       for dy = -r, r do
@@ -3106,6 +3165,12 @@ function Bot:buyCorridor(object_id, near_x, near_y)
       end
       if x then break end
     end
+  end
+  if not x and object_id ~= "reception_desk" then nearest() end
+  if not x and object_id == "bench" then
+    loose = true
+    nearest()
+    if x then log("no spot with its back to a wall: a bench facing another way") end
   end
   if not x and not near_x then
     -- Tiles with free floor all around (so nothing blocks a corridor).

@@ -87,6 +87,10 @@ local GIVE_DAYS, ASK_DAYS, ASK_DAYS_EMERGENCY = 20, 90, 7
 -- before an allied bot lends one although the ally could hire (Jan, 2026-11-07:
 -- no bot ever asked).
 local LACK_DAYS, LACK_EMERGENCY_DAYS = 10, 3
+-- The most benches by a room's door and by a reception desk (as many as
+-- the queue needs, M:projects). (Were 4 and 6: Jan, 2026-11-13, seven
+-- patients waited for Bertie's operating theatre, four of them standing.)
+local BENCHES_AT_DOOR, BENCHES_AT_DESK = 8, 10
 -- Money left after a plot bought for the hospital's value (not for room).
 local VALUE_LAND_SPARE = 15000
 -- Game days between warnings that an opponent can win (4 months).
@@ -266,6 +270,7 @@ function M.new(bot, ctx)
   self.left = {}           -- why patients left: cured, kicked, fed_up, over_priced
   self.lost = {}           -- disease id -> patients who left uncured
   self.no_space = {}       -- project key -> last game day it found no floor for it
+  self.no_space_tries = {} -- project key -> times it found no floor (since the last land)
   self.tricks = {}         -- kind of dirty trick -> game day noticed (from the adviser)
   self.shared = {}         -- ally hospital index -> {item key -> game day offered}
   self.gave = {}           -- "<ally index>:<category>" -> game day a specialist was sent
@@ -337,7 +342,7 @@ function M:assess()
       s.queue[id] = (s.queue[id] or 0) + (q and q:reportedSize() or 0)
       if r.door and r.door.tile_x and not NO_WAITING[id] then
         s.doors[#s.doors + 1] = {key = "room" .. r.id, x = r.door.tile_x, y = r.door.tile_y,
-            queue = q and q:reportedSize() or 0, max = 4}
+            queue = q and q:reportedSize() or 0, max = BENCHES_AT_DOOR}
       end
       local crit = r.getRequiredStaffCriteria and r:getRequiredStaffCriteria()
       if crit and next(crit) and not r:testStaffCriteria(crit) then
@@ -437,7 +442,7 @@ function M:assess()
     s.reception_queue = s.reception_queue + q
     if desk.tile_x then
       s.doors[#s.doors + 1] = {key = "desk" .. desk.tile_x .. "," .. desk.tile_y, x = desk.tile_x, y = desk.tile_y,
-          queue = q, max = 6}
+          queue = q, max = BENCHES_AT_DESK}
     end
   end
   local comfort = {} -- corridor benches, plants, radiators, drinks machines
@@ -1421,11 +1426,18 @@ end
 --!param fill (number) optional: how full its land is (M:landFill); both
 --! as they would be without a plot it is asked for (M:plotRequest)
 function M:landWanted(s, free_floor, fill)
-  local wanted = 0
-  for _, day in pairs(self.no_space) do
-    if s.day - day <= 30 then wanted = wanted + 1 end
+  local wanted, again = 0, false
+  for key, day in pairs(self.no_space) do
+    if s.day - day <= 30 then
+      wanted = wanted + 1
+      -- (The same room not fitting three times: the free floor is in bits
+      -- too small for it. Jan, 2026-11-13: Bertie's second operating theatre
+      -- did not fit for weeks, seven patients queued for the first, and it
+      -- bought no land: 120 tiles of floor were free, here and there.)
+      if ((self.no_space_tries or {})[key] or 0) >= 3 then again = true end
+    end
   end
-  if wanted < 3 and wanted > 0 and (free_floor or self.bot:freeFloor()) >= 120 then wanted = 0 end
+  if wanted < 3 and wanted > 0 and not again and (free_floor or self.bot:freeFloor()) >= 120 then wanted = 0 end
   if (fill or self:landFill(s)) >= MultiplayerSession.BOT_LAND_FILL then wanted = math.max(wanted, 2) end
   if wanted == 0 then return nil end
   return wanted
@@ -1489,8 +1501,9 @@ function M:doProject(s)
       if ok then
         self:note(string.format("day %d: %s (score %.1f, $%d)", s.day, p.key, p.score, math.floor(s.balance)))
         self:noteSpent(p.key, p.cost)
-        if p.key == "buy:land" or p.key == "edit:shrink" then self.no_space = {} end
+        if p.key == "buy:land" or p.key == "edit:shrink" then self.no_space, self.no_space_tries = {}, {} end
         self.no_space[p.key] = nil
+        if self.no_space_tries then self.no_space_tries[p.key] = nil end
         self.boost[p.key] = nil
         self.boost[(p.key:gsub("@.*$", ""))] = nil -- (buy:bench@desk... was the plan's buy:bench)
         if self.wishes[p.key] then self:tellWisher(self.wishes[p.key], "wish_done", p.key) end
@@ -1512,6 +1525,8 @@ function M:doProject(s)
           self:tellWisher(w, "wish_no_space", p.key)
         end
         self.no_space[p.key] = s.day
+        self.no_space_tries = self.no_space_tries or {}
+        self.no_space_tries[p.key] = (self.no_space_tries[p.key] or 0) + 1
         self.failed[p.key] = s.day + 5
         self.next_project = bot:later(2)
         return
