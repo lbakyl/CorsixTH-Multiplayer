@@ -1100,6 +1100,31 @@ function M:projects(s)
       end
     end
   end
+  -- Rooms it found no floor for in the last month wait for land while land
+  -- can be bought: the land goes first, and the rest (benches, staff) goes
+  -- on meanwhile. (Jan, 2026-11-13: Bertie tried its operating theatre, ward
+  -- and psychiatry room in turn, every second day for a month, "no space"
+  -- each time; patients queued with no benches, a doctor short, and the
+  -- land, 28 points to the rooms' 55 and more, never came.)
+  local land
+  for _, p in ipairs(list) do
+    if p.key == "buy:land" then land = p end
+  end
+  if land then
+    local kept, top = {}, nil
+    for _, p in ipairs(list) do
+      local day = self.no_space[p.key]
+      if day and s.day - day <= 30 then
+        top = math.max(top or 0, p.score)
+      else
+        kept[#kept + 1] = p
+      end
+    end
+    if top then
+      land.score = math.max(land.score, top + 1)
+      list = kept
+    end
+  end
   table.sort(list, function(a, b) return a.score > b.score end)
   return list
 end
