@@ -33,7 +33,9 @@ local top_frame_height = 22
 local middle_frame = 358
 local middle_frame_height = 11
 local bottom_frame = 359
-local text_width = 153
+-- (153 ran 2 px past the panel's inner frame on the right: a full line
+-- touched it. 145 leaves 6 px on both sides. Jan, 2026-11-13.)
+local text_width = 145
 
 --! Initialise the Confirmation Dialog
 --!param ui The UI

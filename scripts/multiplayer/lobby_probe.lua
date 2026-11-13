@@ -1717,6 +1717,39 @@ local function run()
                 session.step, tostring(pick), table.concat(list, " "), hint and plain_text(hint) or "none"))
             shot("townmap-" .. entry.arg)
           end
+        elseif a == "townmapclick" then
+          -- townmapclick:auction / :plain: with the town map open (and a
+          -- townmaphover before it, which picked the plot), a click on that
+          -- plot: the question that comes up (Jan, 2026-11-13), logged and
+          -- pictured. confirmok / confirmcancel answer it.
+          local map = world.ui:getWindow(UITownMap)
+          local plot = map and map.hover_plot
+          local text
+          if plot then
+            local th = world.map.th
+            local width, height = th:size()
+            local s, tp = TheApp.gfx:getUIScale(), map:tilePixels()
+            local cx, cy
+            for ty = 1, height do
+              for tx = 1, width do
+                if not cx and th:getCellFlags(tx, ty).parcelId == plot then cx, cy = tx - 1, ty - 1 end
+              end
+            end
+            if cx then
+              map:onMouseUp("left", (227 + cx * tp + tp / 2) * s, (25 + cy * tp + tp / 2) * s)
+            end
+            local dialog = world.ui:getWindow(UIConfirmDialog)
+            text = dialog and dialog.text
+          end
+          log(string.format("UI: townmapclick %s at step %d: plot %s, question %s", entry.arg, session.step,
+              tostring(plot), text and plain_text(text) or "none"))
+          shot("townmapclick-" .. entry.arg)
+        elseif a == "confirmok" or a == "confirmcancel" then
+          local dialog = world.ui:getWindow(UIConfirmDialog)
+          if dialog then
+            if a == "confirmok" then dialog:ok() else dialog:cancel() end
+          end
+          log(string.format("UI: %s at step %d: question was %s", a, session.step, tostring(dialog ~= nil)))
         elseif a == "auctionmap" or a == "auctionmapclose" then
           -- The town map button on the auction screen (a picture of the map),
           -- then the map closed again: the auction screen comes back.

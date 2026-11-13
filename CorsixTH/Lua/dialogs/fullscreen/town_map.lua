@@ -366,20 +366,43 @@ function UITownMap:drawAuctionBadges(canvas, x, y, s)
 end
 
 --! The line under the map for the plot under the mouse: whether it goes to
---! auction (and who else may bid) or is bought at once; nil for none.
+--! auction or is bought at once; nil for none. (Jan, 2026-11-13: it names
+--! nobody; with many players the list was long and told little.)
 function UITownMap:plotHint()
   local plot = self.hover_plot
   local world = self.ui.hospital.world
   if not plot or plot == 0 or not (world.mp_coop and world.mp_coop.players > 1) then return nil end
   local S = _S.multiplayer_window
-  local names = self:auctionPlots()[plot]
-  if names then return S.plot_auction_hint:format(table.concat(names, ", ")) end
+  if self:auctionPlots()[plot] then return S.plot_auction_hint end
   local session = TheApp.mp_session
   if session and not session.observer and not world.free_build_mode and
       world.map.th:isParcelPurchasable(plot, self.ui.hospital:getPlayerIndex()) then
     return S.plot_buy_hint
   end
   return nil
+end
+
+--! Multiplayer: the question before a plot goes to auction or is bought
+--! (Jan, 2026-11-13). The command decides again in everybody's game; a
+--! plot this player cannot buy gets no question, the command's refusal
+--! says why.
+function UITownMap:askToBuy(plot)
+  local ui = self.ui
+  local world = ui.hospital.world
+  local th = world.map.th
+  local buy = --[[persistable:town_map_buy_plot]] function()
+    TheApp.mp_session:issue({kind = "buy_plot", plot = plot})
+  end
+  if world.free_build_mode or world.mp_auction or
+      not th:isParcelPurchasable(plot, ui.hospital:getPlayerIndex()) then
+    buy()
+    return
+  end
+  self.peek = self.peek or {}
+  local bidders = MultiplayerSession.auctionBidders(world, plot, ui.hospital, self.peek)
+  local S = _S.multiplayer_window
+  local question = bidders and #bidders > 1 and S.plot_auction_question or S.plot_buy_question
+  ui:addWindow(UIConfirmDialog(ui, false, question:format(world.map:getParcelPrice(plot)), buy))
 end
 
 --! The question before a plot is sold back (the sale itself is a command,
@@ -441,10 +464,11 @@ function UITownMap:onMouseUp(button, x, y)
     if 0 <= tx and tx < width and 0 <= ty and ty < height then
       local plot = map:getCellFlags(tx + 1, ty + 1, flag_cache).parcelId
       -- (Multiplayer: the command buys it, or starts an auction when
-      -- another player may want it, MultiplayerSession.auctionBidders.)
+      -- another player may want it, MultiplayerSession.auctionBidders;
+      -- after a question.)
       if plot ~= 0 and MultiplayerSession.actionsAreCommands() then
         -- (The till sounds when every peer has bought it: MultiplayerSession.success_sounds.)
-        TheApp.mp_session:issue({kind = "buy_plot", plot = plot})
+        self:askToBuy(plot)
       elseif plot ~= 0 then
         if self.ui.hospital:purchasePlot(plot) then
           self.ui:playSound("cashreg.wav")

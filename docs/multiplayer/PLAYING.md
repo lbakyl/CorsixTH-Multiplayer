@@ -249,9 +249,13 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   and the game stands still until the auction ends. The town map shows
   this before you click: a plot that would go to auction has gold
   stripes over its red and a gavel badge in its top right corner (plain
-  red: you buy it at once), and the line under the map says,
-  for the plot under the mouse, who else could bid or that you buy it
-  straight away. It starts at the
+  red: you buy it at once), and the line under the map says, for the
+  plot under the mouse, whether it goes to auction or you buy it
+  straight away. A click asks first: "Do you really want to start an
+  auction for this plot?" or "Do you really want to buy this plot for
+  $X?". At most four hospitals bid: the one that asks and the three
+  whose hospitals are nearest the plot; when only bots bid, they settle
+  it among themselves at once (the adviser says who won). It starts at the
   plot's price, with you in the lead. The players whose side it is on or
   whose land borders it may bid: the tick bids the sum next to it (10%
   of the price more each time), the cross drops out. The others can only
