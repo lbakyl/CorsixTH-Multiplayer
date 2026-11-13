@@ -250,13 +250,13 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   watch, and close the screen with the cross. (If the host chose **Every
   plot** in the game options, every plot goes to auction, and every
   hospital that may buy it bids.) The gavel sinks while
-  nobody bids and every bid raises it again; when nobody bids for 8
-  seconds (15 for the first bid) it is down: "going once", "going twice",
+  nobody bids and every bid raises it again; when nobody bids for 10
+  seconds it is down: "going once", "going twice",
   sold to the highest bid. The seconds left show in big digits next to the
   gavel, red for the last three. The small map shows the plot for
   sale in red, the other plots still for sale in sand, and every plot's
   number (as on the town map) with a thin line between the plots; who
-  leads has a yellow frame round their bar; **Town map
+  leads has a thick yellow frame round their bar; **Town map
   (F4)** opens the town map, and the auction comes back when you close it. Bots bid too, up to what the plot is worth to
   them: a little over the price while they have room, up to two and a half
   times the price once their rooms fill most of their floor. They keep
@@ -294,8 +294,9 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   players are grey); private ones have a purple mark at the start, team
   ones a green mark. Players
   on an older server get private lines as public ones.
-- **Asking for money (co-op):** the bank manager (click your balance at the
-  bottom), **Ask a player**: set the amount ($500 to $50,000) and **Ask**.
+- **Asking for money (allies):** **MULTIPLAYER**, **TRADE WITH OTHER
+  PLAYERS**, under sending money: set the amount on the slider next to
+  **Request** ($1,000 to $50,000) and click **Request $X**.
   The other player gets a coin icon; its fax shows the amount and your
   balance, and they pay or decline. No answer within 20 game days counts
   as no.

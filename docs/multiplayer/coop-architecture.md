@@ -131,7 +131,8 @@ for that, the rules new code must follow, and what is still missing.
 - **Trades beyond money, staff, patients and research**: loans between
   players, renting rooms.
 - **Money requests** (done on `mp/chat-money-referee`): `ask_money` {to,
-  amount} from the bank manager ("Ask a player", $500 to $50,000); a
+  amount} from the trade window ("Request $X", under sending money; it was
+  the bank manager's "Ask a player" until 2026-11-13), $500 to $50,000; a
   message of type `mp_money` (coin icon) answered in the fax window; paying
   is checked again when answered (`resolve_money`).
 - **Research sharing** (done on `mp/research-sharing`): `offer_research`

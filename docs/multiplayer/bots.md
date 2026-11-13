@@ -346,8 +346,8 @@ environment):
   (`give_money`), the line says only what it did, never what the model
   thought. In the team chat (which every bot of the team gets) only the bot
   named answers, or else the richest allied bot. `MP_BOT_GIVE_LIMITS=keep:max`
-  sets other limits in tests. (A request through the bank manager's **Ask a
-  player** is a fax: the bot pays it in full while it keeps $3,000, see Offers.)
+  sets other limits in tests. (A request through the trade window's
+  **Request $X** is a fax: the bot pays it in full while it keeps $3,000, see Offers.)
 - **A plot on request** (Jan, 2026-11-08): an ally may ask a bot in the chat
   for one of its plots ("give me plot 7", "can I have your plot 7?", "sell me
   plot 7", "can you spare a plot?"; a few Czech words too, or the advisor's

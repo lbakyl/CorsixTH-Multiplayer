@@ -259,7 +259,7 @@ run_probe yuki MP_ROLE=join MP_ROOM=refer MP_STEPS=1100 \
 # a bot does) with its second swing door on the room's top corner: refused
 # in both games (that door was never made, and its pair broke the game).
 run_probe kim MP_ROLE=host MP_ROOM=research MP_COOP=1 MP_LEVEL=5 MP_STEPS=900 \
-  MP_UI_SCRIPT="20:openhospital;100:learn;104:learn;108:learn;112:learn;116:learn;120:learn;124:learn;128:learn;150:shareresearch:5000;190:askmoney:7500;200:chat:0:hello everyone;230:chat:2:just for you;500:learn;540:shareresearch:0;600:askmoney:2000;800:cornerdoor:operating_theatre" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;100:learn;104:learn;108:learn;112:learn;116:learn;120:learn;124:learn;128:learn;150:shareresearch:5000;190:askmoney:7000;200:chat:0:hello everyone;230:chat:2:just for you;500:learn;540:shareresearch:0;600:askmoney:2000;800:cornerdoor:operating_theatre" & pids+=($!)
 sleep 1
 run_probe lea MP_ROLE=join MP_ROOM=research MP_STEPS=900 \
   MP_UI_SCRIPT="30:openhospital;250:answermoney:pay;300:answerresearch:accept;650:answermoney:decline;700:answerresearch:decline" & pids+=($!)
@@ -642,7 +642,7 @@ okres = (result('kim').startswith('IN SYNC through step 900') and result('lea').
          and paid.group(2) == '5000'
          and 'UI: declined the research offer' in ll and know_k == know_l and len(r1.split(',')) == len(r2.split(',')) + 1
          and 'chat seen: kim: hello everyone | kim (to you): just for you [private]' in ll
-         and 'money request of hospital 1 to hospital 2: paid $7500' in kl
+         and 'money request of hospital 1 to hospital 2: paid $7000' in kl
          and 'money request of hospital 1 to hospital 2: declined' in kl)
 # The operating theatre with its second door on the top corner: refused in both.
 corner = [x for x in ck if 'build_room' in x]
@@ -653,7 +653,7 @@ print(f"19. Research sharing:       {result('kim')}; offers {kinds_k.count('offe
       f"accepted {paid.group(1) + ' items for $' + paid.group(2) if paid else 'no'}, one declined; "
       f"same knowledge on both: {know_k == know_l}; hospital 1 knows {len(r1.split(','))}, hospital 2 {len(r2.split(','))}; "
       f"chat to all and private: {'kim (to you): just for you [private]' in ll}; money asked, paid and declined: "
-      f"{'paid $7500' in kl and 'hospital 2: declined' in kl}; second swing door on the corner refused: {corner_ok} {corner}")
+      f"{'paid $7000' in kl and 'hospital 2: declined' in kl}; second swing door on the corner refused: {corner_ok} {corner}")
 fail |= not okres
 if not okres: bad.append("okres")
 

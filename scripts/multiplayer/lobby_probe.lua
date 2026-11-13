@@ -2963,22 +2963,26 @@ local function run()
         elseif a == "learn" then
           session:issue({kind = "probe_learn"})
         elseif a == "askmoney" then
-          -- Bank manager, "Ask a player": the amount, Ask.
-          local bank = UIBankManager(world.ui)
-          world.ui:addWindow(bank)
-          shot("bank-manager")
-          bank:askForMoney()
-          local w = world.ui:getWindow(UIMultiplayerAskMoney)
-          if w then
-            w:setAmount(tonumber(entry.arg) or 5000)
-            shot("ask-window")
-            log(string.format("UI: asked for $%d at step %d", w.amount, session.step))
-            w:ask()
-            w:close()
+          -- The trade window: the request slider set to <amount> (the most
+          -- it offers up to that), Request $X. (It was the bank manager's
+          -- "Ask a player" until 2026-11-13.)
+          local trade = UIMultiplayerTrade(world.ui)
+          world.ui:addWindow(trade)
+          if trade.request_bar then
+            local want = tonumber(entry.arg) or 5000
+            local index = 1
+            for k, amount in ipairs(trade.request_amounts) do if amount <= want then index = k end end
+            trade.request_bar:setRange(trade.request_bar.min_value, trade.request_bar.max_value,
+                trade.request_bar.page_size, index)
+            trade:setRequest(index)
+            shot("trade-request")
+            log(string.format("UI: asked for $%d at step %d", trade.request, session.step))
+            trade:requestMoney()
+            shot("trade-requested")
           else
-            log("UI: no ask window")
+            log("UI: no request row in the trade window")
           end
-          bank:close()
+          trade:close()
         elseif a == "answermoney" then
           local icon
           for _, candidate in ipairs(world.ui.bottom_panel:allMessageIcons()) do

@@ -472,6 +472,7 @@ multiplayer_window = {
   -- Co-op trades
   trade_caption = "Trade with %s",
   trade_send_money = "Send $%d",
+  trade_request_money = "Request $%d",
   trade_money_confirm = "Do you really want to send $%d to %s?",
   trade_money_short = "You do not have that much money.",
   trade_money_allies_only = "Money goes only to allies.",

@@ -58,6 +58,7 @@ local FOR_SALE_COLOUR = {196, 172, 112} -- (plots nobody owns yet: Argus, 2026-1
 -- The leader (Jan: the box under the map looked like a mistake, the same
 -- name twice): their bar framed, "Winning bidder" under the box.
 local BAR_X, BAR_W, BAR_H = 12, 285, 47 -- a bidder bar (from ROW_Y)
+local LEADER_FRAME = 4 -- the yellow frame round the leader's bar, pixels
 local WIN_Y, WIN_W = 434, 260 -- the caption under the leader's box (one row in all 22 languages)
 local CLOCK_W, CLOCK_H = 70, 38
 local CLOCK_X, CLOCK_Y = BID_X + math.floor((BID_W - CLOCK_W) / 2), 434
@@ -465,12 +466,16 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
       local ry = ROW_Y[row]
       if not ry then break end
       if auction and index == auction.leader then
+        -- (Four pixels wide, outside the bar: Argus, 2026-11-13, the two
+        -- before were easy to miss.)
         local frame = canvas:mapRGB(250, 220, 90)
-        local fx, fy, fw, fh = x + (BAR_X - 2) * s, y + (ry - 3) * s, (BAR_W + 4) * s, (BAR_H + 4) * s
-        canvas:drawRect(frame, fx, fy, fw, 2 * s)
-        canvas:drawRect(frame, fx, fy + fh - 2 * s, fw, 2 * s)
-        canvas:drawRect(frame, fx, fy, 2 * s, fh)
-        canvas:drawRect(frame, fx + fw - 2 * s, fy, 2 * s, fh)
+        local t = LEADER_FRAME
+        local fx, fy = x + (BAR_X - t) * s, y + (ry - 1 - t) * s
+        local fw, fh = (BAR_W + 2 * t) * s, (BAR_H + 2 * t) * s
+        canvas:drawRect(frame, fx, fy, fw, t * s)
+        canvas:drawRect(frame, fx, fy + fh - t * s, fw, t * s)
+        canvas:drawRect(frame, fx, fy, t * s, fh)
+        canvas:drawRect(frame, fx + fw - t * s, fy, t * s, fh)
       end
       local hospital = world.hospitals[index]
       name_text(hospital and hospital.name or "?", x + NAME_X * s, y + ry * s, NAME_W * s, ROW_H * s)

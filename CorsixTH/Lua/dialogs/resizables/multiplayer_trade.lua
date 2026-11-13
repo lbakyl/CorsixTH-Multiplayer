@@ -50,16 +50,20 @@ local AMOUNTS = {1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 12
     30000, 40000, 50000, 75000, 100000}
 -- The room for the reputation rows: a line of text, the points, the button.
 local REP_HEIGHT = 94
--- The window but for the staff rows (and the reputation rows).
+-- The row to ask an ally for money, under the one to send it (Argus,
+-- 2026-11-13: in the trade window, not the bank manager).
+local REQUEST_HEIGHT = 36
+-- The window but for the staff rows (and the reputation and request rows).
 local FIXED_HEIGHT = 85 + 36 + 34 + 30 + 10 + 30 + 10
 
---! How many staff rows fit on the screen, with the reputation rows or not.
+--! How many staff rows fit on the screen, with the ally's rows or not.
 local function staff_rows(vouch)
   local video = TheApp and TheApp.video
   local gfx = TheApp and TheApp.gfx
   if not (video and gfx and video.getRenderSize) then return MAX_STAFF_ROWS end
   local _, screen_h = video:getRenderSize()
-  local free = math.floor(screen_h / gfx:getUIScale()) - 20 - FIXED_HEIGHT - (vouch and REP_HEIGHT or 0)
+  local free = math.floor(screen_h / gfx:getUIScale()) - 20 - FIXED_HEIGHT -
+      (vouch and REP_HEIGHT + REQUEST_HEIGHT or 0)
   return math.max(MIN_STAFF_ROWS, math.min(MAX_STAFF_ROWS, math.floor(free / 25)))
 end
 
@@ -74,7 +78,7 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
   local vouch = self.target and not world:mpRivals(self.hospital, self.target)
   local rows = staff_rows(vouch)
   self.staff_rows = rows
-  local height = FIXED_HEIGHT + rows * 25 + (vouch and REP_HEIGHT or 0)
+  local height = FIXED_HEIGHT + rows * 25 + (vouch and REP_HEIGHT + REQUEST_HEIGHT or 0)
   self:UIResizable(ui, WIDTH, height, col.bg)
   self.esc_closes = true
   self.resizable = false
@@ -115,6 +119,26 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
     self.money_button = self:addBevelPanel(220, 40, WIDTH - 240, 30, col.button)
     self.money_button:makeButton(0, 0, WIDTH - 240, 30, nil, self.askSendMoney)
     self:setMoney(1)
+    -- Ask them for money: the button left, its slider right (the other
+    -- player pays or declines in a fax; MultiplayerSession ask_money).
+    self.request_amounts = {}
+    for _, amount in ipairs(AMOUNTS) do
+      if amount >= MultiplayerSession.ASK_MIN and amount <= MultiplayerSession.ASK_MAX then
+        self.request_amounts[#self.request_amounts + 1] = amount
+      end
+    end
+    local rn = #self.request_amounts
+    local rpage = math.max(1, math.ceil(rn / 9))
+    self.request_button = self:addBevelPanel(20, 76, 160, 30, col.button)
+    self.request_button:makeButton(0, 0, 160, 30, nil, self.requestMoney)
+    local rbar = self:addBevelPanel(190, 81, WIDTH - 210, 20, col.caption)
+    rbar.lowered = true
+    self.request_bar = rbar:makeScrollbar(col.button,
+        --[[persistable:multiplayer_trade_request_slider]] function() self:setRequest(self.request_bar.value) end,
+        1, rn + rpage - 1, rpage, 1)
+    self.request_bar.direction = "x"
+    self.request_bar:setRange(1, rn + rpage - 1, rpage, 1)
+    self:setRequest(1)
   else
     self:addBevelPanel(20, 40, WIDTH - 40, 30, col.caption):setLabel(S.trade_money_allies_only).lowered = true
   end
@@ -135,16 +159,17 @@ function UIMultiplayerTrade:UIMultiplayerTrade(ui, target, staff)
       end
     end
   end
+  local top = vouch and REQUEST_HEIGHT or 0
   if #self.staff_list == 0 then
-    self:addBevelPanel(20, 85, WIDTH - 40, 25, col.caption):setLabel(S.trade_no_staff).lowered = true
+    self:addBevelPanel(20, top + 85, WIDTH - 40, 25, col.caption):setLabel(S.trade_no_staff).lowered = true
   end
   self.rows = {}
   for row = 1, rows do
-    self.rows[row] = self:addBevelPanel(20, 80 + (row - 1) * 25, WIDTH - 40, 23,
+    self.rows[row] = self:addBevelPanel(20, top + 80 + (row - 1) * 25, WIDTH - 40, 23,
         col.setting, nil, nil, nil, col.setting_active)
         :makeToggleButton(0, 0, WIDTH - 40, 23, nil, function(window, state) window:selectStaff(row, state) end)
   end
-  local y = 85 + rows * 25
+  local y = top + 85 + rows * 25
   -- (The game's font has no arrows or slashes: words instead.)
   self.page_panel = self:addBevelPanel(20, y, WIDTH - 180, 28, col.caption)
   self.page_panel.lowered = true
@@ -246,6 +271,21 @@ function UIMultiplayerTrade:askSendMoney()
       --[[persistable:multiplayer_trade_money_ok]] function()
         if self.target == target then self:sendMoney(amount) end
       end))
+end
+
+--! The request slider's place `index` (1 = the least): the amount to ask for.
+function UIMultiplayerTrade:setRequest(index)
+  self.request = self.request_amounts[math.max(1, math.min(#self.request_amounts, index or 1))]
+  self.request_button:setLabel(_S.multiplayer_window.trade_request_money:format(self.request))
+end
+
+--! Ask the ally for the amount: a command, so every peer makes the request
+--! (a fax for them) at the same step.
+function UIMultiplayerTrade:requestMoney()
+  local session = TheApp.mp_session
+  if not session or not self.target or not self.request then return end
+  session:issue({kind = "ask_money", to = self.world:getHospitalIndex(self.target), amount = self.request})
+  self:setStatus(_S.multiplayer_window.ask_asked)
 end
 
 function UIMultiplayerTrade:sendMoney(amount)

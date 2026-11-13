@@ -72,13 +72,9 @@ function UIBankManager:UIBankManager(ui)
 
   self:addPanel(0, 250, 390):makeButton(0, 0, 200, 50, 0, self.openTownMap):setTooltip(_S.tooltip.toolbar.town_map
       :format(hotkey_value_label("ingame_panel_townMap", ui.app.hotkeys)))
-  -- Multiplayer co-op: ask another player for money (above the left card).
-  if TheApp.mp_session and self.world.mp_coop then
-    self.ask_button = self:addPanel(0, 58, 52)
-        :makeButton(0, 0, 147, 24, nil, self.askForMoney)
-        :setTooltip(_S.tooltip.multiplayer_window.ask_money)
-    self.ask_button.panel_for_sprite.custom_draw = --[[persistable:bank_ask_button_draw]] function() end
-  end
+  -- (Multiplayer: asking another player for money is in the trade window
+  -- now, under sending it: Argus, 2026-11-13. The button that was here
+  -- above the left card is no more; a game saved with it still loads.)
   self:addPanel(0, 192, 265):makeButton(0, 0, 21, 21, 6, self.increaseLoan):setTooltip(_S.tooltip.bank_manager.borrow_5000)
   self:addPanel(0, 50, 265):makeButton(0, 0, 21, 21, 5, self.decreaseLoan):setTooltip(_S.tooltip.bank_manager.repay_5000)
 
@@ -119,10 +115,15 @@ function UIBankManager:UIBankManager(ui)
   -- TODO: Add the graphs
 end
 
---! Multiplayer co-op: ask another player for money.
+--! Multiplayer co-op: ask another player for money (a game saved with the
+--! old button: the trade window, which has it now).
 function UIBankManager:askForMoney()
-  UIMultiplayerAskMoney.open(self.ui)
+  UIMultiplayerTrade.open(self.ui)
 end
+
+-- (The old button's drawing, kept by name for games saved with it.)
+local --[[persistable:bank_ask_button_draw]] function old_ask_button_draw() end
+UIBankManager.old_ask_button_draw = old_ask_button_draw
 
 function UIBankManager:afterLoad(old, new)
   if old < 36 then
