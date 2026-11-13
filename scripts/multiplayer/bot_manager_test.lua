@@ -338,6 +338,22 @@ do
   plot_price = 40000
   eq(m:outOfSpace(st), true, "land too dear: out of space")
   plot_price = nil
+  -- A short visit counts (the door's visitor count), and so does a patient
+  -- on the way (Bot Bertie's toilets, 2026-11-14: a daily look missed them).
+  local toilets = room(4, "toilets", 2000)
+  toilets.door = {queue = {visitor_count = 3, expected_count = 0, reportedSize = function() return 0 end}}
+  m.bot.world.rooms[4] = toilets
+  m:noteRoomUse({hosp = hosp, day = 10})
+  eq(m.room_used[4], 10, "first seen: used today")
+  m:noteRoomUse({hosp = hosp, day = 50})
+  eq(m.room_used[4], 10, "nobody since")
+  toilets.door.queue.visitor_count = 4
+  m:noteRoomUse({hosp = hosp, day = 60})
+  eq(m.room_used[4], 60, "a visit since the last look")
+  toilets.door.queue.expected_count = 1
+  m:noteRoomUse({hosp = hosp, day = 70})
+  eq(m.room_used[4], 70, "a patient on the way")
+  m.bot.world.rooms[4] = nil
   eq(m:outOfSpace(st), true, "no land left: out of space")
   st.day = 430
   eq(m:outOfSpace(st), false, "the last room without floor was a month ago")

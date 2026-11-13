@@ -1986,11 +1986,26 @@ end
 --! room). A room first seen today counts as used today.
 function M:noteRoomUse(s)
   local world = self.bot.world
+  self.room_visits = self.room_visits or {}
   for _, rm in pairs(world.rooms) do
     if rm.hospital == s.hosp and rm.is_active then
       local used = not self.room_used[rm.id]
       for h in pairs(rm.humanoids or {}) do
         if class.is(h, Patient) or (STAFF_ROOMS[rm.room_info.id] and class.is(h, Staff)) then used = true end
+      end
+      -- A visit since the last look counts too, however short (the door
+      -- counts everybody who went in: Room:commandEnteringPatient), and so
+      -- do patients queueing for it or on their way. (A look once a day
+      -- missed nearly every visit to the toilets: Bot Bertie took his
+      -- toilets, an operating theatre, a ward and a general diagnosis room
+      -- down as unused, then found no space for a theatre; 2026-11-14.)
+      local q = rm.door and rm.door.queue
+      if q then
+        local count = q.visitor_count or 0
+        local seen = self.room_visits[rm.id]
+        if seen and count > seen then used = true end
+        self.room_visits[rm.id] = count
+        if (q.reportedSize and q:reportedSize() or 0) > 0 or (q.expected_count or 0) > 0 then used = true end
       end
       if used then self.room_used[rm.id] = s.day end
     end
