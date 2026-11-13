@@ -3382,9 +3382,9 @@ end
 -- World:_mpHoursForStep); every player sees it (UIMultiplayerAuction).
 -- The auction (world.mp_auction) is game state, the same on every peer. It
 -- opens at the plot's price, the one who asked leading. Each bid is one step
--- up (auction.step). It is sold when nobody bids for AUCTION_SECONDS (the
--- first bid may take AUCTION_OPEN_SECONDS), or when all the others dropped
--- out. Time is counted in steps on every peer alike, like a speed vote.
+-- up (auction.step). It is sold when the time runs out (AUCTION_OPEN_SECONDS
+-- at first; a bid tops it up to AUCTION_SECONDS, never lowers it), or when
+-- all the others dropped out. Time is counted in steps on every peer alike, like a speed vote.
 -- Bots bid in the game (bots_bid): no command. Each bids up to what the
 -- plot is worth to it (botPlotWorth): more, the fuller its land. With a
 -- person among the bidders the bots bid one at a time, each a moment after
@@ -3397,7 +3397,8 @@ end
 -- (The original game's gavel takes 5-6 s; Argus, 2026-11-12: 7-8 s after
 -- the last bid, it ended before he saw it coming. Then 15 s to the first
 -- bid, to read the screen, and 8 s after each; Argus, 2026-11-13: 15 s is
--- just right for the first, 10 s after each.)
+-- just right for the first, 10 s after each, and a bid never takes time
+-- away: place_bid.)
 MultiplayerSession.AUCTION_SECONDS = 10
 MultiplayerSession.AUCTION_OPEN_SECONDS = 15
 -- A bot answers the last bid after this many seconds and up to
@@ -3609,11 +3610,16 @@ local function auction_log(text)
   if session then session.log(text) end
 end
 
---! `index` bids `amount` (checked by the caller).
+--! `index` bids `amount` (checked by the caller). The time left goes up to
+--! AUCTION_SECONDS, never down: a bid with 13 s left leaves 13 s (Argus,
+--! 2026-11-13: a bot's bid in the first seconds cut the 15 s to 10).
+--! auction.frames counts from the last bid (the bots answer it), limit
+--! when the time is up.
 local function place_bid(auction, index, amount)
   auction.bid, auction.leader = amount, index
   auction.bids[index] = amount
-  auction.frames, auction.limit = 0, auction_frames(MultiplayerSession.AUCTION_SECONDS)
+  local left = (auction.limit or 0) - (auction.frames or 0)
+  auction.frames, auction.limit = 0, math.max(left, auction_frames(MultiplayerSession.AUCTION_SECONDS))
   auction_log(string.format("auction %d: hospital %d bids $%d", auction.id, index, amount))
 end
 

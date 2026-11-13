@@ -601,6 +601,36 @@ describe("MultiplayerSession game options", function()
     assert.same({1, 8, 7, 6}, MultiplayerSession.auctionBidders(world, 12, hospitals[1]))
     assert.same({7, 8, 6, 5}, MultiplayerSession.auctionBidders(world, 9, hospitals[7]))
   end)
+
+  it("tops the auction's time up to 10 s with a bid, never lowers it", function()
+    local hospitals = {{balance = 100000}, {balance = 100000}}
+    local world = {hospitals = hospitals, mp_coop = {},
+        getHospitalIndex = function(_, h) return h == hospitals[1] and 1 or 2 end}
+    local ticks = function(seconds) return math.ceil(seconds * 1000 / 18) end
+    local left = function(a) return (a.limit - a.frames) * 18 / 1000 end
+    -- 15 s to the first bid; hospital 2 bids after 2 s: still 13 s left.
+    world.mp_auction = {id = 1, bid = 1000, step = 100, leader = 1, bidders = {1, 2}, bids = {[1] = 1000},
+        out = {}, frames = ticks(2), limit = ticks(15)}
+    local bid = MultiplayerSession.default_handlers.auction_bid
+    local saved = _G.TheApp
+    _G.TheApp = {} -- no mp_session: nothing logged
+    local ok1 = bid(world, {hospital = 2, auction = 1, amount = 1100})
+    local frames1, left1 = world.mp_auction.frames, left(world.mp_auction)
+    -- 3 s later (10 s left), hospital 1 bids: 10 s.
+    world.mp_auction.frames = ticks(3)
+    local ok2 = bid(world, {hospital = 1, auction = 1, amount = 1200})
+    local left2 = left(world.mp_auction)
+    -- 8 s later (2 s left): back up to 10 s.
+    world.mp_auction.frames = ticks(8)
+    local ok3 = bid(world, {hospital = 2, auction = 1, amount = 1300})
+    local left3 = left(world.mp_auction)
+    _G.TheApp = saved
+    assert.is_true(ok1 and ok2 and ok3)
+    assert.equal(0, frames1)
+    assert.is_true(math.abs(left1 - 13) < 0.05)
+    assert.is_true(math.abs(left2 - 10) < 0.05)
+    assert.is_true(math.abs(left3 - 10) < 0.05)
+  end)
 end)
 
 describe("Evil handyman hints", function()
