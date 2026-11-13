@@ -805,9 +805,10 @@ local BONUS_DAYS, BONUS_BELOW, BONUS_FLOOR = 7, 0.5, 2000
 local RISE_LAST_HOURS = 5 * 24
 -- No drinks machine closer than this many tiles to another (Bot:buyCorridor).
 local DRINKS_APART = 5
--- Corridor furniture once the hospital is open: id -> how many.
-local EXTRAS = {{"bench", 3}, {"plant", 2}, {"drinks_machine", 1}, {"bench", 5}, {"extinguisher", 1},
-    {"plant", 4}}
+-- Corridor furniture once the hospital is open: id -> how many. (No fire
+-- extinguisher: they go into the rooms with costly machines, where they
+-- stop explosions; Jan, 2026-11-13. M:projects.)
+local EXTRAS = {{"bench", 3}, {"plant", 2}, {"drinks_machine", 1}, {"bench", 5}, {"plant", 4}}
 
 function Bot.new(lobby)
   local self = setmetatable({}, Bot)
@@ -3149,12 +3150,17 @@ function Bot:buyCorridor(object_id, near_x, near_y)
   -- the floor stays in one piece: better than patients standing. Jan,
   -- 2026-11-13: Agnes found no place for a bench 28 times.)
   local loose = false
+  -- Patients standing on a spot do not rule it out: the command asks them to
+  -- step aside (handlers.place_object). (Jan, 2026-11-13: a crowd by
+  -- Agnes's GP stood on every free spot, so no bench went there, ever.)
+  -- A reception desk still waits for an empty spot.
+  local people_ok = object_id ~= "reception_desk"
   local function fits(tx, ty)
     if next(given) and given[world.map.th:getCellFlags(tx, ty).parcelId] then return false end
     for _, e in ipairs(apart) do
       if math.abs(e.tile_x - tx) <= DRINKS_APART and math.abs(e.tile_y - ty) <= DRINKS_APART then return false end
     end
-    if world:anyHumanoidObscuringArea(tx, ty) then return false end
+    if not people_ok and world:anyHumanoidObscuringArea(tx, ty) then return false end
     for _, facing in ipairs(object_id == "bench" and not loose and back_to_wall(tx, ty) or facings) do
       place:setOrientation(facing)
       place:setBlueprintCell(tx, ty)
@@ -3206,6 +3212,17 @@ function Bot:buyCorridor(object_id, near_x, near_y)
     nearest()
     if x then log("no spot with its back to a wall: a bench facing another way") end
   end
+  if not x and object_id == "bench" and near_x then
+    -- A bit further from the door: a standing patient looks for a free
+    -- bench up to 10 tiles from it (humanoid_actions/queue.lua).
+    loose, max_r = false, 8
+    nearest()
+    if not x then
+      loose = true
+      nearest()
+    end
+    if x then log(string.format("a bench %d,%d tiles from the door", x - ax, y - ay)) end
+  end
   if not x and not near_x then
     -- Tiles with free floor all around (so nothing blocks a corridor).
     x, y = builder.find_free_rect(world, ax, ay, 1, 1, 40, fits)
@@ -3213,7 +3230,13 @@ function Bot:buyCorridor(object_id, near_x, near_y)
   local refused = cuts > 0 and string.format(" (%d spot(s) refused: they would cut its floor in two)", cuts) or ""
   if x then
     place.object_cell_x, place.object_cell_y = x, y
-    place:onMouseUp("left", 100000, 100000) -- a click outside the window
+    if world:anyHumanoidObscuringArea(x, y) then
+      -- (The click would wait for an empty spot; the command asks whoever
+      -- stands there to step aside.)
+      place:placeObject()
+    else
+      place:onMouseUp("left", 100000, 100000) -- a click outside the window
+    end
     placed = true
     log(string.format("bought a %s at %d,%d%s", object_id, x, y, refused))
   else

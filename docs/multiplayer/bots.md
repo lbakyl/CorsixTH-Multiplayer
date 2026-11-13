@@ -50,6 +50,25 @@ machines, a second desk for a long reception queue, benches for people
 standing, drinks machines, radiators for cold patients, bins, plants. The
 best project it can afford is done, one every one to four game days.
 
+- **Handymen** (2026-11-13, Clive's corridors full of litter): one for every
+  four rooms from the 3rd room, one more for every 8 pieces of litter and every
+  4 machines, at most 8. The first mostly repairs (while there are machines),
+  the others mostly clean (while there is litter): their priorities are raised
+  a step a day (`handyman_prio`) to 60%.
+- **Drinks machines** (2026-11-13, Agnes's patients all thirsty): a thirsty
+  patient (over 70%) with no machine within the 8 tiles a patient walks to find
+  one counts; the waiting place most of them stand by gets a machine, up to one
+  per 12 patients. Otherwise one per 25 patients, by the busiest waiting place
+  with none near.
+- **Benches** where patients stand: a spot with somebody on it is not ruled
+  out (the command asks them to step aside), and with no spot within 5 tiles
+  of the door, up to 8 (a standing patient looks up to 10 tiles for a bench).
+- **Fire extinguishers** go into rooms, not corridors (2026-11-13): a hard bot
+  puts 1 to 3 into every room whose machine costs $4000 or more (X-ray,
+  scanner, operating theatre, ultrascan, decontamination, ...; the number from
+  the room's number), a normal bot 1, an easy bot
+  none. With one in the room a worn-out machine may not explode.
+
 - **Rooms** are sized per type (`SIZES`: a GP's office 5x5, a ward 7x7, a staff
   room 6x6, ...), placed with a free tile below and to the right where possible
   so the corridor in front of the door is two tiles wide, and furnished by hand

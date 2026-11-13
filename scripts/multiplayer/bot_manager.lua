@@ -127,6 +127,13 @@ local WAITING = {bench = true, plant = true, radiator = true, drinks_machine = t
 -- A drinks machine serves the waiting places this many tiles around it.
 local DRINKS_R = 8
 local WAITING_R = 4
+-- Thirsty patients this near a waiting place (a box) count for it.
+local DRY_R = 6
+local MAX_HANDYMEN = 8
+-- Handymen's jobs (UIStaff.raiseHandymanPriority, +0.1 a step): the first
+-- mostly repairs while there are machines, the others mostly clean while
+-- there is litter.
+local HANDYMAN_FOCUS = 0.6
 local NO_WAITING = {staff_room = true, research = true, training = true}
 -- Rooms that earn the most: repaired and looked after first.
 local EARNERS = {operating_theatre = 25, scanner = 10, x_ray = 8, cardiogram = 8, ultrascan = 8,
@@ -378,11 +385,20 @@ function M:assess()
   s.waiting_for = {}
   local thirst, warm, toilet, happy, n = 0, 0, 0, 0, 0
   s.patients, s.cold, s.hot = 0, 0, 0
+  -- Thirsty patients (over the game's own 0.7) with no drinks machine within
+  -- the 8 tiles they walk to find one (Patient: findObjectNear): where one is
+  -- missing. (Jan, 2026-11-13: Agnes had 3 machines for 44 patients, none
+  -- near her reception and GP, and everybody there was thirsty.)
+  s.dry = {}
   for _, p in ipairs(hosp.patients or {}) do
     if p.tile_x and not p.going_home and not p.dead and p.disease then
       s.patients = s.patients + 1
       local a = p.attributes or {}
       thirst, toilet, happy = thirst + (a.thirst or 0), toilet + (a.toilet_need or 0), happy + (a.happiness or 0.5)
+      if (a.thirst or 0) > 0.7 and not world:getRoom(p.tile_x, p.tile_y) and
+          not world:findObjectNear(p, "drinks_machine", 8) then
+        s.dry[#s.dry + 1] = {p.tile_x, p.tile_y}
+      end
       local w = a.warmth or 0.5
       warm = warm + w
       if w < 0.25 then s.cold = s.cold + 1 elseif w > 0.75 then s.hot = s.hot + 1 end
@@ -993,7 +1009,12 @@ function M:projects(s)
       end
     end
   end
-  local handymen = math.min(5, (s.room_count >= 3 and 1 or 0) + math.floor(s.litter / 12) + math.floor(machines / 4))
+  -- One for every 4 rooms (from the 3rd), one more for every 8 pieces of
+  -- litter and every 4 machines. (Jan, 2026-11-13: Clive had 3 handymen for
+  -- 16 rooms and his corridors were a mess; the formula was one in all,
+  -- plus litter / 12, at most 5.)
+  local handymen = math.min(MAX_HANDYMEN, (s.room_count >= 3 and math.ceil(s.room_count / 4) or 0) +
+      math.floor(s.litter / 8) + math.floor(machines / 4))
   -- A broken boiler: the more handymen, the sooner it is repaired.
   if hosp.heating and hosp.heating.heating_broke then handymen = math.max(handymen, 3) end
   -- (Litter piling up makes it urgent: Bots Agnes and Bertie had 2 and 3
@@ -1038,7 +1059,27 @@ function M:projects(s)
     -- machines in eight hospitals of about 30 patients, in rows).
     local drinks_now = s.objects.drinks_machine or 0
     local drinks_boost = self.boost["buy:drinks_machine"] or 0
-    if s.patients >= 8 and drinks_now < 1 + s.patients / 25 then
+    -- Thirsty patients no machine reaches (s.dry): one by the waiting place
+    -- most of them stand by, up to one machine per 12 patients.
+    local dry_door, dry_n = nil, 0
+    if #s.dry > 0 and drinks_now < 1 + s.patients / 12 then
+      for _, d in ipairs(s.doors) do
+        local count = 0
+        for _, t in ipairs(s.dry) do
+          if math.abs(t[1] - d.x) <= DRY_R and math.abs(t[2] - d.y) <= DRY_R then count = count + 1 end
+        end
+        if count > dry_n then dry_door, dry_n = d, count end
+      end
+    end
+    if dry_door then
+      local score = math.min(URGENT - 5, 3 + dry_n * 0.5 + s.thirst * 4 + drinks_boost)
+      local ok, cost = pcall(hosp.getObjectBuildCost, hosp, "drinks_machine")
+      if ok then
+        add("buy:drinks_machine@" .. dry_door.key, score, function()
+          return bot:buyCorridor("drinks_machine", dry_door.x, dry_door.y)
+        end, cost or 0)
+      end
+    elseif s.patients >= 8 and drinks_now < 1 + s.patients / 25 then
       local covered = false
       for _, d in ipairs(s.doors) do
         if not covered then
@@ -1069,7 +1110,46 @@ function M:projects(s)
     if radiators < 2 + s.room_count / 3 and (s.cold > 2 or radiators == 0) then buy("radiator", 2 + s.cold * 0.5) end
     if (s.objects.bin or 0) < 2 and s.litter > 8 then buy("bin", 1.5) end
     if (s.objects.plant or 0) < 2 + s.room_count / 4 then buy("plant", 0.8 + (1 - s.happiness)) end
-    if (s.objects.extinguisher or 0) < 1 and s.room_count >= 6 then buy("extinguisher", 0.7) end
+  end
+  -- Fire extinguishers go into the rooms with a costly machine, not into the
+  -- corridors (Jan, 2026-11-13): a worn-out machine in a room with one may
+  -- not explode, the more of them (up to 4) the likelier
+  -- (Machine:calculateIsMachineMustExplode). A hard bot puts 1 to 3 into
+  -- every room whose machine costs $4000 or more (X-ray, scanner, operating
+  -- theatre, ultrascan, decontamination, ...; how many from the room's
+  -- number: no random numbers in bot code), a normal bot 1, an easy bot
+  -- none. One at a time, into a room nobody is in.
+  if bot.level ~= "easy" and s.balance > RESERVE then
+    local rooms = {}
+    for _, rm in pairs(world.rooms) do
+      if rm.hospital == hosp and rm.built and rm.is_active and not rm.crashed then rooms[#rooms + 1] = rm end
+    end
+    table.sort(rooms, function(a, b) return a.id < b.id end)
+    for _, rm in ipairs(rooms) do
+      local costly, have = rm.room_info.id == "operating_theatre", 0
+      for o in pairs(rm.objects or {}) do
+        local id = o.object_type and o.object_type.id
+        if id == "extinguisher" then have = have + 1 end
+        if id and not costly and class.is(o, Machine) and o.strength then
+          local ok, price = pcall(hosp.getObjectBuildCost, hosp, id)
+          costly = ok and (price or 0) >= 4000
+        end
+      end
+      local wanted_here = not costly and 0 or (M.hard and 1 + (rm.id * 7) % 3 or 1)
+      local key = "edit:extinguisher@room" .. rm.id
+      if have < wanted_here and rm:getPatientCount() == 0 and bot:extraAllowed(rm, "extinguisher") then
+        local ok, cost = pcall(hosp.getObjectBuildCost, hosp, "extinguisher")
+        add(key, 2.5 + (wanted_here - have), function()
+          local done, why = bot:editRoom(rm, {"buy:extinguisher", "place", "done"})
+          if done then
+            self:note(string.format("day %d: a fire extinguisher into %s #%d (%d of %d)", s.day,
+                rm.room_info.id, rm.id, have + 1, wanted_here))
+          end
+          return done, why
+        end, ok and cost or 0)
+        break
+      end
+    end
   end
   -- What a team mate asked for in the chat, if nothing above wanted it. A
   -- wish somebody has done meanwhile (the team mate built the room
@@ -1601,6 +1681,22 @@ function M:daily(s)
         self:issue({kind = "call_handyman", machine = id})
       end
     end
+    -- Their jobs: one repairs (machines), the others clean (Jan, 2026-11-13:
+    -- with every handyman doing a third of each, called to machines all the
+    -- time, Clive's corridors were never clean). One step a day each.
+    if not helper then
+      local list = {}
+      for _, h in ipairs(s.hosp.staff or {}) do
+        if class.is(h, Handyman) and h.mp_id and not h.fired then list[#list + 1] = h end
+      end
+      table.sort(list, function(a, b) return a.mp_id < b.mp_id end)
+      for i, h in ipairs(list) do
+        local job = (i == 1 and #s.machines > 0) and "repairing" or (s.litter >= 4 and "cleaning") or nil
+        if job and (h:getAttribute(job) or 1) < HANDYMAN_FOCUS then
+          self:issue({kind = "handyman_prio", staff = h.mp_id, attr = job})
+        end
+      end
+    end
   end
   -- Dirty tricks (in a race), also when a person shares the hospital: they
   -- have had the time to deal with them first.
@@ -1663,12 +1759,14 @@ function M:monthLine(s)
   if not ok then floor_text = "?" end
   return string.format("month %d: left %s; lost most: %s; in hospital %d; queues %s, reception %d; psychiatrists %d,"
       .. " surgeons %d; prices %d%%; reputation %d, $%d; loan $%d; staff %d (%s), juniors %d, consultants %d;"
-      .. " staff happy %d%%, tired %d%%; patients happy %d%%; land %d%% full; goals %s; floor %s", s.month,
+      .. " staff happy %d%%, tired %d%%; patients happy %d%%, thirsty %d%% (%d with no drinks machine near);"
+      .. " land %d%% full; goals %s; floor %s", s.month,
       table.concat(left, " "), table.concat(top, " "),
       s.patients, table.concat(queues, " "), s.reception_queue, hosp:countStaffOfCategory("Psychiatrist"),
       hosp:countStaffOfCategory("Surgeon"), 100, s.reputation, math.floor(s.balance),
       math.floor(s.loan or 0), n, table.concat(staff, ","), juniors, consultants, math.floor(s.staff_happy * 100 + 0.5),
       math.floor(s.fatigue * 100 + 0.5), math.floor((s.happiness or 0) * 100 + 0.5),
+      math.floor((s.thirst or 0) * 100 + 0.5), #(s.dry or {}),
       math.floor(self:landFill(s) * 100 + 0.5), #goals > 0 and table.concat(goals, " ") or "none", floor_text)
 end
 
