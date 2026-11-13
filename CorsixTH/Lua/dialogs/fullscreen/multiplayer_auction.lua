@@ -64,8 +64,8 @@ local CLOCK_W, CLOCK_H = 70, 38
 local CLOCK_X, CLOCK_Y = BID_X + math.floor((BID_W - CLOCK_W) / 2), 434
 local DIGIT_W, DIGIT_H, DIGIT_T, DIGIT_GAP = 18, 28, 4, 6
 local TOWN_LEADER_MID = 461 -- the middle of the leader's box (name and sum)
--- (The town map button: the map's top left corner, Jan.)
-local TOWN_X, TOWN_Y, TOWN_W, TOWN_H = MAP_X + 4, MAP_Y + 4, 120, 22
+-- (No town map button on the map any more: the small map shows the plots
+-- well enough. Jan, 2026-11-13.)
 
 -- The gavel: frames 10 (raised) to 3 (down). As in the original game it
 -- comes down slowly while nobody bids, is raised again by every bid, and
@@ -110,9 +110,6 @@ function UIMultiplayerAuction:UIMultiplayerAuction(ui)
       :makeButton(0, 0, 32, LOAN_H, nil, self.repayLoan):setTooltip(_S.multiplayer_window.auction_repay_tooltip)
   self.borrow_button = self:addBevelPanel(LOAN_X + LOAN_W + 42, LOAN_Y, 32, LOAN_H, loan_col.button):setLabel("+")
       :makeButton(0, 0, 32, LOAN_H, nil, self.borrow):setTooltip(_S.multiplayer_window.auction_borrow_tooltip)
-  self.town_button = self:addBevelPanel(TOWN_X, TOWN_Y, TOWN_W, TOWN_H, loan_col.button)
-      :setLabel(_S.tooltip.toolbar.town_map:format("F4"))
-      :makeButton(0, 0, TOWN_W, TOWN_H, nil, self.openTownMap)
   self.gavel_frame = GAVEL_UP
   self.going = 0
   self.timer = 0
@@ -329,7 +326,8 @@ function UIMultiplayerAuction:repayLoan()
 end
 
 --! The town map (to see every plot), over this screen; the auction comes
---! back when it is closed (MultiplayerSession:syncAuction).
+--! back when it is closed (MultiplayerSession:syncAuction). (Its button is
+--! gone, 2026-11-13; the tests still open the map this way.)
 function UIMultiplayerAuction:openTownMap()
   local town = rawget(_G, "UITownMap")
   if not town then return end

@@ -3396,10 +3396,10 @@ end
 
 -- (The original game's gavel takes 5-6 s; Argus, 2026-11-12: 7-8 s after
 -- the last bid, it ended before he saw it coming. Then 15 s to the first
--- bid, to read the screen, and 8 s after each; Argus, 2026-11-13: 10 s
--- each time, the same from start to end.)
+-- bid, to read the screen, and 8 s after each; Argus, 2026-11-13: 15 s is
+-- just right for the first, 10 s after each.)
 MultiplayerSession.AUCTION_SECONDS = 10
-MultiplayerSession.AUCTION_OPEN_SECONDS = 10
+MultiplayerSession.AUCTION_OPEN_SECONDS = 15
 -- A bot answers the last bid after this many seconds and up to
 -- BOT_BID_SPREAD more (each bot, each bid a little differently: the same on
 -- every peer). Jan, 2026-11-12: only one bot ever seemed to bid against

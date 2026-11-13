@@ -1394,6 +1394,7 @@ local function run()
           elseif a == "research" then w:adjustResearch(entry.arg, "less")
           else w:increaseHeat() end
           log(string.format("UI: %s%s at step %d", a, entry.arg ~= "" and (" " .. entry.arg) or "", session.step))
+          if a == "loan" then shot("bank-manager") end
           w:close()
         elseif a == "bonus" or a == "raise" then
           local w = UIStaffManagement(world.ui)
