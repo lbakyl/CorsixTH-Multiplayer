@@ -200,6 +200,138 @@ function UITownMap:drawPlotButtons(canvas, x, y, s)
   end
 end
 
+--! Multiplayer: the plots this player may buy that would go to auction
+--! (another hospital may bid, MultiplayerSession.auctionBidders): plot ->
+--! the other bidders' names. Worked out again every half second (only the
+--! screen asks: nothing is kept in the game).
+function UITownMap:auctionPlots()
+  local world = self.ui.hospital.world
+  local session = TheApp.mp_session
+  if not (session and not session.observer and world.mp_coop and world.mp_coop.players > 1) then
+    return {}
+  end
+  local now = self.ticks or 0
+  if self.auction_plots and now - (self.auction_plots_at or 0) < 28 then return self.auction_plots end
+  local th, hospital = world.map.th, self.ui.hospital
+  self.peek = self.peek or {}
+  local list = {}
+  for plot = 1, th:getPlotCount() do
+    local bidders = MultiplayerSession.auctionBidders(world, plot, hospital, self.peek)
+    if bidders and #bidders > 1 then
+      local names = {}
+      for k = 2, #bidders do names[#names + 1] = world.hospitals[bidders[k]].name end
+      list[plot] = names
+    end
+  end
+  self.auction_plots, self.auction_plots_at = list, now
+  return list
+end
+
+function UITownMap:onTick()
+  self.ticks = (self.ticks or 0) + 1
+  return UIFullscreen.onTick(self)
+end
+
+-- The gavel on an auction plot's badge (BADGE - 2 pixels square), and its
+-- runs of ink: {column, row, length}, from the 0-based pattern.
+local BADGE = 13
+local GAVEL = {
+  ".....X.....",
+  "....XXX....",
+  "...XXXXX...",
+  "..XXXXX....",
+  ".XXXXX.....",
+  "XXXXXX.....",
+  ".XXX..X....",
+  "..X....X...",
+  "........X..",
+  ".........X.",
+  "..........X",
+}
+local GAVEL_RUNS = {}
+for row, line in ipairs(GAVEL) do
+  local col = 1
+  while col <= #line do
+    local first, last = line:find("X+", col)
+    if not first then break end
+    GAVEL_RUNS[#GAVEL_RUNS + 1] = {first - 1, row - 1, last - first + 1}
+    col = last + 1
+  end
+end
+
+--! The tiles of `plot` that get a gold stripe when it would go to auction:
+--! every fourth diagonal, not on the plot's edge (its white line), flat
+--! {x1, y1, ...}; kept, the plots never change.
+function UITownMap:stripeTiles(th, plot)
+  self.stripe_tiles = self.stripe_tiles or {}
+  local list = self.stripe_tiles[plot]
+  if list then return list end
+  local tiles = MultiplayerSession.plotTiles(th, plot)
+  local inside = {}
+  for i = 1, #tiles, 2 do inside[tiles[i] * 4096 + tiles[i + 1]] = true end
+  list = {}
+  for i = 1, #tiles, 2 do
+    local tx, ty = tiles[i], tiles[i + 1]
+    if (tx + ty) % 4 == 0 and inside[(tx - 1) * 4096 + ty] and inside[(tx + 1) * 4096 + ty] and
+        inside[tx * 4096 + ty - 1] and inside[tx * 4096 + ty + 1] then
+      list[#list + 1] = tx
+      list[#list + 1] = ty
+    end
+  end
+  self.stripe_tiles[plot] = list
+  return list
+end
+
+--! Mark each plot that would go to auction: gold stripes over it and a
+--! gavel badge in its top right corner (Argus, 2026-11-13: whether a plot
+--! goes to auction or is bought at once should show before it is clicked).
+function UITownMap:drawAuctionBadges(canvas, x, y, s)
+  local th = self.ui.hospital.world.map.th
+  local tp = self:tilePixels()
+  self.plot_corners = self.plot_corners or {}
+  local border, face, ink = canvas:mapRGB(30, 20, 20), canvas:mapRGB(240, 190, 40), canvas:mapRGB(70, 40, 15)
+  -- (Tile x, y is drawn at 227 + (x - 1) * tp, 25 + y * tp: the engine's
+  -- rows start a tile down, th_lua_ui.cpp l_town_map_draw.)
+  for plot in pairs(self:auctionPlots()) do
+    local stripes = self:stripeTiles(th, plot)
+    for i = 1, #stripes, 2 do
+      canvas:drawRect(face, x + (227 + (stripes[i] - 1) * tp) * s, y + (25 + stripes[i + 1] * tp) * s,
+          tp * s, tp * s)
+    end
+    local corner = self.plot_corners[plot]
+    if not corner then
+      corner = {MultiplayerSession.plotCorner(th, plot)}
+      self.plot_corners[plot] = corner
+    end
+    if corner[1] then
+      local bx = x + (227 + corner[1] * tp - BADGE) * s
+      local by = y + (25 + corner[2] * tp) * s
+      canvas:drawRect(border, bx, by, BADGE * s, BADGE * s)
+      canvas:drawRect(face, bx + s, by + s, (BADGE - 2) * s, (BADGE - 2) * s)
+      for _, run in ipairs(GAVEL_RUNS) do
+        canvas:drawRect(ink, bx + (1 + run[1]) * s, by + (1 + run[2]) * s, run[3] * s, s)
+      end
+    end
+  end
+end
+
+--! The line under the map for the plot under the mouse: whether it goes to
+--! auction (and who else may bid) or is bought at once; nil for none.
+function UITownMap:plotHint()
+  local plot = self.hover_plot
+  local world = self.ui.hospital.world
+  if not plot or plot == 0 or not (world.mp_coop and world.mp_coop.players > 1) then return nil end
+  local S = _S.multiplayer_window
+  local names = self:auctionPlots()[plot]
+  if names then return S.plot_auction_hint:format(table.concat(names, ", ")) end
+  local session = TheApp.mp_session
+  if session and not session.observer and not world.free_build_mode and
+      world.map.th:isParcelPurchasable(plot, self.ui.hospital:getPlayerIndex()) then
+    return S.plot_buy_hint
+  end
+  return nil
+end
+
 --! The question before a plot is sold back (the sale itself is a command,
 --! checked again by everybody's game).
 function UITownMap:askToSell(plot)
@@ -374,9 +506,11 @@ function UITownMap:draw(canvas, x, y)
   TH.windowHelpers.townMapDraw(self, map.th, canvas, town_map_offset_x, town_map_offset_y,
     config.radiators_enabled, s, player, options)
   self:drawPlotButtons(canvas, x, y, s)
-  if self.hover_button then
-    self.city_font:draw(canvas, self.hover_button.kind == "sell" and _S.multiplayer_window.plot_sell_hint or
-        _S.multiplayer_window.plot_give_hint, x + 227 * s, y + 413 * s, 380 * s, 15 * s)
+  self:drawAuctionBadges(canvas, x, y, s)
+  local hint = self.hover_button and (self.hover_button.kind == "sell" and _S.multiplayer_window.plot_sell_hint or
+      _S.multiplayer_window.plot_give_hint) or self:plotHint()
+  if hint then
+    self.city_font:draw(canvas, hint, x + 227 * s, y + 413 * s, 380 * s, 15 * s)
   end
 
   -- Draw entities

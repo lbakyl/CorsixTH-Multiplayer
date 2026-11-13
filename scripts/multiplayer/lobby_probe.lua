@@ -1694,6 +1694,29 @@ local function run()
           world.ui:addWindow(UITownMap(world.ui))
           log(string.format("UI: townmap at step %d: town map %s", session.step,
               tostring(world.ui:getWindow(UITownMap) ~= nil)))
+        elseif a == "townmaphover" then
+          -- townmaphover:auction / :plain: with the town map open, the mouse
+          -- over a plot that would go to auction (the cheapest) or one bought
+          -- at once; logs the line under the map, and a picture.
+          local map = world.ui:getWindow(UITownMap)
+          local hint
+          if map then
+            local th, hospital = world.map.th, world.ui.hospital
+            local auctions, pick = map:auctionPlots(), nil
+            for plot = 1, th:getPlotCount() do
+              local fits = entry.arg == "auction" and auctions[plot] or
+                  (entry.arg ~= "auction" and not auctions[plot] and th:isParcelPurchasable(plot, hospital:getPlayerIndex()))
+              if fits and (not pick or world.map:getParcelPrice(plot) < world.map:getParcelPrice(pick)) then pick = plot end
+            end
+            map.hover_plot = pick
+            hint = map:plotHint()
+            local list = {}
+            for plot, names in pairs(auctions) do list[#list + 1] = plot .. "(" .. table.concat(names, ",") .. ")" end
+            table.sort(list)
+            log(string.format("UI: townmaphover %s at step %d: plot %s, auction plots %s, hint %s", entry.arg,
+                session.step, tostring(pick), table.concat(list, " "), hint and plain_text(hint) or "none"))
+            shot("townmap-" .. entry.arg)
+          end
         elseif a == "auctionmap" or a == "auctionmapclose" then
           -- The town map button on the auction screen (a picture of the map),
           -- then the map closed again: the auction screen comes back.
@@ -1727,10 +1750,11 @@ local function run()
           local window = world.ui:getWindow(rawget(_G, "UIMultiplayerAuction"))
           local auction = world.mp_auction
           local wait = world.ui:getWindow(rawget(_G, "UIMultiplayerAuctionWait"))
-          log(string.format("UI: %s at step %d: screen %s, auction %s, bid %s, %s, game hours %d, waiting box %s", a,
+          log(string.format("UI: %s at step %d: screen %s, auction %s, bid %s, %s, game hours %d, waiting box %s, " ..
+              "closing in %s ticks", a,
               session.step, tostring(window ~= nil), auction and tostring(auction.id) or "none",
               auction and tostring(auction.bid) or "-", window and window:standing() or "-", world.mp_hours or 0,
-              tostring(wait ~= nil)))
+              tostring(wait ~= nil), window and tostring(window.closing_in) or "-"))
           if window and a == "auctionbid" then window:bid()
           elseif window and a == "auctionpass" then window:dropOut()
           elseif a == "auctionshot" then

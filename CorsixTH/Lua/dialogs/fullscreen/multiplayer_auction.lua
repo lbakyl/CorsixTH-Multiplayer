@@ -350,10 +350,12 @@ function UIMultiplayerAuction:dropOut()
 end
 
 --! The auction ended (MultiplayerSession:syncAuction): the gavel down with
---! a knock, then the screen closes.
+--! a knock, the result for 4 seconds (the cross closes it sooner), then the
+--! screen closes. (Argus, 2026-11-13: it closed after 1 s, too soon to take
+--! in who got the plot.)
 function UIMultiplayerAuction:finish()
   if self.closing_in then return end
-  self.closing_in = 50 -- ticks (about 2 seconds)
+  self.closing_in = math.ceil(4000 / 18) -- ticks of 18 ms
   self.gavel_frame = GAVEL_DOWN
   self.ui:playSound("selectx.wav")
   self:makeRuns() -- the lot in its new owner's colour

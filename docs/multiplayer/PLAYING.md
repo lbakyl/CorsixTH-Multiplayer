@@ -246,16 +246,23 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 - **Land auctions (every game with more than one hospital):** click a
   plot on the town map as usual. If it is on another player's side, or
   borders another hospital's land, the auction room opens for everybody
-  and the game stands still until the auction ends. It starts at the
+  and the game stands still until the auction ends. The town map shows
+  this before you click: a plot that would go to auction has gold
+  stripes over its red and a gavel badge in its top right corner (plain
+  red: you buy it at once), and the line under the map says,
+  for the plot under the mouse, who else could bid or that you buy it
+  straight away. It starts at the
   plot's price, with you in the lead. The players whose side it is on or
   whose land borders it may bid: the tick bids the sum next to it (10%
   of the price more each time), the cross drops out. The others can only
   watch, and close the screen with the cross. (If the host chose **Every
   plot** in the game options, every plot goes to auction, and every
-  hospital that may buy it bids.) The gavel sinks while
-  nobody bids and every bid raises it again; when nobody bids for 10
-  seconds (15 for the first bid) it is down: "going once", "going twice",
-  sold to the highest bid. The seconds left show in big digits next to the
+  hospital that may buy it bids.) The clock starts at 15 seconds and
+  counts down one by one; a bid puts it back up to 10 if fewer are left,
+  never down (a bid with 13 left leaves 13). The gavel sinks while nobody
+  bids and every bid raises it again; when the time runs out it is down:
+  "going once", "going twice", sold to the highest bid. The result stays
+  on the screen for 4 seconds (the cross closes it sooner). The seconds left show in big digits next to the
   gavel, red for the last three. The small map shows the plot for
   sale in red, the other plots still for sale in sand, and every plot's
   number (as on the town map) with a thin line between the plots; who
