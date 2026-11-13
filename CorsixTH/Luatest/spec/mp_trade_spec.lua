@@ -239,6 +239,28 @@ describe("Selling a plot back", function()
     end)
   end)
 
+  it("is not stopped by somebody whose walk crosses it only further on", function()
+    with_texts(function()
+      -- Plot 4 is at tiles 5 and 6; the walk goes from 10 to 3 (plot 1),
+      -- across it in 4 steps. (Jan, 2026-11-13: a plot with the map's
+      -- entrance on it, patients always walking in across it.)
+      local walker = {tile_x = 10, tile_y = 1, action_queue = {{name = "walk",
+          path_x = {10, 9, 8, 7, 6, 5, 4, 3}, path_y = {1, 1, 1, 1, 1, 1, 1, 1}, path_index = 2}}}
+      local world = make({entities = {walker}})
+      assert.is_true(handlers.sell_plot(world, {hospital = 1, plot = 4}))
+      -- Three steps from it: refused.
+      world = make({entities = {walker}})
+      walker.action_queue[1].path_index = 4
+      local _, why = handlers.sell_plot(world, {hospital = 1, plot = 4})
+      assert.equal("people on the plot", why)
+      -- Walking to a tile on it: refused, however far.
+      walker.action_queue[1] = {name = "walk", path_x = {10, 9, 8, 7, 6}, path_y = {1, 1, 1, 1, 1}, path_index = 2}
+      walker.tile_x = 10
+      _, why = handlers.sell_plot(world, {hospital = 1, plot = 4})
+      assert.equal("people on the plot", why)
+    end)
+  end)
+
   it("takes the doors of an entrance the map put on the plot along, to be made again", function()
     with_texts(function()
       local door = {object_type = {id = "entrance_left_door", supports_creation_for_map = true},

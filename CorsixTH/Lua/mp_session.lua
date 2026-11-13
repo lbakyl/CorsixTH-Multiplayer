@@ -3922,21 +3922,32 @@ function MultiplayerSession.isStartingPlot(world, plot)
   return plot <= world.map.th:getPlayerCount()
 end
 
---! Is there a person on `plot`, or one whose walk crosses it?
+--! The next this many tiles of a walk count as being on a plot.
+MultiplayerSession.PLOT_SOON_STEPS = 3
+
+--! Is there a person on `plot`, about to step onto it (the next
+--! PLOT_SOON_STEPS tiles of their walk) or walking to a tile on it? Somebody
+--! whose walk only crosses it further on finds another way at its new fence
+--! (walk.lua), as on a plot handed to an ally. (Jan, 2026-11-13: a plot
+--! with the map's entrance on it could not be sold: patients coming in
+--! always had a walk across it.)
 local function person_on_plot(world, plot)
   local th = world.map.th
   local flags = {}
+  local function on(x, y) return th:getCellFlags(x, y, flags).parcelId == plot end
   for _, entity in ipairs(world.entities) do
     local queue = entity.action_queue
     if queue and entity.tile_x and entity.tile_y then
-      if th:getCellFlags(entity.tile_x, entity.tile_y, flags).parcelId == plot then return true end
+      if on(entity.tile_x, entity.tile_y) then return true end
       local action = queue[1]
       local path_x = action and action.name == "walk" and action.path_x
       local path_y = action and action.path_y
-      if path_x and path_y then
-        for i = action.path_index or 1, #path_x do
-          if th:getCellFlags(path_x[i], path_y[i], flags).parcelId == plot then return true end
+      if path_x and path_y and #path_x > 0 then
+        local from = action.path_index or 1
+        for i = from, math.min(#path_x, from + MultiplayerSession.PLOT_SOON_STEPS - 1) do
+          if on(path_x[i], path_y[i]) then return true end
         end
+        if on(path_x[#path_x], path_y[#path_y]) then return true end
       end
     end
   end
