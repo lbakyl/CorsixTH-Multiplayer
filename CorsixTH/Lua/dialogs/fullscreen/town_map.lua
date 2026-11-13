@@ -118,8 +118,108 @@ function UITownMap:tilePixels()
   return math.max(1, math.floor(384 / math.max(map.width or 128, map.height or 128)))
 end
 
--- Multiplayer: the size of the buttons on the player's plots (pixels before the UI scale).
-local BUTTON = 9
+-- Multiplayer: the size of the buttons on the player's plots and of the
+-- auction badge on plots for sale (pixels before the UI scale; Jan,
+-- 2026-11-13: the same size, they were 9 and 13).
+local BUTTON = 13
+
+-- Their pictures, BUTTON - 2 pixels square inside a dark border: "X"
+-- ink, as runs {column, row, length} from 0 (icon_runs).
+local SELL_ICON = {
+  "...........",
+  ".XX.....XX.",
+  ".XXX...XXX.",
+  "..XXX.XXX..",
+  "...XXXXX...",
+  "....XXX....",
+  "...XXXXX...",
+  "..XXX.XXX..",
+  ".XXX...XXX.",
+  ".XX.....XX.",
+  "...........",
+}
+local GIVE_ICON = {
+  "...........",
+  "......X....",
+  "......XX...",
+  "......XXX..",
+  ".XXXXXXXXX.",
+  ".XXXXXXXXXX",
+  ".XXXXXXXXX.",
+  "......XXX..",
+  "......XX...",
+  "......X....",
+  "...........",
+}
+local GAVEL_ICON = {
+  ".....X.....",
+  "....XXX....",
+  "...XXXXX...",
+  "..XXXXX....",
+  ".XXXXX.....",
+  "XXXXXX.....",
+  ".XXX..X....",
+  "..X....X...",
+  "........X..",
+  ".........X.",
+  "..........X",
+}
+local function icon_runs(icon)
+  local runs = {}
+  for row, line in ipairs(icon) do
+    local col = 1
+    while col <= #line do
+      local first, last = line:find("X+", col)
+      if not first then break end
+      runs[#runs + 1] = {first - 1, row - 1, last - first + 1}
+      col = last + 1
+    end
+  end
+  return runs
+end
+local SELL_RUNS, GIVE_RUNS, GAVEL_RUNS = icon_runs(SELL_ICON), icon_runs(GIVE_ICON), icon_runs(GAVEL_ICON)
+
+--! Does the town map paint tile x, y (indoors in the level's own map, as
+--! th_lua_ui.cpp l_town_map_draw asks of the original tile)? From the
+--! tile's bytes in the level file (th_map.cpp: byte 5 bit 0 impassable,
+--! byte 7 bit 4 outdoors). A plot may take in some grass round it, which
+--! the map leaves green.
+local function painted(th, x, y)
+  local raw = th.getCellRaw and th:getCellRaw(x, y)
+  if not raw or #raw < 8 then return true end
+  return raw:byte(6) % 2 == 0 and math.floor(raw:byte(8) / 16) % 2 == 0
+end
+
+--! The top right tile of `plot` that the map paints (as
+--! MultiplayerSession.plotCorner, of the painted tiles): where its buttons
+--! or its auction badge go.
+--!return x, y (nil, nil for a plot with no tile)
+function UITownMap:drawnCorner(th, plot)
+  self.drawn_corners = self.drawn_corners or {}
+  local corner = self.drawn_corners[plot]
+  if not corner then
+    local tiles = MultiplayerSession.plotTiles(th, plot)
+    local bx, by, best
+    for i = 1, #tiles, 2 do
+      local tx, ty = tiles[i], tiles[i + 1]
+      local score = tx - ty
+      if painted(th, tx, ty) and (not best or score > best) then bx, by, best = tx, ty, score end
+    end
+    if not bx then bx, by = MultiplayerSession.plotCorner(th, plot) end
+    corner = {bx, by}
+    self.drawn_corners[plot] = corner
+  end
+  return corner[1], corner[2]
+end
+
+--! Draw a BUTTON-sized icon at bx, by (screen pixels): border, face, ink.
+local function draw_icon(canvas, bx, by, s, face, ink, runs)
+  canvas:drawRect(canvas:mapRGB(30, 20, 20), bx, by, BUTTON * s, BUTTON * s)
+  canvas:drawRect(face, bx + s, by + s, (BUTTON - 2) * s, (BUTTON - 2) * s)
+  for _, run in ipairs(runs) do
+    canvas:drawRect(ink, bx + (1 + run[1]) * s, by + (1 + run[2]) * s, run[3] * s, s)
+  end
+end
 
 --! Multiplayer: the buttons in the top right corner of each of this player's
 --! plots but the starting plot: a red X to sell the plot back to the bank,
@@ -143,17 +243,14 @@ function UITownMap:plotButtons()
   local th = world.map.th
   local player = hospital:getPlayerIndex()
   local tp = self:tilePixels()
-  self.plot_corners = self.plot_corners or {}
   for plot = 1, th:getPlotCount() do
     if th:getPlotOwner(plot) == player and not MultiplayerSession.isStartingPlot(world, plot) then
-      local corner = self.plot_corners[plot]
-      if not corner then
-        corner = {MultiplayerSession.plotCorner(th, plot)}
-        self.plot_corners[plot] = corner
-      end
-      if corner[1] then
-        local right = 227 + corner[1] * tp -- (the corner tile's right edge)
-        local top = 25 + (corner[2] - 1) * tp
+      local cx, cy = self:drawnCorner(th, plot)
+      if cx then
+        -- (The corner tile's right and top edges: the engine draws tile row
+        -- y at 25 + y * tp, th_lua_ui.cpp l_town_map_draw.)
+        local right = 227 + cx * tp
+        local top = 25 + cy * tp
         list[#list + 1] = {plot = plot, kind = "sell", x = right - BUTTON, y = top}
         if allies then
           list[#list + 1] = {plot = plot, kind = "give", x = right - 2 * BUTTON - 1, y = top}
@@ -178,25 +275,13 @@ end
 --! lighter while the mouse is over one.
 function UITownMap:drawPlotButtons(canvas, x, y, s)
   local hover = self.hover_button
+  local white = canvas:mapRGB(255, 255, 255)
   for _, button in ipairs(self:plotButtons()) do
     local sell = button.kind == "sell"
     local lit = hover and hover.plot == button.plot and hover.kind == button.kind
-    local bx, by = x + button.x * s, y + button.y * s
-    canvas:drawRect(canvas:mapRGB(30, 20, 20), bx, by, BUTTON * s, BUTTON * s)
     local face = sell and (lit and canvas:mapRGB(255, 90, 80) or canvas:mapRGB(200, 30, 30)) or
         (lit and canvas:mapRGB(110, 160, 255) or canvas:mapRGB(40, 90, 210))
-    canvas:drawRect(face, bx + s, by + s, (BUTTON - 2) * s, (BUTTON - 2) * s)
-    local white = canvas:mapRGB(255, 255, 255)
-    if sell then
-      for i = 0, 6 do
-        canvas:drawRect(white, bx + (1 + i) * s, by + (1 + i) * s, s, s)
-        canvas:drawRect(white, bx + (7 - i) * s, by + (1 + i) * s, s, s)
-      end
-    else
-      for _, p in ipairs({{2, 4}, {3, 4}, {4, 4}, {5, 4}, {6, 4}, {4, 2}, {5, 3}, {4, 6}, {5, 5}}) do
-        canvas:drawRect(white, bx + p[1] * s, by + p[2] * s, s, s)
-      end
-    end
+    draw_icon(canvas, x + button.x * s, y + button.y * s, s, face, white, sell and SELL_RUNS or GIVE_RUNS)
   end
 end
 
@@ -232,33 +317,6 @@ function UITownMap:onTick()
   return UIFullscreen.onTick(self)
 end
 
--- The gavel on an auction plot's badge (BADGE - 2 pixels square), and its
--- runs of ink: {column, row, length}, from the 0-based pattern.
-local BADGE = 13
-local GAVEL = {
-  ".....X.....",
-  "....XXX....",
-  "...XXXXX...",
-  "..XXXXX....",
-  ".XXXXX.....",
-  "XXXXXX.....",
-  ".XXX..X....",
-  "..X....X...",
-  "........X..",
-  ".........X.",
-  "..........X",
-}
-local GAVEL_RUNS = {}
-for row, line in ipairs(GAVEL) do
-  local col = 1
-  while col <= #line do
-    local first, last = line:find("X+", col)
-    if not first then break end
-    GAVEL_RUNS[#GAVEL_RUNS + 1] = {first - 1, row - 1, last - first + 1}
-    col = last + 1
-  end
-end
-
 --! The tiles of `plot` that get a gold stripe when it would go to auction:
 --! every fourth diagonal, not on the plot's edge (its white line), flat
 --! {x1, y1, ...}; kept, the plots never change.
@@ -268,7 +326,9 @@ function UITownMap:stripeTiles(th, plot)
   if list then return list end
   local tiles = MultiplayerSession.plotTiles(th, plot)
   local inside = {}
-  for i = 1, #tiles, 2 do inside[tiles[i] * 4096 + tiles[i + 1]] = true end
+  for i = 1, #tiles, 2 do
+    if painted(th, tiles[i], tiles[i + 1]) then inside[tiles[i] * 4096 + tiles[i + 1]] = true end
+  end
   list = {}
   for i = 1, #tiles, 2 do
     local tx, ty = tiles[i], tiles[i + 1]
@@ -288,8 +348,7 @@ end
 function UITownMap:drawAuctionBadges(canvas, x, y, s)
   local th = self.ui.hospital.world.map.th
   local tp = self:tilePixels()
-  self.plot_corners = self.plot_corners or {}
-  local border, face, ink = canvas:mapRGB(30, 20, 20), canvas:mapRGB(240, 190, 40), canvas:mapRGB(70, 40, 15)
+  local face, ink = canvas:mapRGB(240, 190, 40), canvas:mapRGB(70, 40, 15)
   -- (Tile x, y is drawn at 227 + (x - 1) * tp, 25 + y * tp: the engine's
   -- rows start a tile down, th_lua_ui.cpp l_town_map_draw.)
   for plot in pairs(self:auctionPlots()) do
@@ -298,19 +357,10 @@ function UITownMap:drawAuctionBadges(canvas, x, y, s)
       canvas:drawRect(face, x + (227 + (stripes[i] - 1) * tp) * s, y + (25 + stripes[i + 1] * tp) * s,
           tp * s, tp * s)
     end
-    local corner = self.plot_corners[plot]
-    if not corner then
-      corner = {MultiplayerSession.plotCorner(th, plot)}
-      self.plot_corners[plot] = corner
-    end
-    if corner[1] then
-      local bx = x + (227 + corner[1] * tp - BADGE) * s
-      local by = y + (25 + corner[2] * tp) * s
-      canvas:drawRect(border, bx, by, BADGE * s, BADGE * s)
-      canvas:drawRect(face, bx + s, by + s, (BADGE - 2) * s, (BADGE - 2) * s)
-      for _, run in ipairs(GAVEL_RUNS) do
-        canvas:drawRect(ink, bx + (1 + run[1]) * s, by + (1 + run[2]) * s, run[3] * s, s)
-      end
+    local cx, cy = self:drawnCorner(th, plot)
+    if cx then
+      draw_icon(canvas, x + (227 + cx * tp - BUTTON) * s, y + (25 + cy * tp) * s, s, face, ink,
+          GAVEL_RUNS)
     end
   end
 end

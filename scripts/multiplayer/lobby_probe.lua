@@ -2583,13 +2583,19 @@ local function run()
         elseif a == "buyplot" then
           -- Town map: buy the plot this hospital can buy that has the most
           -- objects waiting on it (entrance doors), as a click there does.
-          -- buyplot:other tries one on another player's side (an auction).
+          -- buyplot:other tries one on another player's side (an auction);
+          -- buyplot:plain one that goes to no auction.
           local th, hospital = world.map.th, world.ui.hospital
           local me = world:getHospitalIndex(hospital)
           local best, best_n
+          local peek = {}
           for plot = 1, th:getPlotCount() do
             local side = world.mp_coop and MultiplayerSession.plotSide(world, plot)
             local wanted = not side or (entry.arg == "other") == (side ~= me)
+            if entry.arg == "plain" then
+              local bidders = MultiplayerSession.auctionBidders(world, plot, hospital, peek)
+              wanted = bidders ~= nil and #bidders == 1
+            end
             if wanted and th:isParcelPurchasable(plot, hospital:getPlayerIndex()) then
               local n = 0
               for _, p2 in pairs(world.delayed_map_objects or {}) do
