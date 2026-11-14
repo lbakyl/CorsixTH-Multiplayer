@@ -4359,18 +4359,40 @@ function MultiplayerSession:syncHold(world)
   local class_ = rawget(_G, "UIMultiplayerHoldWait")
   if self.observer or self.abstains or not ui or not class_ then return end -- (not for bots)
   local hold = world.mp_hold
-  -- (Not for oneself only: this player's "done" is on its way.)
+  local report_class, fax_class = rawget(_G, "UIAnnualReport"), rawget(_G, "UIFax")
+  local function reading()
+    return (report_class and ui:getWindow(report_class)) or (fax_class and ui:getWindow(fax_class))
+  end
+  -- (Not for oneself only: this player's "done" is on its way. A fax the
+  -- game waits for from this player: not a box naming nobody, "Waiting on
+  -- to answer the fax" (Argus, 2026-11-14, after closing his race fax), but
+  -- the fax again, every 10 seconds at most, until it is answered.)
   if hold then
-    local others = false
+    local others, own_fax = false, false
     for i in pairs(hold.waiting) do
-      if world.hospitals[i] ~= ui.hospital or self.hold_done_sent ~= hold.id then others = true end
+      if world.hospitals[i] ~= ui.hospital then
+        others = true
+      elseif hold.kind == "win" then
+        own_fax = true
+      elseif self.hold_done_sent ~= hold.id then
+        others = true
+      end
+    end
+    local panel = ui.bottom_panel
+    if own_fax and not reading() and panel and panel.findMessageIcon and panel.openMessageById then
+      local now = self.clock()
+      if not self.fax_reopened_at or now - self.fax_reopened_at >= 10000 then
+        self.fax_reopened_at = now
+        for _, id in ipairs(hold.msgs) do
+          local icon = panel:findMessageIcon(id)
+          if icon and (icon.everyone or icon.hospital == ui.hospital) then panel:openMessageById(id) end
+        end
+      end
     end
     if not others then hold = nil end
   end
   local box = ui:getWindow(class_)
-  local report_class, fax_class = rawget(_G, "UIAnnualReport"), rawget(_G, "UIFax")
-  local reading = hold and ((report_class and ui:getWindow(report_class)) or (fax_class and ui:getWindow(fax_class)))
-  if hold and not reading then
+  if hold and not reading() then
     if not box then ui:addWindow(class_(ui)) end
   elseif box then
     box:close()
