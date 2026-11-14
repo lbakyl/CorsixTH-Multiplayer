@@ -115,18 +115,24 @@ int l_town_map_draw(lua_State* L) {
   const map_tile* pNode = pMap->get_tile_unchecked(0, 0);
   const map_tile* pOriginalNode = pMap->get_original_tile_unchecked(0, 0);
   int iMapWidth = pMap->get_width();
-  // Pixels per tile (times the UI scale): 3 on Theme Hospital's 128 x 128
-  // maps, fewer on bigger ones (2 at 192, 1 at 256), so the map keeps its
-  // 384 pixels; doors and walls in proportion.
-  const int tile = std::max(1, 384 / std::max(iMapWidth, pMap->get_height()));
-  const int t = tile * scale;
+  // The map fills 384 pixels (times the UI scale) whatever its size: tile i
+  // starts at i * 384 * scale / size, so on Theme Hospital's 128 x 128 map
+  // every tile is 3 pixels (times the scale) and on a 256 x 256 one they are
+  // 1 and 2 in turn (it was 1 each, filling two thirds of the square: Jan,
+  // 2026-11-15, MOUNT EVEREST). Rows start a tile down. Doors and walls use
+  // the average size. UITownMap:tilePixels in town_map.lua does the same.
+  const int iSize = std::max(iMapWidth, pMap->get_height());
+  const int iSpan = 384 * scale;
+  auto at = [iSize, iSpan](int i) { return (i * iSpan) / iSize; };
+  const int t = std::max(scale, iSpan / iSize);
   // How far the entrance doors stick out of the hospital, in whole pixels.
   const int door_shift = (2 * t) / 3;
-  int iCanvasY = iCanvasYBase + t;
-  for (int iY = 0; iY < pMap->get_height(); ++iY, iCanvasY += t) {
-    int iCanvasX = iCanvasXBase;
-    for (int iX = 0; iX < iMapWidth;
-         ++iX, ++pNode, ++pOriginalNode, iCanvasX += t) {
+  for (int iY = 0; iY < pMap->get_height(); ++iY) {
+    const int iCanvasY = iCanvasYBase + at(iY + 1);
+    const int th = at(iY + 2) - at(iY + 1);
+    for (int iX = 0; iX < iMapWidth; ++iX, ++pNode, ++pOriginalNode) {
+      const int iCanvasX = iCanvasXBase + at(iX);
+      const int tw = at(iX + 1) - at(iX);
       if (pOriginalNode->flags.hospital) {
         uint32_t iColour = iColourMyHosp;
         int iOwner = pMap->get_parcel_owner(pNode->iParcelId);
@@ -185,12 +191,12 @@ int l_town_map_draw(lua_State* L) {
 
           iColour = render_target::map_colour(iR, iG, iB);
         }
-        pCanvas->fill_rect(iColour, iCanvasX, iCanvasY, t, t);
+        pCanvas->fill_rect(iColour, iCanvasX, iCanvasY, tw, th);
       }
     dont_paint_tile:
       if (is_wall_drawn(*pMap, *pNode, *pOriginalNode,
                         tile_layer::north_wall)) {
-        pCanvas->fill_rect(iColourWall, iCanvasX, iCanvasY, t, scale);
+        pCanvas->fill_rect(iColourWall, iCanvasX, iCanvasY, tw, scale);
 
         // Draw entrance door
         auto l = (pNode - 1)->objects;
@@ -205,7 +211,7 @@ int l_town_map_draw(lua_State* L) {
         }
       }
       if (is_wall_drawn(*pMap, *pNode, *pOriginalNode, tile_layer::west_wall)) {
-        pCanvas->fill_rect(iColourWall, iCanvasX, iCanvasY, scale, t);
+        pCanvas->fill_rect(iColourWall, iCanvasX, iCanvasY, scale, th);
 
         // Draw entrance door
         auto l = (pNode - iMapWidth)->objects;

@@ -113,9 +113,20 @@ local flag_cache = {}
 --! Pixels per map tile (unscaled): 3 on Theme Hospital's 128 x 128 maps,
 --! fewer on bigger ones (2 at 192, 1 at 256), so the map keeps its 384
 --! pixels (the same as the engine's drawing, th_lua_ui.cpp).
+--! Pixels per tile before the UI scale: the map fills 384 of them whatever
+--! its size (3 on a 128 x 128 map, 1.5 on a 256 x 256 one), as
+--! th_lua_ui.cpp l_town_map_draw draws it (tile i starts at i * 384 * scale
+--! / size, whole pixels; Jan, 2026-11-15: MOUNT EVEREST filled two thirds of
+--! the square at 1 pixel a tile).
 function UITownMap:tilePixels()
   local map = self.ui.app.map
-  return math.max(1, math.floor(384 / math.max(map.width or 128, map.height or 128)))
+  return 384 / math.max(map.width or 128, map.height or 128)
+end
+
+--! A screen position as the whole pixel the engine draws it at (drawRect
+--! takes no others; a hair over for numbers like 2.9999999).
+local function whole_px(v)
+  return math.floor(v + 1e-6)
 end
 
 -- Multiplayer: the size of the buttons on the player's plots and of the
@@ -214,6 +225,7 @@ end
 
 --! Draw a BUTTON-sized icon at bx, by (screen pixels): border, face, ink.
 local function draw_icon(canvas, bx, by, s, face, ink, runs)
+  bx, by = whole_px(bx), whole_px(by)
   canvas:drawRect(canvas:mapRGB(30, 20, 20), bx, by, BUTTON * s, BUTTON * s)
   canvas:drawRect(face, bx + s, by + s, (BUTTON - 2) * s, (BUTTON - 2) * s)
   for _, run in ipairs(runs) do
@@ -354,8 +366,9 @@ function UITownMap:drawAuctionBadges(canvas, x, y, s)
   for plot in pairs(self:auctionPlots()) do
     local stripes = self:stripeTiles(th, plot)
     for i = 1, #stripes, 2 do
-      canvas:drawRect(face, x + (227 + (stripes[i] - 1) * tp) * s, y + (25 + stripes[i + 1] * tp) * s,
-          tp * s, tp * s)
+      local x0, y0 = whole_px(x + (227 + (stripes[i] - 1) * tp) * s), whole_px(y + (25 + stripes[i + 1] * tp) * s)
+      local x1, y1 = whole_px(x + (227 + stripes[i] * tp) * s), whole_px(y + (25 + (stripes[i + 1] + 1) * tp) * s)
+      canvas:drawRect(face, x0, y0, math.max(1, x1 - x0), math.max(1, y1 - y0))
     end
     local cx, cy = self:drawnCorner(th, plot)
     if cx then
@@ -556,7 +569,12 @@ function UITownMap:draw(canvas, x, y)
     self.panel_sprites:draw(canvas, 9, x + 101 * s + dx, y + 319 * s, { scaleFactor = s })
   end
 
-  -- city name
+  -- city name (on a map bigger than Theme Hospital's the town reaches up to
+  -- it: a dark band behind it keeps it readable. Jan, 2026-11-15.)
+  local map_w, map_h = map.th:size()
+  if math.max(map_w, map_h) > 128 then
+    canvas:drawRect(canvas:mapRGB(30, 50, 30), x + 300 * s, y + 42 * s, 260 * s, 17 * s)
+  end
   self.city_font:draw(canvas, map.level_name, x + 300 * s, y + 43 * s, 260 * s, 15 * s)
 
   local tp = self:tilePixels()
@@ -591,8 +609,8 @@ function UITownMap:draw(canvas, x, y)
   local function draw_entities(list, color, size)
     for _, ent in ipairs(list) do
       -- 3 is the number of pixel that are used to represent one world tile in the map
-      canvas:drawRect(color, town_map_offset_x + ent.tile_x * tp * s - 2 * s,
-        town_map_offset_y + ent.tile_y * tp * s + s, size * s, size * s)
+      canvas:drawRect(color, whole_px(town_map_offset_x + ent.tile_x * tp * s - 2 * s),
+        whole_px(town_map_offset_y + ent.tile_y * tp * s + s), size * s, size * s)
     end
   end
 
@@ -601,8 +619,8 @@ function UITownMap:draw(canvas, x, y)
       local tile_x, tile_y = ent.tile_x, ent.tile_y
       if tile_x and hospital:isInHospital(tile_x, tile_y) then
         -- 3 is the number of pixel that are used to represent one world tile in the map
-        canvas:drawRect(color, town_map_offset_x + tile_x * tp * s - 2 * s,
-          town_map_offset_y + tile_y * tp * s + s, size * s, size * s)
+        canvas:drawRect(color, whole_px(town_map_offset_x + tile_x * tp * s - 2 * s),
+          whole_px(town_map_offset_y + tile_y * tp * s + s), size * s, size * s)
       end
     end
   end
