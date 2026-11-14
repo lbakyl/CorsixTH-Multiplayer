@@ -77,6 +77,11 @@ jobs:
           mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
           mkdir -p artifact
 
+      # (lpeg's own site may not answer: the same tarball from a mirror, checked.)
+      - name: lpeg source for vcpkg
+        shell: bash
+        run: bash scripts/multiplayer/ci_lpeg_mirror.sh "$(cygpath -u "$VCPKG_ROOT")/downloads"
+
       - name: Run CMake configure
         shell: cmd
         run: |

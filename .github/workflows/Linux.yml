@@ -178,6 +178,10 @@ jobs:
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
 
+      # (lpeg's own site may not answer: the same tarball from a mirror, checked.)
+      - name: lpeg source for vcpkg
+        run: bash scripts/multiplayer/ci_lpeg_mirror.sh "$VCPKG_ROOT/downloads"
+
       - name: Build CorsixTH, run tests
         uses: lukka/run-cmake@v10
         with:
