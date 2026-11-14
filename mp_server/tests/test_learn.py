@@ -123,8 +123,33 @@ def test_corridor_habits_keep_radiators_apart():
     corridor += [{"id": "plant", "x": 10 + x, "y": 8, "dir": "north", "tiles": [[10 + x, 8]]} for x in (0, 1, 5)]
     rec = {"corridor": corridor}
     habits = layout_learn.corridor_habits([rec])
-    assert habits == {"radiator_gap": 3, "radiator_seen": 10}
+    assert (habits["radiator_gap"], habits["radiator_seen"]) == (3, 10) and "plant_gap" not in habits
     assert layout_learn.nearest_gaps(corridor, "plant") == [1, 1, 4]
     # Radiators flush together are not learnt as the habit: never below 2.
     flush = [{"id": "radiator", "x": x, "y": 5} for x in range(10)]
     assert layout_learn.corridor_habits([{"corridor": flush}])["radiator_gap"] == 2
+
+
+def test_corridor_spots_by_doors_seen_from_the_door():
+    """Where an expert's benches stand by a room's door, seen from the door
+    (the room turned so that its door's wall is at the top)."""
+    sys.path.insert(0, str(REPO / "scripts" / "multiplayer"))
+    try:
+        import layout_learn
+    finally:
+        sys.path.pop(0)
+    # Two rooms 4 x 4: one with its door in the north wall at 11,10, a bench
+    # beside it at 12,9 facing north; one with its door in the west wall at
+    # 30,12 (rows of the room 10..13), a bench beside it at 29,11 facing west:
+    # the same spot seen from the door (a column to the right, row -1).
+    rooms = [{"kind": "gp", "x": 10, "y": 10, "w": 4, "h": 4, "built": True,
+              "door": {"x": 11, "y": 10, "dir": "north"}, "objects": []},
+             {"kind": "gp", "x": 30, "y": 10, "w": 4, "h": 4, "built": True,
+              "door": {"x": 30, "y": 12, "dir": "west"}, "objects": []}]
+    corridor = [{"id": "bench", "x": 12, "y": 9, "dir": "north", "tiles": [[12, 9]]},
+                {"id": "bench", "x": 29, "y": 11, "dir": "west", "tiles": [[29, 11]]},
+                {"id": "plant", "x": 40, "y": 40, "dir": "north", "tiles": [[40, 40]]}]
+    near = layout_learn.near_spots([{"rooms": rooms, "corridor": corridor}])
+    assert near["doors_seen"] == 2
+    assert near["door_spots"] == {"bench": [{"dc": 1, "row": -1, "dir": "north", "seen": 2}]}
+    assert near["desk_spots"] == {} and near["desks_seen"] == 0

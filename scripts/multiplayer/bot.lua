@@ -798,9 +798,9 @@ local RESERVE = 3000
 local TRICK_GAP_DAYS = 30
 -- Corridor objects of one kind keep apart (Argus, 2026-11-14: radiators
 -- flush against one another): at least this many tiles from the next one of
--- the hospital's corridors, as the experts' corridors have them (learned each
--- night, layout_learn.py: their radiators mostly stand 3 or 4 apart), else
--- these.
+-- the hospital's corridors; a hard bot as the experts' corridors have them
+-- (learned each night, layout_learn.py: their radiators mostly stand 3 or 4
+-- apart).
 local CORRIDOR_GAPS = {radiator = 3, plant = 2}
 -- Dirty tricks by the bot's level (Jan, 2026-11-14): its first one on a day
 -- of these months of the game (easy: months 10-12, normal: 7-12, hard:
@@ -3117,7 +3117,8 @@ function Bot:buyCorridor(object_id, near_x, near_y)
   end
   -- Radiators and plants keep apart (CORRIDOR_GAPS; the learned ones first).
   local gap = CORRIDOR_GAPS[object_id]
-  local habits = self.expert_data_read and self.expert_data_read.corridor
+  -- (What experts do: a hard bot's, as its rooms. Jan, 2026-11-12.)
+  local habits = self.expert_data and self.expert_data.corridor
   if gap and habits and tonumber(habits[object_id .. "_gap"]) then gap = tonumber(habits[object_id .. "_gap"]) end
   local same = {}
   if gap then
@@ -3181,6 +3182,12 @@ function Bot:buyCorridor(object_id, near_x, near_y)
   -- the door, and first beside a bench facing the same way, so that they
   -- stand in rows (Argus, 2026-11-14: they stood every way round).
   local loose, want_row = false, false
+  local function spaced(tx, ty)
+    for _, e in ipairs(same) do
+      if math.max(math.abs(e.tile_x - tx), math.abs(e.tile_y - ty)) < gap then return false end
+    end
+    return true
+  end
   local function front_of(facing)
     for _, t in ipairs(object_type.orientations[facing].footprint or {}) do
       if t.only_passable then return t end
@@ -3220,9 +3227,7 @@ function Bot:buyCorridor(object_id, near_x, near_y)
       if math.abs(e.tile_x - tx) <= DRINKS_APART and math.abs(e.tile_y - ty) <= DRINKS_APART then return false end
     end
     if not people_ok and world:anyHumanoidObscuringArea(tx, ty) then return false end
-    for _, e in ipairs(same) do
-      if math.max(math.abs(e.tile_x - tx), math.abs(e.tile_y - ty)) < gap then return false end
-    end
+    if not spaced(tx, ty) then return false end
     local list = facings
     if object_id == "bench" then list = loose and toward_door(tx, ty) or back_to_wall(tx, ty) end
     for _, facing in ipairs(list) do
@@ -3252,6 +3257,41 @@ function Bot:buyCorridor(object_id, near_x, near_y)
         if place.object_blueprint_good and keeps_floor(ox, oy, spot.dir) then
           x, y = ox, oy
           log(string.format("a %s where the expert had one: %d,%d facing %s", object_id, ox, oy, spot.dir))
+        end
+      end
+    end
+  end
+  -- Where the experts put this kind of object by a door or a reception desk
+  -- (learned each night from their games, layout_learn.py near_spots; Jan,
+  -- 2026-11-14), seen from the door or desk it is for, the most seen first:
+  -- Argus's benches stand beside the door along the room's wall and in a
+  -- row across the corridor facing it.
+  if not x and near_x and habits and Learned then
+    local spots = {}
+    for _, r in pairs(world.rooms) do
+      local door = r.door
+      if r.hospital == hosp and door and door.tile_x == near_x and door.tile_y == near_y and r.width then
+        spots = Learned.doorSpots(habits, object_id, r.x, r.y, r.width, r.height, door.tile_x, door.tile_y,
+            door.direction)
+      end
+    end
+    if #spots == 0 then
+      for _, desk in ipairs(hosp:getReceptionDesks()) do
+        if desk.tile_x == near_x and desk.tile_y == near_y then
+          spots = Learned.deskSpots(habits, object_id, near_x, near_y, desk.direction)
+        end
+      end
+    end
+    for _, sp in ipairs(spots) do
+      if not x and object_type.orientations[sp.dir] and world:isOnMap(sp.x, sp.y) and self:freeTile(sp.x, sp.y) and
+          spaced(sp.x, sp.y) and (people_ok or not world:anyHumanoidObscuringArea(sp.x, sp.y)) and
+          not (next(given) and given[world.map.th:getCellFlags(sp.x, sp.y).parcelId]) then
+        place:setOrientation(sp.dir)
+        place:setBlueprintCell(sp.x, sp.y)
+        if place.object_blueprint_good and keeps_floor(sp.x, sp.y, sp.dir) then
+          x, y = sp.x, sp.y
+          log(string.format("a %s where the experts have one by a door: %d,%d facing %s (seen %d times)",
+              object_id, sp.x, sp.y, sp.dir, sp.seen or 0))
         end
       end
     end

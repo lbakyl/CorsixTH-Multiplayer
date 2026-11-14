@@ -240,8 +240,18 @@ person who left, keep their own rules:
 - **Corridor habits.** How far apart the experts keep their radiators and
   plants in their corridors (the tiles to the nearest one of the same kind; a
   quarter of them are closer: Argus's radiators mostly stand 3 or 4 apart,
-  so 3). Every bot keeps its own corridor radiators and plants at least that
-  far apart (else 3 and 2; Argus, 2026-11-14: radiators flush together).
+  so 3), and where each kind of one-tile corridor object stands by a room's
+  door and by a reception desk, seen from the door (the room turned so that
+  its door's wall is at the top, the corridor above it) or the desk (turned
+  to face north), each spot seen at least twice, the most seen first
+  (`layout_learn.py near_spots`; from Argus's 109 doors: a bench beside the
+  door along the room's wall, a row across the corridor facing it, drinks
+  machines two tiles to the side). A hard bot buying a bench, plant,
+  radiator or drinks machine for a door or desk tries those spots first
+  (`Learned.doorSpots`, `Learned.deskSpots`, as the expert had it and
+  mirrored), and keeps its radiators and plants as far apart as the experts.
+  Other bots keep them 3 and 2 tiles apart (Argus, 2026-11-14: radiators
+  flush together).
 
 Where no expert spot is free, `Bot:buyCorridor` puts a corridor object
 against a wall (of the building or a room; a bench, a drinks machine or

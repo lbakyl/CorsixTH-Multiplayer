@@ -109,4 +109,33 @@ eq(L.recipe(data, "research", 6), nil, "11 x 11 is too big for 6")
 eq(L.recipe(data, "research", 8).w, 11, "a research-heavy bot's 8 + 3")
 eq(L.recipe(data, "gp", 4).w, 4, "gp")
 eq(L.planKey("CROSSROADS", 192, 192, 6, 6), "CROSSROADS/192x192/6/6", "plan key")
+-- Corridor spots by a door (layout_learn.py near_spots): a bench beside
+-- the door along the room's wall (row -1, a column to the right, facing
+-- north in the frame) and one across the corridor facing the room.
+local habits = {door_spots = {bench = {{dc = 1, row = -1, dir = "north", seen = 16},
+  {dc = 0, row = -3, dir = "south", seen = 10}, {dc = 0, row = -1, dir = "north", seen = 9}}},
+  desk_spots = {bench = {{dx = 0, dy = -2, dir = "south", seen = 4}}}}
+-- Room 5 x 4 at 10,20, door in the north wall at 12,20 (frame column 2).
+local sp = L.doorSpots(habits, "bench", 10, 20, 5, 4, 12, 20, "north")
+eq(#sp, 3, "north: the spot and its mirror, the one across; never in front of the door")
+eq(sp[1].x .. "," .. sp[1].y .. " " .. sp[1].dir, "13,19 north", "north: beside the door")
+eq(sp[2].x .. "," .. sp[2].y .. " " .. sp[2].dir, "11,19 north", "north: mirrored")
+eq(sp[3].x .. "," .. sp[3].y .. " " .. sp[3].dir, "12,17 south", "north: across the corridor")
+-- The same room with its door in the west wall at 10,22: the corridor west.
+sp = L.doorSpots(habits, "bench", 10, 20, 5, 4, 10, 22, "west")
+eq(sp[1].x .. "," .. sp[1].y .. " " .. sp[1].dir, "9,21 west", "west: beside the door")
+eq(sp[3].x .. "," .. sp[3].y .. " " .. sp[3].dir, "7,22 east", "west: across the corridor, facing the room")
+-- In the south wall at 12,23 and the east wall at 14,21.
+sp = L.doorSpots(habits, "bench", 10, 20, 5, 4, 12, 23, "north")
+eq(sp[3].x .. "," .. sp[3].y .. " " .. sp[3].dir, "12,26 north", "south: across the corridor")
+sp = L.doorSpots(habits, "bench", 10, 20, 5, 4, 14, 21, "west")
+eq(sp[3].x .. "," .. sp[3].y .. " " .. sp[3].dir, "17,21 west", "east: across the corridor")
+eq(#L.doorSpots(habits, "plant", 10, 20, 5, 4, 12, 20, "north"), 0, "nothing learnt for plants")
+eq(#L.doorSpots(nil, "bench", 10, 20, 5, 4, 12, 20, "north"), 0, "nothing learnt at all")
+-- By a desk at 30,30: facing north, a bench 2 tiles in front facing it; the
+-- desk facing east: 2 tiles east, facing west.
+local ds = L.deskSpots(habits, "bench", 30, 30, "north")
+eq(ds[1].x .. "," .. ds[1].y .. " " .. ds[1].dir, "30,28 south", "desk north")
+ds = L.deskSpots(habits, "bench", 30, 30, "east")
+eq(ds[1].x .. "," .. ds[1].y .. " " .. ds[1].dir, "32,30 west", "desk east")
 print("bot_learned_test: all checks passed")

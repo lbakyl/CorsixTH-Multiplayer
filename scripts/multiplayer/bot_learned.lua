@@ -110,6 +110,57 @@ function L.frameDir(f, d)
   return DIRS[(i + ROT[f.wall]) % 4 + 1]
 end
 
+--! Where an expert's one-tile corridor object `id` stood by a room's door,
+--! for the room at x, y (w x h) whose door is at door_x, door_y facing
+--! door_dir: map tiles and facings from the learned corridor habits
+--! (layout_learn.py near_spots: the room turned so that the door's wall is
+--! at the top, the corridor above it), each spot as the expert had it, then
+--! mirrored left to right; the most seen first. (Never the tile in front of
+--! the door.)
+function L.doorSpots(habits, id, x, y, w, h, door_x, door_y, door_dir)
+  local spots = habits and habits.door_spots and habits.door_spots[id]
+  if type(spots) ~= "table" then return {} end
+  local f = L.frame(x, y, w, h, door_x, door_y, door_dir)
+  local out, seen = {}, {}
+  for _, s in ipairs(spots) do
+    for _, mirror in ipairs({false, true}) do
+      local dc, dir = s.dc, s.dir
+      if mirror then dc, dir = -dc, MIRROR[dir] or dir end
+      if not (dc == 0 and s.row == -1) then
+        local tx, ty = L.toMap(f, f.col + dc, s.row)
+        local d = L.mapDir(f, dir)
+        local key = tx .. "," .. ty .. "," .. tostring(d)
+        if not seen[key] then
+          seen[key] = true
+          out[#out + 1] = {x = tx, y = ty, dir = d, seen = s.seen}
+        end
+      end
+    end
+  end
+  return out
+end
+
+-- Clockwise quarter turns that bring a desk's facing to north.
+local DESK_ROT = {north = 0, east = 3, south = 2, west = 1}
+
+--! The same by a reception desk at x, y facing `dir` (the desk turned to
+--! face north).
+function L.deskSpots(habits, id, x, y, dir)
+  local spots = habits and habits.desk_spots and habits.desk_spots[id]
+  local k = DESK_ROT[dir]
+  if type(spots) ~= "table" or not k then return {} end
+  local out = {}
+  for _, s in ipairs(spots) do
+    local dx, dy = s.dx, s.dy
+    for _ = 1, (4 - k) % 4 do dx, dy = -dy, dx end
+    local d = s.dir
+    local i = DIR_INDEX[d]
+    if i then d = DIRS[(i - k) % 4 + 1] end
+    out[#out + 1] = {x = x + dx, y = y + dy, dir = d, seen = s.seen}
+  end
+  return out
+end
+
 --! A layout's objects as they stand in the room with frame `f`: each
 --! {id, dir, tiles} with map directions and tiles; mirrored left to right
 --! first if `mirror`.

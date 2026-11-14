@@ -25,7 +25,12 @@ bot played (the room's own bot or a stand-in for a person who left):
   from their latest game there, and what stands in their corridors;
 - corridor habits: how far apart their radiators and plants stand (the
   tiles to the nearest one of the same kind; a quarter of them are closer),
-  so that a bot keeps its own apart as much.
+  so that a bot keeps its own apart as much; and where each kind of
+  corridor object stands by a room's door and by a reception desk, seen
+  from the door (the room turned so that the door's wall is at the top: the
+  corridor above it, row -1 the tiles along the wall) or from the desk
+  (turned so that it faces north), with how often, so that a bot puts its
+  own there first.
 """
 import json
 import os
@@ -196,6 +201,68 @@ def nearest_gaps(items, kind):
             for i, (x, y) in enumerate(pts)]
 
 
+# How far from a door or desk its corridor objects are looked at: columns
+# to either side, rows out from the door's wall; tiles around a desk.
+DOOR_COLS, DOOR_ROWS, DESK_R = 5, 6, 5
+# Turns (clockwise quarter turns) that bring a desk's facing to north.
+DESK_ROT = {"north": 0, "east": 3, "south": 2, "west": 1}
+
+
+def single_tile(o):
+    return len(o.get("tiles") or [[o["x"], o["y"]]]) == 1
+
+
+def turn(x, y, k):
+    """(x, y) turned k quarter turns clockwise (y grows down the map)."""
+    for _ in range(k % 4):
+        x, y = -y, x
+    return x, y
+
+
+def near_spots(recs):
+    """Where the experts' one-tile corridor objects stand by room doors
+    and reception desks, seen from the door or desk: per kind, each spot
+    seen at least twice, the most seen first."""
+    door, desk = Counter(), Counter()
+    doors = desks = 0
+    for rec in recs:
+        items = [o for o in rec["corridor"]
+                 if not is_fixture(o["id"]) and o["id"] != "litter" and single_tile(o)]
+        for room in rec.get("rooms", []):
+            if not (room.get("built") and room.get("door")):
+                continue
+            doors += 1
+            col = door_col(room)
+            for o in items:
+                c, r = to_frame(room, o["x"], o["y"])
+                if -DOOR_ROWS <= r <= -1 and abs(c - col) <= DOOR_COLS:
+                    door[(o["id"], c - col, r, frame_dir(room, o.get("dir")))] += 1
+        for d in items:
+            if d["id"] != "reception_desk" or d.get("dir") not in DESK_ROT:
+                continue
+            desks += 1
+            k = DESK_ROT[d["dir"]]
+            for o in items:
+                if o is d or max(abs(o["x"] - d["x"]), abs(o["y"] - d["y"])) > DESK_R:
+                    continue
+                dx, dy = turn(o["x"] - d["x"], o["y"] - d["y"], k)
+                odir = o.get("dir")
+                if odir in DIRS:
+                    odir = DIRS[(DIRS.index(odir) + k) % 4]
+                desk[(o["id"], dx, dy, odir)] += 1
+
+    def spots(counts, a, b):
+        out = defaultdict(list)
+        for (oid, u, v, d), n in counts.items():
+            if n >= 2:
+                out[oid].append({a: u, b: v, "dir": d, "seen": n})
+        for oid in out:
+            out[oid].sort(key=lambda s: (-s["seen"], abs(s[a]) + abs(s[b]), s[a], s[b], str(s["dir"])))
+        return dict(sorted(out.items()))
+    return {"doors_seen": doors, "door_spots": spots(door, "dc", "row"),
+            "desks_seen": desks, "desk_spots": spots(desk, "dx", "dy")}
+
+
 def corridor_habits(recs):
     """How far apart the experts keep their radiators and plants: the gap a
     quarter of them are closer than (at least 8 seen; within sane bounds)."""
@@ -209,6 +276,7 @@ def corridor_habits(recs):
             gaps.sort()
             out[kind + "_gap"] = max(low, min(high, gaps[len(gaps) // 4]))
             out[kind + "_seen"] = len(gaps)
+    out.update(near_spots(recs))
     return out
 
 
@@ -300,7 +368,7 @@ def learn(paths, experts):
         plans[key] = {"player": rec["name"], "date": rec["date"], "rooms": plan_rooms,
                       "objects": plan_objects, "corridor": dict(sorted(corridor.items()))}
     return {"version": 1, "experts": sorted(want), "sources": sources, "recipes": recipes, "plans": plans,
-            "corridor": corridor_habits(list(latest_plan.values()))}
+            "corridor": corridor_habits(list(records.values()))}
 
 
 def lua_value(v, indent=""):
@@ -379,7 +447,10 @@ def main(argv):
                 json.dump({"sources": data["sources"], "recipes": sorted(data["recipes"]),
                            "plans": sorted(data["plans"])}, f, indent=1)
         print_recipes(data)
-        print(f"corridor habits: {data['corridor']}")
+        habits = data["corridor"]
+        print("corridor habits: " + ", ".join(f"{k} {v}" for k, v in habits.items() if not k.endswith("spots")) +
+              "; by doors: " + ", ".join(f"{k} {len(v)}" for k, v in habits["door_spots"].items()) +
+              "; by desks: " + ", ".join(f"{k} {len(v)}" for k, v in habits["desk_spots"].items()))
         print(f"learnt {len(data['recipes'])} room recipes and {len(data['plans'])} plans from "
               f"{len(data['sources'])} hospitals; written to {out}")
         return 0
