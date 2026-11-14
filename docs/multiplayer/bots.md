@@ -69,6 +69,9 @@ best project it can afford is done, one every one to four game days.
   needs is let go (a junior first, then by skill; specialists stay for the
   rooms that need their skill; a research room needs one for every desk;
   students in training are not counted).
+- **A spare nurse** (Jan, 2026-11-14: Clive's two wards stood without a nurse
+  while his were on a break): once two rooms or more need a nurse, a bot
+  hires 1 nurse more than they need, and 1 more for every 8 places.
 - **Handymen** (2026-11-13, Clive's corridors full of litter): one for every
   four rooms from the 3rd room, one more for every 8 pieces of litter and every
   4 machines, at most 8. The first mostly repairs (while there are machines),

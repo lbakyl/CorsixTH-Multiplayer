@@ -908,11 +908,16 @@ function M:projects(s)
   -- (Doctors: as many spare as M:surplusDoctors keeps, or it would let go
   -- the ones hired here. Jan, 2026-11-14: was 1 more for every 12 patients;
   -- Bertie's corridors were full of idle doctors.)
-  local cap = {Doctor = want.Doctor + M.doctorSlack(want.Doctor), Nurse = want.Nurse + 1 + math.floor(s.patients / 20)}
+  local cap = {Doctor = want.Doctor + M.doctorSlack(want.Doctor),
+      Nurse = want.Nurse + math.max(M.nurseSlack(want.Nurse), 1 + math.floor(s.patients / 20))}
   for cat, k in pairs(want) do
     local have = staff(cat)
     if have < k then hire(cat, 8 + (k - have) * 2) end
   end
+  -- A spare nurse once two rooms need one (M.nurseSlack): a ward whose only
+  -- nurse is on a break stands still.
+  local nurses = staff("Nurse")
+  if nurses >= want.Nurse and nurses < want.Nurse + M.nurseSlack(want.Nurse) then hire("Nurse", 9) end
   -- A room that cannot work for want of a specialist (or of anybody of a
   -- kind) comes before new rooms, and an emergency's rooms before all but
   -- the basics: its patients die while the room waits. (A research room
@@ -1446,6 +1451,16 @@ local SURPLUS_FROM, SURPLUS_EVERY = 90, 7
 --! How many doctors more than its rooms need (`n`) a hospital keeps, for
 --! those on a break: 1, and 1 more for every 8 places (19 places: 3).
 function M.doctorSlack(n)
+  return 1 + math.floor(n / 8)
+end
+
+--! How many nurses more than its rooms need (`n`) a hospital keeps: none
+--! while at most one room needs a nurse, then 1, and 1 more for every 8
+--! places (Jan, 2026-11-14: "once the hospital gets larger, there should
+--! always be a spare nurse"; Clive's two wards stood without a nurse while
+--! his were on a break).
+function M.nurseSlack(n)
+  if n < 2 then return 0 end
   return 1 + math.floor(n / 8)
 end
 local SPECIAL = {Surgeon = "is_surgeon", Psychiatrist = "is_psychiatrist", Researcher = "is_researcher"}

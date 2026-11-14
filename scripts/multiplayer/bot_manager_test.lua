@@ -804,5 +804,10 @@ do
   m:surplusDoctors({day = 110, hosp = hosp})
   eq(#issued, 1, "one spare doctor stays")
   eq(M.doctorSlack(19), 3, "Bertie's 19 places keep 3 spare")
+  -- A spare nurse once two rooms need one (Clive's two wards).
+  eq(M.nurseSlack(0), 0, "no nurse rooms, no spare nurse")
+  eq(M.nurseSlack(1), 0, "one ward, no spare nurse")
+  eq(M.nurseSlack(2), 1, "two wards, a spare nurse")
+  eq(M.nurseSlack(8), 2, "8 nurse places, 2 spare")
 end
 print("spare doctors ok")
