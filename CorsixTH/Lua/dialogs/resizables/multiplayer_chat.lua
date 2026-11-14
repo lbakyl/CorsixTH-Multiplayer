@@ -219,9 +219,15 @@ function UIMultiplayerChatInput:UIMultiplayerChatInput(ui)
   self.box.panel.drawLabel = --[[persistable:mp_chat_draw_label]] function(panel, canvas, x, y, limit)
     return panel.window:_drawLine(panel, canvas, x, y, limit)
   end
+  -- (From the left, as a line one types: centred, the room kept for the
+  -- cursor was half on the left, and it touched the box's right edge.)
+  self.box.panel.align = "left"
   self:_showTarget()
   self.box:setActive(true)
 end
+
+-- Pixels between the box's left edge and the line (besides the panel's own 2).
+local LINE_INSET = 2
 
 --! Is byte `i` of `text` inside a character (a UTF-8 continuation byte)?
 local function inside_char(text, i)
@@ -234,8 +240,9 @@ end
 --! it. The view only moves when the cursor would leave it.
 function UIMultiplayerChatInput:_view(panel, text, cursor)
   local s = panel.apply_ui_scale and TheApp.gfx:getUIScale() or 1
-  -- (Room for the cursor after the last letter: Textbox:drawCursor.)
-  local width = panel.w * s - 4 * s - panel.label_font:sizeOf("0") - 2 * s
+  -- (Room for the cursor after the last letter, Textbox:drawCursor, and a
+  -- small gap before the box's edge: Jan saw it touch the frame.)
+  local width = panel.w * s - 4 * s - panel.label_font:sizeOf("0") - 5 * s - LINE_INSET * s
   local function wide(a, b)
     local _, w = panel.label_font:draw(nil, text:sub(a, b), 0, 0)
     return w
@@ -273,7 +280,8 @@ function UIMultiplayerChatInput:_drawLine(panel, canvas, x, y, limit)
   local cut = limit and {limit[1], math.max(0, math.min(limit[2], to) - from + 1)}
   local clip = panel.auto_clip
   panel.label, panel.auto_clip = text:sub(from, to), false
-  local ok, next_y, last_x = pcall(Panel.drawLabel, panel, canvas, x, y, cut)
+  local s = panel.apply_ui_scale and TheApp.gfx:getUIScale() or 1
+  local ok, next_y, last_x = pcall(Panel.drawLabel, panel, canvas, x + LINE_INSET * s, y, cut)
   panel.label, panel.auto_clip = text, clip
   if not ok then error(next_y, 0) end
   return next_y, last_x
