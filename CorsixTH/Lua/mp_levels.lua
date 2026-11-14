@@ -62,6 +62,21 @@ levels.LEVELS = {
   {campaign = 8, map = 3, cash = 50000, scenario = "cutthroat", intro = "level_intro_7",
     name = "CUTTHROAT", map_files = {[4] = "cutthroat4.map"}, map_author = "Matroftt",
     goals = {reputation = 650, balance = 150000, value = 150000, cured = 300, cure_rate = 55}},
+  -- MOUNT EVEREST, Jan's town square (2026-11-14) made into a town for six
+  -- (Levels/everest6.map, 256 x 256, by scripts/multiplayer/make_everest6.py):
+  -- three districts north of the square and three south of it, the same
+  -- mirrored. Each is a start hospital with five smaller buildings round it,
+  -- each a plot for sale; four big buildings in the middle band and the
+  -- square's four houses are for sale too, so there is land to fight over at
+  -- auctions. Level 9's rooms, diseases and research (all but the DNA fixer
+  -- and the jelly vat); the climbing seasons, the earthquakes and the doctors
+  -- of the scenario "everest" (the end of this file). With 2 to 4 players the
+  -- corner districts are taken, with 5 the southern middle one is for sale.
+  {campaign = 9, map = 0, cash = 70000, scenario = "everest", intro = "level_intro_everest",
+    name = "MOUNT EVEREST",
+    map_files = {[2] = "everest6.map", [3] = "everest6.map", [4] = "everest6.map",
+      [6] = "everest6.map"},
+    goals = {reputation = 650, balance = 150000, value = 170000, cured = 450, cure_rate = 50}},
   -- Made for two against two (Matroftt's map, Levels/level40teams.map,
   -- 2026-11-02): the four hospitals in pairs in the middle of town, team
   -- mates side by side, land for sale all around; level 3's rooms and
@@ -92,19 +107,6 @@ levels.LEVELS = {
     -- Map 0's settings have no earthquakes, and campaign level 8's first
     -- comes in month 13: one every half year instead, each stronger.
     quakes = {{7, 9, 2}, {13, 16, 3}, {19, 22, 4}, {26, 30, 5}, {34, 38, 6}}},
-  -- Jan's town square (2026-11-14) made into a town for six
-  -- (Levels/everest6.map, 256 x 256, by scripts/multiplayer/make_everest6.py):
-  -- three hospitals north of the square and three south of it, the same
-  -- building mirrored, main entrances facing the square, whose four houses
-  -- are for sale. Level 6's rooms, diseases and research; the climbing
-  -- seasons, the earthquakes and the doctors of the scenario "everest" (the
-  -- end of this file). With 2 to 4 players the corners are taken, with 5 the
-  -- southern middle one is for sale.
-  {campaign = 6, map = 0, cash = 70000, scenario = "everest", intro = "level_intro_10",
-    name = "MOUNT EVEREST",
-    map_files = {[2] = "everest6.map", [3] = "everest6.map", [4] = "everest6.map",
-      [6] = "everest6.map"},
-    goals = {reputation = 650, balance = 150000, value = 170000, cured = 450, cure_rate = 50}},
 }
 levels.COUNT = #levels.LEVELS
 
@@ -1040,7 +1042,7 @@ local function cutthroatDay(world)
 end
 
 
--- Level 10, "Mount Everest" -------------------------------------------------
+-- Level 8, "Mount Everest" --------------------------------------------------
 --
 -- Six hospitals at the foot of the mountain. Twice a year, in the climbing
 -- seasons (April and October), about a hundred climbers come down to every
@@ -1120,7 +1122,7 @@ local function announce(world, text, longer)
   MultiplayerSession.tellOthers(world, nil, text, longer)
 end
 
---! Level 10's events, at the end of every day.
+--! Level 8's events, at the end of every day.
 local function everestDay(world)
   local state = world.mp_level_events
   if not state then

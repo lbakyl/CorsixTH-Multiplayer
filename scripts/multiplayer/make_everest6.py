@@ -95,30 +95,48 @@ def main(src, dst):
     # The square's own street north to south (between the two band roads).
     pave_rect(126, 95, 128, MY(95))
 
-    # --- the hospital building (local, northern orientation) -----------------
-    rects = [(0, 18, 58, 48),    # main hall
-             (0, 0, 18, 17),     # north-west wing
-             (23, 5, 35, 17),    # north wing
-             (40, 0, 58, 17),    # north-east wing
-             (12, 49, 46, 64)]   # entrance block
-    gardens = [(7, 26, 15, 36), (43, 26, 51, 36)]
-    inside_local = set()
-    for x0, y0, x1, y1 in rects:
-        inside_local |= {(x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)}
-    for x0, y0, x1, y1 in gardens:
-        inside_local -= {(x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)}
-    # Doors: ('h', boundary row b (between rows b-1 and b), first column) or
-    # ('v', boundary column b, first row); 3 tiles each. Outward: the
-    # direction a path leaves it to the road.
-    doors_local = [('h', 65, 28, (0, 1)),    # main entrance, south
-                   ('h', 5, 28, (0, -1)),    # back door, north wing
-                   ('v', 0, 32, (-1, 0)),    # main hall, west
-                   ('v', 59, 32, (1, 0)),    # main hall, east
-                   ('v', 0, 7, (-1, 0)),     # north-west wing, west
-                   ('v', 59, 7, (1, 0))]     # north-east wing, east
-    camera_local = (29, 56)
+    # --- the buildings (local tiles, the northern orientation: the square to
+    # the south) ----------------------------------------------------------------
+    # A district is a start hospital with five smaller buildings round it,
+    # each a plot for sale of its own (as on Matroftt's maps: land to fight
+    # over at auctions, a rival's too). A building: rectangles of floor,
+    # minus courtyards (grass, walled in), and doors: ('h', b, first, dy):
+    # 3 tiles in the wall between rows b - 1 and b from column `first`,
+    # leading out north (dy -1) or south (dy 1); ('v', b, first, dx) between
+    # columns b - 1 and b from row `first`. From each door a path leads
+    # straight out to the nearest pavement.
+    def building_def(rects, holes=(), doors=()):
+        cells = set()
+        for x0, y0, x1, y1 in rects:
+            cells |= {(x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)}
+        for x0, y0, x1, y1 in holes:
+            cells -= {(x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)}
+        return {'cells': cells, 'holes': list(holes), 'doors': list(doors)}
 
-    # The six hospitals: (player, left x, mirrored north-south?)
+    start_hospital = building_def(
+        [(12, 30, 46, 64)], holes=[(12, 30, 17, 37), (41, 30, 46, 37), (26, 42, 32, 48)],
+        doors=[('h', 65, 28, 1),       # main entrance, to the square
+               ('v', 12, 52, -1),      # west, onto the lane
+               ('v', 47, 52, 1)])      # east, onto the lane
+    annexes = [
+        building_def([(0, 38, 8, 64)], doors=[('v', 9, 49, 1)]),             # front west
+        building_def([(50, 38, 58, 64)], doors=[('v', 50, 49, -1)]),         # front east
+        building_def([(0, 0, 24, 11), (0, 12, 10, 24)], doors=[('v', 0, 4, -1)]),    # back west
+        building_def([(34, 0, 58, 11), (48, 12, 58, 24)], doors=[('v', 59, 4, 1)]),  # back east
+        building_def([(14, 15, 44, 26)], holes=[(27, 18, 31, 23)],
+                     doors=[('h', 15, 28, -1)]),                              # back middle
+    ]
+    # Lanes between the start hospital and the front annexes, from the
+    # district's back to the road in front.
+    lanes = [(9, 30, 11, 68), (47, 30, 49, 68)]
+    camera_local = (29, 58)
+    # The middle band, west of the square, north of its street: one big
+    # building for sale (and its three mirror images).
+    middle = building_def([(30, 101, 82, 121)], holes=[(52, 107, 60, 115)],
+                          doors=[('h', 122, 55, 1), ('h', 101, 55, -1), ('v', 30, 110, -1),
+                                 ('v', 83, 110, 1)])
+
+    # The six districts: (player, left x, mirrored north-south?)
     sites = [(1, XS[0], False), (2, XS[2], True), (3, XS[2], False),
              (4, XS[0], True), (5, XS[1], False), (6, XS[1], True)]
 
@@ -127,46 +145,40 @@ def main(src, dst):
             return x0 + lx, (MY(Y0 + ly) if south else Y0 + ly)
         return f
 
-    cameras, helipads = {}, {}
-    for player, x0, south in sites:
-        g = to_global(x0, south)
-        inside = {g(x, y) for x, y in inside_local}
-        # The plot: the building's rectangle and 4 tiles round it (up to the roads).
-        ax, ay = g(-4, -4)
-        bx, by = g(W + 3, H + 3)
-        px0, px1 = min(ax, bx), max(ax, bx)
-        py0, py1 = min(ay, by), max(ay, by)
-        for y in range(py0, py1 + 1):
-            for x in range(px0, px1 + 1):
-                parcel[y][x] = player
-        # Floor and walls.
-        for y in range(py0, py1 + 1):
-            for x in range(px0, px1 + 1):
-                t = tiles[y][x]
-                if (x, y) in inside:
-                    t[0:8] = bytes((0, 0, HOSP_FLOOR, 0, 0, 0, 0, 0))
-                    building.add((x, y))
-        for y in range(py0, py1 + 2):
-            for x in range(px0, px1 + 2):
+    def place(defn, g, plot):
+        """Build `defn` through the tile transform g on plot `plot`."""
+        inside = {g(x, y) for x, y in defn['cells']}
+        xs = [x for x, _ in inside]
+        ys = [y for _, y in inside]
+        for x, y in inside:
+            tiles[y][x][0:8] = bytes((0, 0, HOSP_FLOOR, 0, 0, 0, 0, 0))
+            parcel[y][x] = plot
+            building.add((x, y))
+        for hx0, hy0, hx1, hy1 in defn['holes']:
+            for lx in range(hx0, hx1 + 1):
+                for ly in range(hy0, hy1 + 1):
+                    x, y = g(lx, ly)
+                    if (x, y) not in inside and min(xs) <= x <= max(xs) and min(ys) <= y <= max(ys):
+                        parcel[y][x] = plot   # (a courtyard belongs to its building)
+        for y in range(min(ys), max(ys) + 2):
+            for x in range(min(xs), max(xs) + 2):
                 t = tiles[y][x]
                 here = (x, y) in inside
                 if here != ((x, y - 1) in inside):
                     t[3] = N_IN if here else N_OUT
                 if here != ((x - 1, y) in inside):
                     t[4] = W_IN if here else W_OUT
-        # Doors, and a path from each to the nearest road.
-        for kind, b, first, (dx, dy) in doors_local:
+        for kind, b, first, sign in defn['doors']:
+            lin, lout = (b - 1, b) if sign > 0 else (b, b - 1)
             if kind == 'h':
-                row = max(g(first, b - 1)[1], g(first, b)[1])   # the tile with the wall
-                cols = sorted(g(first + i, b)[0] for i in range(3))
-                cells = [(c, row) for c in cols]
-                out = (0, dy * (-1 if south else 1))
+                a_in, a_out = g(first, lin), g(first, lout)
+                row = max(a_in[1], a_out[1])        # the tile with the wall
+                cells = [(c, row) for c in sorted(g(first + i, b)[0] for i in range(3))]
             else:
-                xa, xb = g(b - 1, first)[0], g(b, first)[0]
-                col = max(xa, xb)
-                rows = sorted(g(b, first + i)[1] for i in range(3))
-                cells = [(col, r) for r in rows]
-                out = (dx, 0)
+                a_in, a_out = g(lin, first), g(lout, first)
+                col = max(a_in[0], a_out[0])
+                cells = [(col, r) for r in sorted(g(b, first + i)[1] for i in range(3))]
+            out = (a_out[0] - a_in[0], a_out[1] - a_in[1])
             inner = cells[0] in inside
             first_piece, last_piece = DOOR[(kind, inner)]
             for i, (x, y) in enumerate(cells):
@@ -184,22 +196,42 @@ def main(src, dst):
                 else:
                     t[2] = CENTRE
                     t[5:8] = bytes(WALK)
-                    # (the tile inside, across the door: not for building)
-                    ix, iy = x - out[0], y - out[1]
-                    tiles[iy][ix][5] = 2
+                    tiles[y - out[1]][x - out[0]][5] = 2   # (inside, across the door)
+                parcel[y][x] = plot
                 building.add((x, y))
-            # The path: 3 wide, from the first tile outside the door to a road.
-            starts = [(x + out[0], y + out[1]) for x, y in cells]
-            for sx, sy in starts:
-                x, y = sx, sy
+            for x, y in cells:
+                x, y = x + out[0], y + out[1]
                 while 0 <= x < N and 0 <= y < N and not road_centre(tiles, x, y):
+                    if (x, y) in building:
+                        sys.exit('a path from a door of plot %d runs into a building at %d,%d'
+                                 % (plot, x, y))
                     pave(x, y)
                     parcel[y][x] = 0
                     x, y = x + out[0], y + out[1]
+
+    # Plots: 1-6 the start hospitals, 7-10 the square's houses, 11-14 the
+    # middle band, then the districts' buildings for sale.
+    for player, x0, south in sites:
+        g = to_global(x0, south)
+        for lx0, ly0, lx1, ly1 in lanes:
+            for lx in range(lx0, lx1 + 1):
+                for ly in range(ly0, ly1 + 1):
+                    pave(*g(lx, ly))
+    middle_sites = [lambda x, y: (x, y), lambda x, y: (MX(x), y),
+                    lambda x, y: (x, MY(y)), lambda x, y: (MX(x), MY(y))]
+    for i, g in enumerate(middle_sites):
+        place(middle, g, 11 + i)
+    next_plot = 15
+    cameras, helipads = {}, {}
+    for player, x0, south in sites:
+        g = to_global(x0, south)
+        place(start_hospital, g, player)
+        for annex in annexes:
+            place(annex, g, next_plot)
+            next_plot += 1
         cameras[player] = g(*camera_local)
-        # The helipad: on the grass beyond the edge road behind the hospital.
-        cx = x0 + 29
-        helipads[player] = (cx, MY(14) if south else 14)
+        # The helipad: on the grass beyond the edge road behind the district.
+        helipads[player] = (x0 + 29, MY(14) if south else 14)
 
     # Helipads: a 5 x 5 pad (an H on it) with its border, open to the road.
     for player, (cx, cy) in helipads.items():
@@ -228,16 +260,17 @@ def main(src, dst):
         for qx, qy in {(x, y), (MX(x), y), (x, MY(y)), (MX(x), MY(y))}:
             if quiet(qx, qy):
                 tiles[qy][qx][2] = piece
-    # Gardens: the same shrubs and flowers in every hospital's two (a
-    # pattern symmetric both ways, so the town stays symmetric).
-    pattern = [(0, 0, 182)] + [(i, j, 189) for i in (-2, 2) for j in (-3, 3)] +         [(0, j, 185) for j in (-3, 3)] + [(i, 0, 190) for i in (-2, 2)]
-    for player, x0, south in sites:
-        g = to_global(x0, south)
-        for gx0, gy0, gx1, gy1 in gardens:
-            mx, my = (gx0 + gx1) // 2, (gy0 + gy1) // 2
-            for i, j, piece in pattern:
-                x, y = g(mx + i, my + j)
-                tiles[y][x][2] = piece
+    # Courtyards: the same shrubs and flowers in every one (a pattern
+    # symmetric both ways, so the town stays symmetric).
+    pattern = [(0, 0, 182), (-1, -1, 189), (1, 1, 189), (-1, 1, 190), (1, -1, 190)]
+    yards = [(to_global(x0, south), start_hospital['holes'][2]) for _, x0, south in sites]
+    yards += [(to_global(x0, south), annexes[4]['holes'][0]) for _, x0, south in sites]
+    yards += [(g, middle['holes'][0]) for g in middle_sites]
+    for g, (hx0, hy0, hx1, hy1) in yards:
+        mx, my = (hx0 + hx1) // 2, (hy0 + hy1) // 2
+        for i, j, piece in pattern:
+            x, y = g(mx + i, my + j)
+            tiles[y][x][2] = piece
     # Countryside: the north-west quarter, mirrored.
     for _ in range(900):
         x, y = rnd.randrange(0, MID), rnd.randrange(0, MID)

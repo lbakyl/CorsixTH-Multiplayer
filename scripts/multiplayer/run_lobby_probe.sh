@@ -794,7 +794,7 @@ fail |= not ok29
 if not ok29: bad.append("ok29")
 
 lv30 = re.search(r"UI: levels listed \[(.*?)\]; map drawn: (\w+); shared level 3: (.*?); chosen: level (\d+), room name kept: (\w+)", log('kai'))
-ok30 = bool(lv30 and len(lv30.group(1).split(' | ')) == 9 and lv30.group(1).endswith('CUTTHROAT | TEAM TOWN | CROSSROADS')
+ok30 = bool(lv30 and len(lv30.group(1).split(' | ')) == 10 and lv30.group(1).endswith('CUTTHROAT | MOUNT EVEREST | TEAM TOWN | CROSSROADS')
             and lv30.group(2) == 'true' and lv30.group(3) == 'LARGECHESTER' and lv30.groups()[3:] == ('6', 'true'))
 print(f"30. Level browser:          {lv30.groups() if lv30 else '-'}")
 fail |= not ok30
