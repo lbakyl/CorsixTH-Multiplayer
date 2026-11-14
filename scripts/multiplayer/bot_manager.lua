@@ -55,7 +55,9 @@ local REMOVED_REBUILD_DAYS = 180
 -- Rooms used by staff, not patients: used while staff are in them.
 local STAFF_ROOMS = {staff_room = true, training = true, research = true}
 -- Never taken down for being empty (a hospital without them is no hospital).
-local KEEP_ROOMS = {gp = true}
+-- (Toilets too: their visits never reach the door's count, and a visit
+-- is too short to be seen at a daily look; M:noteRoomUse.)
+local KEEP_ROOMS = {gp = true, toilets = true}
 -- Rooms worth a second (third) copy when their queues grow.
 local COPIES = {gp = 6, pharmacy = 2, general_diag = 3, psych = 2, ward = 2, toilets = 3, staff_room = 2,
     cardiogram = 2, scanner = 2, ultrascan = 2, blood_machine = 2, x_ray = 2, inflation = 2,
@@ -1605,7 +1607,12 @@ function M:doProject(s)
     -- (Something urgent it cannot pay: a loan, then it is done.)
     local short = p.cost + RESERVE - s.balance
     -- (Once in a few days: the bank may say no.)
-    if short > 0 and p.score >= URGENT and not p.basic and s.day - (self.loan_day or -99) > 5 then
+    -- (Not for a project that found no floor in the last month: Bot Dora
+    -- borrowed for an X-ray room and a scanner again and again, and neither
+    -- fitted; 2026-11-14.)
+    local floorless = self.no_space[p.key] and s.day - self.no_space[p.key] <= 30
+    if short > 0 and p.score >= URGENT and not p.basic and not floorless and
+        s.day - (self.loan_day or -99) > 5 then
       local amount = math.ceil(short / 5000) * 5000
       if s.loan + amount <= s.max_loan and s.hosp.opened and self:issue({kind = "loan", amount = amount}) then
         self.loan_day = s.day

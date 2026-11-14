@@ -612,5 +612,16 @@ do
   m.next_project, m.failed = 0, {}
   m:doProject({day = 110, balance = 50000, loan = 0, max_loan = 0, hosp = {}})
   eq(m.failed["room:gp"], 120, "twice: in 10 days")
+  -- No loan for a project that found no floor lately (Bot Dora, 2026-11-14).
+  local loans = 0
+  m.issue = function(_, cmd) if cmd.kind == "loan" then loans = loans + 1 end return true end
+  function m.projects() return {project("room:gp", 200, "space")} end
+  m.next_project, m.failed, m.loan_day = 0, {}, nil
+  m:doProject({day = 130, balance = 0, loan = 0, max_loan = 50000, hosp = {opened = true}})
+  eq(loans, 0, "no loan for a room with no floor")
+  m.no_space["room:gp"] = 90
+  m.next_project, m.failed = 0, {}
+  m:doProject({day = 130, balance = 0, loan = 0, max_loan = 50000, hosp = {opened = true}})
+  eq(loans, 1, "a month later: the loan again")
 end
 print("projects ok")
