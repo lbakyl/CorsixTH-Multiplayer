@@ -10,8 +10,8 @@ Status: on `mp/team-hospitals`; first released in mp-test-d5a471a7 (eu2).
 - How many hospitals a game can have depends on the level's map:
   - Theme Hospital's own maps have room for 4, so rooms on those levels have
     up to 4 places.
-  - **TEAM TOWN** (level 8) also has a map for 8 hospitals.
-  - **CROSSROADS** (level 9) is Matroftt's map for 8 (with 2 to 4 players,
+  - **TEAM TOWN** (level 9; level 8 until MOUNT EVEREST came) also has a map for 8 hospitals.
+  - **CROSSROADS** (level 10; before, 9) is Matroftt's map for 8 (with 2 to 4 players,
     the corner hospitals).
 - A new room has as many places as its level has hospitals: up to 4, or up
   to 8 on TEAM TOWN and CROSSROADS. Players may still share a hospital (the same colour).

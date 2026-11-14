@@ -2744,10 +2744,11 @@ function MultiplayerSession.tellPlayer(world, hospital, text, longer)
 end
 
 --! Tell every player except the one of `hospital` (nil: everybody).
-function MultiplayerSession.tellOthers(world, hospital, text)
+--!param longer (number) [optional] as in tellPlayer
+function MultiplayerSession.tellOthers(world, hospital, text, longer)
   local ui = world.ui
   if ui and ui.adviser and ui.hospital ~= hospital then
-    ui.adviser:say({text = text, priority = 10})
+    ui.adviser:say({text = text, priority = 10, longer = longer})
   end
 end
 

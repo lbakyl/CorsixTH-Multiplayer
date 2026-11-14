@@ -93,13 +93,19 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
    colour. With several hospitals the game seats team mates next to each
    other on the map and names each hospital after its players ("JAN + ABI").
    One shared hospital plays the campaign's levels (1 to 12); several
-   hospitals play the multiplayer levels (1 to 9; a higher number plays
-   level 9, as the room says). A saved game keeps its colours and teams.
+   hospitals play the multiplayer levels (1 to 10; a higher number plays
+   level 10, as the room says). A saved game keeps its colours and teams.
    **How many players:** a room has as many places as its level has
-   hospitals. Theme Hospital's maps have room for 4; TEAM TOWN (level 8) also
+   hospitals. Theme Hospital's maps have room for 4; TEAM TOWN (level 9) also
    has a map for 5 to 8 hospitals: four more hospitals north and south of the
-   middle (the empty ones' plots are for sale), and CROSSROADS (level 9) is
-   made for 8, so their rooms have up to 8 places.
+   middle (the empty ones' plots are for sale), and CROSSROADS (level 10) is
+   made for 8, so their rooms have up to 8 places. MOUNT EVEREST (level 8)
+   is made for 6: three districts north of the town square and three south
+   of it, all laid out alike, each a start hospital with five buildings for
+   sale round it (and four big ones beside the square), with climbing
+   seasons that bring about a hundred patients to every hospital each April
+   and October, an earthquake every three months for four years, and only
+   junior doctors to hire in years 2 and 3.
 5. **Sharing a hospital:** team mates build, hire and answer faxes in the
    same hospital. A bot can share yours too: it builds in your hospital along
    with you (a desk, rooms, staff), and whatever you have already built it
@@ -348,8 +354,8 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 ## Levels
 
 **One shared hospital** plays the campaign levels 1 to 12, as in single
-player. **A hospital each** (co-op and the race) has nine levels of its own,
-on Theme Hospital's multiplayer maps (levels 6 and 7 are scenarios, below; levels 8 and 9 are Matroftt's Team Town and Crossroads). Each takes its diseases, rooms and
+player. **A hospital each** (co-op and the race) has ten levels of its own,
+on Theme Hospital's multiplayer maps (levels 6 and 7 are scenarios, below; level 8 is Mount Everest, a scenario too; levels 9 and 10 are Matroftt's Team Town and Crossroads). Each takes its diseases, rooms and
 research from a campaign level, so level 1 is the smallest. From level 2 on
 the training room is there from the start (there are few staff to hire, so
 training should begin early). Every hospital hires from its own list: each
