@@ -747,6 +747,19 @@ do
   m:defendBombs({day = 20, hosp = hosp})
   m:defendBombs({day = 22, hosp = hosp})
   eq(issued[1] and issued[1].kind, "litter_bomb_pick", "one with 300 hours is picked up once noticed")
+  -- Sharing a person's hospital, it leaves the bomb to them while they are
+  -- there; when they are away it picks it up.
+  issued = {}
+  local here = true
+  m.bot.sharesWithPerson = function() return here end
+  bomb.mp_bomb = {fuse = 300, throws = 3}
+  m:defendBombs({day = 30, hosp = hosp})
+  m:defendBombs({day = 32, hosp = hosp})
+  eq(#issued, 0, "the person there picks it up, not the bot")
+  here = false
+  m:defendBombs({day = 34, hosp = hosp}) -- (it notices the bomb a day or more later)
+  m:defendBombs({day = 36, hosp = hosp})
+  eq(issued[1] and issued[1].kind, "litter_bomb_pick", "the person away: the bot picks it up")
 end
 print("bombs left ok")
 

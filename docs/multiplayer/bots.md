@@ -212,7 +212,9 @@ best project it can afford is done, one every one to four game days.
   level 1 and go by the rival's reception desk; a normal or hard one hides
   its bomb on a quiet corridor at least 8 tiles from every desk
   (`Bot:bombSpot`); one on its own floor is found after 1-3 (normal, hard)
-  or 8-18 days (easy) and thrown on at the leader (`M:defendBombs`).
+  or 8-18 days (easy) and thrown on at the leader (`M:defendBombs`). A bot
+  sharing a person's hospital leaves the bombs to that person while they are
+  there (Jan, 2026-11-14).
 - The month in one log line: why patients left (cured, sent away, fed up,
   too dear), the diseases it lost most, patients in the hospital, queues per
   room type, specialists, prices, reputation, money, and its floor (in how many

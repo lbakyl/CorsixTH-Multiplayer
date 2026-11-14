@@ -2363,6 +2363,10 @@ end
 function M:defendBombs(s)
   local sab = self.sabotage
   if not (sab and sab.heldBomb) then return end
+  -- (A bot sharing a person's hospital leaves the bombs to the person, while
+  -- they are there: Jan, 2026-11-14, the bomb window flashed up on his screen
+  -- each time the bot picked one up to throw it on.)
+  if self.bot.sharesWithPerson and self.bot:sharesWithPerson() then return end
   local world = self.bot.world
   local held = sab.heldBomb(world, s.hosp)
   if held then
