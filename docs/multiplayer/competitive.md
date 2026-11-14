@@ -138,7 +138,8 @@ the start, as before.
   (opened by the second click on an espionage level), which sends their keys
   with the command (`items`, ";"-separated); the handler takes those still
   stealable, or refuses. Bots send none and get them at random.
-- **Litter bomb.** The original's network game had them (NETPLAY.TXT); its
+- **Litter bomb.** (No months in `sabotage.SCHEDULE`: every level from the
+  start; level 7 unlocks it in June.) The original's network game had them (NETPLAY.TXT); its
   art is still in the game data: animations 4990-5004 are the 8 stages of
   the burning fuse (2 frames each), 5062 the buy-list picture (object 17,
   `objects/litter_bomb.lua`, class `LitterBomb`, an `Entity` like `Litter`

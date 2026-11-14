@@ -87,7 +87,8 @@ sabotage.SCHEDULE = {
   headhunter = {4, 6, 10}, -- a junior, a doctor, a consultant or specialist
   emergency = {3, 6, 11},  -- 3, 6, 10 patients (level 3: maybe undiscovered)
   epidemic = {4, 7, 12},   -- 2, 4, 7 contagious patients
-  litter_bomb = {2, 4, 7}, -- 15, 25, 40 pieces of litter
+  -- (The litter bomb has no months: every level from the start. Jan,
+  -- 2026-11-14, to test all three; level 7 still holds it back to June.)
 }
 
 -- Evil handymen at once in one hospital, at most.

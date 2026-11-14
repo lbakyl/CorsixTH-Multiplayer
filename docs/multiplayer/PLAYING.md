@@ -519,18 +519,20 @@ research (espionage) and cleanliness (litter bomb).
 The tricks unlock during the first year, the mild ones first: a level not
 unlocked yet is greyed out in the window with the month it unlocks (month 1
 is the first January, 12 the first December). No emergency in the first two
-months; by December every trick at every level can be bought. Level 7,
+months; by December every trick at every level can be bought. The litter
+bomb can be bought at every level from the start. Level 7,
 Cutthroat, has its own, later months (below).
 
 | Trick | L1 | L2 | L3 |
 |---|---|---|---|
-| Rat attack, broken boiler, litter bomb | February | April | July |
+| Rat attack, broken boiler | February | April | July |
 | Smear campaign | March | May | August |
 | Evil handyman | March | May | September |
 | Espionage | March | June | September |
 | Headhunter | April | June | October |
 | Emergency | March | June | November |
 | Epidemic | April | July | December |
+| Litter bomb | from the start | from the start | from the start |
 
 | Trick | L1 | L2 | L3 |
 |---|---|---|---|
