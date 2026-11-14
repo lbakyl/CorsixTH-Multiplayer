@@ -87,11 +87,14 @@ end
 local function chatRows(lobby)
   local places = placesOf(lobby)
   local rows = CHAT_ROWS - math.max(0, places - 6)
-  -- (And what the screen has room for, with a margin.)
-  local config = TheApp and TheApp.config
+  -- (And what the screen has room for, with a margin: the size drawn now,
+  -- not the config's, which in fullscreen is the window's. Jan, 2026-11-15:
+  -- 2 rows on a screen with room for 5.)
+  local video = TheApp and TheApp.video
   local scale = TheApp and TheApp.gfx and TheApp.gfx:getUIScale() or 1
-  if config and config.height then
-    local free = math.floor(config.height / scale) - 20 - heights.room - (places - 4) * PLACE_H
+  local ok, _, screen_h = pcall(function() return video:getRenderSize() end)
+  if ok and screen_h and screen_h > 0 then
+    local free = math.floor(screen_h / scale) - 20 - heights.room - (places - 4) * PLACE_H
     rows = math.min(rows, math.floor(free / CHAT_ROW_H))
   end
   return math.max(CHAT_MIN_ROWS, rows)
@@ -717,7 +720,16 @@ function UIMultiplayer:_updateRoomChat()
   local last = math.max(1, #rows - page + 1)
   local value = (self.chat_at_end or not bar.value) and last or math.min(bar.value, last)
   bar:setRange(1, math.max(#rows, page), page, value)
+  self:_settleChatBar()
   self:_showRoomChat()
+end
+
+--! At the newest rows the scrollbar's handle sits at the very bottom (the
+--! game's scrollbar puts it one step short of it, which looked as if there
+--! were more below: Jan, 2026-11-15).
+function UIMultiplayer:_settleChatBar()
+  local bar = self.chat_scrollbar
+  if bar and bar.value >= bar.max_value - bar.page_size + 1 then bar.slider.y = bar.slider.max_y end
 end
 
 --! The rows of the room's chat from the scrollbar's place.
@@ -733,6 +745,7 @@ function UIMultiplayer:onMouseWheel(x, y)
   local bar = self.view == "room" and self.chat_scrollbar
   if not bar or y == 0 then return UIResizable.onMouseWheel(self, x, y) end
   bar:setRange(bar.min_value, bar.max_value, bar.page_size, math.max(1, bar.value - y))
+  self:_settleChatBar()
   self:_showRoomChat()
   return true
 end

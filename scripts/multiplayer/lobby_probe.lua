@@ -311,7 +311,10 @@ local function room_chat(lobby)
   win:_updateRoom()
   local shown = {}
   for i, panel in ipairs(win.chat_panels) do shown[i] = tostring(panel.label or "") end
-  log("UI: room chat: " .. table.concat(shown, " | ") .. "; box now \"" .. tostring(win.chat_box.text) .. "\"")
+  local bar = win.chat_scrollbar
+  log("UI: room chat: " .. table.concat(shown, " | ") .. "; box now \"" .. tostring(win.chat_box.text) .. "\"" ..
+      string.format("; %d rows, scrollbar %d of %d, handle at the bottom: %s", #win.chat_panels, bar.value,
+          bar.max_value - bar.page_size + 1, tostring(bar.slider.y == bar.slider.max_y)))
   shot("room-chat")
   -- The room's map (the Map button): who plays where, then back.
   win:buttonRoomMap()
