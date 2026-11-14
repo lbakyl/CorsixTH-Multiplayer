@@ -895,7 +895,7 @@ function MultiplayerLobby:_onCHAT(f)
   -- 2026-11-14: the players asked to talk there; everybody sees it all).
   if self.state == "in_room" and self.room_chat then
     self.room_chat[#self.room_chat + 1] = f
-    if #self.room_chat > 20 then table.remove(self.room_chat, 1) end
+    if #self.room_chat > 50 then table.remove(self.room_chat, 1) end
   end
   local session = TheApp and TheApp.mp_session
   if session and session.lobby == self then

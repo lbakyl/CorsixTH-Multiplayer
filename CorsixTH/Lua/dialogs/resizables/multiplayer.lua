@@ -55,11 +55,16 @@ local function view_of(lobby)
   return "rooms"
 end
 
--- The room's chat (Jan, 2026-11-14): its last lines, and a box to type in.
-local CHAT_LINES, CHAT_LINE_H = 5, 20
-local CHAT_H = CHAT_LINES * CHAT_LINE_H + 33
--- (The places view: a line more for each place, as the room view.)
-local heights = {connect = 225, rooms = 435, room = 295 + CHAT_H, seats = 185}
+-- The room's chat (Jan, 2026-11-14): its last rows (a long line wraps onto
+-- more), a scrollbar to read back, and a box to type in. 5 rows with up to 6
+-- places, one fewer for each place more (Jan: with 8 places the room did
+-- not fit a smaller screen), and no more than the screen has room for.
+local CHAT_ROWS, CHAT_MIN_ROWS, CHAT_ROW_H = 5, 2, 18
+local CHAT_GAP = 33 -- (above the rows, and the box under them)
+local CHAT_SCROLL_W = 20
+-- (The places view: a line more for each place, as the room view. The
+-- room's height without its chat rows.)
+local heights = {connect = 225, rooms = 435, room = 295 + CHAT_GAP, seats = 185}
 -- The room view has a line per place: 4 in that height, 27 pixels more for
 -- each more (a room for up to 8).
 local PLACE_H = 27
@@ -78,11 +83,28 @@ local function placesFor(level)
 end
 
 --! The height of a view of the window.
+--! How many rows of the room's chat the room view shows (CHAT_ROWS).
+local function chatRows(lobby)
+  local places = placesOf(lobby)
+  local rows = CHAT_ROWS - math.max(0, places - 6)
+  -- (And what the screen has room for, with a margin.)
+  local config = TheApp and TheApp.config
+  local scale = TheApp and TheApp.gfx and TheApp.gfx:getUIScale() or 1
+  if config and config.height then
+    local free = math.floor(config.height / scale) - 20 - heights.room - (places - 4) * PLACE_H
+    rows = math.min(rows, math.floor(free / CHAT_ROW_H))
+  end
+  return math.max(CHAT_MIN_ROWS, rows)
+end
+
 local function viewHeight(view, lobby)
   if view == "seats" then
     return heights.seats + #lobby.seat_choice.seats * PLACE_H
   end
-  return heights[view] + (view == "room" and (placesOf(lobby) - 4) * PLACE_H or 0)
+  if view == "room" then
+    return heights.room + (placesOf(lobby) - 4) * PLACE_H + chatRows(lobby) * CHAT_ROW_H
+  end
+  return heights[view]
 end
 
 -- The new room's settings as last sent with Create: shown again when the
@@ -600,14 +622,21 @@ function UIMultiplayer:_buildRoom()
   self.hint_panel = label(self, 20, 40 + (places + 2) * PLACE_H + 5, WIDTH - 40, S.room_hint)
   -- The room's chat: the last lines, and a box; Enter sends what is typed.
   local chat_y = 40 + (places + 3) * PLACE_H + 8
+  local rows = chatRows(self.lobby)
   self.chat_panels = {}
-  for i = 1, CHAT_LINES do
-    local line = self:addBevelPanel(20, chat_y + (i - 1) * CHAT_LINE_H, WIDTH - 40, CHAT_LINE_H, col.bg, col.bg, col.bg)
+  for i = 1, rows do
+    local line = self:addBevelPanel(20, chat_y + (i - 1) * CHAT_ROW_H, WIDTH - 45 - CHAT_SCROLL_W, CHAT_ROW_H,
+        col.bg, col.bg, col.bg)
     line:setLabel("", nil, "left"):setAutoClip(true)
     line.lowered = true
     self.chat_panels[i] = line
   end
-  self.chat_box = textbox(self, 20, chat_y + CHAT_LINES * CHAT_LINE_H + 4, WIDTH - 40, "", 120, {"all"},
+  -- The scrollbar: back through the room's chat (the mouse wheel too).
+  local bar_base = self:addBevelPanel(WIDTH - 20 - CHAT_SCROLL_W, chat_y, CHAT_SCROLL_W, rows * CHAT_ROW_H, col.bg)
+  bar_base.lowered = true
+  self.chat_scrollbar = bar_base:makeScrollbar(col.setting, function() self:_showRoomChat() end, 1, 1, rows, 1)
+  self.chat_at_end = true
+  self.chat_box = textbox(self, 20, chat_y + rows * CHAT_ROW_H + 4, WIDTH - 40, "", 120, {"all"},
       _S.tooltip.multiplayer_window.room_chat)
   self.chat_box.confirm_callback = function() self:sendRoomChat() end
   local y = viewHeight("room", self.lobby) - 50
@@ -642,13 +671,70 @@ function UIMultiplayer:sendRoomChat()
   end
 end
 
---! The room's last chat lines, "name: text", the newest at the bottom.
-function UIMultiplayer:_updateRoomChat()
-  local lines = self.lobby.room_chat or {}
-  for i, panel in ipairs(self.chat_panels or {}) do
-    local f = lines[#lines - CHAT_LINES + i]
-    panel:setLabel(f and ((f.name or "?") .. ": " .. (f.text or "")) or "")
+--! A chat line as rows that fit `width` pixels of `font`: wrapped at spaces,
+--! a word longer than a row cut into pieces.
+function UIMultiplayer.wrapChat(text, font, width)
+  local rows, row = {}, ""
+  local function fits(t) return font:sizeOf(t) <= width end
+  for word in text:gmatch("%S+") do
+    local try = row == "" and word or (row .. " " .. word)
+    if fits(try) then
+      row = try
+    else
+      if row ~= "" then rows[#rows + 1] = row end
+      row = word
+      -- (A word too long for a row on its own: as much of it as fits.)
+      while not fits(row) do
+        local n = #row - 1
+        while n > 1 and not fits(row:sub(1, n)) do n = n - 1 end
+        -- (Not inside a letter of several bytes: Russian, say.)
+        while n > 1 and (row:byte(n + 1) or 0) >= 0x80 and (row:byte(n + 1) or 0) < 0xC0 do n = n - 1 end
+        rows[#rows + 1] = row:sub(1, n)
+        row = row:sub(n + 1)
+      end
+    end
   end
+  if row ~= "" or #rows == 0 then rows[#rows + 1] = row end
+  return rows
+end
+
+--! The room's chat as rows, "name: text" wrapped to the rows' width; the
+--! scrollbar's range follows, and stays at the newest rows unless the player
+--! scrolled back.
+function UIMultiplayer:_updateRoomChat()
+  local panels = self.chat_panels
+  if not panels or not panels[1] then return end
+  local font = panels[1].label_font
+  local width = (panels[1].w - 8) * TheApp.gfx:getUIScale()
+  local rows = {}
+  for _, f in ipairs(self.lobby.room_chat or {}) do
+    for _, row in ipairs(UIMultiplayer.wrapChat((f.name or "?") .. ": " .. (f.text or ""), font, width)) do
+      rows[#rows + 1] = row
+    end
+  end
+  self.chat_rows = rows
+  local bar, page = self.chat_scrollbar, #panels
+  local last = math.max(1, #rows - page + 1)
+  local value = (self.chat_at_end or not bar.value) and last or math.min(bar.value, last)
+  bar:setRange(1, math.max(#rows, page), page, value)
+  self:_showRoomChat()
+end
+
+--! The rows of the room's chat from the scrollbar's place.
+function UIMultiplayer:_showRoomChat()
+  local rows, bar = self.chat_rows or {}, self.chat_scrollbar
+  local first = bar and bar.value or 1
+  self.chat_at_end = first >= #rows - #self.chat_panels + 1
+  for i, panel in ipairs(self.chat_panels) do panel:setLabel(rows[first + i - 1] or "") end
+end
+
+--! The mouse wheel scrolls the room's chat.
+function UIMultiplayer:onMouseWheel(x, y)
+  local bar = self.view == "room" and self.chat_scrollbar
+  if not bar or y == 0 then return UIResizable.onMouseWheel(self, x, y) end
+  bar:setRange(bar.min_value, bar.max_value, bar.page_size, math.max(1, bar.value - y))
+  self:_showRoomChat()
+  return true
 end
 
 function UIMultiplayer:_updateRoom()

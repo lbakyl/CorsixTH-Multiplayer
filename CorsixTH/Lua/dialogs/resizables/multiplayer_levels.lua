@@ -328,7 +328,10 @@ function UIMultiplayerLevels:preview()
         c = f.passable and GROUND or NATURE
       elseif plot <= owners then
         local rgb = MultiplayerSession.colourRGB(room and room.colours[plot] or plot)
-        local k = f.hospital and 0.6 or 1
+        -- (The building darker; a light colour only a little: white at 60%
+        -- was the grey of the plots for sale. Jan, 2026-11-14.)
+        local light = math.min(rgb[1], rgb[2], rgb[3]) > 200
+        local k = f.hospital and (light and 0.85 or 0.6) or 1
         c = {math.floor(rgb[1] * k), math.floor(rgb[2] * k), math.floor(rgb[3] * k)}
       else
         c = f.hospital and SALE_IN or SALE_OUT

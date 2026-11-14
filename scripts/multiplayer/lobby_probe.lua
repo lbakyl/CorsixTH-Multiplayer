@@ -524,7 +524,9 @@ local function run_lobby()
         n = n + 1
         if peer ~= 1 and p.ready ~= "1" then ready = false end
       end
-      return n >= want_players and ready and lobby.summary ~= nil
+      -- (MP_WAIT_PLAYERS: fewer than the room's places, for a look at a
+      -- big room's window.)
+      return n >= (tonumber(os.getenv("MP_WAIT_PLAYERS") or "") or want_players) and ready and lobby.summary ~= nil
     end, 60)
     -- MP_COLOURS: "peer:colour,..." the host gives those places these
     -- hospital colours (1-8; the shirts of 5 to 8 are recoloured ones).
