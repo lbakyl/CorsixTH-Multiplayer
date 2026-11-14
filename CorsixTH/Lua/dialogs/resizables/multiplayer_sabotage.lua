@@ -377,7 +377,10 @@ function UIMultiplayerLitterBomb:UIMultiplayerLitterBomb(ui, opts)
   end
   local TH = require("TH")
   self.cursor_bomb = TH.animation()
-  local anims = self.world.object_types.litter_bomb.fuse_animations
+  -- (A game saved before there were litter bombs has the type from the
+  -- game itself, App:afterLoad.)
+  local bomb_type = self.world.object_types.litter_bomb or ui.app.objects.litter_bomb
+  local anims = bomb_type.fuse_animations
   self.cursor_bomb:setAnimation(self.world.anims, self.bomb and self.bomb.animation_idx or anims[1])
   if self.target then
     MultiplayerSession.lookAtHospital(ui, self.target)
@@ -442,10 +445,14 @@ function UIMultiplayerLitterBomb:draw(canvas, x_, y_)
   end
   self.white_font:drawWrapped(canvas, text, x + 28 * s, y + 42 * s, (BOMB_W - 56) * s)
   -- The bomb on the cursor (see-through where it cannot go).
+  -- (The mouse position can be fractional, SDL3 on a scaled screen, a Mac;
+  -- drawing takes whole pixels: Argus's screen froze.)
   local ui = self.ui
-  if ui.cursor_x and not self:_inside(ui.cursor_x - x, ui.cursor_y - y) then
-    self.cursor_bomb:draw(canvas, ui.cursor_x, ui.cursor_y + 8,
-        (spot and spot.target) and 0 or DrawFlags.Alpha50)
+  if ui.cursor_x then
+    local cx, cy = math.floor(ui.cursor_x), math.floor(ui.cursor_y)
+    if not self:_inside(cx - x, cy - y) then
+      self.cursor_bomb:draw(canvas, cx, cy + 8, (spot and spot.target) and 0 or DrawFlags.Alpha50)
+    end
   end
 end
 

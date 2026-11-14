@@ -2941,6 +2941,7 @@ multiplayer_window.sabotage_bomb_picked = "ゴミ爆弾を拾いました。導�
 multiplayer_window.sabotage_bomb_blast = "あなたの病院でゴミ爆弾が爆発しました！ 作業員の掃除が大変です。"
 multiplayer_window.sabotage_bomb_in_hands = "ゴミ爆弾を長く持ちすぎました。自分の病院で爆発しました！"
 multiplayer_window.sabotage_bomb_blast_rival = "あなたのゴミ爆弾が%sの病院で爆発しました。"
+multiplayer_window.sabotage_bomb_found = "あなたのゴミ爆弾が見つかりました。%sが間に合って拾いました。投げ返されるかもしれません！"
 multiplayer_window.saved_flag = "  セーブデータ"
 multiplayer_window.saved_note = "セーブしました: %s"
 multiplayer_window.saving_note = "全プレイヤーのコンピューターでセーブ中..."

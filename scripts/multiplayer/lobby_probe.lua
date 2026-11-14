@@ -2078,9 +2078,14 @@ local function run()
             look_at(tx, ty)
             local ui = world.ui
             local sx, sy = ui:WorldToScreen(tx + 0.5, ty + 0.5)
-            ui.cursor_x, ui.cursor_y = math.floor(sx), math.floor(sy)
+            -- (Not whole pixels, as SDL3 gives them on a Mac or a scaled
+            -- screen: drawing the bomb on the cursor froze Argus's screen.)
+            ui.cursor_x, ui.cursor_y = math.floor(sx) + 0.37, math.floor(sy) + 0.61
             local wx, wy = ui:ScreenToWorld(ui.cursor_x, ui.cursor_y)
             local spot = win:_spot()
+            local drawn, draw_err = pcall(TheApp.drawFrame, TheApp)
+            log(string.format("UI: %s window drawn with the mouse at %.2f,%.2f: %s", a, ui.cursor_x, ui.cursor_y,
+                drawn and "ok" or tostring(draw_err)))
             shot(a == "bombplant" and "bomb-cursor" or "bomb-throw-window")
             local s = TheApp.gfx:getUIScale()
             win:onMouseUp("left", ui.cursor_x - win.x * s, ui.cursor_y - win.y * s)

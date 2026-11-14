@@ -4346,6 +4346,7 @@ multiplayer_window.sabotage_bomb_picked = "Zvedli jste odpadkovou bombu a její 
 multiplayer_window.sabotage_bomb_blast = "Ve vaší nemocnici vybuchla odpadková bomba! Vaši údržbáři mají co zametat."
 multiplayer_window.sabotage_bomb_in_hands = "Drželi jste odpadkovou bombu příliš dlouho: vybuchla ve vaší vlastní nemocnici!"
 multiplayer_window.sabotage_bomb_blast_rival = "Vaše odpadková bomba vybuchla u hráče %s."
+multiplayer_window.sabotage_bomb_found = "Vaši odpadkovou bombu našli: hráč %s ji včas zvedl. Může ji hodit dál, třeba i zpátky na vás!"
 multiplayer_window.saved_flag = "  uložená hra"
 multiplayer_window.saved_note = "Hra uložena: %s"
 multiplayer_window.saving_note = "Ukládá se hra na počítači každého hráče..."

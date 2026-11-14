@@ -3776,6 +3776,7 @@ multiplayer_window.sabotage_bomb_picked = "Podniosłeś bombę śmieciową, a je
 multiplayer_window.sabotage_bomb_blast = "W twoim szpitalu wybuchła bomba śmieciowa! Twoi dozorcy mają co zamiatać."
 multiplayer_window.sabotage_bomb_in_hands = "Trzymałeś bombę śmieciową za długo: wybuchła w twoim własnym szpitalu!"
 multiplayer_window.sabotage_bomb_blast_rival = "Twoja bomba śmieciowa wybuchła w szpitalu %s."
+multiplayer_window.sabotage_bomb_found = "Twoją bombę śmieciową znaleziono: %s podniósł ją na czas. Może rzucić ją dalej, nawet z powrotem do ciebie!"
 multiplayer_window.saved_flag = "  zapis gry"
 multiplayer_window.saved_note = "Gra zapisana: %s"
 multiplayer_window.saving_note = "Zapisujemy grę na komputerze każdego gracza..."

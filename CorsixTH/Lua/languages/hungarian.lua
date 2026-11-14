@@ -2399,6 +2399,7 @@ multiplayer_window.sabotage_bomb_picked = "Felvetted a szemétbombát, és a kan
 multiplayer_window.sabotage_bomb_blast = "Egy szemétbomba robbant fel a kórházadban! A gondnokaidnak lesz mit söpörniük."
 multiplayer_window.sabotage_bomb_in_hands = "Túl sokáig tartottad a szemétbombát: a saját kórházadban robbant fel!"
 multiplayer_window.sabotage_bomb_blast_rival = "A szemétbombád felrobbant %s kórházában."
+multiplayer_window.sabotage_bomb_found = "Megtalálták a szemétbombádat: %s időben felvette. Továbbdobhatja, akár vissza is neked!"
 multiplayer_window.saved_flag = "  mentett játék"
 multiplayer_window.saved_note = "Játék elmentve: %s"
 multiplayer_window.saving_note = "A játék mentése minden játékos gépén..."

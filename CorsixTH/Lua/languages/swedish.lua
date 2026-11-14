@@ -1270,6 +1270,7 @@ multiplayer_window.sabotage_bomb_picked = "Du har plockat upp skräpbomben och s
 multiplayer_window.sabotage_bomb_blast = "En skräpbomb har smällt på ditt sjukhus! Dina vaktmästare har en del att sopa."
 multiplayer_window.sabotage_bomb_in_hands = "Du höll skräpbomben för länge: den smällde på ditt eget sjukhus!"
 multiplayer_window.sabotage_bomb_blast_rival = "Din skräpbomb har smällt hos %s."
+multiplayer_window.sabotage_bomb_found = "Din skräpbomb hittades: %s plockade upp den i tid. De kan kasta den vidare, till och med tillbaka till dig!"
 multiplayer_window.saved_flag = "  sparat spel"
 multiplayer_window.saved_note = "Spelet sparades: %s"
 multiplayer_window.saving_note = "Sparar spelet på alla spelares datorer..."

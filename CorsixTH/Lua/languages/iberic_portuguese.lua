@@ -1315,6 +1315,7 @@ multiplayer_window.sabotage_bomb_picked = "Apanhaste a bomba de lixo e o rastilh
 multiplayer_window.sabotage_bomb_blast = "Rebentou uma bomba de lixo no teu hospital! Os teus contínuos têm muito para varrer."
 multiplayer_window.sabotage_bomb_in_hands = "Seguraste a bomba de lixo durante demasiado tempo: rebentou no teu próprio hospital!"
 multiplayer_window.sabotage_bomb_blast_rival = "A tua bomba de lixo rebentou em %s."
+multiplayer_window.sabotage_bomb_found = "A tua bomba de lixo foi encontrada: %s apanhou-a a tempo. Pode atirá-la a outro, até de volta para ti!"
 multiplayer_window.saved_flag = "  jogo gravado"
 multiplayer_window.saved_note = "Jogo gravado: %s"
 multiplayer_window.saving_note = "A gravar o jogo no computador de cada jogador..."

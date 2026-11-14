@@ -2138,6 +2138,13 @@ function App:afterLoad()
     self.world:newObjectType(rathole_type)
   end
 
+  -- Multiplayer: kinds of object added since the save was made (the litter
+  -- bomb, 2026-11-14) come from the game itself: a game saved before them
+  -- could not plant a bomb (Argus). (The same on every computer.)
+  if self.objects.litter_bomb and not self.world.object_types.litter_bomb then
+    self.world:newObjectType(self.objects.litter_bomb)
+  end
+
   --[[Information only:
   if old < 166 then
     Graphics set type was introduced at this version.

@@ -151,7 +151,7 @@ the start, as before.
   the fuse is 800 game hours, one off per tick (`sabotage.bombTick`, from
   `LitterBomb:tick`), in the bomb's stage animation. A click on a bomb in
   one's own hospital sends `litter_bomb_pick`: the bomb leaves the map
-  (`held` = the hospital's index) and its fuse burns on; while a hospital
+  (`held` = the hospital's index; the sender is told) and its fuse burns on; while a hospital
   holds one, `sabotage.syncBombWindow` (after every step) keeps that
   window open for its players (it cannot be closed), and a click sends
   `litter_bomb_throw {bomb, x, y}`. At 0 `sabotage.bombGoesOff` puts

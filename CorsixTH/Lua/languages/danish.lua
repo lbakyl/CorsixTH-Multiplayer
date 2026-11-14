@@ -3201,6 +3201,7 @@ multiplayer_window.sabotage_bomb_picked = "Du har samlet affaldsbomben op, og lu
 multiplayer_window.sabotage_bomb_blast = "En affaldsbombe er sprunget på dit hospital! Dine pedeller har noget at feje op."
 multiplayer_window.sabotage_bomb_in_hands = "Du holdt fast i affaldsbomben for længe: den sprang på dit eget hospital!"
 multiplayer_window.sabotage_bomb_blast_rival = "Din affaldsbombe er sprunget hos %s."
+multiplayer_window.sabotage_bomb_found = "Din affaldsbombe blev fundet: %s samlede den op i tide. De kan kaste den videre, endda tilbage til dig!"
 multiplayer_window.saved_flag = "  gemt spil"
 multiplayer_window.saved_note = "Spil gemt: %s"
 multiplayer_window.saving_note = "Gemmer spillet på alle spilleres computer..."

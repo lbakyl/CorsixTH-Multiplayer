@@ -4194,6 +4194,7 @@ multiplayer_window.sabotage_bomb_picked = "Du har plukket opp söppelbomben, og 
 multiplayer_window.sabotage_bomb_blast = "En söppelbombe har gått av på sykehuset ditt! Vaktmestrene dine har noe å feie."
 multiplayer_window.sabotage_bomb_in_hands = "Du holdt på söppelbomben for lenge: den gikk av på ditt eget sykehus!"
 multiplayer_window.sabotage_bomb_blast_rival = "Söppelbomben din har gått av hos %s."
+multiplayer_window.sabotage_bomb_found = "Söppelbomben din ble funnet: %s plukket den opp i tide. De kan kaste den videre, til og med tilbake til deg!"
 multiplayer_window.saved_flag = "  lagret spill"
 multiplayer_window.saved_note = "Spillet er lagret: %s"
 multiplayer_window.saving_note = "Lagrer spillet på alle spillernes datamaskiner..."

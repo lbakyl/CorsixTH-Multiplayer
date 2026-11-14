@@ -3046,6 +3046,7 @@ multiplayer_window.sabotage_bomb_picked = "쓰레기 폭탄을 주웠습니다. 
 multiplayer_window.sabotage_bomb_blast = "당신의 병원에서 쓰레기 폭탄이 터졌습니다! 잡역부들이 쓸어야 할 것이 많습니다."
 multiplayer_window.sabotage_bomb_in_hands = "쓰레기 폭탄을 너무 오래 들고 있었습니다: 당신의 병원에서 터졌습니다!"
 multiplayer_window.sabotage_bomb_blast_rival = "당신의 쓰레기 폭탄이 %s의 병원에서 터졌습니다."
+multiplayer_window.sabotage_bomb_found = "당신의 쓰레기 폭탄이 발견되었습니다: %s이(가) 제때 주웠습니다. 다른 곳으로, 심지어 당신에게 다시 던질 수 있습니다!"
 multiplayer_window.saved_flag = "  저장된 게임"
 multiplayer_window.saved_note = "게임을 저장했습니다: %s"
 multiplayer_window.saving_note = "모든 플레이어의 컴퓨터에서 게임을 저장하는 중..."

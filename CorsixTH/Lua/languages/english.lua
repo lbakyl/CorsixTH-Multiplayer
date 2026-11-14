@@ -901,6 +901,7 @@ multiplayer_window = {
   sabotage_bomb_blast = "A litter bomb has gone off in your hospital! Your handymen have some sweeping to do.",
   sabotage_bomb_in_hands = "You held on to the litter bomb for too long: it went off in your own hospital!",
   sabotage_bomb_blast_rival = "Your litter bomb has gone off in the hospital of %s.",
+  sabotage_bomb_found = "Your litter bomb was found: %s picked it up in time. They may throw it on, even back at you!",
   level_rats_notice = "Rats! A swarm has found its way into the hospital. Click them to shoot them before they breed in the litter.",
   data_mismatch_help = "This server's Theme Hospital files are from another edition of the game than yours (the levels and multiplayer maps differ), and games with both would not stay the same. Point CorsixTH at the same edition as the server's (Options, Folder Options, Theme Hospital location), for example the GOG version, and connect again.",
   vaccination_mode_hint = "Vaccination mode: click the infected patients to have a nurse vaccinate them. Right-click, press Esc or click the syringe again to stop.",

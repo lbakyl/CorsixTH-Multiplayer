@@ -1068,6 +1068,12 @@ function sabotage.pickBomb(world, bomb, hospital)
   b.held = world:getHospitalIndex(hospital)
   log(string.format("hospital %d picked up litter bomb #%d (%d hours left)", b.held, bomb.mp_id, b.fuse))
   MultiplayerSession.tellPlayer(world, hospital, S().sabotage_bomb_picked, true)
+  -- (Whoever put it there sees it gone, and is told why. Argus: it just
+  -- vanished.)
+  local from = world.hospitals[b.from or 0]
+  if from and from ~= hospital then
+    MultiplayerSession.tellPlayer(world, from, S().sabotage_bomb_found:format(hospital.name))
+  end
 end
 
 --! Pick up a litter bomb from one's own floor: {bomb}.

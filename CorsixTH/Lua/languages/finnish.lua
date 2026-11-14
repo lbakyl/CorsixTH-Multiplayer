@@ -3685,6 +3685,7 @@ multiplayer_window.sabotage_bomb_picked = "Poimit roskapommin, ja sen sytytyslan
 multiplayer_window.sabotage_bomb_blast = "Roskapommi räjähti sairaalassasi! Huoltomiehilläsi on lakaisemista."
 multiplayer_window.sabotage_bomb_in_hands = "Pidit roskapommia liian kauan: se räjähti omassa sairaalassasi!"
 multiplayer_window.sabotage_bomb_blast_rival = "Roskapommisi räjähti pelaajan %s sairaalassa."
+multiplayer_window.sabotage_bomb_found = "Roskapommisi löydettiin: %s poimi sen ajoissa. He voivat heittää sen eteenpäin, jopa takaisin sinulle!"
 multiplayer_window.saved_flag = "  tallennettu peli"
 multiplayer_window.saved_note = "Peli tallennettu: %s"
 multiplayer_window.saving_note = "Tallennetaan peliä kaikkien pelaajien koneilla..."

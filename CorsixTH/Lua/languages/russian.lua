@@ -4420,6 +4420,7 @@ multiplayer_window.sabotage_bomb_picked = "Вы подобрали мусорн�
 multiplayer_window.sabotage_bomb_blast = "В вашей больнице взорвалась мусорная бомба! Вашим рабочим есть что подметать."
 multiplayer_window.sabotage_bomb_in_hands = "Вы слишком долго держали мусорную бомбу: она взорвалась в вашей собственной больнице!"
 multiplayer_window.sabotage_bomb_blast_rival = "Ваша мусорная бомба взорвалась в больнице %s."
+multiplayer_window.sabotage_bomb_found = "Вашу мусорную бомбу нашли: %s вовремя подобрал(а) её. Её могут перебросить дальше, даже обратно вам!"
 multiplayer_window.saved_flag = "  сохранение"
 multiplayer_window.saved_note = "Игра сохранена: %s"
 multiplayer_window.saving_note = "Сохраняем игру на компьютере каждого игрока..."

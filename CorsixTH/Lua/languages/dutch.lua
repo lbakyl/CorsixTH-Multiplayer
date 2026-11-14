@@ -4059,6 +4059,7 @@ multiplayer_window.sabotage_bomb_picked = "Je hebt de afvalbom opgepakt en de lo
 multiplayer_window.sabotage_bomb_blast = "Er is een afvalbom afgegaan in je ziekenhuis! Je conciërges hebben wat te vegen."
 multiplayer_window.sabotage_bomb_in_hands = "Je hield de afvalbom te lang vast: hij ging af in je eigen ziekenhuis!"
 multiplayer_window.sabotage_bomb_blast_rival = "Je afvalbom is afgegaan bij %s."
+multiplayer_window.sabotage_bomb_found = "Je afvalbom is gevonden: %s heeft hem op tijd opgepakt. Ze kunnen hem doorgooien, zelfs terug naar jou!"
 multiplayer_window.saved_flag = "  opgeslagen spel"
 multiplayer_window.saved_note = "Spel opgeslagen: %s"
 multiplayer_window.saving_note = "Het spel wordt opgeslagen op de computer van elke speler..."

@@ -2275,6 +2275,7 @@ multiplayer_window.sabotage_bomb_picked = "Vous avez ramassé la bombe à détri
 multiplayer_window.sabotage_bomb_blast = "Une bombe à détritus a explosé dans votre hôpital ! Vos agents d'entretien ont de quoi balayer."
 multiplayer_window.sabotage_bomb_in_hands = "Vous avez gardé la bombe à détritus trop longtemps : elle a explosé dans votre propre hôpital !"
 multiplayer_window.sabotage_bomb_blast_rival = "Votre bombe à détritus a explosé chez %s."
+multiplayer_window.sabotage_bomb_found = "Votre bombe à détritus a été trouvée : %s l'a ramassée à temps. Elle peut être relancée, même vers vous !"
 multiplayer_window.saved_flag = "  partie sauvegardée"
 multiplayer_window.saved_note = "Partie sauvegardée : %s"
 multiplayer_window.saving_note = "Sauvegarde de la partie sur l'ordinateur de chaque joueur..."

@@ -4115,6 +4115,7 @@ multiplayer_window.sabotage_bomb_picked = "您撿起了垃圾炸彈，它的引�
 multiplayer_window.sabotage_bomb_blast = "一顆垃圾炸彈在您的醫院裡爆炸了！您的清潔工人有得掃了。"
 multiplayer_window.sabotage_bomb_in_hands = "您拿著垃圾炸彈太久了：它在您自己的醫院裡爆炸了！"
 multiplayer_window.sabotage_bomb_blast_rival = "您的垃圾炸彈在%s的醫院裡爆炸了。"
+multiplayer_window.sabotage_bomb_found = "您的垃圾炸彈被發現了：%s及時撿起了它。對方可能把它扔給別人，甚至扔回給您！"
 multiplayer_window.saved_flag = "  存檔"
 multiplayer_window.saved_note = "遊戲已儲存：%s"
 multiplayer_window.saving_note = "正在每位玩家的電腦上儲存遊戲..."

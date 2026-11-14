@@ -1499,6 +1499,7 @@ multiplayer_window.sabotage_bomb_picked = "Hai raccolto la bomba di rifiuti e la
 multiplayer_window.sabotage_bomb_blast = "Una bomba di rifiuti è esplosa nel tuo ospedale! I tuoi tuttofare hanno parecchio da spazzare."
 multiplayer_window.sabotage_bomb_in_hands = "Hai tenuto la bomba di rifiuti troppo a lungo: è esplosa nel tuo stesso ospedale!"
 multiplayer_window.sabotage_bomb_blast_rival = "La tua bomba di rifiuti è esplosa da %s."
+multiplayer_window.sabotage_bomb_found = "La tua bomba di rifiuti è stata trovata: %s l'ha raccolta in tempo. Può lanciarla ad altri, persino di nuovo a te!"
 multiplayer_window.saved_flag = "  partita salvata"
 multiplayer_window.saved_note = "Partita salvata: %s"
 multiplayer_window.saving_note = "Salvataggio della partita sul computer di ogni giocatore..."

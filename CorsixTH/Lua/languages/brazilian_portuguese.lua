@@ -3449,6 +3449,7 @@ multiplayer_window.sabotage_bomb_picked = "Você pegou a bomba de lixo e o pavio
 multiplayer_window.sabotage_bomb_blast = "Uma bomba de lixo explodiu no seu hospital! Seus zeladores têm muito para varrer."
 multiplayer_window.sabotage_bomb_in_hands = "Você segurou a bomba de lixo por tempo demais: ela explodiu no seu próprio hospital!"
 multiplayer_window.sabotage_bomb_blast_rival = "Sua bomba de lixo explodiu em %s."
+multiplayer_window.sabotage_bomb_found = "Sua bomba de lixo foi encontrada: %s a pegou a tempo. Pode jogá-la adiante, até de volta para você!"
 multiplayer_window.saved_flag = "  jogo salvo"
 multiplayer_window.saved_note = "Jogo salvo: %s"
 multiplayer_window.saving_note = "Salvando o jogo no computador de cada jogador..."

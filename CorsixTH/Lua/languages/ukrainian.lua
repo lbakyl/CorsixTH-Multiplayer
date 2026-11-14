@@ -4070,6 +4070,7 @@ multiplayer_window.sabotage_bomb_picked = "Ви підібрали сміттє�
 multiplayer_window.sabotage_bomb_blast = "У вашій лікарні вибухнула сміттєва бомба! Вашим різноробочим є що замітати."
 multiplayer_window.sabotage_bomb_in_hands = "Ви надто довго тримали сміттєву бомбу: вона вибухнула у вашій власній лікарні!"
 multiplayer_window.sabotage_bomb_blast_rival = "Ваша сміттєва бомба вибухнула в лікарні %s."
+multiplayer_window.sabotage_bomb_found = "Вашу сміттєву бомбу знайшли: %s вчасно її підібрав(ла). Її можуть перекинути далі, навіть назад вам!"
 multiplayer_window.saved_flag = "  збереження"
 multiplayer_window.saved_note = "Гру збережено: %s"
 multiplayer_window.saving_note = "Зберігаємо гру на комп'ютері кожного гравця..."

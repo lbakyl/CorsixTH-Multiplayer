@@ -3847,6 +3847,7 @@ multiplayer_window.sabotage_bomb_picked = "Σηκώσατε τη βόμβα σκ
 multiplayer_window.sabotage_bomb_blast = "Μια βόμβα σκουπιδιών εξερράγη στο νοσοκομείο σας! Οι πολυτεχνίτες σας έχουν πολύ σκούπισμα."
 multiplayer_window.sabotage_bomb_in_hands = "Κρατήσατε τη βόμβα σκουπιδιών πολλή ώρα: εξερράγη στο δικό σας νοσοκομείο!"
 multiplayer_window.sabotage_bomb_blast_rival = "Η βόμβα σκουπιδιών σας εξερράγη στο νοσοκομείο του/της %s."
+multiplayer_window.sabotage_bomb_found = "Η βόμβα σκουπιδιών σας βρέθηκε: ο/η %s τη σήκωσε εγκαίρως. Μπορεί να τη ρίξει παρακάτω, ακόμη και πίσω σε εσάς!"
 multiplayer_window.saved_flag = "  αποθηκευμένο παιχνίδι"
 multiplayer_window.saved_note = "Το παιχνίδι αποθηκεύτηκε: %s"
 multiplayer_window.saving_note = "Αποθήκευση του παιχνιδιού στον υπολογιστή κάθε παίκτη..."

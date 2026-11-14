@@ -244,10 +244,16 @@ blast = re.search(r'litter bomb #\d+ went off in hospital 3 at \d+,\d+: (\d+) pi
 in_hands = re.search(r'litter bomb #\d+ went off in hospital 3 \(in its hands\) at \d+,\d+: (\d+) pieces', a)
 held_c = re.search(r'UI: bombs at step 600: .*held.*; window true', c)
 after = re.search(r'UI: bombs at step 1200: none; litter (\S+); window false', a)
-ok7 = bool(len(planted) == 2 and own_refused and picked_b and thrown_b and picked_c and blast and int(blast.group(1)) >= 10
+# The bomb drawn on the mouse, at a position of fractions of a pixel (a Mac).
+drawn = (len(re.findall(r'UI: bomb\w+ window drawn with the mouse at [\d.]+,[\d.]+: ok', a)) == 3
+         and len(re.findall(r'UI: bombthrow window drawn with the mouse at [\d.]+,[\d.]+: ok', b)) == 1)
+# Whoever planted it is told when it is found and picked up.
+found = bool(re.search(r'ADVISER: Your litter bomb was found: bea picked it up in time', a, re.I))
+ok7 = bool(drawn and found and len(planted) == 2 and own_refused and picked_b and thrown_b and picked_c and blast and int(blast.group(1)) >= 10
            and in_hands and int(in_hands.group(1)) >= 5 and held_c and after
            and all(result(n).startswith('IN SYNC') for n in ('ann', 'bea', 'cid')))
-print(f"7. Litter bombs:            planted: {len(planted)}/2; own floor refused: {bool(own_refused)}; bea picked up and threw on: "
+print(f"7. Litter bombs:            drawn on the mouse: {drawn}; sender told it was found: {found}; "
+      f"planted: {len(planted)}/2; own floor refused: {bool(own_refused)}; bea picked up and threw on: "
       f"{bool(picked_b and thrown_b)}; went off at cid's: {blast.group(1) + ' pieces' if blast else '-'}; cid picked one up: {bool(picked_c)}, "
       f"held (window open at 600): {bool(held_c)}, it went off in cid's hands: {in_hands.group(1) + ' pieces' if in_hands else '-'}; "
       f"litter at 1200: {after.group(1) if after else '-'}; {result('ann')} / {result('bea')} / {result('cid')}")

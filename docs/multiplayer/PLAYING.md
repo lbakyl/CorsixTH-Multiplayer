@@ -553,7 +553,8 @@ them (it counts for the rat-catching award too). **"Litterbomb warning!"?**
 Somebody planted a litter bomb on one of your corridors: find the small black
 bomb and click it to pick it up. You cannot put it away, and its fuse burns
 on: click a corridor in another rival's hospital (or the sender's) to throw
-it there, or it goes off in your own hospital. **A member of staff wants a
+it there, or it goes off in your own hospital. (Whoever planted it is told that
+it was found. A bomb cannot be thrown into a hospital that has not opened yet.) **A member of staff wants a
 big rise because of a better offer?** Pay it in the pay rise window, or they
 leave without severance. **Boiler broken?** Hire handymen. A trick is refused
 while it cannot work, for example while their emergency is still on.
