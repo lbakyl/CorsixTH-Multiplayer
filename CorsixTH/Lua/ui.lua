@@ -1327,5 +1327,11 @@ function UI:pauseMovie()
   end
 end
 
--- Stub for compatibility with savegames r1896-1921
+----- BEGIN Save game compatibility -----
+-- This function are merely for save game compatibility.
+-- And they does not participate in the current game logic.
+--- Stub for compatibility with savegames r1896-1921
 function UI:stopVideo() end
+--- Stub for compatibility with 0.65 savegames and below.
+function UI:toggleFullscreen() end
+----- END Save game compatibility -----
