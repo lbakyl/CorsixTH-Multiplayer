@@ -382,10 +382,13 @@ end
 --! Show the 'Gates to hell' animation.
 --!param entity (Entity) Gates to hell.
 function PlayerHospital:showGatesToHell(entity)
-  local anim_func = --[[persistable:lava_hole_spawn_animation_end]]
-    function(anim_entity)
-      anim_entity:setAnimation(1602)
-    end
+  -- (The name on the function's own line: persist_lua.cpp files it under the
+  -- comment's line, and with the function on the next one no save could be
+  -- made while the animation ran; a multiplayer referee died of it, eu2
+  -- 2026-11-13.)
+  local anim_func = --[[persistable:lava_hole_spawn_animation_end]] function(anim_entity)
+    anim_entity:setAnimation(1602)
+  end
 
   entity:playEntitySounds("LAVA00*.WAV", {0,1350,1150,950,750,350},
       {0,1450,1250,1050,850,450}, 40)
