@@ -87,6 +87,9 @@ local BOMB_NOTICE_DAYS = {easy = {8, 18}, normal = {3, 8}, hard = {1, 3}}
 local BOMB_LEAVE_HOURS = 75
 -- Game days between research offers to the same ally.
 local SHARE_DAYS = 21
+-- (A bot sharing a person's hospital: once a month, without asking them
+-- first. Jan, 2026-11-14: it kept asking him whether to share.)
+local SHARE_MATE_DAYS = 30
 -- Game days between specialists sent to the same ally (of one kind), and
 -- between asking the allies for one (an emergency: sooner).
 -- (Asks: the same kind at most once in 3 months, Jan 2026-11-12; an
@@ -2862,12 +2865,14 @@ end
 
 --! Its research (discoveries, better drugs and machines) to every ally, a
 --! hospital on its side that another player plays, who lacks it: for free,
---! once in SHARE_DAYS per ally, again only when there is something new.
+--! once in SHARE_DAYS per ally (SHARE_MATE_DAYS when it shares a person's
+--! hospital), again only when there is something new.
 function M:shareResearch(s)
   local bot, world = self.bot, self.bot.world
   local mine = s.hosp
   if not world.mp_coop or not world.mpMayTrade or not MultiplayerSession.shareableResearch then return end
   if world.mp_coop.sharing_off then return end -- (the room's owner switched it off)
+  local every = bot:sharesWithPerson() and SHARE_MATE_DAYS or SHARE_DAYS
   for index, h in ipairs(world.hospitals) do
     local peer = bot:playerOfHospital(index)
     -- (Never to a rival: in a race only to team mates.)
@@ -2875,27 +2880,12 @@ function M:shareResearch(s)
       local seen = self.shared[index] or {}
       self.shared[index] = seen
       local items = MultiplayerSession.shareableResearch(mine, h)
-      local keys, names, new = {}, {}, false
+      local keys, new = {}, false
       for _, item in ipairs(items) do
         keys[#keys + 1] = item.key
-        names[#names + 1] = plain(item.name)
         if not seen[item.key] then new = true end
       end
-      -- A person sharing this hospital decides: the bot asks them first and
-      -- sends it when they say "share" (Bot:onChat sets bot.share_ok).
-      local person = bot:sharesWithPerson()
-      local allowed = not person or (bot.share_ok and s.day - bot.share_ok <= SHARE_DAYS)
-      if new and person and not allowed and s.day - (seen.asked or -999) >= SHARE_DAYS then
-        seen.asked = s.day
-        local _, people = bot:peopleOfHospital(index)
-        local list = table.concat(names, ", ", 1, math.min(#names, 4)) .. (#names > 4 and ", ..." or "")
-        for _, mate in ipairs(bot:hospitalMates()) do
-          local line = self.fill_in(self.pick(self.lines.research_ask), {name = bot:playerName(mate),
-              ally = people[1] or world.hospitals[index].name, list = list})
-          bot:say(line, self.typing(line), mate)
-        end
-      end
-      if new and allowed and s.day - (seen.offered or -999) >= SHARE_DAYS and
+      if new and s.day - (seen.offered or -999) >= every and
           self:issue({kind = "offer_research", to = index, items = table.concat(keys, ";"), price = 0}) then
         seen.offered = s.day
         for _, key in ipairs(keys) do seen[key] = s.day end

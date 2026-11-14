@@ -107,8 +107,8 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
    when it is done, or that it needs land or money first. Once a game week
    it gives every member of staff under half happiness two bonuses (while
    the balance stays above $2,000) and tells you what that cost; a pay rise
-   you leave unanswered it answers before they quit. Before it gives your
-   research to an ally it asks you: say "share".
+   you leave unanswered it answers before they quit. Once a month it gives
+   your allies the research they lack, for free, without asking.
 
 **The host's room settings:** before the start the host may remove a person
 from the room (double-click or right-click their line, then "Remove <name>

@@ -250,10 +250,6 @@ local LINES = {
       "Sorry {name}, I can't afford the {what} just yet.",
       "The {what} costs more than I have, {name}. I'll build it as soon as the money is there.",
       "{name}, my bank is too low for the {what} right now. Soon."},
-  research_ask = {"{name}, shall I send {ally} our research for free ({list})? Say \"share\" and I will.",
-      "{name}, want me to send {ally} our research ({list})? Say \"share\" and it's theirs.",
-      "I could give {ally} our research ({list}), {name}. Just say \"share\".",
-      "{name}, should I share our research with {ally} ({list})? Say \"share\" if so."},
   -- To a person sharing the hospital (Bot:sharesWithPerson).
   mate_away = {"You seem to be away, %s. I'll run the whole hospital until you're back.",
       "%s, you're quiet. I'll take over everything until you're back.",
@@ -1264,15 +1260,6 @@ function Bot:onChat(f)
   -- for things; in a race everybody else is a rival (Bot:isAlly).
   local ally = self:isAlly(peer)
   local rival = self.fiery and not ally
-  -- A person sharing the hospital says "share": its research may go to
-  -- the allies (Manager:shareResearch asks first).
-  for _, p in ipairs(self:hospitalMates()) do
-    local low = text:lower()
-    if p == peer and (low:find("share", 1, true) or low:find("sd95{l", 1, true) or low:find("teil", 1, true)) then
-      self.share_ok = self:gameDay()
-      log("a team mate allows sharing the research")
-    end
-  end
   -- What people on its side say goes into its next plan (wishes, worries).
   if ally and text ~= "" then
     self.mate_lines = self.mate_lines or {}
