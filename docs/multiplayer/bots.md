@@ -61,6 +61,14 @@ best project it can afford is done, one every one to four game days.
   4th month, once a week for each of the three, the least skilled one at 75%
   or below is replaced when somebody above 75% is on the list (hired first,
   then the other is let go). Early on a bot hires whoever is most skilled.
+- **Doctors no room needs** (Jan, 2026-11-14: Bertie had 24 doctors for 19
+  places, many standing about): a bot keeps 1 doctor more than its rooms need,
+  and 1 more for every 8 places (19 places: 3), for those on a break. Its
+  hiring rules stop there (it was 1 more for every 12 patients), and from the
+  4th month, once a week, while it has more, the least wanted doctor no room
+  needs is let go (a junior first, then by skill; specialists stay for the
+  rooms that need their skill; a research room needs one for every desk;
+  students in training are not counted).
 - **Handymen** (2026-11-13, Clive's corridors full of litter): one for every
   four rooms from the 3rd room, one more for every 8 pieces of litter and every
   4 machines, at most 8. The first mostly repairs (while there are machines),

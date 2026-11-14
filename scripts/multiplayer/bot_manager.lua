@@ -905,7 +905,10 @@ function M:projects(s)
   -- (A room without its doctor for a moment is not short of staff: the
   -- doctor is in another room. Only fewer people than rooms, or long
   -- queues, call for more; and never more than the patients need.)
-  local cap = {Doctor = want.Doctor + 1 + math.floor(s.patients / 12), Nurse = want.Nurse + 1 + math.floor(s.patients / 20)}
+  -- (Doctors: as many spare as M:surplusDoctors keeps, or it would let go
+  -- the ones hired here. Jan, 2026-11-14: was 1 more for every 12 patients;
+  -- Bertie's corridors were full of idle doctors.)
+  local cap = {Doctor = want.Doctor + M.doctorSlack(want.Doctor), Nurse = want.Nurse + 1 + math.floor(s.patients / 20)}
   for cat, k in pairs(want) do
     local have = staff(cat)
     if have < k then hire(cat, 8 + (k - have) * 2) end
@@ -1432,6 +1435,105 @@ function M:juniors(s)
   end
 end
 
+-- Doctors with nothing to do (Jan, 2026-11-14: Bot Bertie had 24 doctors
+-- for rooms that need about 19, standing about in the corridors; students
+-- who finished their training come back to work and nobody asked whether a
+-- room needed them): from the 4th month, once a week, while it has more
+-- doctors than its rooms need and M.doctorSlack, the least wanted one its
+-- rooms do not need is let go.
+local SURPLUS_FROM, SURPLUS_EVERY = 90, 7
+
+--! How many doctors more than its rooms need (`n`) a hospital keeps, for
+--! those on a break: 1, and 1 more for every 8 places (19 places: 3).
+function M.doctorSlack(n)
+  return 1 + math.floor(n / 8)
+end
+local SPECIAL = {Surgeon = "is_surgeon", Psychiatrist = "is_psychiatrist", Researcher = "is_researcher"}
+local SPECIAL_ORDER = {"Surgeon", "Psychiatrist", "Researcher"}
+
+--! The doctors its rooms do not need (M:surplusDoctors), the least wanted
+--! first: each room's doctors as the game asks for them (a research room one
+--! for every desk, as the bot staffs it), specialists to the rooms that need
+--! their skill first, then the others by skill; a student in the training
+--! room and its teacher are not counted. Also: how many doctors were
+--! counted, and how many its rooms need.
+function M:spareDoctors(s)
+  local bot = self.bot
+  local world, hosp = bot.world, s.hosp
+  local t = self:trainingRoom()
+  local need = {Doctor = 0, Surgeon = 0, Psychiatrist = 0, Researcher = 0}
+  for _, rm in pairs(world.rooms) do
+    if rm.hospital == hosp and rm.is_active and rm.room_info.id ~= "training" then
+      for cat, n in pairs(rm.room_info.required_staff or {}) do
+        if need[cat] then need[cat] = need[cat] + n end
+      end
+      if rm.room_info.id == "research" and rm.objects then
+        local desks = 0
+        for o in pairs(rm.objects) do
+          if o.object_type and o.object_type.id == "desk" then desks = desks + 1 end
+        end
+        need.Researcher = need.Researcher + math.max(0, desks - ((rm.room_info.required_staff or {}).Researcher or 0))
+      end
+    end
+  end
+  local doctors = {}
+  for _, st in ipairs(hosp.staff or {}) do
+    if st.humanoid_class == "Doctor" and not st.fired and st.mp_id and st.profile and
+        not (t and st.tile_x and world:getRoom(st.tile_x, st.tile_y) == t.room) and
+        not (self.isTrainee and self:isTrainee(st, s.day)) then
+      doctors[#doctors + 1] = st
+    end
+  end
+  local function value(st)
+    local v = st.profile.skill or 0
+    if bot.flag(st.profile, "is_junior") then v = v - 2 end
+    if bot.flag(st.profile, "is_consultant") then v = v + 1 end
+    for _, f in pairs(SPECIAL) do
+      if bot.flag(st.profile, f) then v = v + 0.5 end
+    end
+    return v
+  end
+  table.sort(doctors, function(a, b)
+    local va, vb = value(a), value(b)
+    if va ~= vb then return va > vb end
+    return a.mp_id < b.mp_id
+  end)
+  local used = {}
+  for _, cat in ipairs(SPECIAL_ORDER) do
+    local f, left = SPECIAL[cat], need[cat]
+    for _, st in ipairs(doctors) do
+      if left > 0 and not used[st] and bot.flag(st.profile, f) then
+        used[st], left = true, left - 1
+      end
+    end
+    -- (A room short of its specialist takes no one else: that doctor cannot
+    -- do the work.)
+  end
+  local left = need.Doctor
+  for _, st in ipairs(doctors) do
+    if left > 0 and not used[st] then used[st], left = true, left - 1 end
+  end
+  local spare = {}
+  for i = #doctors, 1, -1 do
+    if not used[doctors[i]] then spare[#spare + 1] = doctors[i] end
+  end
+  return spare, #doctors, need.Doctor + need.Surgeon + need.Psychiatrist + need.Researcher
+end
+
+function M:surplusDoctors(s)
+  if s.day < SURPLUS_FROM or s.day - (self.surplus_day or -99) < SURPLUS_EVERY then return end
+  self.surplus_day = s.day
+  local spare, have, need = self:spareDoctors(s)
+  -- (Counted against all its doctors, not the spare ones: a room short of a
+  -- specialist leaves a doctor spare that the hiring rules count as working.)
+  if have - need <= M.doctorSlack(need) or #spare == 0 then return end
+  local st = spare[1]
+  if self:issue({kind = "fire_staff", staff = st.mp_id}) then
+    self:note(string.format("day %d: let go %s, a doctor no room needs (%d doctors for %d places)", s.day,
+        tostring(st.profile:getFullName()), have, need))
+  end
+end
+
 --! From the 4th month (JUNIORS_GONE_DAY), once a week, for nurses, handymen
 --! and receptionists in turn: the least skilled at or below STAFF_MIN_SKILL
 --! is replaced, when one above it is on the list and the bank allows: the
@@ -1835,6 +1937,7 @@ function M:daily(s)
   if helper then return end
   self:juniors(s)
   self:skilledStaff(s)
+  self:surplusDoctors(s)
   self:training(s)
   -- Its floor in pieces (Bot:repairFloor): looked at once a game week, every
   -- 2 days while it is being mended. (Not when it leaves the building to the

@@ -749,3 +749,60 @@ do
   eq(issued[1] and issued[1].kind, "litter_bomb_pick", "one with 300 hours is picked up once noticed")
 end
 print("bombs left ok")
+
+-- Doctors no room needs (Jan, 2026-11-14: Bertie's corridors were full of
+-- them): a GP's office (a doctor), a psychiatry (a psychiatrist), an
+-- operating theatre (2 surgeons), a research room with 3 desks (3
+-- researchers). 11 doctors: those 7 and 4 more; from the 4th month, once a
+-- week, one is let go while more than M.doctorSlack are spare, the least
+-- wanted first.
+do
+  local issued = {}
+  local hosp = {staff = {}}
+  local n = 0
+  local function doctor(skill, flags)
+    n = n + 1
+    local p = {skill = skill, getFullName = function() return "D" .. n end}
+    for k, v in pairs(flags or {}) do p[k] = v end
+    local st = {humanoid_class = "Doctor", mp_id = n, profile = p}
+    hosp.staff[#hosp.staff + 1] = st
+    return st
+  end
+  local function desk() return {object_type = {id = "desk"}} end
+  local rooms = {
+    {hospital = hosp, is_active = true, room_info = {id = "gp", required_staff = {Doctor = 1}}, objects = {}},
+    {hospital = hosp, is_active = true, room_info = {id = "psych", required_staff = {Psychiatrist = 1}}, objects = {}},
+    {hospital = hosp, is_active = true, room_info = {id = "operating_theatre", required_staff = {Surgeon = 2}},
+      objects = {}},
+    {hospital = hosp, is_active = true, room_info = {id = "research", required_staff = {Researcher = 1}},
+      objects = {[desk()] = true, [desk()] = true, [desk()] = true}},
+  }
+  doctor(0.8, {is_surgeon = 1}); doctor(0.6, {is_surgeon = 1}); doctor(0.7, {is_psychiatrist = 1})
+  doctor(0.5, {is_researcher = 1}); doctor(0.6, {is_researcher = 1}); doctor(0.9, {is_researcher = 1})
+  doctor(0.9, {is_consultant = 1}) -- the GP
+  local spare_a = doctor(0.5)
+  local junior = doctor(0.2, {is_junior = 1})
+  doctor(0.7)
+  local spare_b = doctor(0.4)
+  local bot = {world = {rooms = rooms, getRoom = function() return nil end},
+      flag = function(p, name) return p[name] ~= nil and p[name] ~= false end}
+  local m = setmetatable({bot = bot, log = function() end, history = {},
+      trainingRoom = function() return nil end, isTrainee = function() return false end,
+      note = function() end, issue = function(_, cmd) issued[#issued + 1] = cmd return true end}, M)
+  local spare = m:spareDoctors({day = 100, hosp = hosp})
+  eq(#spare, 4, "four doctors no room needs")
+  eq(spare[1], junior, "the junior is the least wanted")
+  eq(spare[2] == spare_b and spare[3] == spare_a, true, "then by skill")
+  m:surplusDoctors({day = 60, hosp = hosp})
+  eq(#issued, 0, "not before the 4th month")
+  m:surplusDoctors({day = 100, hosp = hosp})
+  eq(issued[1] and issued[1].staff, junior.mp_id, "the junior is let go first")
+  m:surplusDoctors({day = 103, hosp = hosp})
+  eq(#issued, 1, "once a week")
+  -- One doctor more than the rooms need (7 places: M.doctorSlack 1) stays.
+  for i = #hosp.staff, 9, -1 do hosp.staff[i] = nil end
+  m:surplusDoctors({day = 110, hosp = hosp})
+  eq(#issued, 1, "one spare doctor stays")
+  eq(M.doctorSlack(19), 3, "Bertie's 19 places keep 3 spare")
+end
+print("spare doctors ok")
