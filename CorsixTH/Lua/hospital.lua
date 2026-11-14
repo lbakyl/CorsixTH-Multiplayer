@@ -2579,7 +2579,9 @@ end
 function Hospital:getRandomBusyRoom()
   local long_queue_rooms, active_rooms, total_queue = {}, 0, 0
   for _, room in pairs(self.world.rooms) do
-    if room.is_active and room.door.queue then
+    -- (This hospital's own rooms: in multiplayer, Argus heard "Your queues
+    -- are too long" about other hospitals' rooms; 2026-11-14.)
+    if room.is_active and room.door.queue and room.hospital == self then
       total_queue = total_queue + #room.door.queue
       active_rooms = active_rooms + 1
       if #room.door.queue > 7 then

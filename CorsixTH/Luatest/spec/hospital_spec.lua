@@ -95,4 +95,21 @@ describe("hospital.lua: ", function()
     assert.is_true((rat_spawns[1].x == hole_a.x and rat_spawns[1].y == hole_a.y) or
         (rat_spawns[1].x == hole_b.x and rat_spawns[1].y == hole_b.y))
   end)
+
+  -- Multiplayer: every hospital's rooms are in world.rooms; "Your queues are
+  -- too long" is about this hospital's own (Argus heard it about others').
+  it("finds a busy room only among its own rooms", function()
+    local mine = setmetatable({}, {__index = Hospital})
+    local other = {}
+    local function room(owner, waiting)
+      local queue = {}
+      for i = 1, waiting do queue[i] = i end
+      return {hospital = owner, is_active = true, door = {queue = queue}}
+    end
+    mine.world = {rooms = {room(other, 30), room(mine, 2)}}
+    assert.is_nil(mine:getRandomBusyRoom())
+    local busy = room(mine, 12)
+    mine.world.rooms[3] = busy
+    assert.are.equal(busy, mine:getRandomBusyRoom())
+  end)
 end)

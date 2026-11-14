@@ -65,6 +65,9 @@ function Inspector:onDestroy()
 end
 
 function Inspector:announce()
+  -- (Multiplayer: only the player of the hospital he inspects hears it;
+  -- Argus heard every hospital's inspector, 2026-11-14.)
+  if not self.world:isUIHospital(self.hospital) then return end
   self.world.ui:playAnnouncement("vip008.wav", AnnouncementPriority.High)
 end
 
