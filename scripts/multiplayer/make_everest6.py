@@ -3,11 +3,13 @@ from Jan's town square (his 256.map of 2026-11-14: a plaza with a fountain
 and four small houses in the middle of a 256 x 256 map).
 
 The town is symmetric about the middle (tile 127) both ways: three
-hospitals north of the square and three south of it, the southern ones
-mirrored, so every hospital is the same building with its main entrance
-facing the square. Each has the same plot, the same doors and paths, its own
-helipad on the edge road behind it. The square's four houses are plots for
-sale. Everything else of the input map (roads, the unfinished buildings
+districts north of the square and three south of it, the southern ones
+mirrored. A district is a start hospital (main entrance facing the square)
+with five smaller buildings round it, in 8 plots for sale, and a helipad on
+the edge road behind it. Four big buildings beside the square (4 plots
+each) and the square's four houses are for sale too: 68 plots of 144 to 299
+floor tiles, each with a door of its own (Matroftt: split the bigger
+plots). Everything else of the input map (roads, the unfinished buildings
 south-east of the square) is replaced.
 
 Player order: 1 north-west, 2 south-east, 3 north-east, 4 south-west,
@@ -104,14 +106,19 @@ def main(src, dst):
     # 3 tiles in the wall between rows b - 1 and b from column `first`,
     # leading out north (dy -1) or south (dy 1); ('v', b, first, dx) between
     # columns b - 1 and b from row `first`. From each door a path leads
-    # straight out to the nearest pavement.
-    def building_def(rects, holes=(), doors=()):
+    # straight out to the nearest pavement. `split` (local x, y -> 0, 1, ...)
+    # cuts a building into several plots, each with a door of its own: the
+    # game puts up a wall between two of them that have different owners
+    # and takes it down when one owner has both (as in Theme Hospital's own
+    # maps).
+    def building_def(rects, holes=(), doors=(), split=None):
         cells = set()
         for x0, y0, x1, y1 in rects:
             cells |= {(x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)}
         for x0, y0, x1, y1 in holes:
             cells -= {(x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)}
-        return {'cells': cells, 'holes': list(holes), 'doors': list(doors)}
+        return {'cells': cells, 'holes': list(holes), 'doors': list(doors),
+                'split': split or (lambda x, y: 0)}
 
     start_hospital = building_def(
         [(12, 30, 46, 64)], holes=[(12, 30, 17, 37), (41, 30, 46, 37), (26, 42, 32, 48)],
@@ -121,20 +128,27 @@ def main(src, dst):
     annexes = [
         building_def([(0, 38, 8, 64)], doors=[('v', 9, 49, 1)]),             # front west
         building_def([(50, 38, 58, 64)], doors=[('v', 50, 49, -1)]),         # front east
-        building_def([(0, 0, 24, 11), (0, 12, 10, 24)], doors=[('v', 0, 4, -1)]),    # back west
-        building_def([(34, 0, 58, 11), (48, 12, 58, 24)], doors=[('v', 59, 4, 1)]),  # back east
+        # back west and back east: an L and a smaller piece, two plots
+        building_def([(0, 0, 24, 11), (0, 12, 10, 24)], doors=[('v', 0, 4, -1), ('h', 0, 17, -1)],
+                     split=lambda x, y: 0 if x <= 12 else 1),
+        building_def([(34, 0, 58, 11), (48, 12, 58, 24)], doors=[('v', 59, 4, 1), ('h', 0, 39, -1)],
+                     split=lambda x, y: 0 if x >= 46 else 1),
+        # back middle: two plots either side of its courtyard
         building_def([(14, 15, 44, 26)], holes=[(27, 18, 31, 23)],
-                     doors=[('h', 15, 28, -1)]),                              # back middle
+                     doors=[('h', 15, 25, -1), ('h', 15, 31, -1)],
+                     split=lambda x, y: 0 if x <= 29 else 1),
     ]
     # Lanes between the start hospital and the front annexes, from the
     # district's back to the road in front.
     lanes = [(9, 30, 11, 68), (47, 30, 49, 68)]
     camera_local = (29, 58)
-    # The middle band, west of the square, north of its street: one big
-    # building for sale (and its three mirror images).
+    # The middle band, west of the square, north of its street: a big
+    # building in four plots round a courtyard (and its three mirror images).
     middle = building_def([(30, 101, 82, 121)], holes=[(52, 107, 60, 115)],
-                          doors=[('h', 122, 55, 1), ('h', 101, 55, -1), ('v', 30, 110, -1),
-                                 ('v', 83, 110, 1)])
+                          doors=[('h', 101, 40, -1), ('h', 101, 69, -1), ('h', 122, 40, 1),
+                                 ('h', 122, 69, 1), ('v', 30, 104, -1), ('v', 83, 104, 1),
+                                 ('v', 30, 115, -1), ('v', 83, 115, 1)],
+                          split=lambda x, y: (0 if x <= 56 else 1) + (0 if y <= 111 else 2))
 
     # The six districts: (player, left x, mirrored north-south?)
     sites = [(1, XS[0], False), (2, XS[2], True), (3, XS[2], False),
@@ -146,20 +160,25 @@ def main(src, dst):
         return f
 
     def place(defn, g, plot):
-        """Build `defn` through the tile transform g on plot `plot`."""
-        inside = {g(x, y) for x, y in defn['cells']}
+        """Build `defn` through the tile transform g on plots `plot`, `plot` +
+        1, ... (its pieces); returns how many plots it took."""
+        local = {g(x, y): (x, y) for x, y in defn['cells']}
+        inside = set(local)
+        split = defn['split']
         xs = [x for x, _ in inside]
         ys = [y for _, y in inside]
-        for x, y in inside:
+        for (x, y), (lx, ly) in local.items():
             tiles[y][x][0:8] = bytes((0, 0, HOSP_FLOOR, 0, 0, 0, 0, 0))
-            parcel[y][x] = plot
+            parcel[y][x] = plot + split(lx, ly)
             building.add((x, y))
         for hx0, hy0, hx1, hy1 in defn['holes']:
             for lx in range(hx0, hx1 + 1):
                 for ly in range(hy0, hy1 + 1):
                     x, y = g(lx, ly)
                     if (x, y) not in inside and min(xs) <= x <= max(xs) and min(ys) <= y <= max(ys):
-                        parcel[y][x] = plot   # (a courtyard belongs to its building)
+                        parcel[y][x] = plot + split(lx, ly)   # (a courtyard belongs to its building)
+        pieces = {split(lx, ly) for lx, ly in defn['cells']}
+        with_door = set()
         for y in range(min(ys), max(ys) + 2):
             for x in range(min(xs), max(xs) + 2):
                 t = tiles[y][x]
@@ -181,6 +200,13 @@ def main(src, dst):
             out = (a_out[0] - a_in[0], a_out[1] - a_in[1])
             inner = cells[0] in inside
             first_piece, last_piece = DOOR[(kind, inner)]
+            # (the door's plot: that of the floor inside it)
+            ins = [c if inner else (c[0] - out[0], c[1] - out[1]) for c in cells]
+            door_pieces = {split(*local[c]) for c in ins}
+            if len(door_pieces) != 1:
+                sys.exit('a door of plot %d is on two of its pieces' % plot)
+            door_plot = plot + door_pieces.pop()
+            with_door.add(door_plot - plot)
             for i, (x, y) in enumerate(cells):
                 t = tiles[y][x]
                 t[0] = (1 if kind == 'v' else 0) if i < 2 else 0
@@ -197,7 +223,7 @@ def main(src, dst):
                     t[2] = CENTRE
                     t[5:8] = bytes(WALK)
                     tiles[y - out[1]][x - out[0]][5] = 2   # (inside, across the door)
-                parcel[y][x] = plot
+                parcel[y][x] = door_plot
                 building.add((x, y))
             for x, y in cells:
                 x, y = x + out[0], y + out[1]
@@ -208,8 +234,11 @@ def main(src, dst):
                     pave(x, y)
                     parcel[y][x] = 0
                     x, y = x + out[0], y + out[1]
+        if with_door != pieces:
+            sys.exit('a piece of plot %d has no door' % plot)
+        return len(pieces)
 
-    # Plots: 1-6 the start hospitals, 7-10 the square's houses, 11-14 the
+    # Plots: 1-6 the start hospitals, 7-10 the square's houses, 11-26 the
     # middle band, then the districts' buildings for sale.
     for player, x0, south in sites:
         g = to_global(x0, south)
@@ -219,16 +248,15 @@ def main(src, dst):
                     pave(*g(lx, ly))
     middle_sites = [lambda x, y: (x, y), lambda x, y: (MX(x), y),
                     lambda x, y: (x, MY(y)), lambda x, y: (MX(x), MY(y))]
-    for i, g in enumerate(middle_sites):
-        place(middle, g, 11 + i)
-    next_plot = 15
+    next_plot = 11
+    for g in middle_sites:
+        next_plot += place(middle, g, next_plot)
     cameras, helipads = {}, {}
     for player, x0, south in sites:
         g = to_global(x0, south)
         place(start_hospital, g, player)
         for annex in annexes:
-            place(annex, g, next_plot)
-            next_plot += 1
+            next_plot += place(annex, g, next_plot)
         cameras[player] = g(*camera_local)
         # The helipad: on the grass beyond the edge road behind the district.
         helipads[player] = (x0 + 29, MY(14) if south else 14)

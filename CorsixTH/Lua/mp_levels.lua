@@ -66,12 +66,13 @@ levels.LEVELS = {
   -- (Levels/everest6.map, 256 x 256, by scripts/multiplayer/make_everest6.py):
   -- three districts north of the square and three south of it, the same
   -- mirrored. Each is a start hospital with five smaller buildings round it,
-  -- each a plot for sale; four big buildings in the middle band and the
-  -- square's four houses are for sale too, so there is land to fight over at
-  -- auctions. Level 9's rooms, diseases and research (all but the DNA fixer
-  -- and the jelly vat); the climbing seasons, the earthquakes and the doctors
-  -- of the scenario "everest" (the end of this file). With 2 to 4 players the
-  -- corner districts are taken, with 5 the southern middle one is for sale.
+  -- in 8 plots for sale; four big buildings in the middle band (4 plots
+  -- each) and the square's four houses are for sale too: 68 plots of 144 to
+  -- 299 tiles, land to fight over at auctions. Level 9's rooms, diseases and
+  -- research (all but the DNA fixer and the jelly vat); the climbing seasons,
+  -- the earthquakes and the doctors of the scenario "everest" (the end of
+  -- this file). With 2 to 4 players the corner districts are taken, with 5
+  -- the southern middle one is for sale.
   {campaign = 9, map = 0, cash = 70000, scenario = "everest", intro = "level_intro_everest",
     name = "MOUNT EVEREST",
     map_files = {[2] = "everest6.map", [3] = "everest6.map", [4] = "everest6.map",
