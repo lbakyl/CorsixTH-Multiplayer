@@ -125,15 +125,18 @@ run_probe pia MP_ROLE=host MP_ROOM=tricks2 MP_MODE=competitive MP_PLAYERS=2 MP_L
 sleep 1
 run_probe quin MP_ROLE=join MP_ROOM=tricks2 MP_STEPS=700 \
   MP_UI_SCRIPT="30:openhospital;60:hire:Nurse;100:learn;400:answerraise:accept;650:stafflog:Nurse" & pids+=($!)
+# (With the referee cid's game is put out of step; ann and bea may see it
+# before the server's word that only cid is repaired, as in the lobby's
+# quorum check: all three expect a repair.)
 cid_extra=""
-cid_env=()
-if [[ "${MP_REFEREE:-0}" == 1 ]]; then cid_extra=";420:cheat"; cid_env=(MP_EXPECT_REPAIR=1); fi
+bombs_env=()
+if [[ "${MP_REFEREE:-0}" == 1 ]]; then cid_extra=";420:cheat"; bombs_env=(MP_EXPECT_REPAIR=1); fi
 sleep 1
-run_probe ann MP_ROLE=host MP_ROOM=bombs MP_MODE=competitive MP_PLAYERS=3 MP_LEVEL=2 MP_STEPS=1250   MP_UI_SCRIPT="20:openhospital;100:bombplant:2:2;150:bombplant:1:1;300:bombplant:1:3;1200:bombs" & pids+=($!)
+run_probe ann MP_ROLE=host MP_ROOM=bombs MP_MODE=competitive MP_PLAYERS=3 MP_LEVEL=2 MP_STEPS=1250 "${bombs_env[@]}" MP_UI_SCRIPT="20:openhospital;100:bombplant:2:2;150:bombplant:1:1;300:bombplant:1:3;1200:bombs" & pids+=($!)
 sleep 1
-run_probe bea MP_ROLE=join MP_ROOM=bombs MP_STEPS=1250   MP_UI_SCRIPT="30:openhospital;200:bombpick:1;210:bombs;230:bombthrow:3;1200:bombs" & pids+=($!)
+run_probe bea MP_ROLE=join MP_ROOM=bombs MP_STEPS=1250 "${bombs_env[@]}" MP_UI_SCRIPT="30:openhospital;200:bombpick:1;210:bombs;230:bombthrow:3;1200:bombs" & pids+=($!)
 sleep 1
-run_probe cid MP_ROLE=join MP_ROOM=bombs MP_STEPS=1250 "${cid_env[@]}"   MP_UI_SCRIPT="40:openhospital;350:bombpick:2;360:bombs${cid_extra};600:bombs;1200:bombs" & pids+=($!)
+run_probe cid MP_ROLE=join MP_ROOM=bombs MP_STEPS=1250 "${bombs_env[@]}" MP_UI_SCRIPT="40:openhospital;350:bombpick:2;360:bombs${cid_extra};600:bombs;1200:bombs" & pids+=($!)
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 python3 - "$out" "${MP_REFEREE:-0}" <<'PY'
