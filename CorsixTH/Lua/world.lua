@@ -1712,14 +1712,15 @@ end
 
 -- Multiplayer: what a hospital only bots play gets every month, hidden, by
 -- the bots' level (the room owner picks it in the room; Jan, 2026-11-12):
--- normal bots MP_BOT_BONUS, easy ones nothing, hard ones more, and 5
--- reputation a month too; a hard bot's hospital also counts a fifth more
+-- normal bots MP_BOT_BONUS, easy ones nothing, hard ones a little more, and
+-- 3 reputation a month too (Jan, 2026-11-14: were $8000 and 5; Argus had
+-- $20,000 after a year against hard bots with $70,000 each); a hard bot's hospital also counts a fifth more
 -- value towards the goals (EndConditions:getAttribute), every second death
 -- only (Hospital:humanoidDeath) and bids higher at auctions (botPlotWorth).
 -- All of it stops once a person plays the hospital.
 World.MP_BOT_BONUS = 2000
-World.MP_BOT_LEVEL_BONUS = {easy = 0, hard = 8000}
-World.MP_BOT_HARD_REPUTATION = 5
+World.MP_BOT_LEVEL_BONUS = {easy = 0, hard = 3000}
+World.MP_BOT_HARD_REPUTATION = 3
 World.MP_BOT_HARD_VALUE = 1.2
 
 --- Called immediately prior to the ingame month changing.
