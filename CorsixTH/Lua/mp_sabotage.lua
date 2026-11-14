@@ -68,7 +68,7 @@ sabotage.PRICES = {
   boiler = {3000, 7000, 12000},
   smear = {5000, 10000, 18000},
   espionage = {6000, 12000, 20000},
-  litter_bomb = {3000, 7000, 12000},
+  litter_bomb = {1000, 2000, 3000}, -- (cheap, it is only a mess: Jan, 2026-11-14)
 }
 sabotage.KINDS = {"handyman", "epidemic", "emergency", "rats", "headhunter", "boiler", "smear", "espionage",
   "litter_bomb"}

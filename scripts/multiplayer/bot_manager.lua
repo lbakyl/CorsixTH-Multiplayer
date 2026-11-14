@@ -2298,6 +2298,27 @@ function M:notice(text)
   if self.bot.fiery then self.bot:tellRival(kind) end
 end
 
+--! Why the bot should not spend `cost` on a dirty trick now (nil: it may;
+--! Jan, 2026-11-14): it owes the bank, or one of the things it needs most
+--! (its urgent projects, the basics of the hospital) would then be short of
+--! money.
+function M:trickMoney(cost)
+  local s = self.state
+  if not s then return nil end
+  local hosp = s.hosp
+  if (hosp.loan or 0) > 0 then return "it owes the bank" end
+  local left = (hosp.balance or 0) - cost
+  if left < 2 * RESERVE then return "not enough money" end
+  local ok, list = pcall(self.projects, self, s)
+  if not ok then return nil end
+  for i = 1, math.min(#list, 4) do
+    local p = list[i]
+    if p.cost > 0 and (p.basic or p.score >= URGENT) and left - p.cost < RESERVE then
+      return "it needs the money for " .. p.key
+    end
+  end
+end
+
 --! The rival to play a dirty trick on: the one closest to winning (its
 --! reputation and money), a person rather than a bot.
 function M:trickTarget()
@@ -2328,7 +2349,11 @@ function M:trickKind(target)
   local kinds = {}
   if machines >= 3 then kinds[#kinds + 1] = "handyman" end
   if target:hasReceptionDesk(true) then kinds[#kinds + 1] = self.rand() < 0.5 and "epidemic" or "emergency" end
-  if target:hasReceptionDesk(true) then kinds[#kinds + 1] = "litter_bomb" end
+  -- (Litter bombs twice: cheap, and only a mess; Jan wants them seen often.)
+  if target:hasReceptionDesk(true) then
+    kinds[#kinds + 1] = "litter_bomb"
+    kinds[#kinds + 1] = "litter_bomb"
+  end
   kinds[#kinds + 1] = "rats"
   return kinds
 end

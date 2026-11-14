@@ -195,7 +195,14 @@ best project it can afford is done, one every one to four game days.
   seconds with `MP_BOT_AWAY_SECONDS`.
 - **Dirty tricks** (race): on the rival closest to winning (a person before a
   bot), the kind that hurts it most (an evil handyman for a hospital with
-  machines, an epidemic or emergency for a staffed desk, else rats).
+  machines, an epidemic or emergency or, twice as likely, a litter bomb for a
+  staffed desk, else rats). Never while it owes the bank, nor when one of the
+  things it needs most (`M:trickMoney`: its four top projects that are urgent
+  or basic) would then be short of money. Litter bombs: an easy bot's are
+  level 1; a normal or easy bot puts its bomb by the rival's reception desk, a
+  hard one hides it on a quiet corridor at least 8 tiles from every desk
+  (`Bot:bombSpot`); one on its own floor is found after 1-3 (hard), 3-8
+  (normal) or 8-18 days (easy) and thrown on at the leader (`M:defendBombs`).
 - The month in one log line: why patients left (cured, sent away, fed up,
   too dear), the diseases it lost most, patients in the hospital, queues per
   room type, specialists, prices, reputation, money, and its floor (in how many
@@ -418,8 +425,10 @@ environment):
   line: the offer arrives as a fax.
 - **Dirty tricks** (race only): the first one, an evil handyman, some time in
   months 7 to 12 on a person's open hospital (never on another bot); then one
-  of the four tricks every 60 to 120 days, at a level it can afford while
-  keeping $6,000. Half the time it drops a hint in the chat a little later.
+  of the tricks every 60 to 120 days, at a level it can afford while
+  keeping $6,000. By level (Jan, 2026-11-14): an easy bot's first trick comes
+  in months 10 to 12, then every 90 to 150 days; a hard bot's in months 4 to
+  6, then every 45 to 90 days. Half the time it drops a hint in the chat a little later.
 - It does not vote on speed changes (only people do, see
   `MultiplayerSession:voterCount`) and closes the windows that would pause
   its game (annual report, information, pay rises).

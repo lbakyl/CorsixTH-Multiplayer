@@ -704,3 +704,27 @@ do
   eq(#hired, 1, "once a week")
 end
 print("skilled staff ok")
+
+-- Money for a dirty trick (Jan, 2026-11-14): never while it owes the bank,
+-- nor when an urgent or basic project of its top four would then be short.
+do
+  local list = {}
+  local m = setmetatable({bot = {}, log = function() end, history = {}}, M)
+  function m.projects() return list end
+  local hosp = {balance = 20000, loan = 0}
+  m.state = {hosp = hosp}
+  eq(m:trickMoney(1000), nil, "plenty of money, nothing urgent")
+  hosp.loan = 5000
+  eq(m:trickMoney(1000), "it owes the bank", "a loan")
+  hosp.loan = 0
+  hosp.balance = 6500
+  eq(m:trickMoney(1000), "not enough money", "the reserve")
+  hosp.balance = 20000
+  list = {{key = "room:gp", score = 50, cost = 2000}, {key = "room:ward", score = 30, cost = 17000}}
+  eq(m:trickMoney(1000), "it needs the money for room:ward", "an urgent room it could not pay after the trick")
+  list = {{key = "room:ward", score = 5, cost = 16000}}
+  eq(m:trickMoney(1000), nil, "a room that can wait")
+  list = {{key = "buy:reception_desk", score = 95, basic = true, cost = 18000}}
+  eq(m:trickMoney(1000), "it needs the money for buy:reception_desk", "the basics first")
+end
+print("trick money ok")

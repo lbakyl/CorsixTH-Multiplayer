@@ -796,6 +796,11 @@ local RESERVE = 3000
 -- alone this many game days (Argus, 2026-11-12: two bots sent their evil
 -- handymen at the same time).
 local TRICK_GAP_DAYS = 30
+-- Dirty tricks by the bot's level (Jan, 2026-11-14): its first one on a day
+-- of these months of the game (easy: months 10-12, normal: 7-12, hard:
+-- 4-6), then one every so many game days.
+local TRICK_FIRST_DAYS = {easy = {271, 359}, normal = {181, 359}, hard = {91, 179}}
+local TRICK_EVERY_DAYS = {easy = {90, 150}, normal = {60, 120}, hard = {45, 90}}
 -- Staff care (Bot:careForStaff): once a game week everybody under half
 -- happiness gets two bonuses (each 10% of their wage and +50% happiness),
 -- while the balance stays above BONUS_FLOOR (Jan, 2026-11-03).
@@ -3432,6 +3437,7 @@ end
 --! A corridor tile of `target` (a rival) to put a litter bomb on: near one
 --! of its reception desks if it can (where the most people pass), else near
 --! its start view; one of the free ones at random (the bot's own random).
+--! A hard bot hides it: on a quiet corridor, far from every reception desk.
 --! Nil if there is none.
 function Bot:bombSpot(target)
   local world = self.world
@@ -3451,9 +3457,21 @@ function Bot:bombSpot(target)
     return tiles
   end
   local tiles = {}
-  for _, desk in ipairs(target:getReceptionDesks()) do
-    if desk.tile_x then
-      for _, t in ipairs(free_tiles(desk.tile_x, desk.tile_y, 4)) do tiles[#tiles + 1] = t end
+  if self.level == "hard" then
+    local cx, cy = th:getCameraTile(target:getPlayerIndex())
+    for _, t in ipairs(free_tiles(cx, cy, 20)) do
+      local near = false
+      for _, desk in ipairs(target:getReceptionDesks()) do
+        if desk.tile_x and math.abs(desk.tile_x - t[1]) + math.abs(desk.tile_y - t[2]) < 8 then near = true end
+      end
+      if not near then tiles[#tiles + 1] = t end
+    end
+  end
+  if #tiles == 0 then
+    for _, desk in ipairs(target:getReceptionDesks()) do
+      if desk.tile_x then
+        for _, t in ipairs(free_tiles(desk.tile_x, desk.tile_y, 4)) do tiles[#tiles + 1] = t end
+      end
     end
   end
   if #tiles == 0 then
@@ -3467,11 +3485,22 @@ function Bot:bombSpot(target)
   end
 end
 
+--! Game days to the next dirty trick, by the bot's level.
+function Bot:trickGap()
+  local r = TRICK_EVERY_DAYS[self.level] or TRICK_EVERY_DAYS.normal
+  return rand(r[1], r[2])
+end
+
 function Bot:playTrick()
   local world = self.world
   if world.mp_coop and world.mp_coop.tricks_off then return false end -- (switched off in this game)
   if self.standin then return false end -- (not in a person's name)
   local mine = world.ui.hospital
+  -- (Not while it owes the bank: Jan, 2026-11-14.)
+  if (mine.loan or 0) > 0 then
+    log(string.format("no trick: it owes the bank $%d", math.floor(mine.loan)))
+    return false
+  end
   local target, choice
   if self.manager then
     -- The rival closest to winning, and the trick that hurts it most.
@@ -3526,10 +3555,18 @@ function Bot:playTrick()
   -- (Not above the highest level unlocked yet.)
   local month = world.game_date:monthOfGame()
   while level > 1 and (sabotage.unlockMonth(world, kind, level) or 0) > month do level = level - 1 end
+  -- (An easy bot's litter bombs are the small ones.)
+  if kind == "litter_bomb" and self.level == "easy" then level = 1 end
   local function cost(l) return sabotage.price(world, mine, kind, l) end
   while level > 1 and mine.balance - cost(level) < 2 * RESERVE do level = level - 1 end
   if mine.balance - cost(level) < 2 * RESERVE then
     log(string.format("no %s trick: not enough money ($%d)", kind, math.floor(mine.balance)))
+    return false
+  end
+  -- (Nor when what it needs most would then be short of money.)
+  local short = self.manager and self.manager:trickMoney(cost(level))
+  if short then
+    log(string.format("no %s trick: %s", kind, short))
     return false
   end
   local why = sabotage.refusal(world, mine, target[1], kind, level)
@@ -3585,8 +3622,8 @@ function Bot:attach(world)
       -- of its time in a continued game), each bot at least 6 days after
       -- the one before it (Bot:botRank).
       greet = (month - 1) * 30 + 31 + (self:botRank() - 1) * 12 + rand(0, 6),
-      -- The first dirty trick in months 7 to 12.
-      trick = (month - 1) * 30 + rand(181, 359),
+      -- The first dirty trick: in months 7 to 12 (easy 10 to 12, hard 4 to 6).
+      trick = (month - 1) * 30 + rand(unpack_args(TRICK_FIRST_DAYS[self.level] or TRICK_FIRST_DAYS.normal)),
     }
     if pace > 1 then self.plan.greet = day + math.floor((self.plan.greet - day) / pace) end
     if pace > 1 then self.plan.trick = day + math.floor((self.plan.trick - day) / pace) end
@@ -3753,7 +3790,7 @@ function Bot:think()
     if self.fiery and day >= plan.trick and hospital.opened and not hospital.mp_place then
       if self:playTrick() then
         self.tricks_played = self.tricks_played + 1
-        plan.trick = self:later(rand(60, 120))
+        plan.trick = self:later(self:trickGap())
       else
         plan.trick = self:later(7)
       end
@@ -3834,7 +3871,7 @@ function Bot:think()
   if self.fiery and day >= plan.trick and hospital.opened then
     if self:playTrick() then
       self.tricks_played = self.tricks_played + 1
-      plan.trick = self:later(rand(60, 120))
+      plan.trick = self:later(self:trickGap())
     else
       plan.trick = self:later(7)
     end
