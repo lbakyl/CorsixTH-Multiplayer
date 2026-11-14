@@ -69,6 +69,10 @@ best project it can afford is done, one every one to four game days.
   needs is let go (a junior first, then by skill; specialists stay for the
   rooms that need their skill; a research room needs one for every desk;
   students in training are not counted).
+- **Surgeons** (Argus, 2026-11-14: "with 2 operating theatres, 6 surgeons
+  at least; 3 with one"): a bot keeps 3 surgeons for each operating theatre
+  (it needs 2), hired once the theatres have their two, and never let go as
+  spare doctors (`M.SURGEONS_PER_THEATRE`).
 - **A spare nurse** (Jan, 2026-11-14: Clive's two wards stood without a nurse
   while his were on a break): once two rooms or more need a nurse, a bot
   hires 1 nurse more than they need, and 1 more for every 8 places.
