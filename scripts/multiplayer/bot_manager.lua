@@ -208,6 +208,19 @@ local function smallest_size(id)
   end
 end
 
+--! How far a room is taken in when there is no floor and no land left
+--! (M:projects, edit:shrink): one more than its smallest size, room for its
+--! plant and radiator (Jan, 2026-11-14: Clive's research room lost both,
+--! taken in twice); a normal or hard bot's research room no smaller than 6
+--! (its three desks).
+local function shrink_size(id)
+  local s = smallest_size(id)
+  if not s then return nil end
+  s = s + 1
+  if id == "research" and (M.hard or M.research_heavy) then s = math.max(s, 6) end
+  return s
+end
+
 --! The planned size of a room type (SIZES, else the smallest).
 -- (A bot set to research hard, Bot.research_heavy: a bigger room with four
 -- desks, a researcher at each. Jan's test of 2026-11-12.)
@@ -954,12 +967,12 @@ function M:projects(s)
   end
   -- No floor for what it wants: first a room that is bigger than it needs
   -- taken in by a row (no cost, and the land may be gone), then land.
-  -- With no land left to buy, rooms go down to their smallest size (the
-  -- plant and radiator may not fit any more).
+  -- With no land left to buy, rooms go down to one more than their smallest
+  -- size, the plant and radiator still in (shrink_size).
   local wanted = self:landWanted(s)
   local _, land_price
   if wanted then _, land_price = bot:cheapestPlot() end
-  local size_of = land_price and SIZES_OF or smallest_size
+  local size_of = land_price and SIZES_OF or shrink_size
   -- (One room at a time, a month apart: each edit closes the room a while.)
   -- (Never in a hospital a person plays in too: the rooms are theirs as well.)
   if wanted and #bot:hospitalMates() == 0 and
