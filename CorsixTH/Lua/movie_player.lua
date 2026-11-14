@@ -250,8 +250,14 @@ local winLetterOverlay = function(me, paragraphs, choose)
   -- The paragraphs as plain strings (_S strings unwrapped), laid out in rows
   -- with a blank line between paragraphs.
   local texts = {}
+  -- (The typewriter font has no "+": a team's name, "ANN + BEN", reads
+  -- "ANN and BEN" on the letter.)
+  local mp_texts = _S.multiplayer_window
+  local and_word = mp_texts and mp_texts.race_and
+  and_word = and_word and tostring((TH.stringProxy._unwrap(and_word))) or " & "
   for i, text in ipairs(paragraphs) do
-    texts[i] = type(text) == "string" and text or tostring((TH.stringProxy._unwrap(text)))
+    local plain = type(text) == "string" and text or tostring((TH.stringProxy._unwrap(text)))
+    texts[i] = (plain:gsub(" %+ ", function() return and_word end))
   end
   local _, line_h = font:sizeOf("Ag")
   -- The rows in lines `line_w` font pixels wide, their height, and how many
