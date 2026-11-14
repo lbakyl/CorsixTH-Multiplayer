@@ -763,6 +763,30 @@ do
 end
 print("bombs left ok")
 
+-- A research room (Jan, 2026-11-14): none with nothing left to research; a
+-- kind of room the person sharing the hospital took away stays away.
+do
+  local drain = {}
+  local hosp = {research = {drain = drain, research_policy = {
+    cure = {current = nil}, diagnosis = {current = nil}, drugs = {current = drain},
+    improvements = {current = {}}}}}
+  eq(M.researchLeft(hosp), true, "an improvement still to research")
+  hosp.research.research_policy.improvements.current = nil
+  eq(M.researchLeft(hosp), false, "everything researched")
+  hosp.research.research_policy.drugs.current = {}
+  eq(M.researchLeft(hosp), true, "a drug still to improve")
+  eq(M.researchLeft({}), true, "no research department known: as before")
+  local here = true
+  local m = setmetatable({bot = {mate_removed = {research = 100}, sharesWithPerson = function() return here end},
+      log = function() end, history = {}}, M)
+  eq(m:mateRemoved("research", 150), true, "taken away by the person 50 days ago")
+  eq(m:mateRemoved("gp", 150), false, "another kind")
+  eq(m:mateRemoved("research", 500), false, "a year later")
+  here = false
+  eq(m:mateRemoved("research", 150), false, "the person away: the bot runs it all")
+end
+print("research room ok")
+
 -- Doctors no room needs (Jan, 2026-11-14: Bertie's corridors were full of
 -- them): a GP's office (a doctor), a psychiatry (a psychiatrist), an
 -- operating theatre (2 surgeons), a research room with 3 desks (3

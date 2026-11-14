@@ -52,6 +52,11 @@ local REFER_GAP_DAYS = 3
 -- year) and with no space left (M:projects, M:outOfSpace).
 local VACANT_DAYS, VACANT_DAYS_VALUE = 150, 360
 local REMOVED_REBUILD_DAYS = 180
+-- A kind of room a person sharing the hospital took away is not built again
+-- by the bot for a year, while they play, unless they ask for it (Jan,
+-- 2026-11-14: he sold the research room, everything researched, and the bot
+-- built it again; he could not stop it). Bot.mate_removed, M:mateRemoved.
+local MATE_REMOVED_DAYS = 365
 -- Rooms used by staff, not patients: used while staff are in them.
 local STAFF_ROOMS = {staff_room = true, training = true, research = true}
 -- Never taken down for being empty (a hospital without them is no hospital).
@@ -731,6 +736,10 @@ function M:projects(s)
   local function room(id, score, size)
     local rt = rooms_by_id[id]
     if not rt or not self:available(id) or s.building[id] then return end
+    -- (No research room with nothing left to research; nor a kind of room a
+    -- person sharing the hospital took away, unless they ask for it.)
+    if id == "research" and not M.researchLeft(hosp) then return end
+    if self:mateRemoved(id, s.day) and not self.wishes["room:" .. id] then return end
     -- A room for a specialist (a psychiatrist, surgeons, a researcher) waits
     -- until one is on the staff or on the hiring list: an empty room helps
     -- nobody.
@@ -1453,6 +1462,29 @@ local SURPLUS_FROM, SURPLUS_EVERY = 90, 7
 
 --! How many doctors more than its rooms need (`n`) a hospital keeps, for
 --! those on a break: 1, and 1 more for every 8 places (19 places: 3).
+--! Is anything left for `hosp` to research? (As the game sees it,
+--! ResearchDepartment: a category is done once it has nothing current, or
+--! only its drain.)
+function M.researchLeft(hosp)
+  local r = hosp and hosp.research
+  local p = r and r.research_policy
+  if not p then return true end
+  for _, cat in ipairs({"cure", "diagnosis", "drugs", "improvements"}) do
+    local c = p[cat] and p[cat].current
+    if c and c ~= r.drain then return true end
+  end
+  return false
+end
+
+--! Did a person sharing the hospital take a room of kind `id` away within
+--! MATE_REMOVED_DAYS (Bot.mate_removed), and are they playing now?
+function M:mateRemoved(id, day)
+  local bot = self.bot
+  local when = bot.mate_removed and bot.mate_removed[id]
+  return when ~= nil and day - when < MATE_REMOVED_DAYS and bot.sharesWithPerson ~= nil and
+      bot:sharesWithPerson() or false
+end
+
 function M.doctorSlack(n)
   return 1 + math.floor(n / 8)
 end

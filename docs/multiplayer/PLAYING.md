@@ -108,7 +108,10 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
    it gives every member of staff under half happiness two bonuses (while
    the balance stays above $2,000) and tells you what that cost; a pay rise
    you leave unanswered it answers before they quit. Once a month it gives
-   your allies the research they lack, for free, without asking.
+   your allies the research they lack, for free, without asking. A kind of
+   room you take away it does not build again for a year, unless you ask
+   for it in the chat; it builds no research room once everything is
+   researched, and leaves litter bombs on your floor to you.
 
 **The host's room settings:** before the start the host may remove a person
 from the room (double-click or right-click their line, then "Remove <name>

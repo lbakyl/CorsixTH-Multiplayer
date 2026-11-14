@@ -1055,9 +1055,33 @@ function Bot:watchCommands()
       if cmd.step == n and cmd.peer then
         bot.last_command = bot.last_command or {}
         bot.last_command[cmd.peer] = {time = bot:now(), day = bot.world and bot:gameDay() or 0}
+        if cmd.kind == "room_delete" then bot:noteMateRemoval(cmd) end
       end
     end
     return before(s)
+  end
+end
+
+--! A person sharing the hospital takes a room away (room_delete, before it
+--! runs): the bot leaves that kind of room alone for a while
+--! (Manager:mateRemoved).
+function Bot:noteMateRemoval(cmd)
+  local world = self.world
+  if not world then return end
+  for _, peer in ipairs(self:hospitalMates()) do
+    if peer == cmd.peer then
+      local id = tonumber(cmd.room)
+      local rm = id and world.rooms[id]
+      local entry = id and world.mp_furnishing and world.mp_furnishing[id]
+      local kind = rm and rm.room_info and rm.room_info.id or
+          entry and entry.dlg and entry.dlg.room_type and entry.dlg.room_type.id
+      if kind then
+        self.mate_removed = self.mate_removed or {}
+        self.mate_removed[kind] = self:gameDay()
+        log(string.format("%s took a %s away: the bot leaves that kind of room to them",
+            tostring(self:playerName(peer)), kind))
+      end
+    end
   end
 end
 

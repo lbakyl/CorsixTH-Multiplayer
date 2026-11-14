@@ -215,6 +215,11 @@ best project it can afford is done, one every one to four game days.
   or 8-18 days (easy) and thrown on at the leader (`M:defendBombs`). A bot
   sharing a person's hospital leaves the bombs to that person while they are
   there (Jan, 2026-11-14).
+- **Rooms a person takes away** (Jan, 2026-11-14: he sold the research room,
+  everything researched, and the bot built it again): a kind of room a person
+  sharing the hospital removed is not built by the bot for a year while they
+  play, unless they ask for it (`Bot:noteMateRemoval`, `M:mateRemoved`). No
+  research room is built once nothing is left to research (`M.researchLeft`).
 - The month in one log line: why patients left (cured, sent away, fed up,
   too dear), the diseases it lost most, patients in the hospital, queues per
   room type, specialists, prices, reputation, money, and its floor (in how many
