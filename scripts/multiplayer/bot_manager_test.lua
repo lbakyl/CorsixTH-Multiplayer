@@ -728,3 +728,24 @@ do
   eq(m:trickMoney(1000), "it needs the money for buy:reception_desk", "the basics first")
 end
 print("trick money ok")
+
+-- A litter bomb on its floor (Jan, 2026-11-14): picked up once noticed, but
+-- left where it lies with less than 75 hours of fuse (it would go off in the
+-- bot's hands before it throws it).
+do
+  local issued = {}
+  local hosp = {}
+  local bomb = {mp_id = 7, tile_x = 5, tile_y = 5, hospital = hosp, mp_bomb = {fuse = 40, throws = 1}}
+  local floor = {entities = {bomb}}
+  local m = setmetatable({bot = {world = floor, skill = "hard"}, log = function() end, history = {},
+      rand = function(a) return a end, sabotage = {heldBomb = function() return nil end},
+      note = function() end, issue = function(_, cmd) issued[#issued + 1] = cmd return true end}, M)
+  m:defendBombs({day = 10, hosp = hosp})
+  m:defendBombs({day = 12, hosp = hosp})
+  eq(#issued, 0, "a bomb with 40 hours left stays where it lies")
+  bomb.mp_bomb = {fuse = 300, throws = 2}
+  m:defendBombs({day = 20, hosp = hosp})
+  m:defendBombs({day = 22, hosp = hosp})
+  eq(issued[1] and issued[1].kind, "litter_bomb_pick", "one with 300 hours is picked up once noticed")
+end
+print("bombs left ok")

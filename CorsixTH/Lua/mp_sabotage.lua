@@ -1041,7 +1041,8 @@ function sabotage.plantBomb(world, thrower, target, x, y, level, bomb)
     bomb:setTile(x, y)
   else
     bomb = world:newObject("litter_bomb", x, y, nil, nil, target)
-    bomb.mp_bomb = {level = level, fuse = sabotage.BOMB_FUSE, hours = 0}
+    bomb.mp_bomb = {level = level, fuse = sabotage.BOMB_FUSE, hours = 0,
+        buyer = world:getHospitalIndex(thrower)}
   end
   local b = bomb.mp_bomb
   b.from = world:getHospitalIndex(thrower)
@@ -1181,9 +1182,16 @@ function sabotage.bombGoesOff(world, bomb)
   log(string.format("litter bomb #%d went off in hospital %d%s at %s,%s: %d pieces of litter",
       bomb.mp_id, index, in_hands and " (in its hands)" or "", tostring(x), tostring(y), pieces))
   MultiplayerSession.tellPlayer(world, hospital, in_hands and S().sabotage_bomb_in_hands or S().sabotage_bomb_blast)
+  -- Whoever threw it last, and whoever bought it (Jan, 2026-11-14: his
+  -- bombs were found, thrown on from hospital to hospital and went off, and
+  -- he never heard where).
   local from = world.hospitals[b.from or 0]
   if from and from ~= hospital then
     MultiplayerSession.tellPlayer(world, from, S().sabotage_bomb_blast_rival:format(hospital.name))
+  end
+  local buyer = world.hospitals[b.buyer or 0]
+  if buyer and buyer ~= hospital and buyer ~= from then
+    MultiplayerSession.tellPlayer(world, buyer, S().sabotage_bomb_blast_rival:format(hospital.name))
   end
   local ui = world.ui
   if x and ui and ui.hospital == hospital and ui.shakeBriefly then ui:shakeBriefly(0.3, 700) end

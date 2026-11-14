@@ -80,6 +80,11 @@ local NOTICE_DAYS = {10, 18}
 -- Game days before it finds a litter bomb on its floor, by its level (the
 -- fuse burns 16 days: an easy bot is often too late).
 local BOMB_NOTICE_DAYS = {easy = {8, 18}, normal = {3, 8}, hard = {1, 3}}
+-- Game hours of fuse below which it leaves a bomb where it lies: it throws
+-- one the day after picking it up, so it would go off in its hands anyway,
+-- at some other spot (Jan, 2026-11-14: Bertie picked one up with 39 hours
+-- left).
+local BOMB_LEAVE_HOURS = 75
 -- Game days between research offers to the same ally.
 local SHARE_DAYS = 21
 -- Game days between specialists sent to the same ally (of one kind), and
@@ -2253,7 +2258,7 @@ function M:defendBombs(s)
         local r = BOMB_NOTICE_DAYS[self.bot.skill] or BOMB_NOTICE_DAYS.normal
         self.bombs_seen[key] = s.day + self.rand(r[1], r[2])
       end
-      if s.day >= self.bombs_seen[key] then
+      if s.day >= self.bombs_seen[key] and (b.fuse or 0) >= BOMB_LEAVE_HOURS then
         if self:issue({kind = "litter_bomb_pick", bomb = e.mp_id}) then
           self:note(string.format("day %d: picked up a litter bomb", s.day))
         end

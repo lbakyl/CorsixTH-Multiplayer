@@ -252,10 +252,12 @@ drawn = (len(re.findall(r'UI: bomb\w+ window drawn with the mouse at [\d.]+,[\d.
          and len(re.findall(r'UI: bombthrow window drawn with the mouse at [\d.]+,[\d.]+: ok', b)) == 1)
 # Whoever planted it is told when it is found and picked up.
 found = bool(re.search(r'ADVISER: Your litter bomb was found: bea picked it up in time', a, re.I))
+# ... and where it went off once bea threw it on to cid (Jan, 2026-11-14).
+found = found and bool(re.search(r'ADVISER: Your litter bomb has gone off in the hospital of cid', a, re.I))
 ok7 = bool(drawn and found and len(planted) == 2 and own_refused and picked_b and thrown_b and picked_c and blast and int(blast.group(1)) >= 10
            and in_hands and int(in_hands.group(1)) >= 5 and held_c and after
            and all(result(n).startswith('IN SYNC') for n in ('ann', 'bea', 'cid')))
-print(f"7. Litter bombs:            drawn on the mouse: {drawn}; sender told it was found: {found}; "
+print(f"7. Litter bombs:            drawn on the mouse: {drawn}; buyer told it was found and where it went off: {found}; "
       f"planted: {len(planted)}/2; own floor refused: {bool(own_refused)}; bea picked up and threw on: "
       f"{bool(picked_b and thrown_b)}; went off at cid's: {blast.group(1) + ' pieces' if blast else '-'}; cid picked one up: {bool(picked_c)}, "
       f"held (window open at 600): {bool(held_c)}, it went off in cid's hands: {in_hands.group(1) + ' pieces' if in_hands else '-'}; "
