@@ -77,6 +77,9 @@ local URGENT = 20
 -- Game days before it deals with a dirty trick (an evil handyman, rats): a
 -- player notices them only after a while.
 local NOTICE_DAYS = {10, 18}
+-- Game days before it finds a litter bomb on its floor, by its level (the
+-- fuse burns 16 days: an easy bot is often too late).
+local BOMB_NOTICE_DAYS = {easy = {8, 18}, normal = {3, 8}, hard = {1, 3}}
 -- Game days between research offers to the same ally.
 local SHARE_DAYS = 21
 -- Game days between specialists sent to the same ally (of one kind), and
@@ -2212,6 +2215,52 @@ function M:defend(s)
     if self.rats_shooting and self.bot.fiery then self.bot:tellRival("rats") end
     self.rats_from, self.rats_shooting = nil, nil
   end
+  self:defendBombs(s)
+end
+
+--! Litter bombs: one on its floor is found after a while (BOMB_NOTICE_DAYS)
+--! and picked up; one it holds is thrown on the next day, at the rival
+--! closest to winning (else any rival still in the race).
+function M:defendBombs(s)
+  local sab = self.sabotage
+  if not (sab and sab.heldBomb) then return end
+  local world = self.bot.world
+  local held = sab.heldBomb(world, s.hosp)
+  if held then
+    local target = self:trickTarget()
+    if not target then
+      for _, h in ipairs(world.hospitals) do
+        if world:mpRivals(s.hosp, h) and not h.mp_place and h.opened then
+          target = h
+          break
+        end
+      end
+    end
+    local x, y
+    if target then x, y = self.bot:bombSpot(target) end
+    if x and self:issue({kind = "litter_bomb_throw", bomb = held.mp_id, x = x, y = y}) then
+      self:note(string.format("day %d: threw the litter bomb on at hospital %d", s.day, world:getHospitalIndex(target)))
+    end
+    return
+  end
+  self.bombs_seen = self.bombs_seen or {}
+  for _, e in ipairs(world.entities) do
+    local b = e.mp_bomb
+    if b and not b.gone and e.tile_x and e.hospital == s.hosp and e.mp_id then
+      -- (The same bomb thrown back later is found anew.)
+      local key = e.mp_id .. ":" .. tostring(b.throws)
+      if not self.bombs_seen[key] then
+        local r = BOMB_NOTICE_DAYS[self.bot.level] or BOMB_NOTICE_DAYS.normal
+        self.bombs_seen[key] = s.day + self.rand(r[1], r[2])
+      end
+      if s.day >= self.bombs_seen[key] then
+        if self:issue({kind = "litter_bomb_pick", bomb = e.mp_id}) then
+          self:note(string.format("day %d: picked up a litter bomb", s.day))
+        end
+        return
+      end
+    end
+  end
 end
 
 -- The text of a game string (translatable strings are wrapped objects).
@@ -2279,6 +2328,7 @@ function M:trickKind(target)
   local kinds = {}
   if machines >= 3 then kinds[#kinds + 1] = "handyman" end
   if target:hasReceptionDesk(true) then kinds[#kinds + 1] = self.rand() < 0.5 and "epidemic" or "emergency" end
+  if target:hasReceptionDesk(true) then kinds[#kinds + 1] = "litter_bomb" end
   kinds[#kinds + 1] = "rats"
   return kinds
 end

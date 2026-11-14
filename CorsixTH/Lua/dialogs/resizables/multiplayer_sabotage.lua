@@ -200,6 +200,14 @@ function UIMultiplayerSabotage:buy(kind, level)
     self.ui:addWindow(UIMultiplayerSpy(self.ui, self, level))
     return
   end
+  if kind == "litter_bomb" then
+    -- The bomb goes onto the cursor, to be put down on a corridor of a
+    -- rival (it is paid when it is down).
+    local ui = self.ui
+    self:close()
+    ui:addWindow(_G["UIMultiplayerLitterBomb"](ui, {level = level, target = self.target}))
+    return
+  end
   session:issue({kind = "sabotage", trick = kind, level = level,
       to = self.world:getHospitalIndex(self.target)})
   self:setStatus(S.sabotage_sent)
@@ -322,4 +330,164 @@ function UIMultiplayerSpy:steal()
       to = self.world:getHospitalIndex(self.target), items = table.concat(keys, ";")})
   if self.tricks.setStatus then self.tricks:setStatus(S.sabotage_sent) end
   self:close()
+end
+
+--! The litter bomb on the cursor: a click on a corridor of a rival's
+--! hospital plants a bomb just bought from the dirty tricks window (it is
+--! paid when it is down: the `sabotage` command with the spot), or throws on
+--! the one this player's hospital picked up (`litter_bomb_throw`). A bomb
+--! picked up cannot be put away: the window stays while the hospital holds
+--! it (sabotage.syncBombWindow) and its fuse burns on.
+class "UIMultiplayerLitterBomb" (UIResizable)
+
+---@class UIMultiplayerLitterBomb: UIResizable
+---@operator call: UIMultiplayerLitterBomb
+local UIMultiplayerLitterBomb = _G["UIMultiplayerLitterBomb"] ---@type UIMultiplayerLitterBomb
+
+local BOMB_W = 400
+local BOMB_H = 118
+
+--!param opts (table) {level = 1-3, target = Hospital} to plant a new bomb
+--! (the view goes to `target` first), or {bomb = LitterBomb}: the one this
+--! hospital holds, to throw on.
+function UIMultiplayerLitterBomb:UIMultiplayerLitterBomb(ui, opts)
+  local S = _S.multiplayer_window
+  self:UIResizable(ui, BOMB_W, BOMB_H, col.bg)
+  self.resizable = false
+  self.on_top = true
+  self.esc_closes = not opts.bomb
+  self:setDefaultPosition(0.5, 0.05)
+  self.default_button_sound = "selectx.wav"
+  self.world = ui.app.world
+  self.hospital = ui.hospital
+  self.bomb = opts.bomb
+  self.level = opts.level
+  self.target = opts.target
+  self.white_font = ui.app.gfx:loadFontAndSpriteTable("QData", "Font01V", nil, nil, { apply_ui_scale = true })
+  self.title_panel = self:addBevelPanel(20, 10, BOMB_W - 40, 20, col.title)
+  self.title_panel.lowered = true
+  self.title_panel:setLabel(self.bomb and S.sabotage_bomb_throw_title or
+      (S.sabotage_litter_bomb .. " L" .. tostring(self.level)))
+  self:addBevelPanel(20, 36, BOMB_W - 40, 40, col.caption).lowered = true
+  self:addBevelPanel(20, BOMB_H - 36, 150, 26, col.button):setLabel(S.sabotage_next)
+      :makeButton(0, 0, 150, 26, nil, self.nextRival)
+  if not self.bomb then
+    self:addBevelPanel(BOMB_W - 130, BOMB_H - 36, 110, 26, col.button):setLabel(S.sabotage_bomb_cancel)
+        :makeButton(0, 0, 110, 26, nil, self.close)
+  end
+  local TH = require("TH")
+  self.cursor_bomb = TH.animation()
+  local anims = self.world.object_types.litter_bomb.fuse_animations
+  self.cursor_bomb:setAnimation(self.world.anims, self.bomb and self.bomb.animation_idx or anims[1])
+  if self.target then
+    MultiplayerSession.lookAtHospital(ui, self.target)
+  end
+end
+
+--! The tile under the mouse, and whether the bomb may go there (and why not):
+--! looked at again when the mouse moves to another tile, else twice a second.
+function UIMultiplayerLitterBomb:_spot()
+  local ui = self.ui
+  if not ui.cursor_x then return end
+  local wx, wy = ui:ScreenToWorld(ui.cursor_x, ui.cursor_y)
+  local x, y = math.floor(wx), math.floor(wy)
+  local now = require("sdl").getTicks()
+  local c = self.spot_cache
+  if c and c.x == x and c.y == y and now - c.at < 500 then return c end
+  local sabotage = MultiplayerSession.sabotage
+  local target, why = sabotage.bombSpot(self.world, self.hospital, x, y)
+  if target and not self.bomb then
+    why = sabotage.refusal(self.world, self.hospital, target, "litter_bomb", self.level)
+    if why then target = nil end
+  end
+  c = {x = x, y = y, at = now, target = target, why = why}
+  self.spot_cache = c
+  return c
+end
+
+--! Is the screen point (x, y) of this window (its own coordinates) on it?
+function UIMultiplayerLitterBomb:_inside(x, y)
+  local s = TheApp.gfx:getUIScale()
+  return x >= 0 and y >= 0 and x < self.width * s and y < self.height * s
+end
+
+function UIMultiplayerLitterBomb:onTick()
+  -- A bomb held: the fuse picture in the corner follows the real one.
+  if self.bomb and self.bomb.animation_idx ~= self.cursor_bomb_anim then
+    self.cursor_bomb_anim = self.bomb.animation_idx
+    self.cursor_bomb:setAnimation(self.world.anims, self.cursor_bomb_anim)
+  end
+  self.cursor_bomb:tick()
+  return UIResizable.onTick(self)
+end
+
+function UIMultiplayerLitterBomb:draw(canvas, x_, y_)
+  UIResizable.draw(self, canvas, x_, y_)
+  local S = _S.multiplayer_window
+  local s = TheApp.gfx:getUIScale()
+  local x, y = self.x * s + x_, self.y * s + y_
+  local spot = self:_spot()
+  local text
+  -- (A throw refused, the spot taken meanwhile: the bomb is still here.)
+  if self.sent and require("sdl").getTicks() - self.sent > 3000 then self.sent = nil end
+  if self.sent then
+    text = S.sabotage_bomb_sent
+  elseif spot and spot.why and spot.why ~= "not inside a hospital" then
+    text = S.sabotage_bomb_not_here:format(spot.why)
+  elseif self.bomb then
+    local days = math.max(1, math.ceil((self.bomb.mp_bomb and self.bomb.mp_bomb.fuse or 0) / 50))
+    text = S.sabotage_bomb_throw:format(days)
+  else
+    text = S.sabotage_bomb_place
+  end
+  self.white_font:drawWrapped(canvas, text, x + 28 * s, y + 42 * s, (BOMB_W - 56) * s)
+  -- The bomb on the cursor (see-through where it cannot go).
+  local ui = self.ui
+  if ui.cursor_x and not self:_inside(ui.cursor_x - x, ui.cursor_y - y) then
+    self.cursor_bomb:draw(canvas, ui.cursor_x, ui.cursor_y + 8,
+        (spot and spot.target) and 0 or DrawFlags.Alpha50)
+  end
+end
+
+function UIMultiplayerLitterBomb:onMouseUp(button, x, y)
+  if self:_inside(x, y) then return UIResizable.onMouseUp(self, button, x, y) end
+  if button == "right" then
+    -- (Planting a new one: put it away. One picked up cannot be: the right
+    -- button scrolls the view as ever.)
+    if self.bomb then return false end
+    self:close()
+    return true
+  end
+  if button ~= "left" then return false end
+  local session = TheApp.mp_session
+  local spot = self:_spot()
+  if not session or not spot then return true end
+  if not spot.target then
+    self.ui:playSound("wrong2.wav")
+    return true
+  end
+  local to = self.world:getHospitalIndex(spot.target)
+  if self.bomb then
+    session:issue({kind = "litter_bomb_throw", bomb = self.bomb.mp_id, x = spot.x, y = spot.y})
+    self.sent = require("sdl").getTicks()
+  else
+    session:issue({kind = "sabotage", trick = "litter_bomb", level = self.level, to = to, x = spot.x, y = spot.y})
+    self:close()
+  end
+  return true
+end
+
+--! Look at the next rival's hospital (only the view moves).
+function UIMultiplayerLitterBomb:nextRival()
+  local world = self.world
+  local n = world.mp_coop and world.mp_coop.players or 1
+  local start = self.target and world:getHospitalIndex(self.target) or world:getHospitalIndex(self.hospital)
+  for step = 1, n do
+    local h = world.hospitals[(start + step - 1) % n + 1]
+    if h and h ~= self.hospital and world:mpRivals(self.hospital, h) and not h.mp_place then
+      self.target = h
+      MultiplayerSession.lookAtHospital(self.ui, h)
+      return
+    end
+  end
 end

@@ -29,6 +29,14 @@
 #      results. In room "tricks2" (pia against quin) quin pays the
 #      headhunter's rise and keeps the nurse; espionage level 1 is refused
 #      at once (nothing improved to copy).
+#   7. litter bombs, in room "bombs" (ann, bea, cid): ann plants one (level
+#      2) on a corridor of bea's through the dirty tricks window and the
+#      bomb on the cursor (a click on her own floor is refused); bea clicks
+#      it, picks it up and throws it on into cid's hospital, where it goes
+#      off and throws litter about. ann plants a second one (level 1) in
+#      cid's hospital; cid picks it up and never throws it: it goes off in
+#      cid's hands. With the referee cid's game is put out of step while
+#      cid holds it, and the repair brings the bomb and its window back.
 # With MP_REFEREE=1 the server also runs its headless referee, and a 5th
 # check needs it to agree with the players to the end (in all three rooms).
 # Exits 0 only if all checks behave as expected.
@@ -60,7 +68,7 @@ if [[ "${MP_REFEREE:-0}" == 1 ]]; then
   export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
   export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/referee"
   export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
-  export MP_REFEREE_PROBE_SCENARIO="race=light;tricks=light;tricks2=light" # the probes' own start on every hospital
+  export MP_REFEREE_PROBE_SCENARIO="race=light;tricks=light;tricks2=light;bombs=light" # the probes' own start on every hospital
 fi
 PYTHONPATH="$source_dir/mp_server" python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
   --log-level INFO --max-per-address 64 > "$out/server.log" 2>&1 &
@@ -117,6 +125,15 @@ run_probe pia MP_ROLE=host MP_ROOM=tricks2 MP_MODE=competitive MP_PLAYERS=2 MP_L
 sleep 1
 run_probe quin MP_ROLE=join MP_ROOM=tricks2 MP_STEPS=700 \
   MP_UI_SCRIPT="30:openhospital;60:hire:Nurse;100:learn;400:answerraise:accept;650:stafflog:Nurse" & pids+=($!)
+cid_extra=""
+cid_env=()
+if [[ "${MP_REFEREE:-0}" == 1 ]]; then cid_extra=";420:cheat"; cid_env=(MP_EXPECT_REPAIR=1); fi
+sleep 1
+run_probe ann MP_ROLE=host MP_ROOM=bombs MP_MODE=competitive MP_PLAYERS=3 MP_LEVEL=2 MP_STEPS=1250   MP_UI_SCRIPT="20:openhospital;100:bombplant:2:2;150:bombplant:1:1;300:bombplant:1:3;1200:bombs" & pids+=($!)
+sleep 1
+run_probe bea MP_ROLE=join MP_ROOM=bombs MP_STEPS=1250   MP_UI_SCRIPT="30:openhospital;200:bombpick:1;210:bombs;230:bombthrow:3;1200:bombs" & pids+=($!)
+sleep 1
+run_probe cid MP_ROLE=join MP_ROOM=bombs MP_STEPS=1250 "${cid_env[@]}"   MP_UI_SCRIPT="40:openhospital;350:bombpick:2;360:bombs${cid_extra};600:bombs;1200:bombs" & pids+=($!)
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 python3 - "$out" "${MP_REFEREE:-0}" <<'PY'
@@ -217,7 +234,31 @@ print(f"6. Newer tricks:            poached: {bool(poached)}; kept for the buyer
       f"{result('nia')} / {result('oz')} / {result('pia')} / {result('quin')}")
 fail |= not ok6
 
+a, b, c = log('ann'), log('bea'), log('cid')
+planted = re.findall(r'step \d+: peer 1 #\d+ sabotage -> ok', a)
+own_refused = re.search(r'UI: bombplant at step \d+ onto \d+,\d+ \(mouse on \d+,\d+\) in hospital 1: refused \(not a rival', a)
+picked_b = re.search(r'step \d+: peer 2 #\d+ litter_bomb_pick -> ok', a)
+thrown_b = re.search(r'step \d+: peer 2 #\d+ litter_bomb_throw -> ok', a)
+picked_c = re.search(r'step \d+: peer 3 #\d+ litter_bomb_pick -> ok', a)
+blast = re.search(r'litter bomb #\d+ went off in hospital 3 at \d+,\d+: (\d+) pieces', a)
+in_hands = re.search(r'litter bomb #\d+ went off in hospital 3 \(in its hands\) at \d+,\d+: (\d+) pieces', a)
+held_c = re.search(r'UI: bombs at step 600: .*held.*; window true', c)
+after = re.search(r'UI: bombs at step 1200: none; litter (\S+); window false', a)
+ok7 = bool(len(planted) == 2 and own_refused and picked_b and thrown_b and picked_c and blast and int(blast.group(1)) >= 10
+           and in_hands and int(in_hands.group(1)) >= 5 and held_c and after
+           and all(result(n).startswith('IN SYNC') for n in ('ann', 'bea', 'cid')))
+print(f"7. Litter bombs:            planted: {len(planted)}/2; own floor refused: {bool(own_refused)}; bea picked up and threw on: "
+      f"{bool(picked_b and thrown_b)}; went off at cid's: {blast.group(1) + ' pieces' if blast else '-'}; cid picked one up: {bool(picked_c)}, "
+      f"held (window open at 600): {bool(held_c)}, it went off in cid's hands: {in_hands.group(1) + ' pieces' if in_hands else '-'}; "
+      f"litter at 1200: {after.group(1) if after else '-'}; {result('ann')} / {result('bea')} / {result('cid')}")
+fail |= not ok7
+
 if with_referee:
+    confirmed = re.search(r"room 'bombs': referee confirmed steps through (\d+)", server)
+    repaired = re.findall(r"room 'bombs': repaired only cid", server)
+    ok_r7 = bool(confirmed and int(confirmed.group(1)) >= 1200 and len(repaired) == 1 and 'REPAIRED' in c)
+    print(f"   referee in 'bombs': confirmed through {confirmed.group(1) if confirmed else '-'}, cid repaired while holding the bomb: {len(repaired)}")
+    fail |= not ok_r7
     for room, least in (('tricks', 1700), ('tricks2', 700)):
         confirmed = re.search(rf"room '{room}': referee confirmed steps through (\d+)", server)
         clean = not re.search(rf"room '{room}': (the players differ|repaired)", server)

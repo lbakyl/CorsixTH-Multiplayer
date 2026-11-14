@@ -1010,6 +1010,10 @@ end
 
 function GameUI:onTick()
   local repaint = UI.onTick(self)
+  if self.brief_shake and require("sdl").getTicks() >= self.brief_shake.till then
+    self.shake_screen_intensity = self.brief_shake.before
+    self.brief_shake = nil
+  end
   if not self:_isMouseScrollButtonDown() then
     if math.abs(self.current_momentum.x) < 0.2 and math.abs(self.current_momentum.y) < 0.2 then
       -- Stop scrolling
@@ -1165,6 +1169,19 @@ end
 --! Stop the screen from shaking after beginShakeScreen is called.
 function GameUI:endShakeScreen()
   self.shake_screen_intensity = 0
+end
+
+--! Shake the screen for a moment (a litter bomb going off), then go back to
+--! how it shook before (an earthquake's shake goes on).
+--!param intensity (number) as for beginShakeScreen
+--!param ms (integer) how long, in milliseconds of real time
+function GameUI:shakeBriefly(intensity, ms)
+  if not self.app.config.enable_screen_shake then return end
+  if not self.brief_shake then
+    self.brief_shake = {before = self.shake_screen_intensity or 0}
+  end
+  self.brief_shake.till = require("sdl").getTicks() + ms
+  self.shake_screen_intensity = math.max(intensity, self.brief_shake.before)
 end
 
 function GameUI:limitCamera(mode)

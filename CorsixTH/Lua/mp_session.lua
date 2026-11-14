@@ -621,6 +621,7 @@ function MultiplayerSession:beforeStep()
   end
   self:tickVote()
   self:tickAuction()
+  MultiplayerSession.sabotage.syncBombWindow(self, self.world)
   self:tickHold()
   self:_dropStaleOutline()
 end

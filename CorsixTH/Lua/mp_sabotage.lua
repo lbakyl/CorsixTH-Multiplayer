@@ -47,6 +47,12 @@ SOFTWARE. --]]
 --!  * espionage: the buyer gets an improvement (level 1), a discovery (level
 --!    2) or two of either (level 3) that the rival has and they do not; at
 --!    level 3 the rival also loses half of the progress on their research.
+--!  * a litter bomb (the original's network game had them): the buyer plants
+--!    it on a corridor of a rival's hospital (the cursor carries it there);
+--!    its fuse burns for 16 days, then it throws 15, 25 or 40 pieces of
+--!    litter about. The players of that hospital may click it first to pick
+--!    it up, but then they must throw it into another rival's hospital: it
+--!    cannot be sold, and its fuse burns on in their hands.
 --! Every purchase is the lockstep command `sabotage` {trick, level, to}; the
 --! rival is not told who sent an epidemic or an emergency.
 
@@ -62,8 +68,10 @@ sabotage.PRICES = {
   boiler = {3000, 7000, 12000},
   smear = {5000, 10000, 18000},
   espionage = {6000, 12000, 20000},
+  litter_bomb = {3000, 7000, 12000},
 }
-sabotage.KINDS = {"handyman", "epidemic", "emergency", "rats", "headhunter", "boiler", "smear", "espionage"}
+sabotage.KINDS = {"handyman", "epidemic", "emergency", "rats", "headhunter", "boiler", "smear", "espionage",
+  "litter_bomb"}
 
 --! The month of the game (1 = the first January) from which each level of
 --! each trick can be bought, in every race (Jan, 2026-11-06): the mild ones
@@ -79,6 +87,7 @@ sabotage.SCHEDULE = {
   headhunter = {4, 6, 10}, -- a junior, a doctor, a consultant or specialist
   emergency = {3, 6, 11},  -- 3, 6, 10 patients (level 3: maybe undiscovered)
   epidemic = {4, 7, 12},   -- 2, 4, 7 contagious patients
+  litter_bomb = {2, 4, 7}, -- 15, 25, 40 pieces of litter
 }
 
 -- Evil handymen at once in one hospital, at most.
@@ -107,6 +116,15 @@ sabotage.DAMAGE_EVERY = 150   -- level 3: a machine every three days
 -- the stronger, the shorter.
 sabotage.STAY_DAYS = {120, 90, 60}
 local DAMAGE_GIVE_UP_HOURS = 300 -- gives up a machine he cannot get to
+-- Litter bomb: the fuse in game hours (ticks; 50 in a day), 16 days, about
+-- 45 seconds at Normal speed, shown in the 8 stages of the original's art;
+-- the pieces of litter it throws about and how far (tiles), by level.
+sabotage.BOMB_FUSE = 800
+sabotage.BOMB_LITTER = {15, 25, 40}
+sabotage.BOMB_RADIUS = {2, 3, 4}
+local MAX_BOMBS = 2       -- ticking in one hospital at once, at most
+local BOMB_UNHAPPY = 0.1  -- happiness lost by people right by it (2 tiles)
+local FUSE_HISS_EVERY = 25 -- game hours between the hisses of its fuse
 
 local handlers = MultiplayerSession.default_handlers
 
@@ -206,6 +224,8 @@ function sabotage.refusal(world, buyer, target, kind, level)
     if not others then return "there is no other hospital for their patients to go to" end
   elseif kind == "espionage" then
     if #sabotage.stealable(target, buyer, level) == 0 then return "they know nothing that you do not" end
+  elseif kind == "litter_bomb" then
+    if sabotage.countBombs(world, target) >= MAX_BOMBS then return "they have enough litter bombs already" end
   elseif kind == "emergency" then
     if target.emergency or target.mp_emergency_timer then return "they have an emergency on" end
     if target.epidemic then return "they have an epidemic on" end
@@ -243,6 +263,12 @@ function handlers.sabotage(world, cmd)
     ok, why = sabotage.smear(world, target, level)
   elseif kind == "espionage" then
     ok, why = sabotage.spy(world, buyer, target, level, cmd.items)
+  elseif kind == "litter_bomb" then
+    -- (Where the cursor put it down: a corridor of that rival.)
+    local spot
+    spot, why = sabotage.bombSpot(world, buyer, cmd.x, cmd.y)
+    if spot and spot ~= target then spot, why = nil, "not that rival's hospital" end
+    ok = spot and sabotage.plantBomb(world, buyer, target, tonumber(cmd.x), tonumber(cmd.y), level) and true
   else
     ok, why = sabotage.sendEmergency(world, target, level)
   end
@@ -939,6 +965,240 @@ function sabotage.spy(world, buyer, target, level, keys)
   MultiplayerSession.tellPlayer(world, target,
       level == 3 and S().sabotage_espionage_notice_3 or S().sabotage_espionage_notice)
   return true
+end
+
+--------------------------------------------------------------------------------
+-- Litter bomb
+--------------------------------------------------------------------------------
+
+--! The lit litter bombs on the floor of `hospital`.
+function sabotage.countBombs(world, hospital)
+  local n = 0
+  for _, e in ipairs(world.entities) do
+    local b = e.mp_bomb
+    if b and not b.gone and e.tile_x and e.hospital == hospital then n = n + 1 end
+  end
+  return n
+end
+
+--! The bomb `hospital` holds (picked up, to be thrown on), or nil.
+function sabotage.heldBomb(world, hospital)
+  local index = world:getHospitalIndex(hospital)
+  for _, e in ipairs(world.entities) do
+    local b = e.mp_bomb
+    if b and not b.gone and b.held == index then return e end
+  end
+end
+
+--! The hospital that a bomb `thrower` plants (or throws) onto tile (x, y)
+--! lands in, or nil and why not: a corridor inside a rival's building,
+--! nothing standing there but litter, no other bomb on it, and not more
+--! than MAX_BOMBS in that hospital.
+function sabotage.bombSpot(world, thrower, x, y)
+  x, y = tonumber(x), tonumber(y)
+  if not x or not y or x % 1 ~= 0 or y % 1 ~= 0 or not world:isOnMap(x, y) then
+    return nil, "no such spot"
+  end
+  local target
+  for _, h in ipairs(world.hospitals) do
+    if h:isInHospital(x, y) then
+      target = h
+      break
+    end
+  end
+  if not target then return nil, "not inside a hospital" end
+  if not world:mpRivals(thrower, target) then return nil, "not a rival's hospital" end
+  if target.mp_place then return nil, "they are out of the race" end
+  if not target.opened or target.mp_opening then return nil, "their hospital is not open yet" end
+  if not world.map.th:getCellFlags(x, y).passable or world:getRoom(x, y) then return nil, "not on a corridor" end
+  for _, obj in ipairs(world:getObjects(x, y) or {}) do
+    if not (obj.object_type and obj.object_type.id == "litter") then return nil, "something stands there" end
+  end
+  for _, e in ipairs(world.entities) do
+    local b = e.mp_bomb
+    if b and not b.gone and e.tile_x == x and e.tile_y == y then return nil, "a bomb is there already" end
+  end
+  if sabotage.countBombs(world, target) >= MAX_BOMBS then return nil, "they have enough litter bombs already" end
+  return target
+end
+
+--! The fuse stage of a bomb (1: all of the fuse left, 8: nearly none).
+function sabotage.bombStage(bomb)
+  local stages = #bomb.object_type.fuse_animations
+  local burnt = sabotage.BOMB_FUSE - bomb.mp_bomb.fuse
+  return math.max(1, math.min(stages, math.floor(burnt * stages / sabotage.BOMB_FUSE) + 1))
+end
+
+--! Put a lit bomb down at (x, y) in `target`: a new one of `level` (bought
+--! by `thrower`), or `bomb`, picked up somewhere and thrown on (its fuse
+--! burns on). The players of that hospital hear the warning; who it came
+--! from they are not told.
+function sabotage.plantBomb(world, thrower, target, x, y, level, bomb)
+  if bomb then
+    bomb.hospital = target
+    bomb.mp_bomb.held = nil
+    bomb:setTile(x, y)
+  else
+    bomb = world:newObject("litter_bomb", x, y, nil, nil, target)
+    bomb.mp_bomb = {level = level, fuse = sabotage.BOMB_FUSE, hours = 0}
+  end
+  local b = bomb.mp_bomb
+  b.from = world:getHospitalIndex(thrower)
+  b.throws = (b.throws or 0) + 1
+  bomb:showFuse(sabotage.bombStage(bomb))
+  bomb:playSound("ignite2.wav")
+  log(string.format("hospital %d put litter bomb #%d (level %d, %d hours left) at %d,%d in hospital %d",
+      b.from, bomb.mp_id, b.level, b.fuse, x, y, world:getHospitalIndex(target)))
+  MultiplayerSession.tellPlayer(world, target, S().sabotage_bomb_notice, true)
+  local ui = world.ui
+  if ui and ui.hospital == target and ui.playAnnouncement then
+    ui:playAnnouncement("rand040.wav", _G["AnnouncementPriority"].High)
+  end
+  return bomb
+end
+
+--! The players of `hospital` pick up `bomb` from its floor: it is theirs to
+--! throw on (sabotage.heldBomb; the window to throw it in opens by itself,
+--! sabotage.syncBombWindow), and its fuse burns on.
+function sabotage.pickBomb(world, bomb, hospital)
+  local b = bomb.mp_bomb
+  bomb:setTile(nil)
+  bomb.hospital = hospital
+  b.held = world:getHospitalIndex(hospital)
+  log(string.format("hospital %d picked up litter bomb #%d (%d hours left)", b.held, bomb.mp_id, b.fuse))
+  MultiplayerSession.tellPlayer(world, hospital, S().sabotage_bomb_picked, true)
+end
+
+--! Pick up a litter bomb from one's own floor: {bomb}.
+function handlers.litter_bomb_pick(world, cmd)
+  local hospital = world.hospitals[cmd.hospital or 1]
+  local bomb = MultiplayerSession.entityOf(world, cmd.bomb, rawget(_G, "LitterBomb"))
+  local b = bomb and bomb.mp_bomb
+  if not b or b.gone or b.held or not bomb.tile_x then return false, "no such bomb" end
+  if bomb.hospital ~= hospital then return false, "not in your hospital" end
+  if sabotage.heldBomb(world, hospital) then return false, "you hold a bomb already" end
+  sabotage.pickBomb(world, bomb, hospital)
+  return true
+end
+
+--! Throw the bomb one holds onto a corridor of a rival's hospital: {bomb, x, y}.
+function handlers.litter_bomb_throw(world, cmd)
+  local hospital = world.hospitals[cmd.hospital or 1]
+  local bomb = MultiplayerSession.entityOf(world, cmd.bomb, rawget(_G, "LitterBomb"))
+  local b = bomb and bomb.mp_bomb
+  if not b or b.gone or b.held ~= world:getHospitalIndex(hospital) then return false, "you hold no such bomb" end
+  local target, why = sabotage.bombSpot(world, hospital, cmd.x, cmd.y)
+  if not target then return false, why end
+  sabotage.plantBomb(world, hospital, target, tonumber(cmd.x), tonumber(cmd.y), nil, bomb)
+  return true
+end
+
+--! One game hour of a lit bomb (LitterBomb:tick): its fuse burns, on the
+--! floor or in someone's hands; its floor taken from under it (a room built
+--! there, the plot sold) sets it off at once.
+function sabotage.bombTick(bomb)
+  local b = bomb.mp_bomb
+  if not b or b.gone then return end
+  local world = bomb.world
+  b.fuse = b.fuse - 1
+  b.hours = (b.hours or 0) + 1
+  local x, y = bomb.tile_x, bomb.tile_y
+  if x then
+    if not bomb.hospital:isInHospital(x, y) or world:getRoom(x, y) then b.fuse = 0 end
+    if b.fuse > 0 and b.hours % FUSE_HISS_EVERY == 0 then bomb:playSound("fuse.wav") end
+  end
+  if b.fuse <= 0 then
+    sabotage.bombGoesOff(world, bomb)
+  else
+    bomb:showFuse(sabotage.bombStage(bomb))
+  end
+end
+
+--! Litter thrown about by a bomb of `level` gone off at (x, y): pieces on
+--! corridor tiles of `hospital` around it (nothing standing on them), at
+--! random (the game's random: the same on every peer). How many it threw.
+function sabotage.scatterLitter(world, hospital, x, y, level)
+  local radius = sabotage.BOMB_RADIUS[level] or 2
+  local th = world.map.th
+  local spots = {}
+  for dy = -radius, radius do
+    for dx = -radius, radius do
+      local tx, ty = x + dx, y + dy
+      if dx * dx + dy * dy <= radius * radius + radius and world:isOnMap(tx, ty) and
+          hospital:isInHospital(tx, ty) and th:getCellFlags(tx, ty).passable and not world:getRoom(tx, ty) then
+        local free = true
+        for _, obj in ipairs(world:getObjects(tx, ty) or {}) do
+          if not (obj.object_type and obj.object_type.id == "litter") then free = false end
+        end
+        if free then spots[#spots + 1] = {tx, ty} end
+      end
+    end
+  end
+  local count = 0
+  for i = 1, math.min(sabotage.BOMB_LITTER[level] or 15, #spots) do
+    local j = math.random(i, #spots)
+    spots[i], spots[j] = spots[j], spots[i]
+    if world:newLitter(math.random(1, 4), spots[i][1], spots[i][2], math.random(0, 1)) then count = count + 1 end
+  end
+  return count
+end
+
+--! The fuse has burnt down: litter all around where the bomb is (in the
+--! hands of a hospital that held it too long: on a corridor of its own),
+--! people right by it upset, and the word to that hospital and to whoever
+--! put it there.
+function sabotage.bombGoesOff(world, bomb)
+  local b = bomb.mp_bomb
+  b.gone = true
+  local hospital = bomb.hospital
+  local in_hands = not bomb.tile_x
+  local x, y = bomb.tile_x, bomb.tile_y
+  if in_hands then
+    x, y = sabotage.corridorTile(world, hospital)
+    if x then bomb:setTile(x, y) end
+  end
+  if x then bomb:playSound("explode.wav") end
+  world:destroyEntity(bomb)
+  local pieces = 0
+  if x then
+    pieces = sabotage.scatterLitter(world, hospital, x, y, b.level)
+    local Humanoid = _G["Humanoid"]
+    for _, e in ipairs(world.entities) do
+      if class.is(e, Humanoid) and e.tile_x and e.hospital == hospital and
+          math.abs(e.tile_x - x) <= 2 and math.abs(e.tile_y - y) <= 2 then
+        e:changeAttribute("happiness", -BOMB_UNHAPPY)
+      end
+    end
+  end
+  local index = world:getHospitalIndex(hospital)
+  log(string.format("litter bomb #%d went off in hospital %d%s at %s,%s: %d pieces of litter",
+      bomb.mp_id, index, in_hands and " (in its hands)" or "", tostring(x), tostring(y), pieces))
+  MultiplayerSession.tellPlayer(world, hospital, in_hands and S().sabotage_bomb_in_hands or S().sabotage_bomb_blast)
+  local from = world.hospitals[b.from or 0]
+  if from and from ~= hospital then
+    MultiplayerSession.tellPlayer(world, from, S().sabotage_bomb_blast_rival:format(hospital.name))
+  end
+  local ui = world.ui
+  if x and ui and ui.hospital == hospital and ui.shakeBriefly then ui:shakeBriefly(0.3, 700) end
+end
+
+--! This player's window to throw the bomb their hospital holds: open while
+--! it holds one (again after a load or a repair), closed after (after every
+--! step, MultiplayerSession:tickAuction's neighbour).
+function sabotage.syncBombWindow(session, world)
+  local ui = world and world.ui
+  local class_ = rawget(_G, "UIMultiplayerLitterBomb")
+  if session.observer or session.abstains or not ui or not class_ or not ui.hospital then return end
+  local bomb = sabotage.heldBomb(world, ui.hospital)
+  local window = ui:getWindow(class_)
+  if bomb then
+    if not window or window.bomb ~= bomb then
+      if window then window:close() end
+      ui:addWindow(class_(ui, {bomb = bomb}))
+    end
+  elseif window and window.bomb then
+    window:close()
+  end
 end
 
 return sabotage

@@ -684,7 +684,7 @@ end
 --! When each trick can first be bought (month of the game), and the month
 --! level 3 of every trick can (a truce until then: none before month 3).
 local TRICK_UNLOCK = {rats = 3, smear = 3, boiler = 3, handyman = 6, epidemic = 6, espionage = 6,
-    emergency = 9, headhunter = 9}
+    litter_bomb = 6, emergency = 9, headhunter = 9}
 local TRICK_TOP_LEVEL_MONTH = 13
 --! The trick of the month, from month 3 on, round and round.
 local TRICK_ROTATION = {"rats", "smear", "boiler", "handyman", "epidemic", "espionage", "emergency",

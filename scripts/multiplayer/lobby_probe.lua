@@ -2023,6 +2023,127 @@ local function run()
           else
             log("UI: no evil handyman found")
           end
+        elseif a == "bombplant" or a == "bombthrow" then
+          -- bombplant:<level>:<hospital>: MULTIPLAYER > DIRTY TRICKS, the
+          -- litter bomb at <level>, then a click on a free corridor tile of
+          -- <hospital> (the first one from its start view outwards);
+          -- bombthrow:<hospital>: the same click in the window that opened
+          -- when this hospital picked a bomb up. Clicks as a person does:
+          -- the mouse over the tile, then the window's mouse button.
+          local sabotage = MultiplayerSession.sabotage
+          local level, to
+          if a == "bombplant" then
+            level, to = entry.arg:match("^(%d+):(%d+)$")
+            level, to = tonumber(level), tonumber(to)
+          else
+            to = tonumber(entry.arg)
+          end
+          local mine, aim = world.ui.hospital, world.hospitals[to]
+          local win
+          if a == "bombplant" then
+            local tricks = UIMultiplayerSabotage(world.ui, aim ~= mine and aim or nil)
+            world.ui:addWindow(tricks)
+            tricks:choose("litter_bomb", level)
+            shot("sabotage-litter_bomb")
+            tricks:choose("litter_bomb", level)
+            if world.ui:getWindow(UIMultiplayerSabotage) then
+              log(string.format("UI: litter bomb refused at once at step %d: %s", session.step,
+                  tostring(tricks.status_panel and tricks.status_panel.label)))
+              tricks:close()
+            end
+          end
+          win = world.ui:getWindow(UIMultiplayerLitterBomb)
+          -- A corridor tile of `aim`: from its camera tile outwards, the
+          -- first the game takes (for one's own: the first of its own).
+          local th = world.map.th
+          local cx, cy = th:getCameraTile(aim:getPlayerIndex())
+          local tx, ty
+          for r = 0, 20 do
+            for dy = -r, r do
+              for dx = -r, r do
+                local x, y = cx + dx, cy + dy
+                if not tx and (math.abs(dx) == r or math.abs(dy) == r) and world:isOnMap(x, y) and
+                    aim:isInHospital(x, y) and th:getCellFlags(x, y).passable and not world:getRoom(x, y) and
+                    (aim == mine or sabotage.bombSpot(world, mine, x, y) == aim) then
+                  tx, ty = x, y
+                end
+              end
+            end
+          end
+          if not win then
+            log(string.format("UI: no litter bomb window at step %d", session.step))
+          elseif not tx then
+            log(string.format("UI: no corridor tile for a litter bomb in hospital %d at step %d", to, session.step))
+          else
+            look_at(tx, ty)
+            local ui = world.ui
+            local sx, sy = ui:WorldToScreen(tx + 0.5, ty + 0.5)
+            ui.cursor_x, ui.cursor_y = math.floor(sx), math.floor(sy)
+            local wx, wy = ui:ScreenToWorld(ui.cursor_x, ui.cursor_y)
+            local spot = win:_spot()
+            shot(a == "bombplant" and "bomb-cursor" or "bomb-throw-window")
+            local s = TheApp.gfx:getUIScale()
+            win:onMouseUp("left", ui.cursor_x - win.x * s, ui.cursor_y - win.y * s)
+            log(string.format("UI: %s at step %d onto %d,%d (mouse on %d,%d) in hospital %d: %s", a, session.step,
+                tx, ty, math.floor(wx), math.floor(wy), to, spot and spot.target and "taken" or
+                ("refused (" .. tostring(spot and spot.why) .. ")")))
+            if world.ui:getWindow(UIMultiplayerLitterBomb) and a == "bombplant" then
+              world.ui:getWindow(UIMultiplayerLitterBomb):close()
+            end
+          end
+        elseif a == "bombpick" then
+          -- bombpick:<n>: click the n-th litter bomb (by number) on this
+          -- hospital's floor, as a person does (LitterBomb:onClick).
+          local bombs = {}
+          for _, e in ipairs(world.entities) do
+            if e.mp_bomb and not e.mp_bomb.gone and e.tile_x and e.hospital == world.ui.hospital then
+              bombs[#bombs + 1] = e
+            end
+          end
+          table.sort(bombs, function(b1, b2) return b1.mp_id < b2.mp_id end)
+          local bomb = bombs[tonumber(entry.arg) or 1]
+          if bomb then
+            look_at(bomb.tile_x, bomb.tile_y)
+            shot("bomb-floor")
+            bomb:onClick(world.ui, "left")
+            log(string.format("UI: picked up litter bomb #%d at step %d (fuse %d hours)", bomb.mp_id, session.step,
+                bomb.mp_bomb.fuse))
+          else
+            log(string.format("UI: no litter bomb to pick up at step %d", session.step))
+          end
+        elseif a == "litterview" then
+          -- A picture of the litter in this hospital (where most of it lies).
+          local sx, sy, n = 0, 0, 0
+          for _, e in ipairs(world.entities) do
+            if e.object_type and e.object_type.id == "litter" and e.hospital == world.ui.hospital and e.tile_x then
+              sx, sy, n = sx + e.tile_x, sy + e.tile_y, n + 1
+            end
+          end
+          if n > 0 then
+            look_at(math.floor(sx / n + 0.5), math.floor(sy / n + 0.5))
+            shot("litter-" .. session.step)
+          end
+          log(string.format("UI: litter view at step %d: %d pieces", session.step, n))
+        elseif a == "bombs" then
+          -- The litter bombs, the litter in each hospital and whether this
+          -- player's window to throw one is open.
+          local parts, litter = {}, {}
+          for _, e in ipairs(world.entities) do
+            local b = e.mp_bomb
+            if b and not b.gone then
+              parts[#parts + 1] = string.format("#%d L%d in %d %s fuse %d", e.mp_id, b.level,
+                  world:getHospitalIndex(e.hospital), e.tile_x and (e.tile_x .. "," .. e.tile_y) or "held", b.fuse)
+            end
+            if e.object_type and e.object_type.id == "litter" and e.hospital then
+              local hi = world:getHospitalIndex(e.hospital)
+              litter[hi] = (litter[hi] or 0) + 1
+            end
+          end
+          local counts = {}
+          for hi = 1, #world.hospitals do counts[#counts + 1] = tostring(litter[hi] or 0) end
+          log(string.format("UI: bombs at step %d: %s; litter %s; window %s", session.step,
+              #parts > 0 and table.concat(parts, ", ") or "none", table.concat(counts, "/"),
+              tostring(world.ui:getWindow(UIMultiplayerLitterBomb) ~= nil)))
         elseif a == "shootrat" then
           -- Click the first attack rat in this hospital (shoot_rat command).
           local rat

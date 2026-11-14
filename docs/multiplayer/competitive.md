@@ -138,6 +138,32 @@ the start, as before.
   (opened by the second click on an espionage level), which sends their keys
   with the command (`items`, ";"-separated); the handler takes those still
   stealable, or refuses. Bots send none and get them at random.
+- **Litter bomb.** The original's network game had them (NETPLAY.TXT); its
+  art is still in the game data: animations 4990-5004 are the 8 stages of
+  the burning fuse (2 frames each), 5062 the buy-list picture (object 17,
+  `objects/litter_bomb.lua`, class `LitterBomb`, an `Entity` like `Litter`
+  that blocks nobody). The second click on a level opens
+  `UIMultiplayerLitterBomb` with the bomb on the cursor; a click on a
+  corridor tile sends `sabotage` with `x, y`, checked by `sabotage.bombSpot`
+  (a rival's building, no room, nothing on it but litter, no bomb there, at
+  most 2 bombs in a hospital). `mp_bomb = {level, fuse, from, held, throws}`:
+  the fuse is 800 game hours, one off per tick (`sabotage.bombTick`, from
+  `LitterBomb:tick`), in the bomb's stage animation. A click on a bomb in
+  one's own hospital sends `litter_bomb_pick`: the bomb leaves the map
+  (`held` = the hospital's index) and its fuse burns on; while a hospital
+  holds one, `sabotage.syncBombWindow` (after every step) keeps that
+  window open for its players (it cannot be closed), and a click sends
+  `litter_bomb_throw {bomb, x, y}`. At 0 `sabotage.bombGoesOff` puts
+  15/25/40 pieces of litter on free corridor tiles within 2/3/4 tiles (the
+  game's random), upsets the people within 2 tiles, and tells the hospital
+  and the sender; one still held goes off on a corridor of the holder's.
+  A room built or a plot sold under it sets it off at once. Sounds:
+  IGNITE2 when it is put down, the announcer's "Litterbomb warning!"
+  (RAND040, in every language's sound set) for that hospital, FUSE every
+  half day near it, EXPLODE and a short screen shake. Bots plant theirs by
+  a reception desk (`Bot:bombSpot`) and find one on their floor after 1-3
+  (hard), 3-8 (normal) or 8-18 days (easy), then throw it at the leader
+  (`M:defendBombs`).
 
 ## Level 7, Cutthroat (mp_levels.lua)
 A level made for the race (`scenario = "cutthroat"`, `config.mp_events`).
@@ -208,9 +234,15 @@ players on level 2; `MP_REFEREE=1` adds the headless referee and a 5th check):
    tricks2);
 6. the newer tricks (rooms tricks and tricks2): a headhunted nurse leaves and
    is kept for the buyer, or stays when the rise is paid; a boiler breaks and
-   is repaired; a smear campaign runs out; espionage L3, and L1 refused with nothing to copy.
+   is repaired; a smear campaign runs out; espionage L3, and L1 refused with nothing to copy;
+7. litter bombs (room bombs): one planted through the window and the bomb on
+   the cursor (a click on one's own floor refused), picked up and thrown on,
+   goes off; a second one goes off in the hands of the one who picked it up;
+   (referee) that player is repaired while holding it and gets the bomb and
+   its window back.
 
 Probe actions: `sabotage:<trick>:<level>:<hospital>`, `kickevil`, `shootrat`, `race`,
+`bombplant:<level>:<hospital>`, `bombpick:<n>`, `bombthrow:<hospital>`, `bombs`,
 `answerraise:accept`, `learn`;
 `MP_MODE=competitive` for the host.
 

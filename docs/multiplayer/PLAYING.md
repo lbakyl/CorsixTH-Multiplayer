@@ -405,8 +405,8 @@ co-op the same events run without the dirty tricks). Level 4's diseases,
 rooms and research on map 3; with four players on a map of its own, made by
 Matroftt on 2026-10-31 (`CorsixTH/Levels/cutthroat4.map`).
 - **Dirty tricks month by month:** a truce until March; then rat attacks,
-  smear campaigns and broken boilers; evil handymen, epidemics and espionage
-  from June; forced emergencies and headhunters from September; level 3 of
+  smear campaigns and broken boilers; evil handymen, epidemics, espionage and
+  litter bombs from June; forced emergencies and headhunters from September; level 3 of
   every trick only from the second year. The Dirty Tricks window shows the
   price for you now; a locked trick says from which month it can be bought.
 - **Prices:** each month one trick is the trick of the month at half price
@@ -513,8 +513,8 @@ click it again to buy it. You pay when the trick is done. The rival
 is not told who sent a trick (only an evil handyman they throw out goes back
 to whoever sent him). Each trick hits something else: reputation (rats),
 money (the handyman), readiness (emergency), disease control (epidemic),
-staff (headhunter), comfort (boiler), patient numbers (smear campaign) and
-research (espionage).
+staff (headhunter), comfort (boiler), patient numbers (smear campaign),
+research (espionage) and cleanliness (litter bomb).
 
 The tricks unlock during the first year, the mild ones first: a level not
 unlocked yet is greyed out in the window with the month it unlocks (month 1
@@ -524,7 +524,7 @@ Cutthroat, has its own, later months (below).
 
 | Trick | L1 | L2 | L3 |
 |---|---|---|---|
-| Rat attack, broken boiler | February | April | July |
+| Rat attack, broken boiler, litter bomb | February | April | July |
 | Smear campaign | March | May | August |
 | Evil handyman | March | May | September |
 | Espionage | March | June | September |
@@ -542,11 +542,16 @@ Cutthroat, has its own, later months (below).
 | **Broken boiler**: their heating fails (too cold in winter, too hot in summer) until their handymen repair it; more handymen repair it sooner | $3,000: short | $7,000: about twice as long | $12,000: long |
 | **Smear campaign**: bad press sends some of their new patients to the other hospitals | $5,000: 1 month, 3 in 10 | $10,000: 2 months, 4 in 10 | $18,000: 3 months, half |
 | **Espionage**: copy research results they have and you do not; a list shows what there is, you pick, then press Steal | $6,000: one drug or machine improvement | $12,000: one discovery | $20,000: two of either, and their current research set back by half |
+| **Litter bomb** (from the original game's network play): the bomb goes onto your cursor; click a corridor in a rival's hospital to plant it there (right-click puts it away, unpaid). Its fuse burns for 16 days (about 45 seconds at Normal speed), then it throws litter about | $3,000: 15 pieces | $7,000: 25, further | $12,000: 40, all over the place |
 
 **Found a handyman who is not on your staff list?** Click him and press the
 sack button: he is thrown out (no severance pay) and walks back to whoever
 sent him, who has to employ him from then on. **Rats?** Click them to shoot
-them (it counts for the rat-catching award too). **A member of staff wants a
+them (it counts for the rat-catching award too). **"Litterbomb warning!"?**
+Somebody planted a litter bomb on one of your corridors: find the small black
+bomb and click it to pick it up. You cannot put it away, and its fuse burns
+on: click a corridor in another rival's hospital (or the sender's) to throw
+it there, or it goes off in your own hospital. **A member of staff wants a
 big rise because of a better offer?** Pay it in the pay rise window, or they
 leave without severance. **Boiler broken?** Hire handymen. A trick is refused
 while it cannot work, for example while their emergency is still on.

@@ -3429,6 +3429,44 @@ end
 -- Dirty tricks (competitive)
 --------------------------------------------------------------------------------
 
+--! A corridor tile of `target` (a rival) to put a litter bomb on: near one
+--! of its reception desks if it can (where the most people pass), else near
+--! its start view; one of the free ones at random (the bot's own random).
+--! Nil if there is none.
+function Bot:bombSpot(target)
+  local world = self.world
+  local mine = world.ui.hospital
+  local th = world.map.th
+  local width, height = th:size()
+  local function free_tiles(cx, cy, r)
+    local tiles = {}
+    for y = math.max(1, cy - r), math.min(height, cy + r) do
+      for x = math.max(1, cx - r), math.min(width, cx + r) do
+        if target:isInHospital(x, y) and th:getCellFlags(x, y).passable and not world:getRoom(x, y) and
+            #(world:getObjects(x, y) or {}) == 0 then
+          tiles[#tiles + 1] = {x, y}
+        end
+      end
+    end
+    return tiles
+  end
+  local tiles = {}
+  for _, desk in ipairs(target:getReceptionDesks()) do
+    if desk.tile_x then
+      for _, t in ipairs(free_tiles(desk.tile_x, desk.tile_y, 4)) do tiles[#tiles + 1] = t end
+    end
+  end
+  if #tiles == 0 then
+    local cx, cy = th:getCameraTile(target:getPlayerIndex())
+    tiles = free_tiles(cx, cy, 15)
+  end
+  -- (The game checks the rest: no bomb there yet, not too many of them.)
+  for _ = 1, math.min(8, #tiles) do
+    local t = pick(tiles)
+    if sabotage.bombSpot(world, mine, t[1], t[2]) == target then return t[1], t[2] end
+  end
+end
+
 function Bot:playTrick()
   local world = self.world
   if world.mp_coop and world.mp_coop.tricks_off then return false end -- (switched off in this game)
@@ -3499,8 +3537,17 @@ function Bot:playTrick()
     log(string.format("no %s trick (level %d) on %s: %s", kind, level, target[2], why))
     return false
   end
+  local cmd = {kind = "sabotage", trick = kind, level = level, to = world:getHospitalIndex(target[1])}
+  if kind == "litter_bomb" then
+    -- (Put down by its reception desk, where the most people pass.)
+    cmd.x, cmd.y = self:bombSpot(target[1])
+    if not cmd.x then
+      log(string.format("no litter bomb on %s: no free corridor tile", target[2]))
+      return false
+    end
+  end
   log(string.format("dirty trick: %s level %d on %s", kind, level, target[2]))
-  TheApp.mp_session:issue({kind = "sabotage", trick = kind, level = level, to = world:getHospitalIndex(target[1])})
+  TheApp.mp_session:issue(cmd)
   if self.manager then self.manager:noteSpent("trick", cost(level)) end
   if rand() < 0.5 then
     local line = pick(LINES.trick):format(target[2])
