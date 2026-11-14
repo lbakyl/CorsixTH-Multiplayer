@@ -1750,10 +1750,31 @@ function World:onEndMonth()
   self:_prepareSpawnDates(false)
 
   self:makeAvailableStaff(self.game_date:monthOfGame())
+  -- Multiplayer: a bot standing in for a person who left may begin or end a
+  -- year at hard (MultiplayerSession.standInLevels); everybody hears it.
+  if self.mp_coop then
+    local S = _S.multiplayer_window
+    for _, c in ipairs(MultiplayerSession.standInLevels(self)) do
+      local hosp = self.hospitals[c.index]
+      local text = c.level == "hard" and S.standin_hard or c.back and S.standin_back or S.standin_normal
+      MultiplayerSession.tellOthers(self, nil, text:format(hosp.name))
+      local session = self.app.mp_session
+      if session then
+        session.log(string.format("stand-in for hospital %d now %s%s", c.index, c.level,
+            c.back and " (a person took the place)" or ""))
+      end
+    end
+  end
   -- Multiplayer: a hospital only bots play gets a hidden bonus every month
-  -- (no line on its bank statement); not one a person plays too.
+  -- (no line on its bank statement); not one a person plays too. And one a
+  -- bot plays for a person who left, in its hard year.
+  local paying = {}
+  for bot_index in pairs(self.mp_coop and self.mp_coop.bot_hospitals or {}) do paying[bot_index] = true end
+  for i, h in ipairs(self.mp_coop and self.hospitals or {}) do
+    if h.mp_standin_hard_until and h.mp_player_away then paying[i] = true end
+  end
   local paid, bots = {}, false
-  for bot_index in pairs(self.mp_coop and self.mp_coop.bot_hospitals or {}) do
+  for bot_index in pairs(paying) do
     local hospital = self.hospitals[bot_index]
     local level = MultiplayerSession.botLevel(self, bot_index)
     bots = true

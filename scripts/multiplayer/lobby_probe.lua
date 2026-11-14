@@ -289,6 +289,45 @@ local function photo_hospital(world, h, what)
   ui:setZoom(1)
 end
 
+--! MP_ROOM_CHAT=<text>: say it in the room's chat before the game (typed
+--! into the room window's box, Enter), wait until MP_ROOM_CHAT_WAIT (another
+--! player's name) has said something too, and log the lines the window shows.
+local function room_chat(lobby)
+  local text = os.getenv("MP_ROOM_CHAT")
+  if not text then return end
+  local win = lobby_window()
+  win.chat_box:setText(text)
+  win.chat_box:confirm()
+  local other = os.getenv("MP_ROOM_CHAT_WAIT")
+  wait_for("the room's chat", function()
+    local own, theirs = false, other == nil
+    for _, f in ipairs(lobby.room_chat or {}) do
+      if f.text == text then own = true end
+      if other and f.name == other then theirs = true end
+    end
+    return own and theirs
+  end, 20)
+  win = lobby_window()
+  win:_updateRoom()
+  local shown = {}
+  for i, panel in ipairs(win.chat_panels) do shown[i] = tostring(panel.label or "") end
+  log("UI: room chat: " .. table.concat(shown, " | ") .. "; box now \"" .. tostring(win.chat_box.text) .. "\"")
+  shot("room-chat")
+  -- The room's map (the Map button): who plays where, then back.
+  win:buttonRoomMap()
+  local map_win = TheApp.ui:getWindow(UIMultiplayerLevels)
+  tick()
+  local m = map_win and map_win.room
+  local where = {}
+  for i = 1, m and m.count or 0 do where[i] = i .. "=" .. tostring(m.colours[i]) .. ":" .. tostring(m.names[i]) end
+  log(string.format("UI: room map: level %s, %s hospital(s), file %s; %s", tostring(m and m.level),
+      tostring(m and m.count), tostring(map_win and map_win:mapFile()), table.concat(where, " ")))
+  shot("room-map")
+  map_win:close()
+  tick()
+  log("UI: back in the room: " .. tostring(lobby_window() and lobby_window().view))
+end
+
 local function run_lobby()
   local menu = assert(TheApp.ui:getWindow(UIMainMenu), "no main menu")
   shot("main-menu")
@@ -540,6 +579,7 @@ local function run_lobby()
       tick()
       shot("room-auctions-off")
     end
+    room_chat(lobby)
     -- MP_KICK=<place>: the host double-clicks that player's line and picks
     -- the menu's "remove" (UIMultiplayer:playerMenu), then stops.
     local kick = tonumber(os.getenv("MP_KICK") or "")
@@ -629,6 +669,7 @@ local function run_lobby()
     lobby_window():buttonReady(true)
     wait_for("lobby update", function() return lobby.summary ~= nil end, 10)
     shot("lobby-room-joined")
+    room_chat(lobby)
     if os.getenv("MP_EXPECT_KICK") then
       -- Removed by the host: back in the room list, told why; joining that
       -- room again is refused for a while.
@@ -1078,6 +1119,13 @@ local function run()
         if not desk_x then desk_x, desk_y = builder.anchor(world) end
         local a, live = entry.action, entry.live
         if a == "buy" then builder.ui_buy(world, desk_x, desk_y, entry.arg, log)
+        elseif a == "bigoutline" or a == "nooutline" then
+          -- A room outline over the whole map, as a player dragging it far
+          -- out would send (the others show only the tiles on this
+          -- player's land); nooutline: none any more.
+          local mw, mh = world.map.th:size()
+          session:showBlueprint(a == "bigoutline" and {room = "gp", x = 1, y = 1, w = mw, h = mh} or nil)
+          log(string.format("UI: %s sent at step %d (map %dx%d)", a, session.step, mw, mh))
         elseif a == "openhospital" then
           local watch
           for _, win in ipairs(world.ui.windows) do

@@ -441,6 +441,8 @@ multiplayer_window = {
   too_many_hospitals = "This level fits %d hospitals: share colours",
   team_button = "Team %d",
   room_hint = "Same colour: one hospital. Same team: you win together.",
+  room_map = "Map",
+  room_map_caption = "The room's map: who plays where",
   mp_level = "%s (with several hospitals: level %d)",
   level = "Level %d",
   players = "%d players",
@@ -795,6 +797,9 @@ multiplayer_window = {
   race_left_end = "You left the race. The others play on for the next places.",
   -- A race of two teams
   -- A fax to the hospital that got there, and one to each of its team mates.
+  standin_hard = "%s is behind: the bot playing for the player who left plays at hard for a year.",
+  standin_normal = "The bot playing %s for the player who left plays at normal again.",
+  standin_back = "Somebody took over %s: the bot's year at hard ends.",
   team_race_reached_fax = {
     "Your hospital has reached this level's goals!",
     "The race is not won yet: your team wins once every hospital of it gets there. Still to go: %s.",
@@ -1052,6 +1057,8 @@ tooltip.multiplayer_window = {
   connect = "Connect to the server and show its rooms",
   download = "This server runs another version of the game: open its download page in your web browser",
   password = "Password of the room to join or create (empty: no password)",
+  room_chat = "Type here and press Enter to talk to everybody in the room",
+  room_map = "The level's map as the game would start now: each hospital in its colour, and who plays it",
   colour = "Your hospital's colour: players with the same colour build one hospital together. Click to change it (the host can change anybody's, bots' too)",
   team = "Your team: the same team wins together, different teams race to the goals and may play dirty tricks on each other. Click to change it (the host can change anybody's, bots' too)",
   levels_players = "The map for this many players (each number of players has its own map)",

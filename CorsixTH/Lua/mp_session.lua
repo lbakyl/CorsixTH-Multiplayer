@@ -1339,15 +1339,97 @@ end
 --! server (START, LOAD), the same on every peer.
 function MultiplayerSession.botLevel(world, index)
   local coop = world and world.mp_coop
+  -- (A bot standing in for a person who left, in its hard year:
+  -- MultiplayerSession.standInLevels.)
+  local hosp = coop and index and world.hospitals and world.hospitals[index]
+  if hosp and hosp.mp_standin_hard_until and hosp.mp_player_away then return "hard" end
   if not (coop and index and coop.bot_hospitals and coop.bot_hospitals[index]) then return "normal" end
   return coop.bot_levels and coop.bot_levels[index] or "normal"
+end
+
+-- A bot standing in for a person who left plays at hard for a year when the
+-- hospital is in bad shape (Jan, 2026-11-14): at a month end, the lowest of
+-- the hospitals in the game on its way to the level's goals, or
+-- STANDIN_BEHIND or more below the others' average. Once per stand-in (the
+-- next person to take the place ends it at once).
+MultiplayerSession.STANDIN_HARD_MONTHS = 12
+MultiplayerSession.STANDIN_BEHIND = 0.15
+
+--! How far `hospital` has got towards the level's goals, 0 to 1: each goal
+--! of the first group of win goals as far as it got to its target, averaged
+--! (in the order of the goals' names: the same sum on every peer). Nil: the
+--! level has no goals.
+function MultiplayerSession.goalProgress(world, hospital)
+  local ec = world.endconditions
+  local goals = ec and ec.win_goals and ec.win_goals[1]
+  if not goals then return nil end
+  local names = {}
+  for name in pairs(goals) do names[#names + 1] = name end
+  table.sort(names)
+  local sum = 0
+  for _, name in ipairs(names) do
+    local crit = goals[name]
+    local value = ec:getAttribute(hospital, name) or 0
+    local target = crit.win_value or 0
+    local p
+    if crit.max_min == 1 then
+      p = target > 0 and math.max(0, math.min(1, value / target)) or (value >= target and 1 or 0)
+    else
+      p = value <= target and 1 or (value > 0 and math.min(1, target / value)) or 0
+    end
+    sum = sum + p
+  end
+  return #names > 0 and sum / #names or nil
+end
+
+--! A month end: which bots standing in for a person begin or end their hard
+--! year. Returns the changes, {index, level ("hard" or "normal"), back
+--! (true: a person took the place)}, in hospital order.
+function MultiplayerSession.standInLevels(world)
+  local coop = world.mp_coop
+  local changes = {}
+  if not coop then return changes end
+  local month = world.game_date:monthOfGame()
+  local n = coop.players or #world.hospitals
+  local progress = {}
+  for i = 1, n do
+    local h = world.hospitals[i]
+    if h and not h.mp_place then progress[i] = MultiplayerSession.goalProgress(world, h) end
+  end
+  for i = 1, n do
+    local h = world.hospitals[i]
+    if h and not h.mp_player_away then
+      if h.mp_standin_hard_until then changes[#changes + 1] = {index = i, level = "normal", back = true} end
+      h.mp_standin_hard_until, h.mp_standin_hard_done = nil, nil
+    elseif h and h.mp_standin_hard_until then
+      if month >= h.mp_standin_hard_until then
+        h.mp_standin_hard_until = nil
+        changes[#changes + 1] = {index = i, level = "normal"}
+      end
+    elseif h and not h.mp_standin_hard_done and progress[i] then
+      local others, sum, lowest = 0, 0, true
+      for j = 1, n do
+        local p = progress[j]
+        if j ~= i and p then
+          others, sum = others + 1, sum + p
+          if p <= progress[i] then lowest = false end
+        end
+      end
+      if others > 0 and (lowest or sum / others - progress[i] >= MultiplayerSession.STANDIN_BEHIND) then
+        h.mp_standin_hard_until = month + MultiplayerSession.STANDIN_HARD_MONTHS
+        h.mp_standin_hard_done = true
+        changes[#changes + 1] = {index = i, level = "hard"}
+      end
+    end
+  end
+  return changes
 end
 
 --! Does this death count in `hospital`'s death figures? Not every second one
 --! of a hard bot's hospital (half, rounded up; World.MP_BOT_LEVEL_BONUS).
 function MultiplayerSession.countsDeath(hospital)
   local world = hospital.world
-  if not (world and world.mp_coop and world.mp_coop.bot_levels) then return true end
+  if not (world and world.mp_coop) then return true end
   if MultiplayerSession.botLevel(world, world:getHospitalIndex(hospital)) ~= "hard" then return true end
   hospital.mp_hard_deaths = (hospital.mp_hard_deaths or 0) + 1
   return hospital.mp_hard_deaths % 2 == 1
@@ -1595,6 +1677,10 @@ end
 --! Tell the other players about the room outline this player is drawing
 --! (nil: no outline any more). Cosmetic: only shown, never part of the game.
 function MultiplayerSession:showBlueprint(rect)
+  -- (The others' outlines go under this one: painted again around it, the
+  -- editor having cleared the tiles it left.)
+  self.own_drawing = rect and {x = rect.x, y = rect.y, w = rect.w, h = rect.h} or nil
+  if self.world and self.remote_blueprints then self:_paintOutlines() end
   if not self.send_cosmetic then return end
   local key = rect and string.format("%s:%d,%d,%d,%d", rect.room or "", rect.x, rect.y, rect.w, rect.h) or ""
   if key == self.last_blueprint then return end
@@ -1610,15 +1696,91 @@ end
 -- on; gameplay never reads it.
 local OVERLAY_LAYER, BLUE_FLOOR = 4, 24
 
-local function paint_rect(world, rect, value)
+--! All the map tiles of a rectangle {x, y, w, h}: x, y, x, y, ...
+local function rect_cells(world, rect)
   local th = world.map and world.map.th
-  if not th then return end
+  local cells = {}
+  if not th then return cells end
   local mw, mh = th:size()
   for x = math.max(1, rect.x), math.min(mw, rect.x + rect.w - 1) do
     for y = math.max(1, rect.y), math.min(mh, rect.y + rect.h - 1) do
+      cells[#cells + 1], cells[#cells + 2] = x, y
+    end
+  end
+  return cells
+end
+
+--! Paint an outline's tiles (rect.cells: x, y, x, y, ...) with `value`,
+--! leaving out the tiles of `skip` (this player's own outline as they draw
+--! it: theirs is always on top).
+local function paint_rect(world, rect, value, skip)
+  local th = world.map and world.map.th
+  if not th or not rect.cells then return end
+  local cells = rect.cells
+  for i = 1, #cells, 2 do
+    local x, y = cells[i], cells[i + 1]
+    if not (skip and x >= skip.x and x < skip.x + skip.w and y >= skip.y and y < skip.y + skip.h) then
       th:setCell(x, y, OVERLAY_LAYER, value)
     end
   end
+end
+
+--! The bounding box of each plot of the map (plot -> {x1, y1, x2, y2}),
+--! worked out once.
+function MultiplayerSession:_plotBoxes(th)
+  if self.plot_boxes and self.plot_boxes_th == th then return self.plot_boxes end
+  local boxes, flags = {}, {}
+  local mw, mh = th:size()
+  for x = 1, mw do
+    for y = 1, mh do
+      local p = th:getCellFlags(x, y, flags).parcelId or 0
+      if p ~= 0 then
+        local b = boxes[p]
+        if not b then
+          boxes[p] = {x1 = x, y1 = y, x2 = x, y2 = y}
+        else
+          b.x1, b.y1 = math.min(b.x1, x), math.min(b.y1, y)
+          b.x2, b.y2 = math.max(b.x2, x), math.max(b.y2, y)
+        end
+      end
+    end
+  end
+  self.plot_boxes, self.plot_boxes_th = boxes, th
+  return boxes
+end
+
+--! The tiles of an outline that are shown (x, y, x, y, ...): all of this
+--! player's own; of another player's only those on their hospital's land
+--! (Jan, 2026-11-14: Matroftt dragged an outline over the whole map, and
+--! everybody's own drawing vanished under it). `owner` is that land's owner
+--! (a hospital's player index), nil for all of it.
+function MultiplayerSession:_outlineCells(rect, owner)
+  if not owner then return rect_cells(self.world, rect) end
+  local th = self.world.map.th
+  local mw, mh = th:size()
+  local x1, y1 = math.max(1, rect.x), math.max(1, rect.y)
+  local x2, y2 = math.min(mw, rect.x + rect.w - 1), math.min(mh, rect.y + rect.h - 1)
+  local cells, flags = {}, {}
+  for plot, b in pairs(self:_plotBoxes(th)) do
+    if th:getPlotOwner(plot) == owner then
+      for x = math.max(x1, b.x1), math.min(x2, b.x2) do
+        for y = math.max(y1, b.y1), math.min(y2, b.y2) do
+          if th:getCellFlags(x, y, flags).parcelId == plot then
+            cells[#cells + 1], cells[#cells + 2] = x, y
+          end
+        end
+      end
+    end
+  end
+  return cells
+end
+
+--! Whose land another player's outline may cover: their hospital's player
+--! index (the hospital they play in; one hospital for all: the first).
+function MultiplayerSession:_outlineOwner(peer)
+  local seats = self.lobby and self.lobby.peer_hospital
+  local hosp = self.world.hospitals[seats and seats[peer] or 1]
+  return hosp and hosp:getPlayerIndex() or 1
 end
 
 --! Take a reserved outline's wall pictures (the room editor's wall, door and
@@ -1644,22 +1806,32 @@ function MultiplayerSession:showRemoteBlueprint(peer, rect)
   if not self.world then return end
   local old = self.remote_blueprints[peer]
   if old then
-    paint_rect(self.world, old, 0)
+    paint_rect(self.world, old, 0, peer ~= self.peer_id and self.own_drawing or nil)
     if old.walls then remove_walls(old.walls) end
     if old.editor and old.editor.phase == "mp_waiting" then old.editor:close() end
   end
   self.remote_blueprints[peer] = nil
   if rect and (rect.w or 0) > 0 and (rect.h or 0) > 0 then
-    self.remote_blueprints[peer] = {x = rect.x, y = rect.y, w = rect.w, h = rect.h, room = rect.room,
+    local owner = peer ~= self.peer_id and self:_outlineOwner(peer) or nil
+    local shown = {x = rect.x, y = rect.y, w = rect.w, h = rect.h, room = rect.room,
         walls = rect.walls, editor = rect.editor}
-    paint_rect(self.world, rect, BLUE_FLOOR)
+    shown.cells = self:_outlineCells(shown, owner)
+    self.remote_blueprints[peer] = shown
     if peer ~= self.peer_id then
-      self.log(string.format("showing reserved area of player %d: %s at %d,%d size %dx%d",
-          peer, tostring(rect.room), rect.x, rect.y, rect.w, rect.h))
+      self.log(string.format("showing reserved area of player %d: %s at %d,%d size %dx%d (%d tiles on their land)",
+          peer, tostring(rect.room), rect.x, rect.y, rect.w, rect.h, #shown.cells / 2))
     end
   end
-  -- Overlapping outlines were partly cleared; paint the others again.
-  for _, other in pairs(self.remote_blueprints) do paint_rect(self.world, other, BLUE_FLOOR) end
+  -- Overlapping outlines were partly cleared; paint them all again.
+  self:_paintOutlines()
+end
+
+--! Paint every outline shown again (another player's below this player's
+--! own drawing).
+function MultiplayerSession:_paintOutlines()
+  for p, other in pairs(self.remote_blueprints) do
+    paint_rect(self.world, other, BLUE_FLOOR, p ~= self.peer_id and self.own_drawing or nil)
+  end
 end
 
 --! Run fn() with the outlines of showRemoteBlueprint off the map: they are
@@ -1667,8 +1839,8 @@ end
 --! floors come back afterwards; the own outline's walls and waiting editor
 --! do not.
 function MultiplayerSession:withoutBlueprints(fn)
-  for _, rect in pairs(self.remote_blueprints) do
-    paint_rect(self.world, rect, 0)
+  for p, rect in pairs(self.remote_blueprints) do
+    paint_rect(self.world, rect, 0, p ~= self.peer_id and self.own_drawing or nil)
     if rect.walls then
       remove_walls(rect.walls)
       rect.walls = nil
@@ -1677,7 +1849,7 @@ function MultiplayerSession:withoutBlueprints(fn)
     rect.editor = nil
   end
   local ok, err = pcall(fn)
-  for _, rect in pairs(self.remote_blueprints) do paint_rect(self.world, rect, BLUE_FLOOR) end
+  self:_paintOutlines()
   if not ok then error(err, 0) end
 end
 
@@ -2133,7 +2305,7 @@ local function hide_rivals_floor(world, cmd)
   local session = TheApp.mp_session
   if session and cmd.peer ~= session.peer_id and
       world:mpRivals(world.hospitals[cmd.hospital or 1], world:getUIHospital()) then
-    paint_rect(world, cmd, 0)
+    paint_rect(world, {cells = rect_cells(world, cmd)}, 0)
   end
 end
 

@@ -96,7 +96,9 @@
 #      sale in both games
 #  34. the host removes a player ("kick"): kip double-clicks lev's line,
 #      the menu's "remove" -> lev is back in the room list, told why, and
-#      joining that room again is refused ("kicked")
+#      joining that room again is refused ("kicked"); before it both say a line in the
+#      room's chat and see each other's in the room window, and kip opens the
+#      room's map (who plays where) and comes back
 #  35. the year end waits ("yearhold", co-op): wes keeps the annual
 #      report open for 80 steps; xan closes it at once and gets the box
 #      "the game waits while WES read...", and no game hours pass until wes
@@ -218,7 +220,7 @@ run_probe frank MP_ROLE=join MP_ROOM=leave MP_STEPS=800 MP_FURNISH_PACE=40 \
   MP_UI_SCRIPT="200:furnishroom:gp:5:5;300:quit" & pids+=($!)
 run_probe gina MP_ROLE=host MP_ROOM=build MP_STEPS=900 MP_DRAW_EVERY=4   MP_UI_SCRIPT="50:enterchat;100:room:gp:5:5:window;400:buy:bench" & pids+=($!)
 sleep 1
-run_probe hugo MP_ROLE=join MP_ROOM=build MP_STEPS=900   MP_UI_SCRIPT="100:room:pharmacy:4:4;300:room:toilets:4:4" & pids+=($!)
+run_probe hugo MP_ROLE=join MP_ROOM=build MP_STEPS=900   MP_UI_SCRIPT="100:room:pharmacy:4:4;300:room:toilets:4:4;600:bigoutline;640:nooutline" & pids+=($!)
 run_probe ivan MP_ROLE=host MP_ROOM=crowd MP_STEPS=1200 MP_SCENARIO=busy & pids+=($!)
 sleep 1
 run_probe judy MP_ROLE=join MP_ROOM=crowd MP_STEPS=1200 MP_SCENARIO=busy   MP_UI_SCRIPT="300:crowdroom:gp:4:4;340:crowdroom:gp:4:4;380:crowdroom:gp:4:4;500:crowdroom:toilets:4:4;700:buyunder:bench" & pids+=($!)
@@ -278,9 +280,10 @@ run_probe ana MP_ROLE=host MP_ROOM=auction MP_COOP=1 MP_LEVEL=2 MP_STEPS=600   M
 sleep 1
 run_probe ben MP_ROLE=join MP_ROOM=auction MP_STEPS=600   MP_UI_SCRIPT="30:openhospital;110:auctionshot;150:auctionbid;170:auctionhide;176:auctionshot;190:auctionback;196:auctionshot" & pids+=($!)
 # The host removes a player from the room.
-run_probe kip MP_ROLE=host MP_ROOM=kick MP_KICK=2 & pids+=($!)
+# (First they talk in the room's chat.)
+run_probe kip MP_ROLE=host MP_ROOM=kick MP_KICK=2 MP_ROOM_CHAT=hello-lev MP_ROOM_CHAT_WAIT=lev & pids+=($!)
 sleep 1
-run_probe lev MP_ROLE=join MP_ROOM=kick MP_EXPECT_KICK=1 & pids+=($!)
+run_probe lev MP_ROLE=join MP_ROOM=kick MP_EXPECT_KICK=1 MP_ROOM_CHAT=hi-kip MP_ROOM_CHAT_WAIT=kip & pids+=($!)
 # The year end waits for everybody's annual report.
 run_probe wes MP_ROLE=host MP_ROOM=yearhold MP_COOP=1 MP_STEPS=400 MP_KEEP_REPORT=80   MP_UI_SCRIPT="20:openhospital;100:yearend" & pids+=($!)
 sleep 1
@@ -502,10 +505,15 @@ kept = re.search(r'UI: outline of gp after the checkmark: (\d+) of (\d+) tiles b
 kept = bool(kept and kept.group(1) == kept.group(2) and int(kept.group(3)) > 0)
 enter = re.search(r'UI: chat key with a room editor open at step 50: chat opened, text "", editor \w+; Enter for (\S+); Shift: chat opened, text ""', g)
 enter = bool(enter and 'UIEditRoom' in enter.group(1).split(',') and 'UIMultiplayerChat' not in enter.group(1))
+# An outline over the whole map (hugo) shows only on hugo's land at gina's
+# (Jan, 2026-11-14: Matroftt's covered everything).
+big5 = re.search(r'showing reserved area of player 2: gp at 1,1 size (\d+)x(\d+) \((\d+) tiles on their land\)', g)
+clipped = bool(big5 and 0 < int(big5.group(3)) < int(big5.group(1)) * int(big5.group(2)) // 4)
 ok5 = (result('gina').startswith('IN SYNC') and result('hugo').startswith('IN SYNC')
-       and rooms_g == rooms_h and built == ['gp', 'toilets'] and saw and kept and enter)
+       and rooms_g == rooms_h and built == ['gp', 'toilets'] and saw and kept and enter and clipped)
 print(f"5. Rooms:                   {result('gina')}; built on both: {rooms_g == rooms_h} {rooms_g}; reserved outlines seen: {saw}; "
-      f"own outline kept: {kept}; Y opens the chat, Enter the editor's: {enter}")
+      f"own outline kept: {kept}; Y opens the chat, Enter the editor's: {enter}; "
+      f"whole-map outline only on its land: {clipped} {big5.group(3) + ' tiles' if big5 else '-'}")
 fail |= not ok5
 if not ok5: bad.append("ok5")
 
@@ -856,11 +864,22 @@ menu34 = re.search(r'UI: kick menu open: (\w+)', log('kip'))
 after34 = re.search(r'UI: after the kick: (.*)', log('kip'))
 told34 = re.search(r'UI: kicked: (.*); view (\w+)', log('lev'))
 again34 = re.search(r'UI: joining again: (\w+)', log('lev'))
+# Before that, both talked in the room's chat and saw each other's line.
+chat_k = re.search(r'UI: room chat: (.*); box now "(.*)"', log('kip'))
+chat_l = re.search(r'UI: room chat: (.*); box now "(.*)"', log('lev'))
+chat34 = all(c and 'kip: hello-lev' in c.group(1) and 'lev: hi-kip' in c.group(1) and c.group(2) == ''
+             for c in (chat_k, chat_l))
+# ... and opened the room's map: who plays where (one hospital for both).
+map34 = re.search(r'UI: room map: level \d+, 1 hospital\(s\), file (\S+); 1=\d+:kip \+ lev', log('kip'))
+back34 = 'UI: back in the room: room' in log('kip')
+chat34 = chat34 and bool(map34) and back34
 ok34 = (bool(menu34) and menu34.group(1) == 'true' and bool(after34) and 'lev' not in after34.group(1)
         and bool(told34) and told34.group(2) == 'rooms' and 'removed you' in told34.group(1)
-        and bool(again34) and again34.group(1) == 'kicked')
+        and bool(again34) and again34.group(1) == 'kicked' and chat34)
 print(f"34. Kick from the room:     menu {menu34 and menu34.group(1)}; after {after34 and after34.group(1)}; "
-      f"lev told {told34 and told34.groups()}; joining again {again34 and again34.group(1)}")
+      f"lev told {told34 and told34.groups()}; joining again {again34 and again34.group(1)}; "
+      f"room chat seen by both, room map: {chat34} {chat_k.group(1) if chat_k else '-'}; "
+      f"map {map34.group(0)[13:] if map34 else '-'}, back {back34}")
 fail |= not ok34
 if not ok34: bad.append("ok34")
 

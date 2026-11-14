@@ -58,3 +58,65 @@ describe("Bot levels", function()
     assert.is_true(MultiplayerSession.countsDeath({world = {}})) -- (no multiplayer)
   end)
 end)
+
+-- Four hospitals of people; goals: reputation 600 and $50,000.
+local function game(month)
+  local world = {mp_coop = {players = 4}, hospitals = {}}
+  world.game_date = {monthOfGame = function() return month[1] end}
+  world.endconditions = {
+    win_goals = {{reputation = {win_value = 600, max_min = 1}, balance = {win_value = 50000, max_min = 1}}},
+    getAttribute = function(_, hospital, name) return hospital[name] end,
+  }
+  local shape = {{600, 50000}, {540, 40000}, {480, 30000}, {300, 10000}}
+  for i = 1, 4 do
+    world.hospitals[i] = {world = world, index = i, name = "H" .. i, reputation = shape[i][1], balance = shape[i][2]}
+  end
+  function world.getHospitalIndex(_, hospital) return hospital.index end
+  return world
+end
+
+describe("A bot standing in for a person who left", function()
+  it("measures the way to the goals", function()
+    local world = game({1})
+    assert.equal(1, MultiplayerSession.goalProgress(world, world.hospitals[1]))
+    assert.near(0.25 + 0.1, MultiplayerSession.goalProgress(world, world.hospitals[4]), 1e-9)
+    world.hospitals[4].balance = -5000 -- (in debt: no way to the goal at all)
+    assert.equal(0.25, MultiplayerSession.goalProgress(world, world.hospitals[4]))
+  end)
+
+  it("plays at hard for a year when the hospital is behind, then normal", function()
+    local month = {5}
+    local world = game(month)
+    local h3, h4 = world.hospitals[3], world.hospitals[4]
+    h4.mp_player_away = true
+    local changes = MultiplayerSession.standInLevels(world)
+    assert.equal(1, #changes)
+    assert.same({index = 4, level = "hard"}, changes[1])
+    assert.equal("hard", MultiplayerSession.botLevel(world, 4))
+    -- A year on it plays at normal again, and stays so for this stand-in.
+    month[1] = 16
+    assert.equal(0, #MultiplayerSession.standInLevels(world))
+    month[1] = 17
+    assert.same({{index = 4, level = "normal"}}, MultiplayerSession.standInLevels(world))
+    assert.equal("normal", MultiplayerSession.botLevel(world, 4))
+    month[1] = 18
+    assert.equal(0, #MultiplayerSession.standInLevels(world))
+    -- Not behind: hospital 3 (0.7 against 0.73 for the others, not the lowest).
+    h3.mp_player_away = true
+    assert.equal(0, #MultiplayerSession.standInLevels(world))
+    assert.equal("normal", MultiplayerSession.botLevel(world, 3))
+  end)
+
+  it("ends the hard year at once when a person takes the place", function()
+    local world = game({3})
+    local h4 = world.hospitals[4]
+    h4.mp_player_away = true
+    MultiplayerSession.standInLevels(world)
+    h4.mp_player_away = nil
+    assert.equal("normal", MultiplayerSession.botLevel(world, 4))
+    assert.same({{index = 4, level = "normal", back = true}}, MultiplayerSession.standInLevels(world))
+    -- A new stand-in later may get its own year.
+    h4.mp_player_away = true
+    assert.same({{index = 4, level = "hard"}}, MultiplayerSession.standInLevels(world))
+  end)
+end)

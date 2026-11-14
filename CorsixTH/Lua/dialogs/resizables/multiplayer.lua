@@ -55,8 +55,11 @@ local function view_of(lobby)
   return "rooms"
 end
 
+-- The room's chat (Jan, 2026-11-14): its last lines, and a box to type in.
+local CHAT_LINES, CHAT_LINE_H = 5, 20
+local CHAT_H = CHAT_LINES * CHAT_LINE_H + 33
 -- (The places view: a line more for each place, as the room view.)
-local heights = {connect = 225, rooms = 435, room = 295, seats = 185}
+local heights = {connect = 225, rooms = 435, room = 295 + CHAT_H, seats = 185}
 -- The room view has a line per place: 4 in that height, 27 pixels more for
 -- each more (a room for up to 8).
 local PLACE_H = 27
@@ -590,8 +593,23 @@ function UIMultiplayer:_buildRoom()
         :setTooltip(T.team)
   end
   self.summary_panel = label(self, 20, 40 + places * PLACE_H + 5, WIDTH - 40, "")
-  self.mode_panel = label(self, 20, 40 + (places + 1) * PLACE_H + 5, WIDTH - 40, "")
+  -- What the room plays, and its map (with who plays where) a click away.
+  self.mode_panel = label(self, 20, 40 + (places + 1) * PLACE_H + 5, WIDTH - 40 - 75, "")
+  self:addBevelPanel(WIDTH - 90, 40 + (places + 1) * PLACE_H + 5, 70, 25, col.button):setLabel(S.room_map)
+      :makeButton(0, 0, 70, 25, nil, self.buttonRoomMap):setTooltip(_S.tooltip.multiplayer_window.room_map)
   self.hint_panel = label(self, 20, 40 + (places + 2) * PLACE_H + 5, WIDTH - 40, S.room_hint)
+  -- The room's chat: the last lines, and a box; Enter sends what is typed.
+  local chat_y = 40 + (places + 3) * PLACE_H + 8
+  self.chat_panels = {}
+  for i = 1, CHAT_LINES do
+    local line = self:addBevelPanel(20, chat_y + (i - 1) * CHAT_LINE_H, WIDTH - 40, CHAT_LINE_H, col.bg, col.bg, col.bg)
+    line:setLabel("", nil, "left"):setAutoClip(true)
+    line.lowered = true
+    self.chat_panels[i] = line
+  end
+  self.chat_box = textbox(self, 20, chat_y + CHAT_LINES * CHAT_LINE_H + 4, WIDTH - 40, "", 120, {"all"},
+      _S.tooltip.multiplayer_window.room_chat)
+  self.chat_box.confirm_callback = function() self:sendRoomChat() end
   local y = viewHeight("room", self.lobby) - 50
   -- The game's options (UIMultiplayerRoomOptions): the host sets them,
   -- everybody may look.
@@ -605,9 +623,38 @@ function UIMultiplayer:_buildRoom()
   self:_updateRoom()
 end
 
+--! The Map button: the room's map with who plays where
+--! (UIMultiplayerLevels.roomMap), which opens this window again when done.
+function UIMultiplayer:buttonRoomMap()
+  local ui = self.ui
+  self.rebuilding = true
+  self:close()
+  ui:addWindow(UIMultiplayerLevels(ui, nil, nil, self.lobby))
+end
+
+--! Send what is typed in the room's chat box (nothing when it is empty).
+function UIMultiplayer:sendRoomChat()
+  local box = self.chat_box
+  local text = box and type(box.text) == "string" and box.text:gsub("^%s+", ""):gsub("%s+$", "") or ""
+  if text ~= "" then
+    self.lobby:sendChat(text)
+    box:setText("")
+  end
+end
+
+--! The room's last chat lines, "name: text", the newest at the bottom.
+function UIMultiplayer:_updateRoomChat()
+  local lines = self.lobby.room_chat or {}
+  for i, panel in ipairs(self.chat_panels or {}) do
+    local f = lines[#lines - CHAT_LINES + i]
+    panel:setLabel(f and ((f.name or "?") .. ": " .. (f.text or "")) or "")
+  end
+end
+
 function UIMultiplayer:_updateRoom()
   local S = _S.multiplayer_window
   local lobby = self.lobby
+  self:_updateRoomChat()
   local max = tonumber(lobby.room.max) or 2
   local bots = lobby:canAddBots()
   -- Bots the server is still starting take the first empty places.

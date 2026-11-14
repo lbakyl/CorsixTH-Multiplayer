@@ -822,6 +822,9 @@ function MultiplayerLobby:_onJOINED(f)
   self.state = "in_room"
   self.players, self.players_pending = {}, {}
   self.ready = false
+  -- (The room's chat starts here: older lines, of another room or game,
+  -- are not shown in it.)
+  self.room_chat = {}
   self:_changed("joined", f)
 end
 
@@ -888,6 +891,12 @@ function MultiplayerLobby:_onCHAT(f)
   end
   self.chat[#self.chat + 1] = f
   if #self.chat > 20 then table.remove(self.chat, 1) end
+  -- The room's own chat, shown in the room before the game starts (Jan,
+  -- 2026-11-14: the players asked to talk there; everybody sees it all).
+  if self.state == "in_room" and self.room_chat then
+    self.room_chat[#self.room_chat + 1] = f
+    if #self.room_chat > 20 then table.remove(self.room_chat, 1) end
+  end
   local session = TheApp and TheApp.mp_session
   if session and session.lobby == self then
     -- In the game: the chat lines at the top left (to = a private message).

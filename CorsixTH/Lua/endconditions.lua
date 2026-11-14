@@ -266,7 +266,7 @@ function EndConditions:getAttribute(hospital, attribute)
   -- Multiplayer: a hard bot's hospital counts a fifth more value towards the
   -- goals (World.MP_BOT_LEVEL_BONUS).
   local world = hospital.world
-  if attribute == "value" and value and world and world.mp_coop and world.mp_coop.bot_levels and
+  if attribute == "value" and value and world and world.mp_coop and
       MultiplayerSession.botLevel(world, world:getHospitalIndex(hospital)) == "hard" then
     value = math.floor(value * World.MP_BOT_HARD_VALUE)
   end
