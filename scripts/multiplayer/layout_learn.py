@@ -22,7 +22,10 @@ bot played (the room's own bot or a stand-in for a person who left):
   seen;
 - plans: for each level, map size, number of hospitals and hospital place
   an expert played, every room of theirs (kind, corner, size, door, layout)
-  from their latest game there, and what stands in their corridors.
+  from their latest game there, and what stands in their corridors;
+- corridor habits: how far apart their radiators and plants stand (the
+  tiles to the nearest one of the same kind; a quarter of them are closer),
+  so that a bot keeps its own apart as much.
 """
 import json
 import os
@@ -183,6 +186,32 @@ def date_key(date):
         return (0, 0, 0, 0)
 
 
+def nearest_gaps(items, kind):
+    """For each object of `kind`, the tiles to the nearest other one (the
+    larger of the two distances along the axes)."""
+    pts = [(o["x"], o["y"]) for o in items if o["id"] == kind]
+    if len(pts) < 2:
+        return []
+    return [min(max(abs(x - a), abs(y - b)) for j, (a, b) in enumerate(pts) if j != i)
+            for i, (x, y) in enumerate(pts)]
+
+
+def corridor_habits(recs):
+    """How far apart the experts keep their radiators and plants: the gap a
+    quarter of them are closer than (at least 8 seen; within sane bounds)."""
+    out = {}
+    for kind, low, high in (("radiator", 2, 6), ("plant", 2, 5)):
+        gaps = []
+        for rec in recs:
+            items = [o for o in rec["corridor"] if not is_fixture(o["id"])]
+            gaps += nearest_gaps(items, kind)
+        if len(gaps) >= 8:
+            gaps.sort()
+            out[kind + "_gap"] = max(low, min(high, gaps[len(gaps) // 4]))
+            out[kind + "_seen"] = len(gaps)
+    return out
+
+
 def learn(paths, experts):
     """Recipes and plans from the experts' hospitals in the layouts."""
     want = {e.strip().upper() for e in experts if e.strip()}
@@ -270,7 +299,8 @@ def learn(paths, experts):
         corridor = Counter(o["id"] for o in items)
         plans[key] = {"player": rec["name"], "date": rec["date"], "rooms": plan_rooms,
                       "objects": plan_objects, "corridor": dict(sorted(corridor.items()))}
-    return {"version": 1, "experts": sorted(want), "sources": sources, "recipes": recipes, "plans": plans}
+    return {"version": 1, "experts": sorted(want), "sources": sources, "recipes": recipes, "plans": plans,
+            "corridor": corridor_habits(list(latest_plan.values()))}
 
 
 def lua_value(v, indent=""):
@@ -349,6 +379,7 @@ def main(argv):
                 json.dump({"sources": data["sources"], "recipes": sorted(data["recipes"]),
                            "plans": sorted(data["plans"])}, f, indent=1)
         print_recipes(data)
+        print(f"corridor habits: {data['corridor']}")
         print(f"learnt {len(data['recipes'])} room recipes and {len(data['plans'])} plans from "
               f"{len(data['sources'])} hospitals; written to {out}")
         return 0

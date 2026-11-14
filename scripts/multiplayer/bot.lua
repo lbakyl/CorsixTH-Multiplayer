@@ -796,6 +796,12 @@ local RESERVE = 3000
 -- alone this many game days (Argus, 2026-11-12: two bots sent their evil
 -- handymen at the same time).
 local TRICK_GAP_DAYS = 30
+-- Corridor objects of one kind keep apart (Argus, 2026-11-14: radiators
+-- flush against one another): at least this many tiles from the next one of
+-- the hospital's corridors, as the experts' corridors have them (learned each
+-- night, layout_learn.py: their radiators mostly stand 3 or 4 apart), else
+-- these.
+local CORRIDOR_GAPS = {radiator = 3, plant = 2}
 -- Dirty tricks by the bot's level (Jan, 2026-11-14): its first one on a day
 -- of these months of the game (easy: months 10-12, normal: 7-12, hard:
 -- 4-6), then one every so many game days.
@@ -3100,9 +3106,27 @@ function Bot:buyCorridor(object_id, near_x, near_y)
     local id = e.object_type and e.object_type.id
     if id and id:find("entrance", 1, true) and e.tile_x then keep(e.tile_x, e.tile_y, 2) end
   end
+  -- A wall: outside the building, a room, or floor nobody can walk that
+  -- nothing stands on. (Not a bench or a drinks machine: plants and benches
+  -- went beside them in the open floor as if against a wall; Argus,
+  -- 2026-11-14.)
   local function wall(tx, ty)
-    return not hosp:isInHospital(tx, ty) or world:getRoom(tx, ty) ~= nil or
-        not world.map.th:getCellFlags(tx, ty).passable
+    if not hosp:isInHospital(tx, ty) or world:getRoom(tx, ty) ~= nil then return true end
+    if world.map.th:getCellFlags(tx, ty).passable then return false end
+    return #(world:getObjects(tx, ty) or {}) == 0
+  end
+  -- Radiators and plants keep apart (CORRIDOR_GAPS; the learned ones first).
+  local gap = CORRIDOR_GAPS[object_id]
+  local habits = self.expert_data_read and self.expert_data_read.corridor
+  if gap and habits and tonumber(habits[object_id .. "_gap"]) then gap = tonumber(habits[object_id .. "_gap"]) end
+  local same = {}
+  if gap then
+    for _, e in ipairs(world.entities) do
+      if e.object_type and e.object_type.id == object_id and e.tile_x and hosp:isInHospital(e.tile_x, e.tile_y) and
+          not world:getRoom(e.tile_x, e.tile_y) then
+        same[#same + 1] = e
+      end
+    end
   end
   -- Drinks machines spread out: none within DRINKS_APART tiles of another of
   -- this hospital's (Matroftt, 2026-11-07: rows of them by the reception).
@@ -3151,10 +3175,40 @@ function Bot:buyCorridor(object_id, near_x, near_y)
     end
     return out
   end
-  -- (With no such spot free near the door, a bench any way round, as long as
+  -- (With no such spot free near the door, a bench elsewhere, as long as
   -- the floor stays in one piece: better than patients standing. Jan,
-  -- 2026-11-13: Agnes found no place for a bench 28 times.)
-  local loose = false
+  -- 2026-11-13: Agnes found no place for a bench 28 times.) Then it faces
+  -- the door, and first beside a bench facing the same way, so that they
+  -- stand in rows (Argus, 2026-11-14: they stood every way round).
+  local loose, want_row = false, false
+  local function front_of(facing)
+    for _, t in ipairs(object_type.orientations[facing].footprint or {}) do
+      if t.only_passable then return t end
+    end
+  end
+  local function toward_door(tx, ty)
+    if not near_x then return facings end
+    local scored = {}
+    for _, facing in ipairs(facings) do
+      local front = front_of(facing)
+      local dot = front and (front[1] * (near_x - tx) + front[2] * (near_y - ty)) or -1
+      if dot > 0 then scored[#scored + 1] = {facing, dot} end
+    end
+    table.sort(scored, function(a, b) return a[2] > b[2] or (a[2] == b[2] and a[1] < b[1]) end)
+    local out = {}
+    for _, f in ipairs(scored) do out[#out + 1] = f[1] end
+    return out
+  end
+  local function in_row(tx, ty, facing)
+    local front = front_of(facing)
+    if not front then return false end
+    for _, side in ipairs({{front[2], front[1]}, {-front[2], -front[1]}}) do
+      for _, e in ipairs(world:getObjects(tx + side[1], ty + side[2]) or {}) do
+        if e.object_type and e.object_type.id == "bench" and e.direction == facing then return true end
+      end
+    end
+    return false
+  end
   -- Patients standing on a spot do not rule it out: the command asks them to
   -- step aside (handlers.place_object). (Jan, 2026-11-13: a crowd by
   -- Agnes's GP stood on every free spot, so no bench went there, ever.)
@@ -3166,10 +3220,17 @@ function Bot:buyCorridor(object_id, near_x, near_y)
       if math.abs(e.tile_x - tx) <= DRINKS_APART and math.abs(e.tile_y - ty) <= DRINKS_APART then return false end
     end
     if not people_ok and world:anyHumanoidObscuringArea(tx, ty) then return false end
-    for _, facing in ipairs(object_id == "bench" and not loose and back_to_wall(tx, ty) or facings) do
-      place:setOrientation(facing)
-      place:setBlueprintCell(tx, ty)
-      if place.object_blueprint_good and keeps_floor(tx, ty, facing) then return true end
+    for _, e in ipairs(same) do
+      if math.max(math.abs(e.tile_x - tx), math.abs(e.tile_y - ty)) < gap then return false end
+    end
+    local list = facings
+    if object_id == "bench" then list = loose and toward_door(tx, ty) or back_to_wall(tx, ty) end
+    for _, facing in ipairs(list) do
+      if not (want_row and not in_row(tx, ty, facing)) then
+        place:setOrientation(facing)
+        place:setBlueprintCell(tx, ty)
+        if place.object_blueprint_good and keeps_floor(tx, ty, facing) then return true end
+      end
     end
     return false
   end
@@ -3202,8 +3263,8 @@ function Bot:buyCorridor(object_id, near_x, near_y)
         for dx = -r, r do
           local tx, ty = ax + dx, ay + dy
           if not x and math.max(math.abs(dx), math.abs(dy)) == r and not clear[ty * 1000 + tx] and
-              self:freeTile(tx, ty) and (wall(tx - 1, ty) or wall(tx + 1, ty) or wall(tx, ty - 1) or
-              wall(tx, ty + 1)) and fits(tx, ty) then
+              self:freeTile(tx, ty) and (want_row or wall(tx - 1, ty) or wall(tx + 1, ty) or
+              wall(tx, ty - 1) or wall(tx, ty + 1)) and fits(tx, ty) then
             x, y = tx, ty
           end
         end
@@ -3212,20 +3273,26 @@ function Bot:buyCorridor(object_id, near_x, near_y)
     end
   end
   if not x and object_id ~= "reception_desk" then nearest() end
-  if not x and object_id == "bench" then
-    loose = true
-    nearest()
-    if x then log("no spot with its back to a wall: a bench facing another way") end
-  end
-  if not x and object_id == "bench" and near_x then
-    -- A bit further from the door: a standing patient looks for a free
-    -- bench up to 10 tiles from it (humanoid_actions/queue.lua).
-    loose, max_r = false, 8
+  -- (A bench: facing the door beside another one, then by a wall facing the
+  -- door; the same a bit further from the door, as a standing patient looks
+  -- for a free bench up to 10 tiles from it, humanoid_actions/queue.lua.)
+  local function loose_bench()
+    loose, want_row = true, true
     nearest()
     if not x then
-      loose = true
+      want_row = false
       nearest()
     end
+    loose, want_row = false, false
+  end
+  if not x and object_id == "bench" then
+    loose_bench()
+    if x then log("no spot with its back to a wall: a bench facing the door") end
+  end
+  if not x and object_id == "bench" and near_x then
+    max_r = 8
+    nearest()
+    if not x then loose_bench() end
     if x then log(string.format("a bench %d,%d tiles from the door", x - ax, y - ay)) end
   end
   if not x and not near_x then

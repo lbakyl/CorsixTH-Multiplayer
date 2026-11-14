@@ -237,6 +237,18 @@ person who left, keep their own rules:
   of that kind, with their door and layout (`Bot:planSlot`), and puts its
   reception desks, benches, radiators and other corridor objects on the
   expert's spots, nearest to the reception first (`Bot:buyCorridor`).
+- **Corridor habits.** How far apart the experts keep their radiators and
+  plants in their corridors (the tiles to the nearest one of the same kind; a
+  quarter of them are closer: Argus's radiators mostly stand 3 or 4 apart,
+  so 3). Every bot keeps its own corridor radiators and plants at least that
+  far apart (else 3 and 2; Argus, 2026-11-14: radiators flush together).
+
+Where no expert spot is free, `Bot:buyCorridor` puts a corridor object
+against a wall (of the building or a room; a bench, a drinks machine or
+another object is no wall, so nothing piles up around them in the open
+floor), nearest to where it is wanted. A bench goes with its back to a wall,
+facing the corridor; with no such spot near the door, it faces the door,
+first beside a bench facing the same way, so that benches stand in rows.
 
 `lua scripts/multiplayer/bot_learned_test.lua scripts/multiplayer/bot_learned.lua`
 checks the turning of layouts (each door wall, mirrored) on any Lua.

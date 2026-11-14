@@ -106,3 +106,25 @@ def test_the_learned_file_loads_in_lua(tmp_path):
     text = out.read_text(encoding="utf-8")
     assert text.startswith("-- What the bots learnt")
     assert 'return {' in text and '["CROSSROADS/192x192/6/6"] = {' in text and 'tiles = {{2, 2}}' in text
+
+
+def test_corridor_habits_keep_radiators_apart():
+    """The experts' radiators: the gap a quarter of them are closer than, so
+    that a bot keeps its own as far apart (Argus: not flush together)."""
+    sys.path.insert(0, str(REPO / "scripts" / "multiplayer"))
+    try:
+        import layout_learn
+    finally:
+        sys.path.pop(0)
+    # Ten radiators in a row along a wall, 3 tiles apart, two of them 2 apart;
+    # three plants only (too few to learn from).
+    xs = [0, 3, 6, 9, 12, 15, 18, 21, 24, 26]
+    corridor = [{"id": "radiator", "x": 10 + x, "y": 5, "dir": "north", "tiles": [[10 + x, 5]]} for x in xs]
+    corridor += [{"id": "plant", "x": 10 + x, "y": 8, "dir": "north", "tiles": [[10 + x, 8]]} for x in (0, 1, 5)]
+    rec = {"corridor": corridor}
+    habits = layout_learn.corridor_habits([rec])
+    assert habits == {"radiator_gap": 3, "radiator_seen": 10}
+    assert layout_learn.nearest_gaps(corridor, "plant") == [1, 1, 4]
+    # Radiators flush together are not learnt as the habit: never below 2.
+    flush = [{"id": "radiator", "x": x, "y": 5} for x in range(10)]
+    assert layout_learn.corridor_habits([{"corridor": flush}])["radiator_gap"] == 2
