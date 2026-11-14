@@ -2063,6 +2063,11 @@ function World:_mpPlaceFax(hosp, how, place)
   self.ui.bottom_panel:queueMessage("information", message, nil, nil, 2, nil, hosp)
   if how == "won" then
     MultiplayerSession.startHold(self, "win", self.next_message_id, self:getHospitalIndex(hosp))
+    -- Its player sees the winning video with this fax (below), not again
+    -- when they leave: kept in the game, so a loaded or rejoined game does
+    -- not show it again either (Argus saw it again on "Back to the lobby"
+    -- after loading his game, 2026-11-14).
+    hosp.mp_win_video_shown = true
   end
   if self.ui.hospital == hosp then
     -- A win: the winning video at once, on this player's screen only (the

@@ -757,7 +757,7 @@ multiplayer_window = {
   race_won = {
     "Congratulations!",
     "Your hospital has reached this level's goals: %s place.",
-    "The others race on for the next places. Go back to the lobby, or watch?",
+    "The others race on for the next places. No new patients come to your hospital now. Go back to the lobby, or watch?",
   },
   -- The same on the winning video's letter, answered with its tick (back to
   -- the lobby) or cross (watch).
@@ -777,7 +777,7 @@ multiplayer_window = {
   race_out = {
     "Bad news.",
     "Your hospital failed this level's goals two years running: it is out of the race, in %s place.",
-    "Go back to the lobby, or watch the others?",
+    "No new patients come to your hospital now. Go back to the lobby, or watch the others?",
   },
   race_over = {
     "The race is over. Final standings:",
