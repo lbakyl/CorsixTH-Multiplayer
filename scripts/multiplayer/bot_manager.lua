@@ -923,10 +923,12 @@ function M:projects(s)
     end, cost)
   end
   -- A machine worn down by its repairs (each takes some strength): a new
-  -- one before it explodes; urgent once it is nearly done for.
+  -- one before it explodes; urgent once it is nearly done for. (Scored 6
+  -- before: Bot Agnes never got to it, and three of her rooms exploded;
+  -- 2026-11-14.)
   for _, m in ipairs(s.machines) do
     if m.new > m.strength + 1 and m.strength <= math.max(3, math.floor(m.new / 2)) then
-      add("replace:" .. m.room, (m.strength <= 3 and 25 or 6) + (EARNERS[m.room] or 0) * 0.5, function()
+      add("replace:" .. m.room, (m.strength <= 3 and 25 or 12) + (EARNERS[m.room] or 0) * 0.5, function()
         return self:issue({kind = "replace_machine", machine = m.e.mp_id})
       end, m.cost)
     end
@@ -1643,12 +1645,16 @@ function M:doProject(s)
         self.no_space[p.key] = s.day
         self.no_space_tries = self.no_space_tries or {}
         self.no_space_tries[p.key] = (self.no_space_tries[p.key] or 0) + 1
-        self.failed[p.key] = s.day + 5
-        self.next_project = bot:later(2)
-        return
+        -- (Tried again later, the more often it failed the later: up to a
+        -- month. Meanwhile the next project gets its turn today: Bot Agnes,
+        -- out of floor and land, tried a GP's office, a fracture clinic and
+        -- a slack tongue clinic in turn for a year, and never replaced the
+        -- worn machines that then exploded; 2026-11-14.)
+        self.failed[p.key] = s.day + math.min(30, 5 * self.no_space_tries[p.key])
+      else
+        self.failed[p.key] = s.day + (why == "money" and 3 or 10)
+        self:note(string.format("day %d: %s failed (%s)", s.day, p.key, tostring(why or "?")))
       end
-      self.failed[p.key] = s.day + (why == "money" and 3 or 10)
-      self:note(string.format("day %d: %s failed (%s)", s.day, p.key, tostring(why or "?")))
     elseif self.wishes[p.key] and not self.wishes[p.key].told_money then
       self.wishes[p.key].told_money = true
       self:tellWisher(self.wishes[p.key], "wish_no_money", p.key)
@@ -1697,8 +1703,11 @@ function M:daily(s)
         if class.is(h, Handyman) and h.mp_id and not h.fired then list[#list + 1] = h end
       end
       table.sort(list, function(a, b) return a.mp_id < b.mp_id end)
+      -- (One repairer for every 4 machines: with one alone, Bot Agnes's
+      -- busy machines exploded before he got round to them; 2026-11-14.)
+      local repairers = #s.machines > 0 and math.max(1, math.ceil(#s.machines / 4)) or 0
       for i, h in ipairs(list) do
-        local job = (i == 1 and #s.machines > 0) and "repairing" or (s.litter >= 4 and "cleaning") or nil
+        local job = i <= repairers and "repairing" or (s.litter >= 4 and "cleaning") or nil
         if job and (h:getAttribute(job) or 1) < HANDYMAN_FOCUS then
           self:issue({kind = "handyman_prio", staff = h.mp_id, attr = job})
         end

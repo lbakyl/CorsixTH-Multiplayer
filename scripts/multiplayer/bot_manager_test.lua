@@ -586,3 +586,31 @@ eq(M.researchWanted(policy, 800, true).cure, 20, "research: even after two years
 eq(M.researchWanted({cure = {frac = 70}}, 100, true).cure, 20, "research: even once every cure is found")
 
 print("rivals ok")
+
+-- A project that finds no floor gives the next one its turn the same day,
+-- and is tried again later the more often it failed (Bot Agnes, 2026-11-14:
+-- rooms with no floor took every turn for a year, and her worn machines were
+-- never replaced before they exploded).
+do
+  local ran = {}
+  local function project(key, score, why)
+    return {key = key, score = score, cost = 100, run = function()
+      ran[#ran + 1] = key
+      if why then return false, why end
+      return true
+    end}
+  end
+  local m = setmetatable({bot = {later = function(_, d) return 100 + d end, gameDay = function() return 100 end},
+      next_project = 0, failed = {}, no_space = {}, boost = {}, wishes = {}, history = {},
+      rand = function(a) return a end, log = function() end}, M)
+  function m.projects()
+    return {project("room:gp", 20, "space"), project("room:fracture_clinic", 18, "space"), project("replace:x_ray", 12)}
+  end
+  m:doProject({day = 100, balance = 50000, loan = 0, max_loan = 0, hosp = {}})
+  eq(table.concat(ran, ","), "room:gp,room:fracture_clinic,replace:x_ray", "no floor: the next project the same day")
+  eq(m.failed["room:gp"], 105, "no floor once: again in 5 days")
+  m.next_project, m.failed = 0, {}
+  m:doProject({day = 110, balance = 50000, loan = 0, max_loan = 0, hosp = {}})
+  eq(m.failed["room:gp"], 120, "twice: in 10 days")
+end
+print("projects ok")
