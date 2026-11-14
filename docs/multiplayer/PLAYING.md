@@ -544,7 +544,7 @@ Cutthroat, has its own, later months (below).
 | **Broken boiler**: their heating fails (too cold in winter, too hot in summer) until their handymen repair it; more handymen repair it sooner | $3,000: short | $7,000: about twice as long | $12,000: long |
 | **Smear campaign**: bad press sends some of their new patients to the other hospitals | $5,000: 1 month, 3 in 10 | $10,000: 2 months, 4 in 10 | $18,000: 3 months, half |
 | **Espionage**: copy research results they have and you do not; a list shows what there is, you pick, then press Steal | $6,000: one drug or machine improvement | $12,000: one discovery | $20,000: two of either, and their current research set back by half |
-| **Litter bomb** (from the original game's network play): the bomb goes onto your cursor; click a corridor in a rival's hospital to plant it there (right-click puts it away, unpaid). Its fuse burns for 16 days (about 45 seconds at Normal speed), then it throws litter about | $3,000: 15 pieces | $7,000: 25, further | $12,000: 40, all over the place |
+| **Litter bomb** (from the original game's network play): placed like an object, its blueprint on the tile under the mouse (blue floor where it can go, red where not); click a corridor in a rival's hospital to plant it there (right-click puts it away, unpaid). Its fuse burns for 16 days (about 45 seconds at Normal speed), then it throws litter about | $3,000: 15 pieces | $7,000: 25, further | $12,000: 40, all over the place |
 
 **Found a handyman who is not on your staff list?** Click him and press the
 sack button: he is thrown out (no severance pay) and walks back to whoever

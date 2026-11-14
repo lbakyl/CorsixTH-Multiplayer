@@ -332,7 +332,9 @@ function UIMultiplayerSpy:steal()
   self:close()
 end
 
---! The litter bomb on the cursor: a click on a corridor of a rival's
+--! Placing a litter bomb, as an object is placed (UIPlaceObjects): the bomb's
+--! blueprint on the tile under the mouse, the floor marked green where it
+--! can go and red where not (Argus). A click on a corridor of a rival's
 --! hospital plants a bomb just bought from the dirty tricks window (it is
 --! paid when it is down: the `sabotage` command with the spot), or throws on
 --! the one this player's hospital picked up (`litter_bomb_throw`). A bomb
@@ -346,6 +348,10 @@ local UIMultiplayerLitterBomb = _G["UIMultiplayerLitterBomb"] ---@type UIMultipl
 
 local BOMB_W = 400
 local BOMB_H = 118
+-- The blueprint's floor tile, where the bomb can go and where not, and its
+-- red picture (as UIPlaceObjects: map layer 4, the ghost palette).
+local GOOD_TILE, BAD_TILE = 24 + 256 * 8, 67 + 256 * 8
+local FLAG_ALTPAL = 16
 
 --!param opts (table) {level = 1-3, target = Hospital} to plant a new bomb
 --! (the view goes to `target` first), or {bomb = LitterBomb}: the one this
@@ -376,12 +382,17 @@ function UIMultiplayerLitterBomb:UIMultiplayerLitterBomb(ui, opts)
         :makeButton(0, 0, 110, 26, nil, self.close)
   end
   local TH = require("TH")
-  self.cursor_bomb = TH.animation()
+  self.preview = TH.animation()
   -- (A game saved before there were litter bombs has the type from the
   -- game itself, App:afterLoad.)
   local bomb_type = self.world.object_types.litter_bomb or ui.app.objects.litter_bomb
   local anims = bomb_type.fuse_animations
-  self.cursor_bomb:setAnimation(self.world.anims, self.bomb and self.bomb.animation_idx or anims[1])
+  local world_anims = self.world.anims
+  local _, ghost = ui.app.gfx:getPalette("MPalette.dat")
+  for _, anim in ipairs(anims) do
+    world_anims:setAnimationGhostPalette(anim, ghost, world_anims.Alt32_GreyScale)
+  end
+  self.preview:setAnimation(world_anims, self.bomb and self.bomb.animation_idx or anims[1])
   if self.target then
     MultiplayerSession.lookAtHospital(ui, self.target)
   end
@@ -415,21 +426,58 @@ function UIMultiplayerLitterBomb:_inside(x, y)
 end
 
 function UIMultiplayerLitterBomb:onTick()
-  -- A bomb held: the fuse picture in the corner follows the real one.
-  if self.bomb and self.bomb.animation_idx ~= self.cursor_bomb_anim then
-    self.cursor_bomb_anim = self.bomb.animation_idx
-    self.cursor_bomb:setAnimation(self.world.anims, self.cursor_bomb_anim)
+  -- A bomb held: its blueprint shows how much of the fuse is left.
+  if self.bomb and self.bomb.animation_idx ~= self.preview_anim then
+    self.preview_anim = self.bomb.animation_idx
+    self.preview:setAnimation(self.world.anims, self.preview_anim)
   end
-  self.cursor_bomb:tick()
+  self.preview:tick()
   return UIResizable.onTick(self)
 end
 
+--! The floor of the tile `spot` (nil: none) marked green or red, the one
+--! marked before cleared (picture only, this machine).
+function UIMultiplayerLitterBomb:_markTile(spot)
+  local key = spot and string.format("%d,%d,%s", spot.x, spot.y, spot.target and "+" or "-")
+  if key == self.marked_key then return end
+  local map = self.world.map.th
+  if self.marked then map:setCell(self.marked[1], self.marked[2], 4, 0) end
+  self.marked, self.marked_key = nil, key
+  if spot then
+    map:setCell(spot.x, spot.y, 4, spot.target and GOOD_TILE or BAD_TILE)
+    self.marked = {spot.x, spot.y}
+  end
+end
+
+function UIMultiplayerLitterBomb:close()
+  self:_markTile(nil)
+  return UIResizable.close(self)
+end
+
 function UIMultiplayerLitterBomb:draw(canvas, x_, y_)
-  UIResizable.draw(self, canvas, x_, y_)
   local S = _S.multiplayer_window
   local s = TheApp.gfx:getUIScale()
   local x, y = self.x * s + x_, self.y * s + y_
   local spot = self:_spot()
+  local ui = self.ui
+  -- The blueprint: on a tile of a hospital, not under this window, while the
+  -- game lets the player act. (The mouse position can be fractional, SDL3 on
+  -- a Mac or a scaled screen; drawing takes whole pixels.)
+  local shown = spot and ui.cursor_x and self.world.user_actions_allowed and
+      self.world:isOnMap(spot.x, spot.y) and self.world.map.th:getCellFlags(spot.x, spot.y).hospital and
+      not self:_inside(math.floor(ui.cursor_x) - x, math.floor(ui.cursor_y) - y)
+  self:_markTile(shown and spot or nil)
+  if shown then
+    local xpos, ypos = ui:WorldToScreen(spot.x, spot.y)
+    local zoom = ui:getEffectiveZoom()
+    if canvas:scale(zoom) then
+      xpos, ypos = xpos / zoom, ypos / zoom
+    end
+    self.preview:setPartialFlag(FLAG_ALTPAL, not spot.target)
+    self.preview:draw(canvas, math.floor(xpos), math.floor(ypos))
+    canvas:scale(1)
+  end
+  UIResizable.draw(self, canvas, x_, y_)
   local text
   -- (A throw refused, the spot taken meanwhile: the bomb is still here.)
   if self.sent and require("sdl").getTicks() - self.sent > 3000 then self.sent = nil end
@@ -444,16 +492,6 @@ function UIMultiplayerLitterBomb:draw(canvas, x_, y_)
     text = S.sabotage_bomb_place
   end
   self.white_font:drawWrapped(canvas, text, x + 28 * s, y + 42 * s, (BOMB_W - 56) * s)
-  -- The bomb on the cursor (see-through where it cannot go).
-  -- (The mouse position can be fractional, SDL3 on a scaled screen, a Mac;
-  -- drawing takes whole pixels: Argus's screen froze.)
-  local ui = self.ui
-  if ui.cursor_x then
-    local cx, cy = math.floor(ui.cursor_x), math.floor(ui.cursor_y)
-    if not self:_inside(cx - x, cy - y) then
-      self.cursor_bomb:draw(canvas, cx, cy + 8, (spot and spot.target) and 0 or DrawFlags.Alpha50)
-    end
-  end
 end
 
 function UIMultiplayerLitterBomb:onMouseUp(button, x, y)
@@ -474,6 +512,8 @@ function UIMultiplayerLitterBomb:onMouseUp(button, x, y)
     return true
   end
   local to = self.world:getHospitalIndex(spot.target)
+  -- (The sound of an object put down, as a bench or a plant.)
+  self.ui:playSound("place_r.wav")
   if self.bomb then
     session:issue({kind = "litter_bomb_throw", bomb = self.bomb.mp_id, x = spot.x, y = spot.y})
     self.sent = require("sdl").getTicks()

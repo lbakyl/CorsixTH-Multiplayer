@@ -2086,7 +2086,7 @@ local function run()
             local drawn, draw_err = pcall(TheApp.drawFrame, TheApp)
             log(string.format("UI: %s window drawn with the mouse at %.2f,%.2f: %s", a, ui.cursor_x, ui.cursor_y,
                 drawn and "ok" or tostring(draw_err)))
-            shot(a == "bombplant" and "bomb-cursor" or "bomb-throw-window")
+            shot(a == "bombplant" and ("bomb-cursor-" .. session.step) or "bomb-throw-window")
             local s = TheApp.gfx:getUIScale()
             win:onMouseUp("left", ui.cursor_x - win.x * s, ui.cursor_y - win.y * s)
             log(string.format("UI: %s at step %d onto %d,%d (mouse on %d,%d) in hospital %d: %s", a, session.step,

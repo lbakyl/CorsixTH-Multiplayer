@@ -144,7 +144,9 @@ the start, as before.
   the burning fuse (2 frames each), 5062 the buy-list picture (object 17,
   `objects/litter_bomb.lua`, class `LitterBomb`, an `Entity` like `Litter`
   that blocks nobody). The second click on a level opens
-  `UIMultiplayerLitterBomb` with the bomb on the cursor; a click on a
+  `UIMultiplayerLitterBomb`: the bomb's blueprint on the tile under the
+  mouse, as `UIPlaceObjects` draws one (map layer 4 floor, the ghost palette
+  where it cannot go), and PLACE_R when it is put down; a click on a
   corridor tile sends `sabotage` with `x, y`, checked by `sabotage.bombSpot`
   (a rival's building, no room, nothing on it but litter, no bomb there, at
   most 2 bombs in a hospital). `mp_bomb = {level, fuse, from, held, throws}`:
