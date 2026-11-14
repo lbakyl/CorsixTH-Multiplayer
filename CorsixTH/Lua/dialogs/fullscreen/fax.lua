@@ -316,7 +316,10 @@ function UIFax:choice(choice_number)
       -- (A winner saw the video when the fax came, not again now.)
       local movie = self.ui.app.world:mpEndMovie(hospital)
       if movie == "win" and (session.win_movie_shown or hospital.mp_win_video_shown) then movie = nil end
-      session:finish({_S.multiplayer_window.race_left_end}, movie)
+      -- (The win video ends on a letter that waits for a click: with the
+      -- fax's words on it, not blank, which looked frozen to Argus.)
+      session:finish({_S.multiplayer_window.race_left_end}, movie,
+          movie == "win" and MultiplayerSession.winLetter(self.message, hospital, true) or nil)
     end
   elseif choice == "stay_on_level" then
     hospital.win_declined = true

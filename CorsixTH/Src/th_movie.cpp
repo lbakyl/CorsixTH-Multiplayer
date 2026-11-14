@@ -688,8 +688,12 @@ void movie_player::copy_audio_to_stream(SDL_AudioStream* stream,
     std::size_t audio_size = decode_audio_frame(requested_size);
 
     if (audio_size <= 0) {
-      std::memset(audio_chunk_buffer.data(),
-                  SDL_GetSilenceValueForFormat(audio_format), requested_size);
+      // No more sound (the end of the movie's audio): SDL plays silence while
+      // the stream has no data. (This used to fill audio_chunk_buffer with
+      // requested_size bytes of silence; SDL may ask for more than the
+      // buffer holds, as CoreAudio does on macOS, and the rest ran over into
+      // audio_playback_stream, so stopping the movie afterwards crashed with
+      // "Parameter 'stream' is invalid".)
       return;
     }
     SDL_PutAudioStreamData(stream, audio_chunk_buffer.data(),
