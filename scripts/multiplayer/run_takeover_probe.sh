@@ -19,8 +19,8 @@
 #   1. ugo sees the places (tia playing, two bots) and takes place 2; Bot
 #      Agnes leaves; the room list showed the game running with 2 places
 #   2. the bot's hospital is a person's now: no hidden bot bonus for it
-#      after that; place 3's bot is a hard one (tia made it so in the room):
-#      its bonus says so (the server's LOAD names it)
+#      after that; place 2's bot was a hard one (tia made it so in the room;
+#      a new bot is a normal one, which gets none: Jan, 2026-11-14)
 #   3. ugo leaves: a stand-in bot named ugo takes place 2, says nothing,
 #      plays no trick, asks nobody
 #   4. ugo comes back by name: place 2 at once, the stand-in leaves
@@ -101,7 +101,7 @@ wait_log() {
 }
 
 pids=()
-run_probe tia MP_ROLE=host MP_ROOM=take MP_MODE=competitive MP_PLAYERS=3 MP_ADD_BOTS=2 MP_SCENARIO=none MP_BOT_LEVELS=2:normal \
+run_probe tia MP_ROLE=host MP_ROOM=take MP_MODE=competitive MP_PLAYERS=3 MP_ADD_BOTS=2 MP_SCENARIO=none MP_BOT_LEVELS=2:hard \
   MP_REALTIME=1 MP_STEPS=3600 MP_STALL_LIMIT=180 MP_UI_SCRIPT="20:openhospital;3590:hospitals" & pids+=($!)
 run_probe vic MP_ROLE=host MP_ROOM=lone MP_MODE=coop MP_PLAYERS=2 MP_ADD_BOTS=1 MP_SCENARIO=none \
   MP_REALTIME=1 MP_STEPS=300 MP_STALL_LIMIT=120 MP_UI_SCRIPT="20:openhospital" & pids+=($!)
@@ -151,14 +151,14 @@ print(f"1. Takes a bot's place:     places {places.group(1) if places else '-'};
       f"took place 2: {'takes place 2 (was' in server}; loaded: {'REJOINED' in u}")
 if not ok1: bad.append("ok1")
 
-# The bonus months after the take-over (tia's game held for it): hospital 2
-# not among them; before it, 2 and 3 (3 a hard bot: a new bot is a hard one;
-# tia made the bot of 2 a normal one).
+# The bonus months after the take-over (tia's game held for it): nobody
+# (hospital 2 a person's, 3 a normal bot, which gets none); before it, 2
+# (tia made the bot of 2 a hard one; a new bot is a normal one).
 taken = t.find('(rejoin at step')
 before = re.findall(r'bot bonus for hospital\(s\) (\S+)', t[:taken]) if taken >= 0 else []
 after = re.findall(r'bot bonus for hospital\(s\) (\S+)', t[taken:]) if taken >= 0 else []
-ok2 = (taken >= 0 and len(after) > 0 and all(h == '3:hard' for h in after)
-       and all(h == '2,3:hard' for h in before) and re.search(r'Bot \w+ \(hard bot\)', t) is not None
+ok2 = (taken >= 0 and len(after) > 0 and all(h == 'none' for h in after)
+       and all(h == '2:hard' for h in before) and re.search(r'Bot \w+ \(hard bot\)', t) is not None
        and re.search(r'Bot \w+ \(normal bot\)', t) is not None)
 print(f"2. No bonus for a person:   before the take-over {before or 'none'}, after {after or 'none'}")
 if not ok2: bad.append("ok2")

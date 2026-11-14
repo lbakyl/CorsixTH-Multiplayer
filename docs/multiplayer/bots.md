@@ -74,11 +74,10 @@ best project it can afford is done, one every one to four game days.
 - **Benches** where patients stand: a spot with somebody on it is not ruled
   out (the command asks them to step aside), and with no spot within 5 tiles
   of the door, up to 8 (a standing patient looks up to 10 tiles for a bench).
-- **Fire extinguishers** go into rooms, not corridors (2026-11-13): a hard bot
-  puts 1 to 3 into every room whose machine costs $4000 or more (X-ray,
-  scanner, operating theatre, ultrascan, decontamination, ...; the number from
-  the room's number), a normal bot 1, an easy bot
-  none. With one in the room a worn-out machine may not explode.
+- **Fire extinguishers** go into rooms, not corridors (2026-11-13): a normal
+  or hard bot puts 1 to 3 into every room whose machine costs $4000 or more
+  (X-ray, scanner, operating theatre, ultrascan, decontamination, ...; the
+  number from the room's number), an easy bot none. With one in the room a worn-out machine may not explode.
 
 - **Rooms** are sized per type (`SIZES`: a GP's office 5x5, a ward 7x7, a staff
   room 6x6, ...), placed with a free tile below and to the right where possible
@@ -199,10 +198,10 @@ best project it can afford is done, one every one to four game days.
   staffed desk, else rats). Never while it owes the bank, nor when one of the
   things it needs most (`M:trickMoney`: its four top projects that are urgent
   or basic) would then be short of money. Litter bombs: an easy bot's are
-  level 1; a normal or easy bot puts its bomb by the rival's reception desk, a
-  hard one hides it on a quiet corridor at least 8 tiles from every desk
-  (`Bot:bombSpot`); one on its own floor is found after 1-3 (hard), 3-8
-  (normal) or 8-18 days (easy) and thrown on at the leader (`M:defendBombs`).
+  level 1 and go by the rival's reception desk; a normal or hard one hides
+  its bomb on a quiet corridor at least 8 tiles from every desk
+  (`Bot:bombSpot`); one on its own floor is found after 1-3 (normal, hard)
+  or 8-18 days (easy) and thrown on at the leader (`M:defendBombs`).
 - The month in one log line: why patients left (cured, sent away, fed up,
   too dear), the diseases it lost most, patients in the hospital, queues per
   room type, specialists, prices, reputation, money, and its floor (in how many
@@ -219,8 +218,8 @@ rooms side by side for a game year, one bot each.
 
 A server can name expert players (`CORSIXTH_MP_EXPERTS`, SERVER-SETUP.md
 section 10); the referee saves their games and a nightly job
-(`corsixth_mp/learn.py`, `layout_learn.py`) writes `learned.lua`. A hard bot
-reads it when it starts; easy and normal bots, and a bot standing in for a
+(`corsixth_mp/learn.py`, `layout_learn.py`) writes `learned.lua`. A normal or
+hard bot reads it when it starts; easy bots, and a bot standing in for a
 person who left, keep their own rules:
 
 - **Room recipes.** For each kind of room, the size the experts build most
@@ -246,7 +245,7 @@ person who left, keep their own rules:
   to face north), each spot seen at least twice, the most seen first
   (`layout_learn.py near_spots`; from Argus's 109 doors: a bench beside the
   door along the room's wall, a row across the corridor facing it, drinks
-  machines two tiles to the side). A hard bot buying a bench, plant,
+  machines two tiles to the side). A normal or hard bot buying a bench, plant,
   radiator or drinks machine for a door or desk tries those spots first
   (`Learned.doorSpots`, `Learned.deskSpots`, as the expert had it and
   mirrored), and keeps its radiators and plants as far apart as the experts.
@@ -449,8 +448,17 @@ environment):
   months 7 to 12 on a person's open hospital (never on another bot); then one
   of the tricks every 60 to 120 days, at a level it can afford while
   keeping $6,000. By level (Jan, 2026-11-14): an easy bot's first trick comes
-  in months 10 to 12, then every 90 to 150 days; a hard bot's in months 4 to
-  6, then every 45 to 90 days. Half the time it drops a hint in the chat a little later.
+  in months 10 to 12, then every 90 to 150 days; a normal or hard bot's in
+  months 4 to 6, then every 45 to 90 days. Half the time it drops a hint in
+  the chat a little later.
+- **Levels** (Jan, 2026-11-14: the players did not want bots that cheat): an
+  easy bot plays its plain rules without the language model; a normal bot
+  plays as the experts do (`Bot.skill` "hard": learned rooms and corridors,
+  bigger research, extinguishers, the trick timing above) and gets nothing
+  extra in the game; a hard bot plays the same and cheats
+  (World.MP_BOT_LEVEL_BONUS: $3,000 and 3 reputation a month, its value a
+  fifth more towards the goals, every second death, higher auction bids). A
+  new bot is a normal one (server.py `BOT_DEFAULT_LEVEL`).
 - It does not vote on speed changes (only people do, see
   `MultiplayerSession:voterCount`) and closes the windows that would pause
   its game (annual report, information, pay rises).

@@ -1592,9 +1592,9 @@ def test_bot_levels_easy_and_hard():
         ann = await Client.connect(port, "Ann")
         ann.send(encode("CREATE", room="lv", password="", max=3, mode="competitive", level=1))
         await ann.expect("JOINED")
-        # A bot is a hard one unless the owner says otherwise.
+        # A bot is a normal one unless the owner says otherwise.
+        ann.send(encode("BOT", add=1, level="hard"))
         ann.send(encode("BOT", add=1))
-        ann.send(encode("BOT", add=1, level="normal"))
         await started_bots(bots, 2)
         assert [b["level"] for b in bots] == ["hard", "normal"]
         agnes, bertie = await connect_bot(port, bots[0]), await connect_bot(port, bots[1])

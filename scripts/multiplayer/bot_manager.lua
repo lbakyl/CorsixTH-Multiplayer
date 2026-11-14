@@ -1137,7 +1137,7 @@ function M:projects(s)
   -- theatre, ultrascan, decontamination, ...; how many from the room's
   -- number: no random numbers in bot code), a normal bot 1, an easy bot
   -- none. One at a time, into a room nobody is in.
-  if bot.level ~= "easy" and s.balance > RESERVE then
+  if bot.skill ~= "easy" and s.balance > RESERVE then
     local rooms = {}
     for _, rm in pairs(world.rooms) do
       if rm.hospital == hosp and rm.built and rm.is_active and not rm.crashed then rooms[#rooms + 1] = rm end
@@ -2250,7 +2250,7 @@ function M:defendBombs(s)
       -- (The same bomb thrown back later is found anew.)
       local key = e.mp_id .. ":" .. tostring(b.throws)
       if not self.bombs_seen[key] then
-        local r = BOMB_NOTICE_DAYS[self.bot.level] or BOMB_NOTICE_DAYS.normal
+        local r = BOMB_NOTICE_DAYS[self.bot.skill] or BOMB_NOTICE_DAYS.normal
         self.bombs_seen[key] = s.day + self.rand(r[1], r[2])
       end
       if s.day >= self.bombs_seen[key] then

@@ -847,10 +847,10 @@ function Bot.new(lobby)
   self.level = os.getenv("MP_BOT_LEVEL") or "normal"
   -- What it learnt from expert players' hospitals (Jan, 2026-11-12: bots
   -- should build like Argus): room recipes, and plans for the places experts
-  -- played (bot_learned.lua). Only a hard bot (Jan, the same night: easy and
-  -- normal bots are not changed); not one standing in for a person who left,
-  -- whose hospital it keeps going.
-  -- (Read here; used only while its level is hard: Bot:applyLevel.)
+  -- played (bot_learned.lua). Only a normal or hard bot (Jan, 2026-11-12:
+  -- easy bots are not changed; until 2026-11-14 normal ones neither); not one
+  -- standing in for a person who left, whose hospital it keeps going.
+  -- (Read here; used only while it plays as the experts: Bot:applyLevel.)
   local learned_path = os.getenv("MP_BOT_LEARNED") or ""
   local learn_dir = os.getenv("CORSIXTH_MP_LEARN_DIR") or ""
   if learned_path == "" and learn_dir ~= "" then learned_path = learn_dir .. "/learned.lua" end
@@ -885,15 +885,20 @@ end
 --! before the game starts, and the game's own (START) wins: Bot:attach.
 function Bot:applyLevel(level)
   self.level = level
+  -- How it plays: an easy bot plainly; a normal or hard one as the experts
+  -- do (Jan, 2026-11-14: normal bots are what hard ones were, without the
+  -- hidden help, which only hard ones get in the game). `level` stays the
+  -- room's word for it (its name, the help it gets).
+  self.skill = level == "easy" and "easy" or "hard"
   if level == "easy" and self.ai ~= "off" then
     self.ai, self.ai_easy = "off", true
   elseif level ~= "easy" and self.ai_easy then
     self.ai, self.ai_easy = nil, nil
   end
-  self.expert_data = level == "hard" and self.expert_data_read or nil
+  self.expert_data = self.skill == "hard" and self.expert_data_read or nil
   if self.expert_data then log("builds as the experts do (a hard bot)") end
   self.expert_plan_world = nil -- (the plan for its place is looked up again)
-  if Manager then Manager.learned, Manager.hard = self.expert_data, level == "hard" end
+  if Manager then Manager.learned, Manager.hard = self.expert_data, self.skill == "hard" end
 end
 
 function Bot:now() return socket.gettime() end
@@ -2355,7 +2360,7 @@ function Bot:drawRoom(room_type, size, extras, near)
   local min = math.max(room_type.minimum_size or 4, SMALLEST[room_type.id] or 0)
   -- (Four desks need a bigger room: a 5 x 5 one took two, a 7 x 7 one three.
   -- Bot.research_heavy, Manager.roomPlan.)
-  if (self.research_heavy or self.level == "hard") and room_type.id == "research" then min = math.max(min, 6) end
+  if (self.research_heavy or self.skill == "hard") and room_type.id == "research" then min = math.max(min, 6) end
   local ax, ay = self:anchor()
   size = math.max(min, size or min + 1) -- (one more than the smallest: room for a plant)
   self.reserved = self:reservedTiles()
@@ -3564,7 +3569,7 @@ function Bot:bombSpot(target)
     return tiles
   end
   local tiles = {}
-  if self.level == "hard" then
+  if self.skill == "hard" then
     local cx, cy = th:getCameraTile(target:getPlayerIndex())
     for _, t in ipairs(free_tiles(cx, cy, 20)) do
       local near = false
@@ -3594,7 +3599,7 @@ end
 
 --! Game days to the next dirty trick, by the bot's level.
 function Bot:trickGap()
-  local r = TRICK_EVERY_DAYS[self.level] or TRICK_EVERY_DAYS.normal
+  local r = TRICK_EVERY_DAYS[self.skill] or TRICK_EVERY_DAYS.normal
   return rand(r[1], r[2])
 end
 
@@ -3663,7 +3668,7 @@ function Bot:playTrick()
   local month = world.game_date:monthOfGame()
   while level > 1 and (sabotage.unlockMonth(world, kind, level) or 0) > month do level = level - 1 end
   -- (An easy bot's litter bombs are the small ones.)
-  if kind == "litter_bomb" and self.level == "easy" then level = 1 end
+  if kind == "litter_bomb" and self.skill == "easy" then level = 1 end
   local function cost(l) return sabotage.price(world, mine, kind, l) end
   while level > 1 and mine.balance - cost(level) < 2 * RESERVE do level = level - 1 end
   if mine.balance - cost(level) < 2 * RESERVE then
@@ -3730,7 +3735,7 @@ function Bot:attach(world)
       -- the one before it (Bot:botRank).
       greet = (month - 1) * 30 + 31 + (self:botRank() - 1) * 12 + rand(0, 6),
       -- The first dirty trick: in months 7 to 12 (easy 10 to 12, hard 4 to 6).
-      trick = (month - 1) * 30 + rand(unpack_args(TRICK_FIRST_DAYS[self.level] or TRICK_FIRST_DAYS.normal)),
+      trick = (month - 1) * 30 + rand(unpack_args(TRICK_FIRST_DAYS[self.skill] or TRICK_FIRST_DAYS.normal)),
     }
     if pace > 1 then self.plan.greet = day + math.floor((self.plan.greet - day) / pace) end
     if pace > 1 then self.plan.trick = day + math.floor((self.plan.trick - day) / pace) end

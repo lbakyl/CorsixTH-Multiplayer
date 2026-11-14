@@ -91,12 +91,14 @@ REFEREE_REPAIR_TIMEOUT = 20.0
 BOT_NAMES = ("Bot Agnes", "Bot Bertie", "Bot Clive", "Bot Dora", "Bot Edna", "Bot Fergus",
              "Bot Gwen", "Bot Hector")
 BOT_START_TIMEOUT = 60.0
-# A bot's level (the room owner picks it: Jan, 2026-11-12): easy (no advice
-# from the language model, no hidden money), normal, hard (more hidden
-# money and other help in the game: World.MP_BOT_LEVEL_BONUS). A new bot is
-# a hard one unless the owner says otherwise (Jan, 2026-11-12).
+# A bot's level (the room owner picks it: Jan, 2026-11-12; 2026-11-14 the
+# players asked for bots that do not cheat): easy (no advice from the
+# language model, the simpler play), normal (advice, the experts' play,
+# nothing extra), hard (as normal, with hidden money and other help in the
+# game: World.MP_BOT_LEVEL_BONUS). A new bot is a normal one unless the
+# owner says otherwise.
 BOT_LEVELS = ("easy", "normal", "hard")
-BOT_DEFAULT_LEVEL = "hard"
+BOT_DEFAULT_LEVEL = "normal"
 # A running game's places (Jan, 2026-11-12): somebody may join it and take
 # the place of a bot, or of a player who left; a player who leaves gets a bot
 # that plays their hospital under their name until somebody takes the place

@@ -26,9 +26,10 @@
 #   9. research ("lab", co-op on level 2, which has research: frank and one
 #      bot): the bot (it discovers something on day 20, a test command)
 #      offers it to frank for free, without a chat line (the fax says it); a research room it builds
-#      has a second desk
-#  11. the hidden monthly bonus: in "team" hospitals 2 and 3 (bots), never
-#      ann's; in "duel" hospital 2 (the bot)
+#      has two more desks (a normal bot plays as the experts)
+#  11. the hidden monthly bonus: none for these normal bots (Jan,
+#      2026-11-14: only hard bots get it; run_takeover_probe.sh checks one),
+#      in "team" (hospitals 2 and 3 bots) and "duel" (hospital 2)
 #  12. land auctions with a bot ("auc", co-op on level 2: gus and one bot):
 #      gus asks for a plot on the bot's side, the bot bids (a moment after
 #      each bid, not at once: MultiplayerSession.BOT_BID_SECONDS), gus outbids
@@ -302,7 +303,8 @@ offer_text = re.findall(r'research offer[^\n]*', f)
 # a new research room".)
 research_lines = [t for _, t in chats_from(f, lab_bot) if 'research' in t and '$' not in t] if lab_bot else []
 lab_rooms = re.findall(r'furnishing research #\d+: buying ([^\n]*)', lb)
-desks = all('desk:1' in r for r in lab_rooms)
+# (A normal bot plays as the experts: two more desks, no plant; Jan, 2026-11-14.)
+desks = all('desk:2' in r for r in lab_rooms)
 ok9 = (any(r == 'ok' for _, r in offers9) and not research_lines and desks
        and result('frank').startswith('IN SYNC'))
 print(f"9. Research shared:         offers to frank {offers9}; research chat lines (none expected, the fax says it): {research_lines[:1]}; "
@@ -331,9 +333,9 @@ print(f"10. Tricks on a bot:        played {played} {tricks10}; rats shot from s
 fail |= not ok10
 if not ok10: bad.append("ok10")
 # 11. The hidden monthly bonus, for hospitals only bots play.
-bonus_team = re.findall(r'bot bonus for hospital\(s\) ([\d,]+)', a)
-bonus_duel = re.findall(r'bot bonus for hospital\(s\) ([\d,]+)', e)
-ok11 = bool(bonus_team) and set(bonus_team) == {'2,3'} and bool(bonus_duel) and set(bonus_duel) == {'2'}
+bonus_team = re.findall(r'bot bonus for hospital\(s\) (\S+)', a)
+bonus_duel = re.findall(r'bot bonus for hospital\(s\) (\S+)', e)
+ok11 = bool(bonus_team) and set(bonus_team) == {'none'} and bool(bonus_duel) and set(bonus_duel) == {'none'}
 print(f"11. Bot bonus:              team {bonus_team}; duel {bonus_duel}")
 fail |= not ok11
 if not ok11: bad.append("ok11")

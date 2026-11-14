@@ -1712,14 +1712,15 @@ end
 
 -- Multiplayer: what a hospital only bots play gets every month, hidden, by
 -- the bots' level (the room owner picks it in the room; Jan, 2026-11-12):
--- normal bots MP_BOT_BONUS, easy ones nothing, hard ones a little more, and
--- 3 reputation a month too (Jan, 2026-11-14: were $8000 and 5; Argus had
--- $20,000 after a year against hard bots with $70,000 each); a hard bot's hospital also counts a fifth more
+-- only hard ones get anything (Jan, 2026-11-14: the players do not want
+-- bots that cheat; normal bots, which had $2000 a month, now play as hard
+-- ones did, with nothing extra): $3000 and 3 reputation a month (were $8000
+-- and 5; Argus had $20,000 after a year against hard bots with $70,000 each); a hard bot's hospital also counts a fifth more
 -- value towards the goals (EndConditions:getAttribute), every second death
 -- only (Hospital:humanoidDeath) and bids higher at auctions (botPlotWorth).
 -- All of it stops once a person plays the hospital.
-World.MP_BOT_BONUS = 2000
-World.MP_BOT_LEVEL_BONUS = {easy = 0, hard = 3000}
+World.MP_BOT_BONUS = 0
+World.MP_BOT_LEVEL_BONUS = {easy = 0, normal = 0, hard = 3000}
 World.MP_BOT_HARD_REPUTATION = 3
 World.MP_BOT_HARD_VALUE = 1.2
 
@@ -1751,12 +1752,14 @@ function World:onEndMonth()
   self:makeAvailableStaff(self.game_date:monthOfGame())
   -- Multiplayer: a hospital only bots play gets a hidden bonus every month
   -- (no line on its bank statement); not one a person plays too.
-  local paid = {}
+  local paid, bots = {}, false
   for bot_index in pairs(self.mp_coop and self.mp_coop.bot_hospitals or {}) do
     local hospital = self.hospitals[bot_index]
     local level = MultiplayerSession.botLevel(self, bot_index)
-    if hospital then
-      hospital.balance = hospital.balance + (World.MP_BOT_LEVEL_BONUS[level] or World.MP_BOT_BONUS)
+    bots = true
+    local money = World.MP_BOT_LEVEL_BONUS[level] or World.MP_BOT_BONUS
+    if hospital and (money > 0 or level == "hard") then
+      hospital.balance = hospital.balance + money
       if level == "hard" then
         hospital.reputation = math.min(hospital.reputation + World.MP_BOT_HARD_REPUTATION,
             hospital.reputation_max or 1000)
@@ -1765,6 +1768,7 @@ function World:onEndMonth()
     end
   end
   local session = self.app.mp_session
+  if bots and #paid == 0 and session then session.log("bot bonus for hospital(s) none") end
   if #paid > 0 and session then
     table.sort(paid)
     -- (2,3:hard: hospital 3's bots are hard ones.)
