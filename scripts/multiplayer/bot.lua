@@ -3303,10 +3303,38 @@ function Bot:hireCategory(category)
   -- A researcher goes straight into the research room (else the room may
   -- wait a long time for a doctor to be called over).
   if category == "Researcher" and self.manager and self.manager:roomOf("research") then what = what .. "@research" end
-  -- The most skilled on the list (of those with the skill wanted).
-  local ok, err = pcall(builder.ui_hire, self.world, dx, dy, what, log, function(p) return p.skill or 0 end)
+  -- The most skilled on the list (of those with the skill wanted), anybody
+  -- before a junior (Argus, 2026-11-14: juniors are catastrophically slow;
+  -- one only when nobody else is on the list).
+  local ok, err = pcall(builder.ui_hire, self.world, dx, dy, what, log, function(p)
+    return (p.skill or 0) - (flag(p, "is_junior") and 2 or 0)
+  end)
   if not ok then log("could not hire a " .. category .. ": " .. tostring(err)) end
   return ok
+end
+
+--! Is somebody of this category (Nurse, Handyman, Receptionist) on its list
+--! with a skill above `min` (0 to 1)?
+function Bot:canHireSkilled(category, min)
+  local world = self.world
+  local pools = world.staffPool and world:staffPool() or world.available_staff
+  for _, profile in ipairs(pools[category] or {}) do
+    if (profile.skill or 0) > min then return true end
+  end
+  return false
+end
+
+--! Is somebody of this category (see Bot:canHire) on its list who is not a
+--! junior?
+function Bot:canHireSenior(category)
+  local class, skill = category, SPECIALISTS[category]
+  if skill then class = "Doctor" end
+  local world = self.world
+  local pools = world.staffPool and world:staffPool() or world.available_staff
+  for _, profile in ipairs(pools[class] or {}) do
+    if not flag(profile, "is_junior") and (not skill or flag(profile, "is_" .. skill)) then return true end
+  end
+  return false
 end
 
 --! Hire the consultant on the list who would teach best (Bot.teacherScore)

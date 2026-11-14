@@ -50,6 +50,17 @@ machines, a second desk for a long reception queue, benches for people
 standing, drinks machines, radiators for cold patients, bins, plants. The
 best project it can afford is done, one every one to four game days.
 
+- **Junior doctors** (Argus, 2026-11-14: they are so slow that queues pile up
+  at the GP's offices): a bot hires anybody before a junior. Once a week it
+  looks for a junior in a GP's office, and from the 4th month for any junior
+  at work: it hires a better doctor (one who is not a junior, while the bank
+  holds $8,000) and sends the junior to a free chair in the training room, or
+  lets them go. One a week. Juniors in training stay, and so does a junior
+  surgeon or psychiatrist until one who is not a junior can be hired.
+- **Skilled nurses, handymen and receptionists** (Argus, 2026-11-14): from the
+  4th month, once a week for each of the three, the least skilled one at 75%
+  or below is replaced when somebody above 75% is on the list (hired first,
+  then the other is let go). Early on a bot hires whoever is most skilled.
 - **Handymen** (2026-11-13, Clive's corridors full of litter): one for every
   four rooms from the 3rd room, one more for every 8 pieces of litter and every
   4 machines, at most 8. The first mostly repairs (while there are machines),

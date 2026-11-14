@@ -625,3 +625,82 @@ do
   eq(loans, 1, "a month later: the loan again")
 end
 print("projects ok")
+
+-- Junior doctors (Argus, 2026-11-14): a GP's office gets a better doctor at
+-- the weekly look; from the 4th month any junior at work is replaced; a
+-- junior surgeon nobody can replace stays; one in the training room stays.
+do
+  class = {is = function(x, c) return x and x.is_a == c end}
+  local issued, hired, notes = {}, {}, {}
+  local hosp = {staff = {}}
+  local function doctor(id, fields)
+    local st = {humanoid_class = "Doctor", mp_id = id, tile_x = id, tile_y = 1,
+        profile = {getFullName = function() return "D" .. id end}}
+    for k, v in pairs(fields or {}) do st.profile[k] = v end
+    hosp.staff[#hosp.staff + 1] = st
+    return st
+  end
+  local gp_junior = doctor(1, {is_junior = true})
+  local ward_junior = doctor(2, {is_junior = true})
+  doctor(3, {is_junior = true, is_surgeon = true}) -- (a junior surgeon)
+  local gp = {id = 10, hospital = hosp, is_active = true, room_info = {id = "gp"}, staff_member = gp_junior}
+  local seniors = {Doctor = true, Surgeon = false}
+  local bot = {world = {rooms = {gp}, getRoom = function() return nil end},
+      flag = function(p, name) return p[name] ~= nil and p[name] ~= false end,
+      canHireSenior = function(_, cat) return seniors[cat] end,
+      hireCategory = function(_, cat) hired[#hired + 1] = cat return true end}
+  local m = setmetatable({bot = bot, log = function() end, history = {},
+      issue = function(_, cmd) issued[#issued + 1] = cmd return true end}, M)
+  m.trainingRoom = function() return nil end
+  m.note = function(_, text) notes[#notes + 1] = text end
+  m:juniors({day = 20, balance = 50000, hosp = hosp})
+  eq(hired[1], "Doctor", "a doctor for the GP's junior")
+  eq(issued[1] and issued[1].staff, 1, "the GP's junior is let go")
+  gp.staff_member = nil
+  gp_junior.fired = true
+  m:juniors({day = 24, balance = 50000, hosp = hosp})
+  eq(#hired, 1, "once a week")
+  m:juniors({day = 40, balance = 50000, hosp = hosp})
+  eq(#hired, 1, "before the 4th month a junior elsewhere stays")
+  m:juniors({day = 95, balance = 50000, hosp = hosp})
+  eq(issued[2] and issued[2].staff, 2, "from the 4th month the other junior is replaced")
+  ward_junior.fired = true
+  m:juniors({day = 102, balance = 50000, hosp = hosp})
+  eq(#issued, 2, "a junior surgeon nobody can replace stays")
+  seniors.Surgeon = true
+  m:juniors({day = 109, balance = 50000, hosp = hosp})
+  eq(hired[3], "Surgeon", "a surgeon for the junior surgeon once one can be hired")
+  eq(issued[3] and issued[3].staff, 3, "then the junior surgeon goes")
+end
+print("juniors ok")
+
+-- Nurses, handymen and receptionists (Argus, 2026-11-14): from the 4th month
+-- the least skilled at or below 75% is replaced by one above it, if any.
+do
+  local issued, hired = {}, {}
+  local hosp = {staff = {}}
+  local function member(id, class, skill)
+    local st = {humanoid_class = class, mp_id = id, profile = {skill = skill, getFullName = function() return "S" .. id end}}
+    hosp.staff[#hosp.staff + 1] = st
+    return st
+  end
+  member(1, "Nurse", 0.5)
+  member(2, "Nurse", 0.3)
+  member(3, "Nurse", 0.9)
+  member(4, "Handyman", 0.6)
+  member(5, "Receptionist", 0.8)
+  local skilled = {Nurse = true, Handyman = false, Receptionist = true}
+  local bot = {canHireSkilled = function(_, cat) return skilled[cat] end,
+      hireCategory = function(_, cat) hired[#hired + 1] = cat return true end}
+  local m = setmetatable({bot = bot, log = function() end, history = {},
+      issue = function(_, cmd) issued[#issued + 1] = cmd return true end}, M)
+  m:skilledStaff({day = 60, balance = 50000, hosp = hosp})
+  eq(#hired, 0, "not before the 4th month")
+  m:skilledStaff({day = 95, balance = 50000, hosp = hosp})
+  eq(hired[1], "Nurse", "a better nurse")
+  eq(issued[1] and issued[1].staff, 2, "the least skilled nurse goes first")
+  eq(#issued, 1, "no better handyman on the list: the handyman stays; the receptionist is good")
+  m:skilledStaff({day = 97, balance = 50000, hosp = hosp})
+  eq(#hired, 1, "once a week")
+end
+print("skilled staff ok")

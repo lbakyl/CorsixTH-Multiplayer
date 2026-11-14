@@ -132,6 +132,15 @@ local WAITING_R = 4
 -- Thirsty patients this near a waiting place (a box) count for it.
 local DRY_R = 6
 local MAX_HANDYMEN = 8
+-- Junior doctors (Argus, 2026-11-14): looked for every JUNIOR_DAYS; from
+-- JUNIORS_GONE_DAY on (the 4th month) none works anywhere but in training.
+local JUNIOR_DAYS, JUNIORS_GONE_DAY = 7, 90
+-- Nurses, handymen and receptionists (Argus, 2026-11-14): from the 4th month
+-- one at or below this skill is replaced by one above it, once a week each.
+local STAFF_MIN_SKILL = 0.75
+local SKILLED = {"Nurse", "Handyman", "Receptionist"}
+-- The specialist a junior is (one nobody else may replace is kept).
+local JUNIOR_SKILLS = {is_surgeon = "Surgeon", is_psychiatrist = "Psychiatrist", is_researcher = "Researcher"}
 -- Handymen's jobs (UIStaff.raiseHandymanPriority, +0.1 a step): the first
 -- mostly repairs while there are machines, the others mostly clean while
 -- there is litter.
@@ -1351,6 +1360,84 @@ function M:traineeChair(s)
   return nil
 end
 
+--! Junior doctors are catastrophically slow (Argus, 2026-11-14: they made
+--! massive queues at the GP's offices). Once a week: a GP's office with a
+--! junior in it gets a better doctor, and from the 4th month any junior at
+--! work is replaced, one a week, as a person does. The new doctor is hired
+--! first (only one who is not a junior, when the bank allows), then the
+--! junior goes to the training room if a chair is free, else is let go.
+--! Juniors in training (students, trainees hired for a need from the 3rd
+--! year) stay, and so does a junior specialist nobody else can replace (a
+--! surgeon or psychiatrist hired at the start because there was no other).
+function M:juniors(s)
+  local bot = self.bot
+  if s.day - (self.junior_day or -99) < JUNIOR_DAYS then return end
+  self.junior_day = s.day
+  local world, hosp = bot.world, s.hosp
+  local t = self:trainingRoom()
+  local function junior(st)
+    return st and st.humanoid_class == "Doctor" and not st.fired and st.mp_id and st.profile and
+        bot.flag(st.profile, "is_junior") and not (t and st.tile_x and world:getRoom(st.tile_x, st.tile_y) == t.room) and
+        not self:isTrainee(st, s.day)
+  end
+  -- A GP's office first, then (from the 4th month) any junior.
+  local pick, at_gp
+  for _, rm in pairs(world.rooms) do
+    if not pick and rm.hospital == hosp and rm.is_active and rm.room_info.id == "gp" and junior(rm.staff_member) then
+      pick, at_gp = rm.staff_member, true
+    end
+  end
+  if not pick and s.day >= JUNIORS_GONE_DAY then
+    for _, st in ipairs(hosp.staff or {}) do
+      if not pick and junior(st) then pick = st end
+    end
+  end
+  if not pick then return end
+  -- A specialist junior is replaced by one with the same skill, or kept.
+  local category = "Doctor"
+  for flag, cat in pairs(JUNIOR_SKILLS) do
+    if bot.flag(pick.profile, flag) then category = cat end
+  end
+  if not bot:canHireSenior(category) or s.balance < RESERVE + 5000 then return end
+  if not bot:hireCategory(category) then return end
+  local name = tostring(pick.profile:getFullName())
+  if t and t.teacher and #t.students < t.chairs and bot:moveStaffInto(pick, t.room) then
+    self:note(string.format("day %d: hired a %s for junior %s%s, who goes to the training room", s.day,
+        category:lower(), name, at_gp and " (in a GP's office)" or ""))
+  else
+    self:issue({kind = "fire_staff", staff = pick.mp_id})
+    self:note(string.format("day %d: hired a %s for junior %s%s, who is let go", s.day, category:lower(), name,
+        at_gp and " (in a GP's office)" or ""))
+  end
+end
+
+--! From the 4th month (JUNIORS_GONE_DAY), once a week, for nurses, handymen
+--! and receptionists in turn: the least skilled at or below STAFF_MIN_SKILL
+--! is replaced, when one above it is on the list and the bank allows: the
+--! new one is hired first, then the other is let go. (Argus, 2026-11-14: a
+--! stable staff of nurses and handymen above 75%; low ones only early on.)
+function M:skilledStaff(s)
+  local bot = self.bot
+  if s.day < JUNIORS_GONE_DAY or s.day - (self.skilled_day or -99) < JUNIOR_DAYS then return end
+  self.skilled_day = s.day
+  for _, category in ipairs(SKILLED) do
+    local worst
+    for _, st in ipairs(s.hosp.staff or {}) do
+      local skill = st.profile and st.profile.skill
+      if st.humanoid_class == category and not st.fired and st.mp_id and skill and skill <= STAFF_MIN_SKILL and
+          (not worst or skill < worst.profile.skill) then
+        worst = st
+      end
+    end
+    if worst and s.balance >= RESERVE + 5000 and bot:canHireSkilled(category, STAFF_MIN_SKILL) and
+        bot:hireCategory(category) then
+      self:issue({kind = "fire_staff", staff = worst.mp_id})
+      self:note(string.format("day %d: hired a better %s for %s (skill %d%%), who is let go", s.day,
+          category:lower(), tostring(worst.profile:getFullName()), math.floor(worst.profile.skill * 100 + 0.5)))
+    end
+  end
+end
+
 --! The training room: its teacher and students.
 --! How training works (rooms/training.lua, Doctor:trainSkills): a doctor
 --! who is not yet a consultant learns only while he sits in a lecture chair
@@ -1725,6 +1812,8 @@ function M:daily(s)
   -- have had the time to deal with them first.
   self:defend(s)
   if helper then return end
+  self:juniors(s)
+  self:skilledStaff(s)
   self:training(s)
   -- Its floor in pieces (Bot:repairFloor): looked at once a game week, every
   -- 2 days while it is being mended. (Not when it leaves the building to the
