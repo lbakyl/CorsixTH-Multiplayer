@@ -213,8 +213,70 @@ function UIMultiplayerChatInput:UIMultiplayerChatInput(ui)
     end
     return _G["Textbox"].textInput(box, text)
   end
+  -- A line longer than the box scrolls: the part around the cursor stays in
+  -- view and the start goes off to the left. (Argus, 2026-11-14: the text
+  -- was cut off with "..." and he typed on blind.)
+  self.box.panel.drawLabel = --[[persistable:mp_chat_draw_label]] function(panel, canvas, x, y, limit)
+    return panel.window:_drawLine(panel, canvas, x, y, limit)
+  end
   self:_showTarget()
   self.box:setActive(true)
+end
+
+--! Is byte `i` of `text` inside a character (a UTF-8 continuation byte)?
+local function inside_char(text, i)
+  local b = text:byte(i)
+  return b ~= nil and b >= 0x80 and b < 0xC0
+end
+
+--! The part of the line `text` that shows in the box: from and to (byte
+--! positions, whole characters), the cursor (after byte `cursor`) always in
+--! it. The view only moves when the cursor would leave it.
+function UIMultiplayerChatInput:_view(panel, text, cursor)
+  local s = panel.apply_ui_scale and TheApp.gfx:getUIScale() or 1
+  -- (Room for the cursor after the last letter: Textbox:drawCursor.)
+  local width = panel.w * s - 4 * s - panel.label_font:sizeOf("0") - 2 * s
+  local function wide(a, b)
+    local _, w = panel.label_font:draw(nil, text:sub(a, b), 0, 0)
+    return w
+  end
+  if wide(1, #text) <= width then
+    self.view_from = 1
+    return 1, #text
+  end
+  local from = math.min(self.view_from or 1, cursor + 1)
+  while inside_char(text, from) do from = from + 1 end
+  while from <= cursor and wide(from, cursor) > width do
+    from = from + 1
+    while inside_char(text, from) do from = from + 1 end
+  end
+  -- After the cursor, as much as fits.
+  local to = cursor
+  while to < #text do
+    local stop = to + 1
+    while inside_char(text, stop + 1) do stop = stop + 1 end
+    if wide(from, stop) > width then break end
+    to = stop
+  end
+  self.view_from = from
+  return from, to
+end
+
+--! Draw the typed line (Panel:drawLabel for the box's panel), only the part
+--! that shows (UIMultiplayerChatInput:_view); `limit` as for drawLabel, its
+--! character counted in the whole line (the cursor's place).
+function UIMultiplayerChatInput:_drawLine(panel, canvas, x, y, limit)
+  local Panel = _G["Panel"] -- (a global class, not declared for luacheck)
+  local text = panel.label
+  if type(text) ~= "string" or not self.box then return Panel.drawLabel(panel, canvas, x, y, limit) end
+  local from, to = self:_view(panel, text, math.min(self.box.cursor_pos[2] or #text, #text))
+  local cut = limit and {limit[1], math.max(0, math.min(limit[2], to) - from + 1)}
+  local clip = panel.auto_clip
+  panel.label, panel.auto_clip = text:sub(from, to), false
+  local ok, next_y, last_x = pcall(Panel.drawLabel, panel, canvas, x, y, cut)
+  panel.label, panel.auto_clip = text, clip
+  if not ok then error(next_y, 0) end
+  return next_y, last_x
 end
 
 function UIMultiplayerChatInput:_lobby()

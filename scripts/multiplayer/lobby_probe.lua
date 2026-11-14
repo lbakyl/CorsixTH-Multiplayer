@@ -2921,6 +2921,25 @@ local function run()
         elseif a == "surgery" then
           session:issue({kind = "probe_surgery", n = tonumber(entry.arg)})
           log(string.format("UI: surgery patients (%s) at step %d", entry.arg, session.step))
+        elseif a == "chattype" or a == "chatkey" then
+          -- chattype:<text>: the chat line opened (if it is not) and <text>
+          -- typed, not sent (for a picture of the box); chatkey:<key>[:<n>]:
+          -- that key (home, end, left, right) n times in the open line.
+          local input = world.ui:getWindow(UIMultiplayerChatInput)
+          if a == "chattype" then
+            if not input then
+              world.ui:onKeyDown("y", {})
+              world.ui:onTextInput("y")
+              input = world.ui:getWindow(UIMultiplayerChatInput)
+            end
+            for ch in entry.arg:gmatch("[\1-\127\194-\244][\128-\191]*") do world.ui:onTextInput(ch) end
+          elseif input then
+            local key, n = entry.arg:match("^(%a+):?(%d*)$")
+            for _ = 1, tonumber(n) or 1 do world.ui:onKeyDown(key, {}) end
+          end
+          log(string.format("UI: %s %s at step %d: line %s, cursor %s, view from %s", a, entry.arg, session.step,
+              input and string.format("%q", tostring(input.box.text)) or "none",
+              input and tostring(input.box.cursor_pos[2]) or "-", input and tostring(input.view_from) or "-"))
         elseif a == "enterchat" then
           -- The chat key (Y, with its letter as text, as SDL sends it) while
           -- a room is being drawn: the chat opens with an empty line, and
