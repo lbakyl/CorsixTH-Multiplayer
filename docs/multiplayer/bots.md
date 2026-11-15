@@ -25,8 +25,10 @@ referee build cannot run bots (the button is not shown there).
   its own changes and moves it with its person), goes when its person leaves
   the lobby, and in a game plays on when they leave (`_stand_in_due` starts
   no stand-in for that place). LOBBY says `assistants=` and `open=` (places a
-  person or bot may still take), PLAYER `assists=<peer>`; the room window
-  shows a line for each (`placesOf`) and the menu on a person's line.
+  person or bot may still take), `assisted=` (who has one), PLAYER
+  `assists=<peer>`. The room window has an Assistants column beside the
+  places (`sideColumn`, `_updateSide`): each assistant beside its person,
+  "+ Add assistant" beside one's own line (the host's: every person's).
 - Server (`mp_server/corsixth_mp/server.py`): `BOT add=1` / `BOT remove=<peer>`
   from the room owner in the lobby. The server picks a name (`BOT_NAMES`; in
   a continued game the first saved hospital nobody has taken), starts the

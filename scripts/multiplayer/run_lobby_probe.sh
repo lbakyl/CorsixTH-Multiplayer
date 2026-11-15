@@ -1156,17 +1156,20 @@ if with_referee:
     # Assistants: a bot in each player's hospital, no place of its own.
     lines37 = [re.search(r'UI: room lines with my assistant \((\d+) lines, open (\w+)\): (.*)', log(n)) for n in ('yuri', 'zoe')]
     zoe37 = lines37[1].group(3) if lines37[1] else ''
+    column37 = re.search(r'UI: assistants column: (.*)', log('zoe'))
+    side37 = column37.group(1).split(' | ') if column37 else []
     hosp37 = re.search(r'UI: hospitals at step \d+ .*', log('yuri'))
     names37 = re.findall(r'\[\d+ ([A-Z +]+?) opened=', hosp37.group(0)) if hosp37 else []
     added37 = re.findall(r"room 'assist': '(\w+)' adds '([\w ]+)' to help '(\w+)'", server)
     ok37 = (all(lines37) and lines37[1].group(1) == '4' and lines37[1].group(2) == '0'
-            and "(yuri's assistant) [colour" in zoe37 and "(zoe's assistant) [colour" in zoe37
-            and 'colour button off' in zoe37
+            and zoe37.startswith('yuri (host)') and ' | zoe ' in zoe37 and 'Bot' not in zoe37
+            and len(side37) >= 2 and side37[0].startswith('Bot ') and side37[1].startswith('Bot ')
             and len(names37) == 2 and names37[0].startswith('YURI + BOT') and names37[1].startswith('ZOE + BOT')
             and sorted((a, c) for a, _, c in added37) == [('yuri', 'yuri'), ('zoe', 'zoe')]
             and all(result(n).startswith('IN SYNC through step 600') for n in ('yuri', 'zoe'))
             and int(confirmed_after('assist')) >= 500)
-    print(f"37. Assistants:             zoe's lines {lines37[1].groups()[:2] if lines37[1] else '-'}: {zoe37[:160]}; "
+    print(f"37. Assistants:             zoe's lines {lines37[1].groups()[:2] if lines37[1] else '-'}: {zoe37[:120]}; "
+          f"column {side37}; "
           f"hospitals {names37}; added {added37}; {result('yuri')} / {result('zoe')}; "
           f"referee confirmed {confirmed_after('assist')}")
     fail |= not ok37

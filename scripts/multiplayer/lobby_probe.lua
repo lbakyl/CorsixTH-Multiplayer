@@ -289,10 +289,11 @@ local function photo_hospital(world, h, what)
   ui:setZoom(1)
 end
 
---! MP_ASSISTANT=1: this player right-clicks their own line in the room and
---! picks "Add an assistant" (UIMultiplayer:playerMenu), waits until the bot
---! has joined their hospital, and logs the menu and the room's lines (with
---! MP_SHOT_DIR: pictures of both).
+--! MP_ASSISTANT=1: this player clicks "+ Add assistant" beside their own
+--! line in the room (the assistants' column, UIMultiplayer:clickSide), waits
+--! until the bot has joined their hospital, and logs the room's lines and the
+--! column (with MP_SHOT_DIR: pictures before and after; and the menu on the
+--! player's own line, which offers one too).
 local function add_assistant(lobby)
   if os.getenv("MP_ASSISTANT") ~= "1" then return end
   local me = tonumber(lobby.room.peer)
@@ -301,38 +302,48 @@ local function add_assistant(lobby)
   wait_for("an assistant offered", function() return lobby:mayAddAssistant(me) end, 20)
   local win = lobby_window()
   win:_updateRoom()
-  win:playerMenu(me)
-  local menu = win.player_dropdown
-  local want, items, pick = plain_text(_S.multiplayer_window.add_assistant), {}, nil
-  for k, panel in ipairs(menu and menu.item_panels or {}) do
+  local function column()
+    local out = {}
+    for k, panel in ipairs(win.side_panels or {}) do out[k] = plain_text(panel.label or "") end
+    return table.concat(out, " | ")
+  end
+  local line
+  for k = 1, #win.player_panels do
+    local e = win.side_entry and win.side_entry[k]
+    if e and e.add == me then line = k end
+  end
+  log("UI: assistants column before: " .. column())
+  shot("assistant-add")
+  -- (The menu on this player's own line offers one too.)
+  local my_line
+  for k = 1, #win.player_panels do
+    local p = win:rowPlayer(k)
+    if p and tonumber(p.peer) == me then my_line = k end
+  end
+  win:playerMenu(my_line)
+  local items = {}
+  for k, panel in ipairs(win.player_dropdown and win.player_dropdown.item_panels or {}) do
     items[k] = plain_text(panel.label or "")
-    if items[k] == want then pick = k end
   end
   log("UI: menu on my line: " .. table.concat(items, " | "))
-  shot("assistant-menu")
-  if not pick then error("no assistant in the menu on my line") end
-  menu:selectItem(pick)
+  if win.player_dropdown then win.player_dropdown:close() end
+  if not line then error("no \"+ Add assistant\" beside my line") end
+  win:clickSide(line)
   wait_for("my assistant", function()
     local a = lobby:assistantOf(me)
     return a ~= nil and a.ready == "1"
   end, 60)
-  -- (The window is built again, with a line for the assistant.)
-  wait_for("the room's lines", function()
-    local w = lobby_window()
-    return w and w.view == "room" and w.player_panels and lobby.summary and
-        #w.player_panels >= (tonumber(lobby.room.max) or 2) + (tonumber(lobby.summary.assistants) or 0)
-  end, 10)
   win = lobby_window()
   win:_updateRoom()
   local lines = {}
-  for i = 1, #win.player_panels do
-    local p = lobby.players[i]
-    lines[i] = plain_text(win.player_panels[i].label or "") ..
-        (p and p.colour and string.format(" [colour %s, team %s, colour button %s]", p.colour, p.team or "?",
-        win.colour_buttons[i].enabled and "on" or "off") or "")
+  for k = 1, #win.player_panels do
+    local p = win:rowPlayer(k)
+    lines[k] = plain_text(win.player_panels[k].label or "") ..
+        (p and p.colour and string.format(" [colour %s, team %s]", p.colour, p.team or "?") or "")
   end
   log(string.format("UI: room lines with my assistant (%d lines, open %s): %s", #win.player_panels,
       tostring(lobby.summary.open), table.concat(lines, " | ")))
+  log("UI: assistants column: " .. column())
   shot("room-assistant")
 end
 
@@ -505,7 +516,7 @@ local function run_lobby()
       local add_text = (tostring(_S.multiplayer_window.add_bot):gsub("^<LocalisedString> Current value:%s*", ""))
       local empty
       for i = 1, tonumber(lobby.room.max) or 2 do
-        if not empty and not lobby.players[i] and labels[i] == add_text then empty = i end
+        if not empty and not win:rowPlayer(i) and labels[i] == add_text then empty = i end
       end
       log(string.format("UI: room places before bot %d: %s", k, table.concat(labels, " | ")))
       if not empty then error("no empty place to click for a bot") end
@@ -553,7 +564,7 @@ local function run_lobby()
       -- (With MP_SHOT_DIR: the level menu on the first bot's line, as a
       -- right click opens it.)
       for i = 1, #win.player_panels do
-        local p = lobby.players[i]
+        local p = win:rowPlayer(i)
         if shot_dir and p and p.bot == "1" then
           win:playerMenu(i)
           local level_menu, items = win.player_dropdown, {}
