@@ -277,12 +277,16 @@ What happens then:
   `/var/lib/corsixth/learn/saves` (a few MB each). A hospital a bot played at
   any time, even for a while for a player who left, is never learnt from.
 - Every morning at 6:30 (Prague time) the server reads the new saves and
-  writes what the bots learnt to `/var/lib/corsixth/learn/learned.lua`. Hard
+  writes what the bots learnt to `/var/lib/corsixth/learn/learned.lua`. Each
+  game counts once, as its latest save has it (a game continued from a save
+  is saved again: its saves are recognised by the rooms and corridor objects
+  they share). Hard
   bots of games started after that build that way (a new bot is a hard one
   unless the room's owner picks another level); easy and normal bots keep
   their own rules.
-- The daily Discord report names the saves and players learnt from that
-  night (nothing is said on a night without new ones).
+- The daily Discord report names the games and players learnt from that
+  night, each game by its latest save and how many saves it had (nothing is
+  said on a night without new ones).
 
 Tell the players you name that their games are saved on your server for
 this. To start over, stop the service and delete

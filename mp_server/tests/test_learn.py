@@ -20,8 +20,8 @@ def _room(kind, x, y, objects):
             "objects": [{"id": i, "x": tx, "y": ty, "dir": d, "tiles": [[tx, ty]]} for i, tx, ty, d in objects]}
 
 
-def _record(save, index, name, rooms, bot=False):
-    return {"save": save, "date": "2-01-01T00", "map": [128, 128], "index": index, "level": "TEST TOWN",
+def _record(save, index, name, rooms, bot=False, date="2-01-01T00"):
+    return {"save": save, "date": date, "map": [128, 128], "index": index, "level": "TEST TOWN",
             "hospitals": 3, "name": name, "bot": bot, "standin": False, "plots": [index],
             "rooms": rooms, "corridor": [{"id": "bench", "x": 9, "y": 9, "dir": "north", "tiles": [[9, 9]]}]}
 
@@ -153,3 +153,79 @@ def test_corridor_spots_by_doors_seen_from_the_door():
     assert near["doors_seen"] == 2
     assert near["door_spots"] == {"bench": [{"dc": 1, "row": -1, "dir": "north", "seen": 2}]}
     assert near["desk_spots"] == {} and near["desks_seen"] == 0
+
+
+def _layout_learn():
+    sys.path.insert(0, str(REPO / "scripts" / "multiplayer"))
+    try:
+        import layout_learn
+    finally:
+        sys.path.pop(0)
+    return layout_learn
+
+
+def test_one_game_saved_many_times_counts_once(tmp_path):
+    """Argus, 2026-11-14: one game continued from a save again and again, eight
+    saves of it; each game counts once, as its latest save has it (Jan)."""
+    layout_learn = _layout_learn()
+    gp = _room("gp", 10, 10, [("desk", 12, 12, "south")])
+    ward = _room("ward", 20, 10, [("bed", 21, 12, "south")])
+    pharmacy = _room("pharmacy", 30, 10, [("pharmacy_cabinet", 31, 12, "west")])
+    # Game one: three saves, growing (and one continued from the first save,
+    # out of game-date order); game two at the same place: other corners.
+    one = [_record("a y2.sav", 1, "ARGUS", [gp], date="2-01-01T00"),
+           _record("b y3.sav", 1, "ARGUS", [gp, ward], date="3-01-01T00"),
+           _record("c y2.sav", 1, "argus", [gp, ward, pharmacy], date="2-06-01T00"),
+           _record("d y3.sav", 1, "ARGUS", [gp, ward, pharmacy], date="3-02-01T00")]
+    two = [_record("e y1.sav", 1, "ARGUS", [_room("gp", 60, 60, [("desk", 61, 62, "south")])], date="1-04-01T00")]
+    for rec in two:
+        rec["corridor"] = [{"id": "bench", "x": 70, "y": 70, "dir": "north", "tiles": [[70, 70]]}]
+    # The same rooms at another place (hospital 2): another game.
+    other_place = [_record("a y2.sav", 2, "ARGUS", [gp], date="2-01-01T00")]
+    groups = layout_learn.games(one + two + other_place)
+    assert [[r["save"] for r in g] for g in groups] == [
+        ["a y2.sav", "c y2.sav", "b y3.sav", "d y3.sav"], ["e y1.sav"], ["a y2.sav"]]
+    assert layout_learn.games([]) == []
+    # Learnt: each game once, as its latest save has it. The gp is seen in
+    # three games (not in six saves).
+    layouts = tmp_path / "layouts.jsonl"
+    layouts.write_text("".join(json.dumps(r) + "\n" for r in one + two + other_place), encoding="utf-8")
+    data = layout_learn.learn([str(layouts)], ["Argus"])
+    assert [(s["save"], s["saves"]) for s in data["sources"]] == [("e y1.sav", 1), ("a y2.sav", 1), ("d y3.sav", 4)]
+    assert data["recipes"]["gp"]["rooms"] == 3 and data["recipes"]["ward"]["rooms"] == 1
+
+
+def test_a_hospital_without_rooms_teaches_nothing(tmp_path):
+    layout_learn = _layout_learn()
+    layouts = tmp_path / "layouts.jsonl"
+    layouts.write_text(json.dumps(_record("x y1.sav", 1, "ARGUS", [], date="1-01-05T00")) + "\n", encoding="utf-8")
+    data = layout_learn.learn([str(layouts)], ["Argus"])
+    assert data["sources"] == [] and data["plans"] == {} and data["recipes"] == {}
+
+
+def test_the_report_names_a_game_once_with_its_saves(tmp_path):
+    env = {"CORSIXTH_MP_STATS_DIR": str(tmp_path), "CORSIXTH_MP_SERVER_NAME": "eu2",
+           "CORSIXTH_MP_LEARN_DIR": str(tmp_path)}
+    (tmp_path / "runs.jsonl").write_text(json.dumps({"day": "2026-11-14", "learnt": [
+        {"player": "ARGUS", "save": "20261114-120641 Argus's room y5-01-08", "level": "CROSSROADS",
+         "date": "5-01-08T00", "rooms": 26, "saves": 8},
+        {"player": "ARGUS", "save": "20261114-192458 Jan's room y1-10-29", "level": "CROSSROADS",
+         "date": "1-10-29T23", "rooms": 20}]}) + "\n", encoding="utf-8")
+    lines = daily_report.report("2026-11-14", env).splitlines()
+    assert lines[-2:] == [
+        "Bots learnt from ARGUS: 20261114-120641 Argus's room y5-01-08 (CROSSROADS 5-01-08, 26 rooms, latest of 8 saves)",
+        "Bots learnt from ARGUS: 20261114-192458 Jan's room y1-10-29 (CROSSROADS 1-10-29, 20 rooms)"]
+
+
+def test_the_night_reports_each_game_once():
+    """The night's saves of one game: one line, its latest save, and how many
+    saves it had; a hospital without rooms yet: none."""
+    gp = _room("gp", 10, 10, [("desk", 12, 12, "south")])
+    ward = _room("ward", 20, 10, [("bed", 21, 12, "south")])
+    records = [_record("/l/saves/1 a y2.sav", 1, "ARGUS", [gp], date="2-01-01T00"),
+               _record("/l/saves/2 a y3.sav", 1, "ARGUS", [gp, ward], date="3-01-01T00"),
+               _record("/l/saves/3 b y1.sav", 1, "ARGUS", [], date="1-01-05T00")]
+    records[-1]["corridor"] = []  # (another game, just started)
+    learnt = learn._learnt(records, {"CORSIXTH_MP_REFEREE_SOURCE": str(REPO)})
+    assert learnt == [{"player": "ARGUS", "save": "2 a y3", "level": "TEST TOWN", "date": "3-01-01T00",
+                       "rooms": 2, "saves": 2}]

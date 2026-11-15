@@ -6,8 +6,9 @@ every game year and when the game ends, into CORSIXTH_MP_LEARN_DIR/saves
 (scripts/multiplayer/referee.lua). This reads the saves it has not read yet
 (scripts/multiplayer/layout_dump.lua, run with the referee's game), keeps
 the experts' hospitals that no bot ever played (the .json beside each save),
-and writes what the bots learn from all of them so far (learned.lua,
-scripts/multiplayer/layout_learn.py). Bots started from then on read it
+and writes what the bots learn from all of them so far, each game once, as
+its latest save has it (learned.lua, scripts/multiplayer/layout_learn.py:
+games). Bots started from then on read it
 (scripts/multiplayer/bot.lua): they build their rooms the size the experts
 do, put things where the experts put them, and on a map and place an expert
 played they follow that expert's hospital.
@@ -125,6 +126,28 @@ def _bot_ever(save: pathlib.Path) -> set[int]:
     return {int(h["index"]) for h in info.get("hospitals", []) if h.get("bot_ever")}
 
 
+def _learnt(records: list[dict], env: dict[str, str]) -> list[dict]:
+    """What the night learnt from, for the report: each game once, its latest
+    save, with how many of its saves came that night (layout_learn.games;
+    Jan, 2026-11-15: eight lines for one game of Argus's). A hospital without
+    rooms yet is left out: nothing was learnt from it."""
+    learner = _layout_learn(env.get("CORSIXTH_MP_REFEREE_SOURCE", ""))
+    if hasattr(learner, "games"):
+        latest = [(game[-1], len(game)) for game in learner.games(records)]
+        latest.sort(key=lambda e: os.path.basename(str(e[0].get("save", ""))))
+    else:  # (an older layout_learn.py: every save)
+        latest = [(rec, 1) for rec in records]
+    out = []
+    for rec, saves in latest:
+        built = [r for r in rec.get("rooms", []) if r.get("built") and r.get("door")]
+        if not built:
+            continue
+        save = pathlib.Path(str(rec.get("save", "")))
+        out.append({"player": rec["name"], "save": save.stem, "level": rec.get("level", ""),
+                    "date": rec.get("date", ""), "rooms": len(rec.get("rooms", [])), "saves": saves})
+    return out
+
+
 def run(env: dict[str, str] | None = None, now: float | None = None, dry_run: bool = False) -> dict:
     """Read the new saves and learn again; what was new (also in runs.jsonl)."""
     env = dict(os.environ if env is None else env)
@@ -158,6 +181,7 @@ def run(env: dict[str, str] | None = None, now: float | None = None, dry_run: bo
                 summary.setdefault("output", text[-600:])
         by_path = {str(s): s for s in saves}
         lines = out.read_text(encoding="utf-8").splitlines() if out.is_file() else []
+        experts_own = []
         for line in lines:
             try:
                 rec = json.loads(line)
@@ -169,9 +193,8 @@ def run(env: dict[str, str] | None = None, now: float | None = None, dry_run: bo
             new_records.append(rec)
             if (rec.get("name", "").upper() in want and not rec.get("bot") and not rec.get("standin")
                     and not rec.get("ai")):
-                summary["learnt"].append({"player": rec["name"], "save": save.stem if save else rec.get("save"),
-                                          "level": rec.get("level", ""), "date": rec.get("date", ""),
-                                          "rooms": len(rec.get("rooms", []))})
+                experts_own.append(rec)
+        summary["learnt"] = _learnt(experts_own, env)
     if dry_run:
         return summary
     layouts = folder / "layouts.jsonl"

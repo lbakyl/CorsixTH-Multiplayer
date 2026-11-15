@@ -15,7 +15,8 @@ picture '.' is floor, letters are objects (the legend under it) and 'D' the
 door above it.
 
 What is learnt, from the hospitals named like an expert (any case) that no
-bot played (the room's own bot or a stand-in for a person who left):
+bot played (the room's own bot or a stand-in for a person who left), each
+game once, as its latest save has it (games()):
 - recipes: for each kind of room the size the experts build most and the
   layout they use most at that size (mirrored so that the door is in the
   left half; a bot mirrors it back to its own door), with how often it was
@@ -280,6 +281,57 @@ def corridor_habits(recs):
     return out
 
 
+def built_rooms(rec):
+    return [r for r in rec.get("rooms", []) if r.get("built") and r.get("door")]
+
+
+def marks(rec):
+    """What stays put in a hospital from one save of a game to the next: its
+    rooms (kind, corner, size) and its corridor objects (kind, tile)."""
+    out = {("room", r["kind"], r["x"], r["y"], r["w"], r["h"]) for r in built_rooms(rec)}
+    out |= {("object", o["id"], o["x"], o["y"]) for o in rec.get("corridor", [])
+            if not is_fixture(o["id"]) and o["id"] != "litter"}
+    return out
+
+
+def save_order(rec):
+    """The latest save of a game last: by game date, then rooms, then name."""
+    return (date_key(rec["date"]), len(built_rooms(rec)), os.path.basename(rec["save"]))
+
+
+def games(records):
+    """The records (one expert's hospital each) grouped by game, each game's
+    saves in save_order. A referee saves an expert's game every game year and
+    at its end, and a game continued from a save (perhaps more than once, Argus
+    on 2026-11-14: eight saves of one game) is saved again: they are one game
+    when they are the same expert's at the same level and place (plan_key)
+    and one has at least half of what the other (the one with less) has where
+    it was (marks). Games in the order of their first record."""
+    recs = list(records)
+    parent = list(range(len(recs)))
+
+    def root(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    by_place = defaultdict(list)
+    for i, rec in enumerate(recs):
+        by_place[(plan_key(rec), rec["name"].upper())].append(i)
+    seen = [marks(rec) for rec in recs]
+    for members in by_place.values():
+        for a, i in enumerate(members):
+            for j in members[:a]:
+                small = min(len(seen[i]), len(seen[j]))
+                if small and 2 * len(seen[i] & seen[j]) >= small:
+                    parent[root(i)] = root(j)
+    groups = defaultdict(list)
+    for i in range(len(recs)):
+        groups[root(i)].append(recs[i])
+    return [sorted(g, key=save_order) for _, g in sorted(groups.items())]
+
+
 def learn(paths, experts):
     """Recipes and plans from the experts' hospitals in the layouts."""
     want = {e.strip().upper() for e in experts if e.strip()}
@@ -289,21 +341,24 @@ def learn(paths, experts):
         if rec["name"].upper() not in want or rec.get("bot") or rec.get("standin") or rec.get("ai"):
             continue
         records[(os.path.basename(rec["save"]), rec["index"], rec["date"])] = rec
-    # One game's yearly saves show the same rooms again: each room counts
-    # once per game place (its latest state), by kind and corner.
-    rooms = {}
+    # Each game counts once, as its latest save has it (Jan, 2026-11-15: one
+    # game saved eight times weighed eight times as much as another in the
+    # corridor habits); a hospital without rooms yet teaches nothing.
+    latest = []
+    for game in games(records.values()):
+        rec = game[-1]
+        if built_rooms(rec):
+            latest.append((rec, len(game)))
     sources = []
     latest_plan = {}
-    for rec in sorted(records.values(), key=lambda r: date_key(r["date"])):
-        sources.append({"player": rec["name"], "save": os.path.basename(rec["save"]), "date": rec["date"],
-                        "level": rec["level"], "index": rec["index"], "rooms": len(rec["rooms"])})
-        for room in rec["rooms"]:
-            if room.get("built") and room.get("door"):
-                rooms[(plan_key(rec), rec["name"].upper(), room["kind"], room["x"], room["y"])] = (rec, room)
-        latest_plan[plan_key(rec)] = rec
     by_kind = defaultdict(list)
-    for (_, _, kind, _, _), (rec, room) in rooms.items():
-        by_kind[kind].append((rec, room))
+    for rec, saves in sorted(latest, key=lambda e: save_order(e[0])):
+        sources.append({"player": rec["name"], "save": os.path.basename(rec["save"]), "date": rec["date"],
+                        "level": rec["level"], "index": rec["index"], "rooms": len(rec["rooms"]),
+                        "saves": saves})
+        for room in built_rooms(rec):
+            by_kind[room["kind"]].append((rec, room))
+        latest_plan[plan_key(rec)] = rec
     recipes = {}
     for kind, entries in sorted(by_kind.items()):
         sizes = Counter(frame_size(room) for _, room in entries)
@@ -368,7 +423,7 @@ def learn(paths, experts):
         plans[key] = {"player": rec["name"], "date": rec["date"], "rooms": plan_rooms,
                       "objects": plan_objects, "corridor": dict(sorted(corridor.items()))}
     return {"version": 1, "experts": sorted(want), "sources": sources, "recipes": recipes, "plans": plans,
-            "corridor": corridor_habits(list(records.values()))}
+            "corridor": corridor_habits([rec for rec, _ in latest])}
 
 
 def lua_value(v, indent=""):
