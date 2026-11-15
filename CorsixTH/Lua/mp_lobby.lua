@@ -710,6 +710,44 @@ function MultiplayerLobby:canAddBots()
   return self:isOwner() and self.room.bots == "1"
 end
 
+--! An assistant: a bot that helps the person of place `peer` in their own
+--! hospital and takes none of the room's places (Argus, 2026-11-15). Anybody
+--! for themselves, the owner for anybody, one each, in a new game.
+function MultiplayerLobby:addAssistant(peer) self.error = nil; self:send("BOT", {assist = peer}) end
+
+--! Whether this player may give the person of place `peer` an assistant now.
+function MultiplayerLobby:mayAddAssistant(peer)
+  local p = self.players and self.players[tonumber(peer)]
+  if not (p and p.bot ~= "1" and self.room and self.room.bots == "1" and self:isFreeRoom()) then
+    return false
+  end
+  if tonumber(peer) ~= tonumber(self.room.peer) and not self:isOwner() then return false end
+  -- (One each: the server names those who have one, starting or not.)
+  for helped in (self.summary and self.summary.assisted or ""):gmatch("%d+") do
+    if tonumber(helped) == tonumber(peer) then return false end
+  end
+  -- (Not once the game has its most players, assistants too: PLACES.)
+  local everybody = tonumber(self.summary and self.summary.starting) or 0
+  for _ in pairs(self.players) do everybody = everybody + 1 end
+  return self:assistantOf(peer) == nil and everybody < MultiplayerLobby.PLACES
+end
+
+--! The assistant of the person of place `peer` (their entry), or nil.
+function MultiplayerLobby:assistantOf(peer)
+  for _, p in pairs(self.players or {}) do
+    if tonumber(p.assists) == tonumber(peer) then return p end
+  end
+  return nil
+end
+
+--! A bot's name as the lists show it: "Bot Agnes (hard bot)", or for an
+--! assistant whose it is, "Bot Agnes (Argus's assistant)".
+function MultiplayerLobby:botLine(p)
+  local person = p.assists and self.players and self.players[tonumber(p.assists)]
+  if person then return _S.multiplayer_window.assistant_named:format(p.name, person.name) end
+  return MultiplayerLobby.botName(p.name, p.level)
+end
+
 function MultiplayerLobby:sendChat(text) self:send("CHAT", {text = text}) end
 
 --! This player's allies still in the game, in peer order: in a race of

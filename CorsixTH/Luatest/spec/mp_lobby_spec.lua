@@ -276,4 +276,46 @@ describe("MultiplayerLobby", function()
     assert.equal("LIST", t.sent[#t.sent])
     assert.equal("LEAVE", t.sent[#t.sent - 1])
   end)
+
+  it("offers an assistant to one's own hospital, the owner's to anybody's", function()
+    local saved = rawget(_G, "_S")
+    rawset(_G, "_S", {multiplayer_window = {assistant_named = "%s (%s's assistant)",
+        bot_named = "%s (%s)", bot_kind_normal = "normal bot"}})
+    local ok, err = pcall(function()
+      local lobby, t = make_lobby()
+      -- Bea in Alice's room (Alice owns it): Alice has an assistant, Bea not.
+      t.inbox = {"WELCOME id=1 proto=1", "JOINED bots=1 free=1 max=2 mode=coop peer=2 room=r",
+        "PLAYER colour=1 name=Alice owner=1 peer=1 team=1",
+        "PLAYER colour=2 name=Bea peer=2 team=1",
+        "PLAYER assists=1 bot=1 colour=1 name=Bot%20Agnes peer=3 team=1",
+        "LOBBY assisted=1 assistants=1 count=3 max=2 open=0 room=r"}
+      lobby:poll()
+      assert.equal("Bot Agnes (Alice's assistant)", lobby:botLine(lobby.players[3]))
+      assert.equal(3, tonumber(lobby:assistantOf(1).peer))
+      assert.is_nil(lobby:assistantOf(2))
+      -- Bea: one for herself, none for Alice (who has one, and is not hers).
+      assert.is_true(lobby:mayAddAssistant(2))
+      assert.is_false(lobby:mayAddAssistant(1))
+      assert.is_false(lobby:mayAddAssistant(3))
+      lobby:addAssistant(2)
+      assert.equal("BOT assist=2", t.sent[#t.sent])
+      -- Hers starting (the server names her): not again; another bot
+      -- starting does not stop her.
+      lobby.summary.assisted, lobby.summary.starting = "1,2", "1"
+      assert.is_false(lobby:mayAddAssistant(2))
+      lobby.summary.assisted = "1"
+      assert.is_true(lobby:mayAddAssistant(2))
+      lobby.summary.starting = nil
+      -- Not once the game has its most players (8, assistants too).
+      for peer = 4, 8 do lobby.players[peer] = {peer = tostring(peer), name = "P" .. peer, bot = "1"} end
+      assert.is_false(lobby:mayAddAssistant(2))
+      lobby.players[8] = nil
+      assert.is_true(lobby:mayAddAssistant(2))
+      -- Not in a saved game.
+      lobby.room.free = nil
+      assert.is_false(lobby:mayAddAssistant(2))
+    end)
+    rawset(_G, "_S", saved)
+    assert(ok, err)
+  end)
 end)

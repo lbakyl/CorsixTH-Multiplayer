@@ -507,6 +507,10 @@ multiplayer_window = {
   trade_offered = "Offered. They join you if the other player accepts.",
   loading = "LOADING...",
   kick_player = "Remove %s from the room",
+  add_assistant = "Add an assistant (a bot in my hospital)",
+  add_assistant_for = "Add an assistant for %s",
+  remove_assistant = "Send the assistant away",
+  assistant_named = "%s (%s's assistant)",
   hold_year = "Waiting on %s to close the annual report...",
   hold_win = "Waiting on %s to answer the fax...",
   hold_left = "The game goes on in %s at the latest.",
@@ -1041,6 +1045,7 @@ multiplayer_window = {
 }
 
 tooltip.multiplayer_window = {
+  add_assistant = "Right click: an assistant, a bot that helps in this hospital and takes no place",
   bot_level = "Right click: an easy, normal or hard bot",
   player_row = "Click: look at this player's hospital (N: the next hospital)",
   chat_target = "Who the message is for: everybody, your team (in a race of teams) or one player. Click or press Tab for the next",

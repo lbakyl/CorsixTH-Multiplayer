@@ -69,10 +69,13 @@ local heights = {connect = 225, rooms = 435, room = 295 + CHAT_GAP, seats = 185}
 -- each more (a room for up to 8).
 local PLACE_H = 27
 
---! How many places the room view shows: the room's, at least 4.
+--! How many places the room view shows: the room's, and a line for each
+--! assistant (they take none of the places), at least 4.
 local function placesOf(lobby)
   local max = lobby and lobby.room and tonumber(lobby.room.max) or 2
-  return math.max(4, math.min(MultiplayerLobby.PLACES, max))
+  local lines = max + (tonumber(lobby and lobby.summary and lobby.summary.assistants) or 0)
+  for peer in pairs(lobby and lobby.room and lobby.players or {}) do lines = math.max(lines, peer) end
+  return math.max(4, math.min(MultiplayerLobby.PLACES, lines))
 end
 
 --! How many places a new room on this level may have: as many as the level
@@ -766,32 +769,41 @@ function UIMultiplayer:_updateRoom()
   for i = 1, #self.player_panels do
     local p, panel = lobby.players[i], self.player_panels[i]
     if hint and p and p.bot == "1" and
-        panel.label_font:sizeOf(MultiplayerLobby.botName(p.name, p.level) .. hint) > (panel.w - 8) * scale then
+        panel.label_font:sizeOf(lobby:botLine(p) .. hint) > (panel.w - 8) * scale then
       hint = nil
     end
   end
+  -- (The places still open, from the server: assistants take none; an
+  -- older server: the lines up to the room's size.)
+  local open = tonumber(lobby.summary and lobby.summary.open)
+  self.add_lines = {}
   for i = 1, #self.player_panels do
     local p = lobby.players[i]
     local text = ""
     if p and p.bot == "1" then
-      local name = MultiplayerLobby.botName(p.name, p.level)
+      local name = lobby:botLine(p)
       text = hint and (name .. hint) or name
     elseif p then
       -- (The host is not asked whether they are ready.)
       text = S.player_line:format(p.name, p.owner == "1" and S.owner_mark or "", p.rtt or "?",
           p.owner == "1" and "" or (p.ready == "1" and S.is_ready or S.not_ready))
-    elseif i <= max and starting > 0 then
+    elseif starting > 0 and (open or i <= max) then
       starting = starting - 1
       text = S.bot_starting
-    elseif i <= max then
+    elseif (open and open > 0) or (not open and i <= max) then
+      open = open and open - 1
       text = bots and S.add_bot or S.waiting_player
+      self.add_lines[i] = true
     end
     self.player_panels[i]:setLabel(text)
     self.place_buttons[i]:setTooltip(p and p.bot == "1" and bots and
-        _S.tooltip.multiplayer_window.bot_level or nil)
+        _S.tooltip.multiplayer_window.bot_level or
+        p and p.bot ~= "1" and lobby:mayAddAssistant(p.peer) and _S.tooltip.multiplayer_window.add_assistant or nil)
     -- (Only one's own, and the host anybody's, in a new game.)
     local seated = p ~= nil and tonumber(p.colour) ~= nil
-    local may = seated and lobby:isFreeRoom() and (lobby:isOwner() or p.peer == lobby.room.peer)
+    -- (An assistant's are its person's: they move it.)
+    local may = seated and lobby:isFreeRoom() and (lobby:isOwner() or p.peer == lobby.room.peer) and
+        not p.assists
     local colour_button, team_button = self.colour_buttons[i], self.team_buttons[i]
     colour_button:setVisible(seated)
     colour_button:enable(may)
@@ -863,7 +875,7 @@ function UIMultiplayer:clickPlace(i)
   if not lobby:canAddBots() then return end
   if p and p.bot == "1" then
     lobby:removeBot(i)
-  elseif not p and i <= (tonumber(lobby.room.max) or 2) then
+  elseif not p and self.add_lines and self.add_lines[i] then
     lobby:addBot()
   end
 end
@@ -881,28 +893,45 @@ function UIMultiplayer:buttonOptions()
   options:setPosition(math.max(0, math.floor((self.width - options.width) / 2)), 80)
 end
 
---! The host's menu on another person's line: remove them from the room; on a
---! bot's line: its level (easy, normal, hard: Jan, 2026-11-12).
+--! The menu on a place's line. A bot's: its level (easy, normal, hard: Jan,
+--! 2026-11-12), for the host; an assistant's: sending it away, for its
+--! person too. A person's: an assistant for their hospital (their own, the
+--! host anybody's: Argus, 2026-11-15), and for the host removing them.
 function UIMultiplayer:playerMenu(i)
   local lobby = self.lobby
   local p = lobby.players[i]
-  if p and p.bot == "1" and lobby:canAddBots() then
-    local S, peer = _S.multiplayer_window, p.peer
-    local levels = {"easy", "normal", "hard"}
-    local current = 2
-    for index, level in ipairs(levels) do
-      if level == (p.level or "normal") then current = index end
+  if not p then return end
+  local S, peer = _S.multiplayer_window, p.peer
+  local items, actions, current = {}, {}, nil
+  if p.bot == "1" then
+    if lobby:canAddBots() then
+      local levels = {"easy", "normal", "hard"}
+      current = 2
+      for index, level in ipairs(levels) do
+        if level == (p.level or "normal") then current = index end
+      end
+      for index, text in ipairs({S.bot_menu_easy, S.bot_menu_normal, S.bot_menu_hard}) do
+        items[#items + 1] = {text = text}
+        actions[#actions + 1] = function() lobby:setBotLevel(peer, levels[index]) end
+      end
     end
-    self:_placeMenu(i, {{text = S.bot_menu_easy}, {text = S.bot_menu_normal}, {text = S.bot_menu_hard}},
-        function(_, index) lobby:setBotLevel(peer, levels[index]) end, current)
-    return
+    if p.assists and (lobby:isOwner() or tonumber(p.assists) == tonumber(lobby.room.peer)) then
+      items[#items + 1] = {text = S.remove_assistant}
+      actions[#actions + 1] = function() lobby:removeBot(peer) end
+    end
+  else
+    if lobby:mayAddAssistant(peer) then
+      local mine = tonumber(peer) == tonumber(lobby.room.peer)
+      items[#items + 1] = {text = mine and S.add_assistant or S.add_assistant_for:format(p.name)}
+      actions[#actions + 1] = function() lobby:addAssistant(peer) end
+    end
+    if lobby:isOwner() and tonumber(peer) ~= tonumber(lobby.room.peer) then
+      items[#items + 1] = {text = S.kick_player:format(p.name)}
+      actions[#actions + 1] = function() lobby:kickPlayer(peer) end
+    end
   end
-  if not (p and p.bot ~= "1" and lobby:isOwner() and tonumber(p.peer) ~= tonumber(lobby.room.peer)) then
-    return
-  end
-  local peer, name = p.peer, p.name
-  self:_placeMenu(i, {{text = _S.multiplayer_window.kick_player:format(name)}},
-      function() lobby:kickPlayer(peer) end)
+  if #items == 0 then return end
+  self:_placeMenu(i, items, function(_, index) actions[index]() end, current)
 end
 
 -- A place's menu: at least this wide, and this much wider than its longest
@@ -1007,7 +1036,8 @@ function UIMultiplayer:onTick()
         self.ui:addWindow(UIInformation(self.ui, {_S.multiplayer_window.data_mismatch_help}))
       end
       local download = self.view == "connect" and MultiplayerLobby.downloadOffer(lobby.error)
-      if view_of(lobby) ~= self.view or (download and not self.download) then
+      if view_of(lobby) ~= self.view or (download and not self.download) or
+          (self.view == "room" and placesOf(lobby) ~= #self.player_panels) then
         self:rebuild(status)
         return
       end

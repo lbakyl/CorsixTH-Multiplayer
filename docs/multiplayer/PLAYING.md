@@ -147,7 +147,19 @@ more towards the goals, only every second death counts, and it bids higher at
 auctions).
 The room, the places of a running game and the Players window say which:
 "Bot Agnes (hard bot)". Whatever helps a bot stops once a person plays its
-hospital. A bot builds its
+hospital.
+
+**An assistant for your hospital.** A right click (or a double click) on your
+own line in a new game's room offers "Add an assistant": a bot joins your
+hospital to help you, as any bot that shares a person's hospital does (it
+builds, hires and looks after staff, pays bonuses, shares research; with
+**Allied bots build** off it does all but the building). It takes none of the
+room's places,
+so on a map for four, four people can each have one. It is listed under you,
+"Bot Agnes (Argus's assistant)", keeps your colour and team (it moves with
+you), and leaves the room with you; in a game it plays on in your hospital if
+you leave, and no other bot comes for your place. One each; the host may add
+one for anybody. Your menu (or a click by the host) sends it away again. A bot builds its
 hospital slowly, as a beginner would (a desk, a GP's office, then one room
 after the other), hires staff, opens, and chats a little. In co-op it accepts
 whatever you offer it and thanks you; in a competitive race it plays a dirty

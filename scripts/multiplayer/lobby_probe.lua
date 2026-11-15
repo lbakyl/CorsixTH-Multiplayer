@@ -289,6 +289,53 @@ local function photo_hospital(world, h, what)
   ui:setZoom(1)
 end
 
+--! MP_ASSISTANT=1: this player right-clicks their own line in the room and
+--! picks "Add an assistant" (UIMultiplayer:playerMenu), waits until the bot
+--! has joined their hospital, and logs the menu and the room's lines (with
+--! MP_SHOT_DIR: pictures of both).
+local function add_assistant(lobby)
+  if os.getenv("MP_ASSISTANT") ~= "1" then return end
+  local me = tonumber(lobby.room.peer)
+  wait_for("the room window", function() return lobby_window() and lobby_window().view == "room" end, 10)
+  -- (As a person would: once the lobby offers it.)
+  wait_for("an assistant offered", function() return lobby:mayAddAssistant(me) end, 20)
+  local win = lobby_window()
+  win:_updateRoom()
+  win:playerMenu(me)
+  local menu = win.player_dropdown
+  local want, items, pick = plain_text(_S.multiplayer_window.add_assistant), {}, nil
+  for k, panel in ipairs(menu and menu.item_panels or {}) do
+    items[k] = plain_text(panel.label or "")
+    if items[k] == want then pick = k end
+  end
+  log("UI: menu on my line: " .. table.concat(items, " | "))
+  shot("assistant-menu")
+  if not pick then error("no assistant in the menu on my line") end
+  menu:selectItem(pick)
+  wait_for("my assistant", function()
+    local a = lobby:assistantOf(me)
+    return a ~= nil and a.ready == "1"
+  end, 60)
+  -- (The window is built again, with a line for the assistant.)
+  wait_for("the room's lines", function()
+    local w = lobby_window()
+    return w and w.view == "room" and w.player_panels and lobby.summary and
+        #w.player_panels >= (tonumber(lobby.room.max) or 2) + (tonumber(lobby.summary.assistants) or 0)
+  end, 10)
+  win = lobby_window()
+  win:_updateRoom()
+  local lines = {}
+  for i = 1, #win.player_panels do
+    local p = lobby.players[i]
+    lines[i] = plain_text(win.player_panels[i].label or "") ..
+        (p and p.colour and string.format(" [colour %s, team %s, colour button %s]", p.colour, p.team or "?",
+        win.colour_buttons[i].enabled and "on" or "off") or "")
+  end
+  log(string.format("UI: room lines with my assistant (%d lines, open %s): %s", #win.player_panels,
+      tostring(lobby.summary.open), table.concat(lines, " | ")))
+  shot("room-assistant")
+end
+
 --! MP_ROOM_CHAT=<text>: say it in the room's chat before the game (typed
 --! into the room window's box, Enter), wait until MP_ROOM_CHAT_WAIT (another
 --! player's name) has said something too, and log the lines the window shows.
@@ -445,6 +492,7 @@ local function run_lobby()
       log(string.format("UI: game option %s=%s", option, value))
     end
     pick_team(lobby)
+    add_assistant(lobby)
     -- Bots: click the first empty place, once per bot, as a person would.
     local add_bots = tonumber(os.getenv("MP_ADD_BOTS") or "0")
     for k = 1, add_bots do
@@ -594,7 +642,12 @@ local function run_lobby()
       win:clickPlace(kick)
       log("UI: kick menu open: " .. tostring(win.player_dropdown ~= nil))
       shot("kick-menu")
-      win.player_dropdown:selectItem(1)
+      -- (The "remove" item: the menu also offers an assistant for them.)
+      local remove_text, pick = plain_text(_S.multiplayer_window.kick_player:format(lobby.players[kick].name)), 1
+      for k, panel in ipairs(win.player_dropdown.item_panels) do
+        if plain_text(panel.label or "") == remove_text then pick = k end
+      end
+      win.player_dropdown:selectItem(pick)
       wait_for("the player removed", function() return lobby.players[kick] == nil end, 10)
       log("UI: after the kick: " .. seats_text(lobby))
       local until_t = socket.gettime() + 4
@@ -675,6 +728,7 @@ local function run_lobby()
     wait_for("lobby update", function() return lobby.summary ~= nil end, 10)
     shot("lobby-room-joined")
     room_chat(lobby)
+    add_assistant(lobby)
     if os.getenv("MP_EXPECT_KICK") then
       -- Removed by the host: back in the room list, told why; joining that
       -- room again is refused for a while.

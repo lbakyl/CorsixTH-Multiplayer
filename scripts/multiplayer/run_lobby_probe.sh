@@ -120,7 +120,11 @@
 # transparent walls and other warmth colours, kept through the repair, and
 # each player still sees the hospital under their own name); 16.
 # rejoin after a quit; 36. a quorum repair with three players: only the one
-# whose game differs loads the referee's game, the others go on, not told.
+# whose game differs loads the referee's game, the others go on, not told;
+# 37. assistants (Argus, 2026-11-15): in a co-op room for two, yuri and zoe
+# each add an assistant from the menu on their own line (a bot that helps in
+# their hospital and takes no place): four lines, two hospitals of two
+# ("YURI + BOT ...") -> IN SYNC, the referee agrees.
 # Exits 0 only if all checks behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
@@ -158,7 +162,7 @@ else
     export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
     export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/referee"
     export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
-    export MP_REFEREE_PROBE_SCENARIO="crowd=busy;staff=busy;edit=busy;cardio=none;epi=busy;wreck=none;lang=busy" # the probes' own start, see below
+    export MP_REFEREE_PROBE_SCENARIO="crowd=busy;staff=busy;edit=busy;cardio=none;epi=busy;wreck=none;lang=busy;assist=none" # the probes' own start, see below
   fi
   PYTHONPATH="$source_dir/mp_server" python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
     --log-level INFO --max-per-address 96 --max-connections 128 > "$out/server.log" 2>&1 &
@@ -408,6 +412,10 @@ if [[ "${MP_REFEREE:-0}" == 1 ]]; then
   (for _ in $(seq 600); do grep -qs "UI: quitting" "$out/vera/log.txt" && break; sleep 0.1; done
    sleep 1
    run_probe vera-back MP_NAME=vera MP_ROLE=join MP_ROOM=back MP_STEPS=1500 MP_REJOIN=1) & pids+=($!)
+  # Assistants (check 37): each adds one to their own hospital.
+  run_probe yuri MP_ROLE=host MP_ROOM=assist MP_COOP=1 MP_LEVEL=2 MP_PLAYERS=2 MP_WAIT_PLAYERS=4 MP_ASSISTANT=1     MP_SCENARIO=none MP_STEPS=600 MP_UI_SCRIPT="40:openhospital;550:hospitals" & pids+=($!)
+  sleep 1
+  run_probe zoe MP_ROLE=join MP_ROOM=assist MP_ASSISTANT=1 MP_SCENARIO=none MP_STEPS=600     MP_UI_SCRIPT="50:openhospital;560:hospitals" & pids+=($!)
 fi
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
@@ -1144,6 +1152,25 @@ if with_referee:
           f"referee confirmed {confirmed_after('quorum')} (referee repaired alone in: {alone or 'none'})")
     fail |= not ok36
     if not ok36: bad.append("ok36")
+
+    # Assistants: a bot in each player's hospital, no place of its own.
+    lines37 = [re.search(r'UI: room lines with my assistant \((\d+) lines, open (\w+)\): (.*)', log(n)) for n in ('yuri', 'zoe')]
+    zoe37 = lines37[1].group(3) if lines37[1] else ''
+    hosp37 = re.search(r'UI: hospitals at step \d+ .*', log('yuri'))
+    names37 = re.findall(r'\[\d+ ([A-Z +]+?) opened=', hosp37.group(0)) if hosp37 else []
+    added37 = re.findall(r"room 'assist': '(\w+)' adds '([\w ]+)' to help '(\w+)'", server)
+    ok37 = (all(lines37) and lines37[1].group(1) == '4' and lines37[1].group(2) == '0'
+            and "(yuri's assistant) [colour" in zoe37 and "(zoe's assistant) [colour" in zoe37
+            and 'colour button off' in zoe37
+            and len(names37) == 2 and names37[0].startswith('YURI + BOT') and names37[1].startswith('ZOE + BOT')
+            and sorted((a, c) for a, _, c in added37) == [('yuri', 'yuri'), ('zoe', 'zoe')]
+            and all(result(n).startswith('IN SYNC through step 600') for n in ('yuri', 'zoe'))
+            and int(confirmed_after('assist')) >= 500)
+    print(f"37. Assistants:             zoe's lines {lines37[1].groups()[:2] if lines37[1] else '-'}: {zoe37[:160]}; "
+          f"hospitals {names37}; added {added37}; {result('yuri')} / {result('zoe')}; "
+          f"referee confirmed {confirmed_after('assist')}")
+    fail |= not ok37
+    if not ok37: bad.append("ok37")
 if bad:
     print("failed checks: " + " ".join(bad))
 sys.exit(1 if fail else 0)
