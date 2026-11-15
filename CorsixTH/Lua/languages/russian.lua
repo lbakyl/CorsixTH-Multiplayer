@@ -3931,6 +3931,7 @@ subtitles = {
 -------------------------------------------------------------------------------
 hotkey_window.ingame_mp_chat = "Чат мультиплеера"
 hotkey_window.ingame_mp_next_hospital = "Следующая больница (MP)"
+hotkey_window.ingame_mp_own_hospital = "Своя больница (MP)"
 main_menu.multiplayer = "Мультиплеер"
 map_editor_window.pages.camera_n = "Камера %d"
 map_editor_window.pages.heliport_n = "Верт. Площадка %d"

@@ -3857,6 +3857,7 @@ subtitles = {
 -------------------------------------------------------------------------------
 hotkey_window.ingame_mp_chat = "Chat pro více hráčů"
 hotkey_window.ingame_mp_next_hospital = "Další nemocnice (MP)"
+hotkey_window.ingame_mp_own_hospital = "Vlastní nemocnice (MP)"
 main_menu.multiplayer = "Multiplayer"
 map_editor_window.pages.camera_n = "Kamera %d"
 map_editor_window.pages.heliport_n = "Heliport %d"

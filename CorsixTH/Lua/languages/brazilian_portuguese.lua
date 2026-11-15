@@ -2960,6 +2960,7 @@ menu_file_load[8] = "  JOGO 8 "
 -------------------------------------------------------------------------------
 hotkey_window.ingame_mp_chat = "Chat multijogador"
 hotkey_window.ingame_mp_next_hospital = "Próximo hospital (MJ)"
+hotkey_window.ingame_mp_own_hospital = "Seu hospital (MJ)"
 main_menu.multiplayer = "Multijogador"
 map_editor_window.pages.camera_n = "Câmera %d"
 map_editor_window.pages.heliport_n = "Heliporto %d"

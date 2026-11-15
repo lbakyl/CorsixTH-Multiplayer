@@ -985,6 +985,8 @@ function MultiplayerLobby:_attachChat(ui)
     chat:addKeyHandler("ingame_mp_chat", chat.openInput)
     chat:removeKeyHandler("ingame_mp_next_hospital")
     chat:addKeyHandler("ingame_mp_next_hospital", chat.nextHospital)
+    chat:removeKeyHandler("ingame_mp_own_hospital")
+    chat:addKeyHandler("ingame_mp_own_hospital", chat.ownHospital)
     return
   end
   ui:addWindow(UIMultiplayerChat(ui))

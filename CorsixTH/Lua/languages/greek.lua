@@ -3358,6 +3358,7 @@ staff_list = {
 -------------------------------------------------------------------------------
 hotkey_window.ingame_mp_chat = "Συνομιλία πολλών παικτών"
 hotkey_window.ingame_mp_next_hospital = "Επόμενο νοσοκομείο (MP)"
+hotkey_window.ingame_mp_own_hospital = "Δικό σας νοσοκομείο (MP)"
 main_menu.multiplayer = "Πολλοί παίκτες"
 map_editor_window.pages.camera_n = "Κάμερα %d"
 map_editor_window.pages.heliport_n = "Ελικοδρόμιο %d"

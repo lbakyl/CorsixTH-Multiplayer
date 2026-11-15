@@ -1972,6 +1972,7 @@ tooltip.cheats_window.cheats = {
 -------------------------------------------------------------------------------
 hotkey_window.ingame_mp_chat = "Chat multijugador"
 hotkey_window.ingame_mp_next_hospital = "Hospital siguiente (MJ)"
+hotkey_window.ingame_mp_own_hospital = "Tu hospital (MJ)"
 main_menu.multiplayer = "Multijugador"
 map_editor_window.pages.camera_n = "Cámara %d"
 map_editor_window.pages.heliport_n = "Helipuerto %d"

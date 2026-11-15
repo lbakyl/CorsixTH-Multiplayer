@@ -1786,6 +1786,7 @@ subtitles = {
 -------------------------------------------------------------------------------
 hotkey_window.ingame_mp_chat = "Chat multijoueur"
 hotkey_window.ingame_mp_next_hospital = "Hôpital suivant (MJ)"
+hotkey_window.ingame_mp_own_hospital = "Votre hôpital (MJ)"
 main_menu.multiplayer = "Multijoueur"
 map_editor_window.pages.camera_n = "Caméra %d"
 map_editor_window.pages.heliport_n = "Héliport %d"

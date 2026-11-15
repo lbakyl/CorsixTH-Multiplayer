@@ -2452,6 +2452,7 @@ bank_manager = {
 -------------------------------------------------------------------------------
 hotkey_window.ingame_mp_chat = "マルチプレイヤー チャット"
 hotkey_window.ingame_mp_next_hospital = "次の病院 (MP)"
+hotkey_window.ingame_mp_own_hospital = "自分の病院 (MP)"
 main_menu.multiplayer = "マルチプレイヤー"
 map_editor_window.pages.camera_n = "カメラ %d"
 map_editor_window.pages.heliport_n = "ヘリポート %d"

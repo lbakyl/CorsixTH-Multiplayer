@@ -617,6 +617,86 @@ describe("world.lua co-op patients: ", function()
   end)
 end)
 
+-- Multiplayer: people come to a hospital by an edge point near it (Argus:
+-- patients walked across the whole map), World:spawnPointFor.
+describe("world.lua multiplayer spawn points: ", function()
+  -- Six edge points; the walk from the desk at (50, 50) to each is given.
+  local function makeWorld(walks, opts)
+    opts = opts or {}
+    local points = {}
+    for i = 1, 6 do points[i] = {x = i, y = 1, direction = "north"} end
+    local world = setmetatable({
+      spawn_points = points,
+      mp_coop = not opts.single and {players = 2} or nil,
+      month = 1,
+      searches = 0,
+    }, {__index = World})
+    world.game_date = {monthOfGame = function() return world.month end}
+    function world:getPathDistance(_, _, x2, _)
+      self.searches = self.searches + 1
+      return walks[x2]
+    end
+    local desks = opts.desks or {{tile_x = 50, tile_y = 50}}
+    local hospital = {getReceptionDesks = function() return desks end}
+    return world, hospital, desks
+  end
+
+  -- Which points come up over many picks.
+  local function picked(world, hospital)
+    local seen = {}
+    for _ = 1, 200 do seen[world:spawnPointFor(hospital).x] = true end
+    return seen
+  end
+
+  it("picks among the nearest few, never a far one", function()
+    -- Nearest 20 (point 1), then 21 (6) and 22 (2); 30 and 31 are within
+    -- reach but three is enough; 80 is far.
+    local world, hospital = makeWorld({20, 22, 30, 31, 80, 21})
+    assert.are.same({[1] = true, [2] = true, [6] = true}, picked(world, hospital))
+    assert.are.same({1, 6, 2}, hospital.mp_spawn_near.points)
+  end)
+
+  it("leaves out points much further than the nearest", function()
+    local world, hospital = makeWorld({20, 60, nil, nil, nil, 36})
+    assert.are.same({[1] = true}, picked(world, hospital))
+  end)
+
+  it("any point when none can be walked to, or without a staffed desk", function()
+    local world, hospital = makeWorld({})
+    local count = 0
+    for _ in pairs(picked(world, hospital)) do count = count + 1 end
+    assert.are.equal(6, count)
+    assert.are.same({}, hospital.mp_spawn_near.points)
+    world, hospital = makeWorld({20, 22, 30, 31, 80, 21}, {desks = {}})
+    assert.is_true(picked(world, hospital)[5])
+  end)
+
+  it("walks are looked at again only in a new month or with other desks", function()
+    local world, hospital, desks = makeWorld({20, 22, 30, 31, 80, 21},
+        {desks = {{tile_x = 50, tile_y = 50}, {tile_x = 60, tile_y = 50}}})
+    world:spawnPointFor(hospital)
+    local searches = world.searches
+    assert.are.equal(12, searches)
+    -- The same desks in another order (they come from a pairs() walk).
+    desks[1], desks[2] = desks[2], desks[1]
+    world:spawnPointFor(hospital)
+    assert.are.equal(searches, world.searches)
+    world.month = 2
+    world:spawnPointFor(hospital)
+    assert.are.equal(2 * searches, world.searches)
+    desks[2] = nil
+    world:spawnPointFor(hospital)
+    assert.are.equal(2 * searches + 6, world.searches)
+  end)
+
+  it("single player: any point, and no walks looked at", function()
+    local world, hospital = makeWorld({20, 22, 30, 31, 80, 21}, {single = true})
+    assert.is_true(picked(world, hospital)[5])
+    assert.are.equal(0, world.searches)
+    assert.is_nil(hospital.mp_spawn_near)
+  end)
+end)
+
 describe("world.lua VIP visits: ", function()
   local saved_t_random, saved_round
 

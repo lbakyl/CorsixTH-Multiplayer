@@ -3705,6 +3705,7 @@ original_credits = {
 -------------------------------------------------------------------------------
 hotkey_window.ingame_mp_chat = "Flerspillerchat"
 hotkey_window.ingame_mp_next_hospital = "Neste sykehus (MP)"
+hotkey_window.ingame_mp_own_hospital = "Eget sykehus (MP)"
 main_menu.multiplayer = "Flerspiller"
 map_editor_window.pages.camera_n = "Kamera %d"
 map_editor_window.pages.heliport_n = "Helikopterplass %d"

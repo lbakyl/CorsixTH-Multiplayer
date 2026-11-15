@@ -1082,6 +1082,7 @@ original_credits[361] = " "
 -------------------------------------------------------------------------------
 hotkey_window.ingame_mp_chat = "Mehrspieler-Chat"
 hotkey_window.ingame_mp_next_hospital = "Nächstes Krankenhaus (MP)"
+hotkey_window.ingame_mp_own_hospital = "Eigenes Krankenhaus (MP)"
 main_menu.multiplayer = "Mehrspieler"
 map_editor_window.pages.camera_n = "Kamera %d"
 map_editor_window.pages.heliport_n = "Heliport %d"

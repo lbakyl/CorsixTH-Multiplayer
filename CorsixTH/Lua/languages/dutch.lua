@@ -3570,6 +3570,7 @@ hotkey_window = {
 -------------------------------------------------------------------------------
 hotkey_window.ingame_mp_chat = "Multiplayer-chat"
 hotkey_window.ingame_mp_next_hospital = "Volgend ziekenhuis (MP)"
+hotkey_window.ingame_mp_own_hospital = "Eigen ziekenhuis (MP)"
 main_menu.multiplayer = "Multiplayer"
 map_editor_window.pages.camera_n = "Camera %d"
 map_editor_window.pages.heliport_n = "Helikopterplatform %d"

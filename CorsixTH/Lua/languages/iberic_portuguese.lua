@@ -826,6 +826,7 @@ room_classes = {
 -------------------------------------------------------------------------------
 hotkey_window.ingame_mp_chat = "Chat multijogador"
 hotkey_window.ingame_mp_next_hospital = "Hospital seguinte (MJ)"
+hotkey_window.ingame_mp_own_hospital = "O seu hospital (MJ)"
 main_menu.multiplayer = "Multijogador"
 map_editor_window.pages.camera_n = "Câmara %d"
 map_editor_window.pages.heliport_n = "Heliporto %d"

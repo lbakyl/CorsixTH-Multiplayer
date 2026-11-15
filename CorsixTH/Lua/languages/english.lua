@@ -1465,6 +1465,7 @@ hotkey_window = {
   ingame_patient_gohome = "Send Home",
   ingame_mp_chat = "Multiplayer Chat",
   ingame_mp_next_hospital = "Next Hospital (MP)",
+  ingame_mp_own_hospital = "Own Hospital (MP)",
   ingame_sellPickedUpItem = "Sell Picked-up Item",
   ingame_storePosition_1 = "1",
   ingame_storePosition_2 = "2",

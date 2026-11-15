@@ -2712,6 +2712,7 @@ adviser.warnings.no_desk_4 = "En receptionist skal have sit eget bord for at tag
 -------------------------------------------------------------------------------
 hotkey_window.ingame_mp_chat = "Multiplayer-chat"
 hotkey_window.ingame_mp_next_hospital = "Næste hospital (MP)"
+hotkey_window.ingame_mp_own_hospital = "Eget hospital (MP)"
 main_menu.multiplayer = "Multiplayer"
 map_editor_window.pages.camera_n = "Kamera %d"
 map_editor_window.pages.heliport_n = "Helikopterplads %d"

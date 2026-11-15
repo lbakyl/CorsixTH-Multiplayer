@@ -2557,6 +2557,7 @@ menu = {
 -------------------------------------------------------------------------------
 hotkey_window.ingame_mp_chat = "멀티플레이어 채팅"
 hotkey_window.ingame_mp_next_hospital = "다음 병원 (MP)"
+hotkey_window.ingame_mp_own_hospital = "내 병원 (MP)"
 main_menu.multiplayer = "멀티플레이어"
 map_editor_window.pages.camera_n = "카메라 %d"
 map_editor_window.pages.heliport_n = "헬리포트 %d"

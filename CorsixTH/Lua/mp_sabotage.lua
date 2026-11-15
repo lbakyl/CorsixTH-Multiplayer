@@ -589,7 +589,7 @@ function sabotage.startEpidemic(world, target, level)
   local disease = contagious[math.random(1, #contagious)]
   local x, y = target:getHeliportSpawnPosition()
   if not x then
-    local spawn_point = world.spawn_points[math.random(1, #world.spawn_points)]
+    local spawn_point = world:spawnPointFor(target)
     x, y = spawn_point.x, spawn_point.y
   end
   for _ = 1, EPIDEMIC_PATIENTS[level] do

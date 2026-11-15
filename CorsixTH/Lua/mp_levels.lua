@@ -596,7 +596,7 @@ local function epidemicWave(world)
         for _ = 1, between(EPIDEMIC_PATIENTS) do
           local patient = world:newEntity("Patient", 2, 1)
           patient:setDisease(disease)
-          patient:setNextAction(SpawnAction("spawn", world.spawn_points[math.random(1, #world.spawn_points)]))
+          patient:setNextAction(SpawnAction("spawn", world:spawnPointFor(hospital)))
           patient:setHospital(hospital)
           hospital:addToEpidemic(patient)
         end

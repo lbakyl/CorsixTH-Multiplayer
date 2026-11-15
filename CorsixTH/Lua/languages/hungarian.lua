@@ -1910,6 +1910,7 @@ adviser.warnings.nurse_needs_desk_2 = "A nővérke boldog, hogy megengedted neki
 -------------------------------------------------------------------------------
 hotkey_window.ingame_mp_chat = "Többjátékos csevegés"
 hotkey_window.ingame_mp_next_hospital = "Következő kórház (MP)"
+hotkey_window.ingame_mp_own_hospital = "Saját kórház (MP)"
 main_menu.multiplayer = "Többjátékos"
 map_editor_window.pages.camera_n = "Kamera %d"
 map_editor_window.pages.heliport_n = "Helikopter-leszálló %d"

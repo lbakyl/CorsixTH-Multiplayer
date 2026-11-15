@@ -3196,6 +3196,7 @@ original_credits = {
 -------------------------------------------------------------------------------
 hotkey_window.ingame_mp_chat = "Moninpelin keskustelu"
 hotkey_window.ingame_mp_next_hospital = "Seuraava sairaala (MP)"
+hotkey_window.ingame_mp_own_hospital = "Oma sairaala (MP)"
 main_menu.multiplayer = "Moninpeli"
 map_editor_window.pages.camera_n = "Kamera %d"
 map_editor_window.pages.heliport_n = "Helikopterikenttä %d"

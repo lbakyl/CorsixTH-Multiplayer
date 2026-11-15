@@ -469,7 +469,8 @@ end
 
 --! Despawn the humanoid.
 function Humanoid:despawn()
-  local spawn_point = self.world.spawn_points[math.random(1, #self.world.spawn_points)]
+  -- (Multiplayer: by an edge near their hospital, World:spawnPointFor.)
+  local spawn_point = self.world:spawnPointFor(self.hospital)
   -- An edge it cannot walk to (a map whose roads an unowned plot cuts): the
   -- nearest one it can, else it leaves where it stands. (Otherwise it would
   -- try the walk again every tick, for ever.)
