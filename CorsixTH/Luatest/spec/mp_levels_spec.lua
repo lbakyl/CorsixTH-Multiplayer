@@ -62,6 +62,7 @@ local function fake_world(players, discovered)
     self.mp_turns[event] = turn
     return self.hospitals[turn]
   end
+  function world:spawnPointFor() return self.spawn_points[1] end -- (as World:spawnPointFor)
   function world:newEntity()
     local patient = {}
     function patient:setDisease(d) self.disease = d end
