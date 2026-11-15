@@ -84,6 +84,13 @@ RECOVERY_TIMEOUT = 60.0
 # referee differs (an older game cannot send one: then a full repair).
 QUORUM_WAIT = 10.0
 REFEREE_REPAIR_TIMEOUT = 20.0
+# A game repaired alone that differs again within this many steps: everybody
+# loads the referee's game this time. (2026-11-15, the map session's MOUNT
+# EVEREST match: Bot Bertie's game, repaired alone, differed again within 50
+# steps 145 times; something a loaded game does not get back from the save
+# made it go its own way. Once all games have loaded the same save, they go
+# on alike.)
+QUORUM_AGAIN_STEPS = 1000
 # Computer players (bots): the room owner adds them in the lobby; each is a
 # headless game this server starts (like the referee) that joins the room as
 # a player. Names given in this order; a bot that has not joined within the
@@ -316,6 +323,7 @@ class Room:
     last_report: dict[int, str] = field(default_factory=dict)
     recovery: "Recovery | None" = None  # desync repair in progress
     recoveries: int = 0
+    quorum_repaired: dict[int, int] = field(default_factory=dict)  # place -> step it was repaired alone
     # Bots started but not joined yet: token -> [name, process or None, the
     # running game's place it takes (None: a new place in the lobby),
     # stand-in, level, the place of the person it assists (0: none)].
@@ -1801,6 +1809,13 @@ class Server:
                     # (Repairing the referee meanwhile: the players come first.)
                     room.recovery = None
                 quorum = self._quorum(fps, active) if room.referee_token else None
+                if quorum is not None and any(
+                        0 <= step - room.quorum_repaired.get(p, -QUORUM_AGAIN_STEPS - 1) <= QUORUM_AGAIN_STEPS
+                        for p in quorum[1]):
+                    log.warning("room %r: %s repaired alone lately and differs again at step %d: "
+                                "repairing everybody", room.name,
+                                ", ".join(room.players[p].name for p in quorum[1] if p in room.players), step)
+                    quorum = None
                 if quorum is not None:
                     self._quorum_repair(room, step, *quorum)
                 else:
@@ -1892,6 +1907,7 @@ class Server:
         """Hold everybody and give them the referee's game; `rejoining`: the
         player(s) who have no game yet (they get it without holding)."""
         rec = room.recovery = Recovery(step=step)
+        room.quorum_repaired.clear()  # (everybody loads the same game)
         newcomers = [] if rejoining is None else \
             [rejoining] if isinstance(rejoining, int) else list(rejoining)
         for peer in newcomers:
@@ -1916,6 +1932,8 @@ class Server:
         names = ", ".join(room.players[p].name for p in dissenters if p in room.players)
         log.warning("room %r: a quorum agrees at step %d; repairing only %s", room.name, step, names)
         rec = room.recovery = Recovery(step=step, only=set(dissenters), quorum_fp=fp)
+        for p in dissenters:
+            room.quorum_repaired[p] = step
         # The others go on: their games noticed the difference too, and
         # would tell their players that the games are out of sync.
         self._tell_others(room, rec.only, encode("REPAIRING", step=step,

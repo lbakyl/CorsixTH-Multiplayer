@@ -601,6 +601,15 @@ def test_quorum_repairs_only_the_game_that_differs():
                 break
             await asyncio.sleep(0.01)
         assert room.verified_step == 5 and room.desync_step is None
+        # Cid differs again soon after: this time everybody loads the
+        # referee's game (Bot Bertie on MOUNT EVEREST, 2026-11-15: 145
+        # repairs of his game alone, each differing again).
+        a.send("S 1 6 fp-six")
+        b.send("S 2 6 fp-six")
+        c.send("S 3 6 fp-odd")
+        for x in (a, b, c):
+            assert (await x.expect("HOLD"))["step"] == "6"
+        assert room.quorum_repaired == {}
     run_with_referee(body)
 
 

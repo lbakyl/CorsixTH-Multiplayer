@@ -506,28 +506,21 @@ end
 --! After loading a game (a desync repair, a rejoin, a continued game):
 --! commands that were waiting to be tried again (a room waiting for people
 --! to leave its area) are kept in the game (world.mp_retries, beforeStep),
---! so they go on; the tiles people were asked to leave (avoidTile, set only
---! by such a room) are freed first and marked again by the room's next try.
---! Before, a reload forgot the waiting room: its player's editor waited for
---! good and nobody could build there again (Argus, eu2).
+--! so they go on. Before, a reload forgot the waiting room: its player's
+--! editor waited for good and nobody could build there again (Argus, eu2).
+--! They go on exactly as saved, at their step and game hour, with the tiles
+--! people were asked to leave (avoidTile, in the save) as they were: a game
+--! that loads alone (a quorum repair, a rejoin) must go on as the games that
+--! did not load. (Until 2026-11-15 a reload freed those tiles and tried the
+--! room again a little later, in the loading game only.)
 function MultiplayerSession:_resumeRetries(world, step)
-  local th = world and world.map and world.map.th
-  if not th then return end
-  local w, h = th:size()
-  local flags = {}
-  for ty = 1, h do
-    for tx = 1, w do
-      th:getCellFlags(tx, ty, flags)
-      if flags.avoidTile then th:setCellFlags(tx, ty, {avoidTile = false}) end
-    end
-  end
   local keys = {}
-  for key in pairs(world.mp_retries or {}) do keys[#keys + 1] = key end
+  for key in pairs(world and world.mp_retries or {}) do keys[#keys + 1] = key end
   table.sort(keys)
   for _, key in ipairs(keys) do
     local cmd = world.mp_retries[key]
-    cmd.step = step + MultiplayerSession.RETRY_STEPS
-    cmd.retry_at_hour = nil
+    -- (One due before the saved step would never run: the next step.)
+    if (tonumber(cmd.step) or 0) <= step then cmd.step = step + 1 end
     self.pending[#self.pending + 1] = cmd
   end
 end
@@ -1186,8 +1179,27 @@ function MultiplayerSession.diagnostics(world)
         tostring(e.tile_x), tostring(e.tile_y), doing)
   end
   parts[#parts + 1] = "map rows " .. MultiplayerSession.mapRows(world)
+  -- (Which tile flag a map that differs differs in, and every message with
+  -- its timer: 2026-11-15, Bot Bertie's game on MOUNT EVEREST took a fax's
+  -- default choice alone, then its map differed after every repair.)
+  parts[#parts + 1] = "map flags " .. MultiplayerSession.flagCounts(world)
+  parts[#parts + 1] = "messages " .. MultiplayerSession.messageList(world)
   parts[#parts + 1] = "random " .. MultiplayerSession.randomDraws()
   return table.concat(parts, "; ")
+end
+
+--! Every message in the bottom panel, shown or queued, in number order:
+--! "number:type:hospital:timer" (the timer in game hours, "nil": none).
+function MultiplayerSession.messageList(world)
+  local panel = world.ui and world.ui.bottom_panel
+  if not (panel and panel.allMessageIcons) then return "" end
+  local out = {}
+  for _, icon in ipairs(panel:allMessageIcons()) do
+    local hospital = icon.hospital and world:getHospitalIndex(icon.hospital)
+    out[#out + 1] = string.format("%s:%s:%s:%s", tostring(icon.mp_id), tostring(icon.type),
+        tostring(hospital or "-"), tostring(icon.timer))
+  end
+  return table.concat(out, ",")
 end
 
 -- The tile flags a map row's checksum covers (the ones the game decides by:
@@ -1195,6 +1207,32 @@ end
 local ROW_FLAGS = {"passable", "buildable", "hospital", "room", "travelNorth", "travelEast",
     "travelSouth", "travelWest", "buildableNorth", "buildableEast", "buildableSouth", "buildableWest",
     "avoidTile", "doNotIdle", "tallWest", "tallNorth", "doorWest", "doorNorth"}
+
+--! For each tile flag of the map rows' checksum: how many tiles have it, and
+--! a sum of where ("name=count/sum"; the same in two games unless the flag
+--! differs).
+function MultiplayerSession.flagCounts(world)
+  local th = world.map and world.map.th
+  if not th then return "" end
+  local w, h = th:size()
+  local flags, counts, sums = {}, {}, {}
+  for y = 1, h do
+    for x = 1, w do
+      th:getCellFlags(x, y, flags)
+      for i, name in ipairs(ROW_FLAGS) do
+        if flags[name] then
+          counts[i] = (counts[i] or 0) + 1
+          sums[i] = ((sums[i] or 0) + x * 1031 + y * 7) % 1000003
+        end
+      end
+    end
+  end
+  local out = {}
+  for i, name in ipairs(ROW_FLAGS) do
+    out[#out + 1] = string.format("%s=%d/%d", name, counts[i] or 0, sums[i] or 0)
+  end
+  return table.concat(out, " ")
+end
 
 --! A checksum of every map row's tile flags, walls and room ids ("y:crc",
 --! comma-separated). The fingerprint does not cover the map; a desync in

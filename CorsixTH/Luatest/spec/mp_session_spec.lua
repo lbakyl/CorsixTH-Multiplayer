@@ -664,6 +664,41 @@ describe("MultiplayerSession game options", function()
     assert(ok, err)
   end
 
+  it("goes on with a waiting room exactly as saved after a load", function()
+    -- (A game that loads alone, as in a quorum repair, must go on as those
+    -- that did not load: the same step and game hour, the map untouched.)
+    local waiting = {kind = "build_room", peer = 2, seq = 7, step = 105, retry_at_hour = 50, retries = 3}
+    local late = {kind = "build_room", peer = 1, seq = 4, step = 90}
+    local world = {mp_retries = {["2:7"] = waiting, ["1:4"] = late},
+        map = {th = setmetatable({}, {__index = function() error("the map is not touched") end})}}
+    local session = {pending = {}}
+    MultiplayerSession._resumeRetries(session, world, 100)
+    assert.equal(2, #session.pending)
+    assert.same({105, 50, 3}, {waiting.step, waiting.retry_at_hour, waiting.retries})
+    assert.equal(101, late.step)
+  end)
+
+  it("counts the map's tile flags and lists the messages for a desync's dump", function()
+    local cells = {[1] = {passable = true}, [2] = {passable = true, avoidTile = true}}
+    local th = {size = function() return 2, 1 end,
+        getCellFlags = function(_, x, _, t)
+          for k in pairs(t) do t[k] = nil end
+          for k, v in pairs(cells[x]) do t[k] = v end
+          return t
+        end}
+    local h1 = {}
+    local world = {map = {th = th}, hospitals = {h1},
+        getHospitalIndex = function(_, h) return h == h1 and 1 or nil end,
+        ui = {bottom_panel = {allMessageIcons = function()
+          return {{mp_id = 3, type = "personality", hospital = h1, timer = 12}, {type = "mp_vote"}}
+        end}}}
+    local counts = MultiplayerSession.flagCounts(world)
+    assert.truthy(counts:find("passable=2/", 1, true))
+    assert.truthy(counts:find("avoidTile=1/2069", 1, true)) -- (2 * 1031 + 1 * 7)
+    assert.truthy(counts:find("buildable=0/0", 1, true))
+    assert.equal("3:personality:1:12,nil:mp_vote:-:nil", MultiplayerSession.messageList(world))
+  end)
+
   it("keeps the money for the bid a hospital leads with: no loan paid back below it", function()
     with_texts(function()
       local world = money_world({8000, 8000}, {10000, 10000})
