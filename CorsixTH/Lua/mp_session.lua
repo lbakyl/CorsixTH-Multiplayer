@@ -658,6 +658,7 @@ MultiplayerSession.rejection_texts = {
                  ["someone is in the way"] = "Could not place the object there: someone was in the way.",
                  ["it would block the room"] = "Not there: it would block the way to another object."},
   room_finish = {["objects missing"] = "The room still needs some of its objects."},
+  loan = {["leading an auction"] = "You lead the auction: you need that money to pay for your bid."},
   offer_staff = {["already offered"] = "That member of staff has already been offered."},
   offer_patient = {["already offered"] = "That patient has already been referred.",
                    ["the patient is in a room"] = "The patient is in a room now. Try again when they come out.",
@@ -3392,6 +3393,12 @@ function handlers.loan(world, cmd)
   else
     amount = -amount
     if amount > hospital.loan or hospital.balance < amount then return false, "cannot repay" end
+    -- Not the money a bid needs while it leads the auction (Argus,
+    -- 2026-11-15: matroftt borrowed for each bid and paid it back at once;
+    -- he led three auctions and could pay for none when they ended).
+    if MultiplayerSession.leadingBid(world, hospital) > hospital.balance - amount then
+      return false, "leading an auction"
+    end
     hospital.loan = hospital.loan - amount
     hospital:spendMoney(amount, _S.transactions.loan_repayment)
   end
@@ -3873,8 +3880,29 @@ local function auction_decided(auction)
   return true
 end
 
+--! The bid `hospital` leads the auction with (0: none).
+function MultiplayerSession.leadingBid(world, hospital)
+  local auction = world.mp_auction
+  if auction and hospital and world.hospitals[auction.leader] == hospital then return auction.bid or 0 end
+  return 0
+end
+
+--! A hospital that won an auction with less money than its bid (spent, or
+--! a loan paid back, since it bid) borrows the rest from the bank in steps
+--! of $5000, if the bank lends it all. Returns the amount borrowed (0:
+--! none). The same on every peer.
+function MultiplayerSession.auctionBorrow(world, hospital, cost)
+  if not hospital or hospital.balance >= cost then return 0 end
+  local short = cost - hospital.balance
+  local amount = math.ceil(short / 5000) * 5000
+  if (hospital.loan or 0) + amount > MultiplayerSession.maxLoan(world, hospital) then return 0 end
+  hospital.loan = (hospital.loan or 0) + amount
+  hospital:receiveMoney(amount, _S.transactions.bank_loan)
+  return amount
+end
+
 --! The auction ends: the leader buys the plot for the bid (if they still
---! may and can pay).
+--! may and can pay; short of money, with a loan for the rest).
 local function end_auction(world)
   local auction = world.mp_auction
   world.mp_auction = nil
@@ -3887,22 +3915,41 @@ local function end_auction(world)
   if borrowed > 0 then
     auction_log(string.format("auction %d: bot hospital %d borrows $%d", auction.id, auction.leader, borrowed))
   end
+  -- Anyone whose money is short now borrows the rest (Argus, 2026-11-15:
+  -- matroftt led three auctions for one plot and got none, with "Plot 13
+  -- was not sold" each time).
+  local lent = MultiplayerSession.auctionBorrow(world, winner, auction.bid)
+  if lent > 0 then
+    auction_log(string.format("auction %d: hospital %d borrows $%d to pay", auction.id, auction.leader, lent))
+    MultiplayerSession.tellPlayer(world, winner, S.auction_loan_note:format(lent, auction.plot))
+  end
   -- (purchasePlot gives cost advice through the UI; only to that player.)
   local adviser = ui and ui.adviser
   if ui and ui.hospital ~= winner then ui.adviser = nil end
   local ok = winner and winner:purchasePlot(auction.plot, auction.bid)
   if ui then ui.adviser = adviser end
-  -- (Kept for the auction screen's last moment: who got it.)
+  -- (Kept for the auction screen's last moment: who got it, or who could
+  -- not pay.)
   auction.sold, auction.name = ok or false, winner and winner.name
+  auction.unpaid = not ok and winner and winner.balance < auction.bid or nil
   world.mp_auction_last = auction
   auction_log(string.format("auction %d: plot %d %s", auction.id, auction.plot,
-      ok and string.format("sold to hospital %d for $%d", auction.leader, auction.bid) or "not sold"))
+      ok and string.format("sold to hospital %d for $%d", auction.leader, auction.bid) or
+      auction.unpaid and string.format("not sold: hospital %d has $%d of $%d", auction.leader,
+          math.floor(winner.balance), auction.bid) or "not sold"))
   local session = TheApp.mp_session
   if session then
-    session.notify(ok and S.auction_sold:format(auction.plot, winner.name, auction.bid) or
-        S.auction_not_sold:format(auction.plot))
+    session.notify(MultiplayerSession.auctionResult(auction))
   end
   if ok and ui and ui.hospital == winner then ui:playSound("cashreg.wav") end
+end
+
+--! What became of an auction that ended, as a line for the players.
+function MultiplayerSession.auctionResult(auction)
+  local S = _S.multiplayer_window
+  if auction.sold then return S.auction_sold:format(auction.plot, auction.name, auction.bid) end
+  if auction.unpaid then return S.auction_not_paid:format(auction.plot, auction.name, auction.bid) end
+  return S.auction_not_sold:format(auction.plot)
 end
 
 --! Open an auction for `plot` (MultiplayerSession.auctionBidders: the
