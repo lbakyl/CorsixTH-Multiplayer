@@ -343,6 +343,35 @@ def main(src, dst):
                 if floor or door:
                     parcel[y][x] = 7 + i
 
+    # --- outer walls belong to their plot --------------------------------------
+    # A building's south and east walls stand on the tiles just outside it.
+    # Those tiles go to the plot inside, or the game (which turns a plot not
+    # yet bought into grass, walls and all) leaves those walls standing alone
+    # in the grass.
+    def indoors(x, y):
+        t = tiles[y][x]
+        return t[2] == HOSP_FLOOR and not (t[7] & 16)
+    moved = paved_moved = 0
+    for y in range(1, N):
+        for x in range(1, N):
+            if indoors(x, y):
+                continue
+            t = tiles[y][x]
+            owners = set()
+            if t[3] and indoors(x, y - 1) and parcel[y - 1][x]:
+                owners.add(parcel[y - 1][x])
+            if t[4] and indoors(x - 1, y) and parcel[y][x - 1]:
+                owners.add(parcel[y][x - 1])
+            if not owners:
+                continue
+            if len(owners) > 1 or (parcel[y][x] and parcel[y][x] not in owners):
+                sys.exit('the wall tile %d,%d is between plots %s and %d' % (x, y, sorted(owners), parcel[y][x]))
+            if not parcel[y][x]:
+                moved += 1
+                paved_moved += t[2] not in (1, 2)
+            parcel[y][x] = owners.pop()
+    print('outer wall tiles given to their plots', moved, '(not grass: %d)' % paved_moved)
+
     # --- write ------------------------------------------------------------------
     out = bytearray(b'CTHMAP1\0' + struct.pack('<HH', N, N) + b'\0' * 4)
     head = bytearray(34)
