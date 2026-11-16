@@ -22,6 +22,8 @@
 -- <dir>/saves (with a .json beside it: the room, the date, each hospital and
 -- whether a bot ever played it), and notes what they build (rooms, objects,
 -- moves) in <dir>/builds/<room>.jsonl. layout_learn.py learns from them.
+-- An expert who did nothing since the last save (a save loaded and only
+-- looked at) is not saved again.
 local args = {...}
 local unpack_args = table.unpack or unpack
 local source_dir = assert(os.getenv("CORSIXTH_SOURCE"), "Missing CORSIXTH_SOURCE")
@@ -106,13 +108,34 @@ local function ensure_dir(path)
   if not lfs.attributes(path, "mode") then lfs.mkdir(path) end
 end
 
---! Save the game for learning (why: "year 2", "end"), if an expert plays.
+-- Hospitals whose expert issued a game command since the last learning
+-- save (watch_commands): index -> true.
+local acted = {}
+
+--! Save the game for learning (why: "year 2", "end"), if an expert plays
+--! and did something since the last save.
 local function learn_save(why, lobby)
   local world = TheApp.world
   if not learning or not world then return end
   note_bots(world)
   local playing = experts_playing(world)
   if not next(playing) then return end
+  -- Only the experts who did something since the last save (or the start):
+  -- a game continued from a save and only looked at teaches nothing new
+  -- (Argus on 2026-11-15: three saves loaded, nothing built, all "learnt").
+  local idle = {}
+  for index, name in pairs(playing) do
+    if not acted[index] then
+      playing[index] = nil
+      idle[#idle + 1] = name
+    end
+  end
+  table.sort(idle)
+  if not next(playing) then
+    log(string.format("learning: no save (%s): %s did nothing since the last save", why, table.concat(idle, ", ")))
+    return
+  end
+  acted = {}
   local ok, err = pcall(function()
     ensure_dir(learn_dir)
     ensure_dir(learn_dir .. "/saves")
@@ -180,6 +203,30 @@ local function watch_builds()
   end
 end
 
+-- Commands that do not count as doing something in one's hospital: the
+-- shared speed, saving, being away, and what the game does by itself.
+local IDLE_KINDS = {set_speed = true, speed_vote = true, speed_vote_answer = true, save_game = true,
+    player_away = true, hold_done = true, room_takeover = true}
+
+--! Note which hospitals act (acted): every command that ran for one, but
+--! IDLE_KINDS.
+local function watch_commands()
+  corsixth.require("mp_session")
+  local handlers = MultiplayerSession.default_handlers
+  local kinds = {}
+  for kind in pairs(handlers) do kinds[#kinds + 1] = kind end
+  for _, kind in ipairs(kinds) do
+    local handler = handlers[kind]
+    if not IDLE_KINDS[kind] and type(handler) == "function" then
+      handlers[kind] = function(world, cmd)
+        local ok, why = handler(world, cmd)
+        if ok then acted[tonumber(cmd.hospital) or 1] = true end
+        return ok, why
+      end
+    end
+  end
+end
+
 local function run()
   assert(loadfile(source_dir .. "/CorsixTH/CorsixTH.lua"))(unpack_args(args))
   assert(TheApp.good_install_folder, "Game data was not accepted")
@@ -197,6 +244,7 @@ local function run()
     table.sort(names)
     log("learning from " .. table.concat(names, ", ") .. " into " .. learn_dir)
     watch_builds()
+    watch_commands()
   end
 
   -- Wait for the server's START (the game data and level load here).
