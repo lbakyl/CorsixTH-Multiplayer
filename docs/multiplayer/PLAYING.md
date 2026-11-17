@@ -21,8 +21,8 @@ It is a test version: expect rough edges, and please report what you find.
   with. A server with a referee only lets in the build it runs; it tells
   you which release to download.
 - **A server address** (`host:port`, port 47800 by default).
-  `eu1.bachelor-tech.com:47800` runs the newest stable release,
-  `eu2.bachelor-tech.com:47800` the newest test build.
+  `eu1.openth.org:47800` runs the newest stable release,
+  `eu2.openth.org:47800` the newest test build.
   Anybody can run one; see [SERVER-SETUP.md](SERVER-SETUP.md).
 
 ## Get the game

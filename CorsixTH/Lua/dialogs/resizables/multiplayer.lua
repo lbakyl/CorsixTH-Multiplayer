@@ -221,8 +221,8 @@ end
 --! The public servers offered on the connect view (eu2 is the default the
 --! first time: test builds are played there).
 UIMultiplayer.SERVERS = {
-  {label = "server_eu1", address = "eu1.bachelor-tech.com:47800"},
-  {label = "server_eu2", address = "eu2.bachelor-tech.com:47800"},
+  {label = "server_eu1", address = "eu1.openth.org:47800"},
+  {label = "server_eu2", address = "eu2.openth.org:47800"},
 }
 
 function UIMultiplayer:_buildConnect()

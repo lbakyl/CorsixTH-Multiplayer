@@ -18,7 +18,7 @@ This is a fork of CorsixTH, not an official CorsixTH release. Single player work
    - **Linux** (x86_64, Ubuntu 24.04, Linux Mint 22 or newer): unpack `...-linux-x86_64.tar.gz` and start `CorsixTH-Multiplayer/CorsixTH-Multiplayer.sh`.
    - **macOS** (Apple Silicon, the macOS version the release names, usually 27 or newer): unzip `...-macos-arm64.zip` and move `CorsixTH.app` to Applications. The app is not notarized by Apple: the first time, open **System Settings > Privacy & Security** and click **Open Anyway**.
 2. **Theme Hospital's game data** is needed, as for CorsixTH: the original CD, or a download from [GOG.com](https://www.gog.com/game/theme_hospital) or [EA](https://www.ea.com/games/theme/theme-hospital). The first start asks for its folder.
-3. **Main menu > Multiplayer**: click **EU1: stable** (`eu1.bachelor-tech.com:47800`, the newest stable release) or **EU2: test builds** (`eu2.bachelor-tech.com:47800`, the newest test build), enter your name, then **Connect**.
+3. **Main menu > Multiplayer**: click **EU1: stable** (`eu1.openth.org:47800`, the newest stable release) or **EU2: test builds** (`eu2.openth.org:47800`, the newest test build), enter your name, then **Connect**.
 4. **Create a room** (the level, how many places, a password if you like) or **join** one. Everybody picks a colour and a team: the same colour shares a hospital, the same team wins together. Click an empty place to add a bot. When everybody is ready, the room's owner starts the game. The lobby measures everybody's connection and sets the top speed that stays smooth.
 5. Everybody in a game must run the **same release**. A server only lets in the release it runs, and tells you which one to download.
 

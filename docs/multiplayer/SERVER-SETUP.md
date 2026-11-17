@@ -1,7 +1,7 @@
 # Setting up your own multiplayer server (with the referee)
 
-This guide sets up a server like `eu1.bachelor-tech.com` and
-`eu2.bachelor-tech.com`: the lobby where players make and join rooms, plus
+This guide sets up a server like `eu1.openth.org` and
+`eu2.openth.org`: the lobby where players make and join rooms, plus
 the **referee**, a copy of every game that runs on the server. The referee
 repairs games that get out of sync within a moment, lets a player whose game
 crashed join again, and runs the computer players (bots). One script does
