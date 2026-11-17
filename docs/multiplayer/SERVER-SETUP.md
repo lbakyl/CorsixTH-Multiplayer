@@ -128,7 +128,7 @@ ls ~/themehos
 ## 4. Pick the game version
 
 Every player and the server must run **the same release**. Open the releases
-page: <https://github.com/lbakyl/CorsixTH-Multiplayer/releases>
+page: <https://github.com/openth-org/openth/releases>
 
 - **Stable** releases are called `mp-stable-<number>` (the one marked
   *Latest*). eu1 runs the newest stable one.
@@ -145,7 +145,7 @@ release name, and the welcome text (`--motd`, shown to players when they
 connect) with your own:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/lbakyl/CorsixTH-Multiplayer/master/mp_server/deploy/setup-referee-host.sh
+curl -fsSLO https://raw.githubusercontent.com/openth-org/openth/master/mp_server/deploy/setup-referee-host.sh
 sudo bash setup-referee-host.sh --release mp-stable-a03adfdc --data ~/themehos --motd "Welcome to my CorsixTH server"
 ```
 
@@ -201,7 +201,7 @@ When a new release comes out, run the script again with its name, **without
 `--data`** (the server keeps the game files from the first time):
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/lbakyl/CorsixTH-Multiplayer/master/mp_server/deploy/setup-referee-host.sh
+curl -fsSLO https://raw.githubusercontent.com/openth-org/openth/master/mp_server/deploy/setup-referee-host.sh
 sudo bash setup-referee-host.sh --release mp-stable-NEWNUMBER --motd "Welcome to my CorsixTH server"
 ```
 

@@ -7,7 +7,7 @@
 #        [--name eu2] [--experts "Argus,Matroftt"]
 #   (a stable release is named mp-stable-<commit>)
 #
-# --release  a test release of lbakyl/CorsixTH-Multiplayer: its Linux package
+# --release  a test release of openth-org/openth: its Linux package
 #            is the referee, and the server code comes from the same commit.
 #            The players must run that release (the build ids must match).
 # --code     optional: the server code and the referee's and bots' scripts
@@ -50,7 +50,7 @@ PORT=47800
 MOTD="CorsixTH multiplayer server (with referee)"
 NAME=""
 EXPERTS="-"
-REPO=lbakyl/CorsixTH-Multiplayer
+REPO=openth-org/openth
 BASE=/opt/corsixth-mp
 
 while [[ $# -gt 0 ]]; do

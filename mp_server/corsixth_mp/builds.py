@@ -29,7 +29,7 @@ from dataclasses import dataclass
 
 from .referee import RefereeConfig
 
-REPO_URL = "https://github.com/lbakyl/CorsixTH-Multiplayer"
+REPO_URL = "https://github.com/openth-org/openth"
 
 
 def lua_checksum(lua_dir: str | os.PathLike[str]) -> str:

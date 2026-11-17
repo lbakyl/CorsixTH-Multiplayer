@@ -179,7 +179,7 @@ describe("MultiplayerLobby", function()
 
   it("offers the release a server asks for, but only from GitHub", function()
     local lobby, t = make_lobby()
-    local url = "https://github.com/lbakyl/CorsixTH-Multiplayer/releases/tag/mp-test-6d85201a"
+    local url = "https://github.com/openth-org/openth/releases/tag/mp-test-6d85201a"
     t.inbox = {"ERROR code=build_mismatch need=210d8203 release=mp-test-6d85201a text=Other%20game" ..
         "%20version url=" .. url}
     lobby:poll()

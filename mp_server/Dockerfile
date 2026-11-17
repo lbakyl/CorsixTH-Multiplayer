@@ -7,7 +7,7 @@ FROM python:3.13-slim
 
 LABEL org.opencontainers.image.title="corsixth-mp-server" \
       org.opencontainers.image.description="Relay and lobby server for the experimental CorsixTH multiplayer mode" \
-      org.opencontainers.image.source="https://github.com/lbakyl/CorsixTH-Multiplayer" \
+      org.opencontainers.image.source="https://github.com/openth-org/openth" \
       org.opencontainers.image.licenses="MIT"
 
 # Unprivileged user with a fixed id (the compose file runs as it too).

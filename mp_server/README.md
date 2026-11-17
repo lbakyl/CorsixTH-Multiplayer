@@ -21,7 +21,7 @@ referee (below).
 ## Quick start (plain server)
 
 1. Get the server code of the **same release your players use**: on the
-   [releases page](https://github.com/lbakyl/CorsixTH-Multiplayer/releases),
+   [releases page](https://github.com/openth-org/openth/releases),
    under the release, **Source code (zip)**. Unpack it.
 2. Open a terminal in its `mp_server` folder and start the server:
 

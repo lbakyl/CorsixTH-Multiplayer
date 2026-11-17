@@ -1232,7 +1232,7 @@ def test_bot_of_another_build_or_on_a_plain_server(run):
 
 def test_other_builds_are_turned_away_with_the_release():
     check = BuildCheck(checksum="210d8203", release="mp-test-6d85201a",
-                       url="https://github.com/lbakyl/CorsixTH-Multiplayer/releases/tag/mp-test-6d85201a")
+                       url="https://github.com/openth-org/openth/releases/tag/mp-test-6d85201a")
 
     async def main():
         server = srv.Server(build_check=check)
@@ -1273,7 +1273,7 @@ def test_build_check_settings(tmp_path):
 
     check = BuildCheck.from_env({"CORSIXTH_MP_RELEASE": "mp-test-6d85201a"}, referee)
     assert check.checksum == expected and check.release == "mp-test-6d85201a"
-    assert check.url == "https://github.com/lbakyl/CorsixTH-Multiplayer/releases/tag/mp-test-6d85201a"
+    assert check.url == "https://github.com/openth-org/openth/releases/tag/mp-test-6d85201a"
     assert check.accepts(f"v0.70.1-sv269-lua5.5-mp1-english-{expected}")
     assert not check.accepts("v0.70.1-sv269-lua5.5-mp1-english-00000000")
     assert not check.accepts(expected + "x")

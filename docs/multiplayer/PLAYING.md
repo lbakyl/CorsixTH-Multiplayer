@@ -27,7 +27,7 @@ It is a test version: expect rough edges, and please report what you find.
 
 ## Get the game
 
-1. Open the fork's [Releases](https://github.com/lbakyl/CorsixTH-Multiplayer/releases)
+1. Open the fork's [Releases](https://github.com/openth-org/openth/releases)
    and download the newest **Multiplayer test build** zip (no GitHub account
    needed). Unzip it into a new folder.
 2. Start `CorsixTH.exe`. The first time it asks for your Theme Hospital
