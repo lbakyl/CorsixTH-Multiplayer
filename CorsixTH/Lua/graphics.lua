@@ -444,20 +444,77 @@ function Graphics:hasLanguageFont(font)
   end
 end
 
+-- Which texts the original bitmap fonts cannot show, by text (reset when
+-- it grows large: chat lines and names come and go).
+local beyond_cache, beyond_cache_size = {}, 0
+
+--- Whether `text` has letters the original bitmap font (Theme Hospital's
+--- own) cannot show: another script's, e.g. a Russian player's name for a
+--- player of the English game, or Chinese in the multiplayer chat. Code
+--- page 437 shows the Latin-1 letters, the Russian game's MIK the Russian
+--- ones (and Ё, drawn as Е). Punctuation and symbols (U+2000 to U+2E7F)
+--- stay with the bitmap font, as before.
+--- @param text (string) UTF-8 text
+--- @param mik (boolean) the Russian game's font, else code page 437
+--- @return boolean
+local function beyond_bitmap_font(text, mik)
+  if not text:find("[\195-\244]") then return false end
+  local key = mik and "m" .. text or text
+  local known = beyond_cache[key]
+  if known ~= nil then return known end
+  local beyond = false
+  for c in text:gmatch("[\195-\244][\128-\191]*") do
+    local b1, b2, b3 = c:byte(1, 3)
+    b2, b3 = (b2 or 0x80) - 0x80, (b3 or 0x80) - 0x80
+    local cp
+    if b1 < 0xE0 then
+      cp = (b1 - 0xC0) * 64 + b2
+    elseif b1 < 0xF0 then
+      cp = (b1 - 0xE0) * 4096 + b2 * 64 + b3
+    else
+      cp = 0x10000
+    end
+    if cp >= 0x2E80 or (cp < 0x2000 and cp >= (mik and 0xC0 or 0x100) and
+        not (mik and (cp == 0x401 or cp == 0x451 or (cp >= 0x410 and cp <= 0x44F)))) then
+      beyond = true
+      break
+    end
+  end
+  if beyond_cache_size >= 2000 then beyond_cache, beyond_cache_size = {}, 0 end
+  beyond_cache[key] = beyond
+  beyond_cache_size = beyond_cache_size + 1
+  return beyond
+end
+
+--- The font that draws `text`: a bitmap font's Unicode stand-in (the
+--- same size and colour) when the bitmap font cannot show it.
+--- @param self The font proxy.
+--- @param text The text, a string or a game string.
+local function font_for(self, text)
+  local unicode = self._unicode
+  if not unicode then return self._proxy end
+  if type(text) == "userdata" then text = TH.stringProxy._unwrap(text) end
+  if type(text) ~= "string" or not beyond_bitmap_font(text, unicode.mik) then return self._proxy end
+  if not unicode.font then
+    unicode.font = unicode.gfx:_loadTrueTypeFont("unicode", unicode.sprite_table, unicode.font_options)
+  end
+  return unicode.font
+end
+
 --- Font proxy meta table wrapping the C++ class.
 local font_proxy_mt = {
   __index = {
-    sizeOf = function(self, ...)
-      return self._proxy:sizeOf(...)
+    sizeOf = function(self, text, ...)
+      return font_for(self, text):sizeOf(text, ...)
     end,
-    draw = function(self, ...)
-      return self._proxy:draw(...)
+    draw = function(self, canvas, text, ...)
+      return font_for(self, text):draw(canvas, text, ...)
     end,
-    drawWrapped = function(self, ...)
-      return self._proxy:drawWrapped(...)
+    drawWrapped = function(self, canvas, text, ...)
+      return font_for(self, text):drawWrapped(canvas, text, ...)
     end,
-    drawTooltip = function(self, ...)
-      return self._proxy:drawTooltip(...)
+    drawTooltip = function(self, canvas, text, ...)
+      return font_for(self, text):drawTooltip(canvas, text, ...)
     end,
     isBitmap = function(self)
       return self._proxy:isBitmap()
@@ -477,6 +534,7 @@ function Graphics:onChangeLanguage()
         local fn = info[1]
         local new_object = fn(unpack(info, 2))
         object._proxy = new_object._proxy
+        object._unicode = new_object._unicode
       end
     end
     g.load_info = load_info
@@ -795,6 +853,7 @@ function Graphics:loadFont(sprite_table, font_options, y_sep, ttf_color, force_b
   local use_bitmap_font = font_options.force_bitmap or
       self:_isLanguageSupportedByTHAssets() or not sprite_table:isVisible(46)
   local font
+  local unicode -- the Unicode font for text the bitmap font cannot show
   if use_bitmap_font then
     font = TH.bitmap_font()
     font:setSeparation(font_options.x_sep or 0, font_options.y_sep or 0)
@@ -802,13 +861,18 @@ function Graphics:loadFont(sprite_table, font_options, y_sep, ttf_color, force_b
     if font_options.apply_ui_scale then
       font:setScaleFactor(self:getUIScale())
     end
+    if self.ttf_font_data and not font_options.force_bitmap and sprite_table:isVisible(46) then
+      -- (Made when first needed: font_for.)
+      unicode = {gfx = self, sprite_table = sprite_table, font_options = font_options,
+          mik = self.th_charset == charsets["mik"]}
+    end
   else
     font = self:_loadTrueTypeFont("unicode", sprite_table, font_options)
   end
   -- A change of language or scale might cause the font to change,
   -- so wrap it in a proxy object which allows the actual object to
   -- be changed easily.
-  font = setmetatable({ _proxy = font }, font_proxy_mt)
+  font = setmetatable({ _proxy = font, _unicode = unicode }, font_proxy_mt)
   self.load_info[font] = { self.loadFont, self, sprite_table, font_options }
   return font
 end

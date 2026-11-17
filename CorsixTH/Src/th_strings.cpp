@@ -283,6 +283,24 @@ unsigned int unicode_to_codepage_mik(unsigned int code_point) {
       return 0xFE;
     case 0x00A0:
       return 0xFF;
+    // Not in MIK: the nearest letter or sign it has, as Russian is often
+    // written anyway (Yo as Ye, quotes and dashes plain).
+    case 0x0401:    // Cyrillic capital Yo
+      return 0x85;  // Cyrillic capital Ye
+    case 0x0451:    // Cyrillic small yo
+      return 0xA5;  // Cyrillic small ye
+    case 0x00AB:    // left guillemet
+    case 0x00BB:    // right guillemet
+    case 0x201C:    // left double quotation mark
+    case 0x201D:    // right double quotation mark
+    case 0x201E:    // low double quotation mark
+      return 0x22;
+    case 0x2018:  // left single quotation mark
+    case 0x2019:  // right single quotation mark
+      return 0x27;
+    case 0x2013:  // en dash
+    case 0x2014:  // em dash
+      return 0x2D;
     default:
       return 0x3F;  // '?'
   }

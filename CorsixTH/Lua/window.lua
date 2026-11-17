@@ -31,6 +31,40 @@ local Window = _G["Window"] ---@type Window
 -- i.e. mouse_left, mouse_middle, mouse_right
 Window.buttons_down = permanent"Window.buttons_down" {}
 
+-- Text is UTF-8: a letter can take several bytes (two in Russian, three in
+-- Chinese). Text boxes keep their cursor, a byte position, between letters.
+
+--! Is byte `i` of `text` inside a letter (a UTF-8 continuation byte)?
+local function inside_letter(text, i)
+  local b = text:byte(i)
+  return b ~= nil and b >= 0x80 and b < 0xC0
+end
+
+--! The start of the letter that byte position `pos` (the cursor after byte
+--! `pos`) is in or after: `pos` itself, or less inside a letter.
+local function letter_start(text, pos)
+  while pos > 0 and inside_letter(text, pos + 1) do pos = pos - 1 end
+  return pos
+end
+
+--! The number of letters in `text`.
+local function letter_count(text)
+  local _, n = text:gsub("[^\128-\191]", "")
+  return n
+end
+
+--! The first `n` letters of `text`.
+local function first_letters(text, n)
+  local count = 0
+  for i = 1, #text do
+    if not inside_letter(text, i) then
+      count = count + 1
+      if count > n then return text:sub(1, i - 1) end
+    end
+  end
+  return text
+end
+
 function Window:Window()
   self.x = 0
   self.y = 0
@@ -296,8 +330,8 @@ function Panel:clipLine(line, limit)
   local _, last_x = self.label_font:draw(nil, line, 0, 0)
   if last_x > limit then
     limit = limit - self.label_font:sizeOf("..._")
-    while last_x > limit do
-      line = line:sub(1, -2)
+    while last_x > limit and line ~= "" do
+      line = line:sub(1, letter_start(line, #line - 1)) -- (a whole letter off)
       _, last_x = self.label_font:draw(nil, line, 0, 0)
     end
     line = line .. "..."
@@ -1067,27 +1101,30 @@ function Textbox:keyInput(char, rawchar)
   end
   local ui = self.panel.window.ui
   local line = type(self.text) == "table" and self.text[self.cursor_pos[1]] or self.text
-  local pat = "%a%d_" -- which characters form "words" for ctrl+[left/right/backspace/delete]
+  -- Which characters form "words" for ctrl+[left/right/backspace/delete]:
+  -- also the bytes of letters beyond ASCII (Cyrillic, Chinese and others).
+  local pat = "%a%d_\128-\255"
   local new_line
   local handled = false
-  if not self.char_limit or string.len(line) < self.char_limit then
-    -- Upper- and lowercase letters
-    if self.allowed_input.alpha then
-      if #char == 1 and string.match(char, '%a') then
-        handled = true
-      end
+  -- (A typing key is the box's even when the box is full, textInput keeps
+  -- the limit: it did not stop the text, and the key went on to the
+  -- hotkeys, e.g. N in the multiplayer chat.)
+  -- Upper- and lowercase letters
+  if self.allowed_input.alpha then
+    if #char == 1 and string.match(char, '%a') then
+      handled = true
     end
-    -- Numbers
-    if not handled and self.allowed_input.numbers then
-      if #char == 1 and string.match(char, '%d') then
-        handled = true
-      end
+  end
+  -- Numbers
+  if not handled and self.allowed_input.numbers then
+    if #char == 1 and string.match(char, '%d') then
+      handled = true
     end
-    -- Space, hyphen and plus sign
-    if not handled and self.allowed_input.misc then
-      if char == "space" or char == "-" or char == "+" then
-        handled = true
-      end
+  end
+  -- Space, hyphen and plus sign
+  if not handled and self.allowed_input.misc then
+    if char == "space" or char == "-" or char == "+" then
+      handled = true
     end
   end
   -- Backspace (delete last char, or last word if ctrl is pressed)
@@ -1100,7 +1137,7 @@ function Textbox:keyInput(char, rawchar)
         new_line = self.text[self.cursor_pos[1]] .. line
       end
     else
-      local pos = self.cursor_pos[2] - 1
+      local pos = letter_start(line, self.cursor_pos[2] - 1)
       if ui.app.key_modifiers.ctrl then
         pos = string.find(string.sub(line, 1, self.cursor_pos[2]),
             "[^" .. pat .. "][" .. pat .. "]+[^" .. pat .. "]*$") or 0
@@ -1119,6 +1156,7 @@ function Textbox:keyInput(char, rawchar)
       end
     else
       local pos = self.cursor_pos[2] + 2
+      while inside_letter(line, pos) do pos = pos + 1 end
       if ui.app.key_modifiers.ctrl then
         pos = (string.find(line, "[^" .. pat .. "][" .. pat .. "]",
             self.cursor_pos[2] + 1) or string.len(line)) + 1
@@ -1155,7 +1193,8 @@ function Textbox:keyInput(char, rawchar)
       else
         -- one line up
         self.cursor_pos[1] = self.cursor_pos[1] - 1
-        self.cursor_pos[2] = math.min(self.cursor_pos[2], string.len(self.text[self.cursor_pos[1]]))
+        local above = self.text[self.cursor_pos[1]]
+        self.cursor_pos[2] = letter_start(above, math.min(self.cursor_pos[2], string.len(above)))
       end
       handled = true
     elseif char == "down" then -- down
@@ -1165,7 +1204,8 @@ function Textbox:keyInput(char, rawchar)
       else
         -- one line down
         self.cursor_pos[1] = self.cursor_pos[1] + 1
-        self.cursor_pos[2] = math.min(self.cursor_pos[2], string.len(self.text[self.cursor_pos[1]]))
+        local below = self.text[self.cursor_pos[1]]
+        self.cursor_pos[2] = letter_start(below, math.min(self.cursor_pos[2], string.len(below)))
       end
       handled = true
     elseif char == "right" then -- right
@@ -1181,8 +1221,10 @@ function Textbox:keyInput(char, rawchar)
           self.cursor_pos[2] = string.find(line, "[^" .. pat .. "][" .. pat .. "]",
               self.cursor_pos[2] + 1) or string.len(line)
         else
-          -- one to the right
-          self.cursor_pos[2] = self.cursor_pos[2] + 1
+          -- one letter to the right
+          local pos = self.cursor_pos[2] + 1
+          while inside_letter(line, pos + 1) do pos = pos + 1 end
+          self.cursor_pos[2] = pos
         end
       end
       handled = true
@@ -1199,8 +1241,8 @@ function Textbox:keyInput(char, rawchar)
           self.cursor_pos[2] = string.find(string.sub(line, 1, self.cursor_pos[2]),
               "[^" .. pat .. "][" .. pat .. "]+[^" .. pat .. "]*$") or 0
         else
-          -- one to the left
-          self.cursor_pos[2] = self.cursor_pos[2] - 1
+          -- one letter to the left
+          self.cursor_pos[2] = letter_start(line, self.cursor_pos[2] - 1)
         end
       end
       handled = true
@@ -1220,12 +1262,10 @@ function Textbox:keyInput(char, rawchar)
     self.cursor_pos[2] = string.len(line)
     handled = true
   end
-  if not self.char_limit or string.len(self.text) < self.char_limit then
-    -- Experimental "all" category
-    if not handled and self.allowed_input.all and
-        not (char == "shift" or char == "ctrl" or char == "alt") then -- F-Keys
-      handled = true
-    end
+  -- Experimental "all" category
+  if not handled and self.allowed_input.all and
+      not (char == "shift" or char == "ctrl" or char == "alt") then -- F-Keys
+    handled = true
   end
   if new_line then
     if type(self.text) == "table" then
@@ -1249,6 +1289,12 @@ function Textbox:textInput(text)
   end
 
   local line = type(self.text) == "table" and self.text[self.cursor_pos[1]] or self.text
+  if self.char_limit then
+    -- (In letters: a Russian letter is two bytes.)
+    local room = self.char_limit - letter_count(line)
+    if room <= 0 then return end
+    text = first_letters(text, room)
+  end
   local new_line = line:sub(1, self.cursor_pos[2]) .. text .. line:sub(self.cursor_pos[2] + 1, -1)
   self.cursor_pos[2] = self.cursor_pos[2] + #text
 
@@ -1279,7 +1325,7 @@ function Textbox:allowedInput(types)
   return self
 end
 
---[[ Limit input to a maximum of [limit] characters.
+--[[ Limit input to a maximum of [limit] characters (letters, not bytes).
 !param limit (integer or nil) Number of characters until the textbox will stop accepting input, or nil to deactivate limit.
 ]]
 function Textbox:characterLimit(limit)
