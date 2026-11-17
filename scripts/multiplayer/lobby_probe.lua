@@ -1570,6 +1570,14 @@ local function run()
           end
         elseif a == "shot" then
           shot(entry.arg)
+        elseif a == "hotkeys" then
+          -- The hotkey window on its in-game page (the multiplayer keys at
+          -- its end), a picture, closed again.
+          local win = UIHotkeyAssign(world.ui)
+          world.ui:addWindow(win)
+          win:showKeyPane("ingame")
+          shot("hotkeys", true)
+          win:close()
         elseif a == "staffwindow" then
           -- Open the staff window of this hospital's first <arg> (a screenshot
           -- shows it), then click its send icon: the trade window opens.

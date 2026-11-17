@@ -861,7 +861,8 @@ function UIMultiplayer:_updateRoom()
   end
   self:_updateSide()
   local s = lobby.summary
-  self.summary_panel:setLabel(s and S.recommendation:format(s.speed, s.latency or "?") or S.measuring)
+  self.summary_panel:setLabel(s and S.recommendation:format(MultiplayerLobby.speedName(s.speed),
+      s.latency or "?") or S.measuring)
   -- What the colours and teams make now, and the level it plays.
   local mode = s and s.mode or lobby.room.mode
   local level = tonumber(lobby.room.level) or 1

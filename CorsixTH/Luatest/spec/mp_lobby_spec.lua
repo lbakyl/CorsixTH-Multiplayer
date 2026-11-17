@@ -52,6 +52,26 @@ describe("MultiplayerLobby", function()
     assert.equal("LIST", (MultiplayerLobby.decode("LIST")))
   end)
 
+  it("names hospitals in capitals, Russian ones too", function()
+    assert.equal("JAN", MultiplayerLobby.capitals("Jan"))
+    assert.equal("АЛЁНА", MultiplayerLobby.capitals("Алёна"))
+    assert.equal("ПЁТР ЩУКИН", MultiplayerLobby.capitals("Пётр Щукин"))
+    assert.equal("ҐАНОК ЇЖАК", MultiplayerLobby.capitals("ґанок їжак"))
+    assert.equal("小明", MultiplayerLobby.capitals("小明"))
+    -- (Accented letters stay small: the bitmap font has few such capitals.)
+    assert.equal("MARíA", MultiplayerLobby.capitals("María"))
+  end)
+
+  it("names speeds as the speed menu does, in the player's language", function()
+    local saved = rawget(_G, "_S")
+    _G._S = {menu_options_game_speed = {and_then_some_more = "    (%1%) Еще быстрее",
+        max_speed = "  (%1%) MAX SPEED  "}}
+    assert.equal("Еще быстрее", MultiplayerLobby.speedName("And then some more"))
+    assert.equal("MAX SPEED", MultiplayerLobby.speedName("Max speed"))
+    assert.equal("Warp", MultiplayerLobby.speedName("Warp"))
+    _G._S = saved
+  end)
+
   it("caps speed requests at the room's maximum", function()
     assert.equal("Pause", MultiplayerLobby.clampSpeed("Pause", "Normal"))
     assert.equal("Slower", MultiplayerLobby.clampSpeed("Slower", "Normal"))

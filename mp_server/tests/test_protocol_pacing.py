@@ -20,6 +20,16 @@ def test_decode_message():
     assert verb == "JOIN" and fields == {"room": "Ward 7", "password": ""}
 
 
+def test_decode_spaces_beyond_ascii():
+    # The game (Lua's %s) escapes only ASCII whitespace: a no-break space or a
+    # Chinese ideographic space comes as it is, and the line still decodes.
+    text = "\u4f60\u597d\u3000\u4e16\u754c"  # (the space: U+3000)
+    verb, fields = decode(f"CHAT text={text} name=A\u00a0B")
+    assert verb == "CHAT" and fields == {"text": text, "name": "A\u00a0B"}
+    verb, fields = decode("HELLO proto=1 name=Алёна")
+    assert fields["name"] == "Алёна"
+
+
 def test_game_line_helpers():
     assert parse_step_report("S 2 41 2026-01-01 bal=1") == (2, 41, "2026-01-01 bal=1")
     assert command_peer("C kind=hire peer=12 seq=1") == 12

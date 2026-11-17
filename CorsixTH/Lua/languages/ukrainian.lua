@@ -3581,6 +3581,7 @@ warnings = {
 -------------------------------------------------------------------------------
 hotkey_window.ingame_mp_chat = "Чат мультиплеєра"
 hotkey_window.ingame_mp_next_hospital = "Наступна лікарня (MP)"
+hotkey_window.ingame_mp_own_hospital = "Власна лікарня (MP)"
 main_menu.multiplayer = "Мультиплеєр"
 map_editor_window.pages.camera_n = "Камера %d"
 map_editor_window.pages.heliport_n = "Гелік. майданчик %d"

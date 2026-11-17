@@ -3626,6 +3626,7 @@ multiplayer.everyone_failed = "所有玩家都沒有完成最終目標。因此�
 -------------------------------------------------------------------------------
 hotkey_window.ingame_mp_chat = "多人遊戲聊天"
 hotkey_window.ingame_mp_next_hospital = "下一家醫院 (MP)"
+hotkey_window.ingame_mp_own_hospital = "自己的醫院 (MP)"
 main_menu.multiplayer = "多人遊戲"
 map_editor_window.pages.camera_n = "攝影機 %d"
 map_editor_window.pages.heliport_n = "直升機坪 %d"
