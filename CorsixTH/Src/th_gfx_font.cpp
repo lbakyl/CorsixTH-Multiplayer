@@ -523,8 +523,9 @@ text_layout freetype_font::draw_text_wrapped(render_target* pCanvas,
         // would only move them off it.
         /* FT_Error iError = */
         FT_Load_Glyph(font_face, oGlyph.index,
-                      pixel_size > 0 ? (FT_LOAD_NO_HINTING | FT_LOAD_TARGET_MONO)
-                                     : FT_LOAD_DEFAULT);
+                      pixel_size > 0
+                          ? (FT_LOAD_NO_HINTING | FT_LOAD_TARGET_MONO)
+                          : FT_LOAD_DEFAULT);
         // TODO: iError != FT_Err_Ok
 
         /* iError = */
