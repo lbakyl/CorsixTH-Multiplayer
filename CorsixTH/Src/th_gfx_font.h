@@ -248,6 +248,18 @@ class freetype_font final : public font {
   */
   FT_Error set_ideal_character_size(int iWidth, int iHeight);
 
+  //! Use the face as a pixel font drawn at exactly the given size.
+  /*!
+      A pixel font has square outlines on the grid of its design size.
+      Drawn at a whole multiple of that size, without hinting and without
+      anti-aliasing, every font pixel lands on whole screen pixels, so the
+      text looks like the game's own bitmap fonts. This must be called after
+      setFace(); a size of 0 or less turns it off again.
+
+      @param iPixels Text size in pixels (the design size times the scale).
+  */
+  FT_Error set_pixel_size(int iPixels);
+
   void set_font_color(argb_colour color);
 
   void set_shadow_options(const font_shadow_options& options);
@@ -314,6 +326,8 @@ class freetype_font final : public font {
   static int freetype_init_count;
   static constexpr int cache_size_log2{7};
   FT_Face font_face{nullptr};
+  //! Size of a pixel font in pixels, or 0 for an ordinary (smoothed) font.
+  int pixel_size{0};
   argb_colour font_color{0};
   font_shadow_options shadow_opts{};
   bool is_done_freetype_init{false};

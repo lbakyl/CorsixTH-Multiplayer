@@ -331,8 +331,19 @@ FT_Error freetype_font::match_bitmap_font(sprite_sheet* font_spritesheet,
   return FT_Err_Ok;
 }
 
+FT_Error freetype_font::set_pixel_size(int iPixels) {
+  if (font_face == nullptr) return FT_Err_Invalid_Face_Handle;
+  if (iPixels <= 0) {
+    pixel_size = 0;
+    return FT_Err_Ok;
+  }
+  pixel_size = iPixels;
+  return FT_Set_Pixel_Sizes(font_face, 0, static_cast<FT_UInt>(iPixels));
+}
+
 FT_Error freetype_font::set_ideal_character_size(int iWidth, int iHeight) {
   if (font_face == nullptr) return FT_Err_Invalid_Face_Handle;
+  pixel_size = 0;
 
   if (is_monochrome() || iHeight <= 14 || iWidth <= 9) {
     // Look for a bitmap strike of a similar size
@@ -508,8 +519,12 @@ text_layout freetype_font::draw_text_wrapped(render_target* pCanvas,
       if (oGlyph.glyph == nullptr) {
         oGlyph.index = FT_Get_Char_Index(font_face, iCode);
 
+        // A pixel font's outlines already sit on the pixel grid: hinting
+        // would only move them off it.
         /* FT_Error iError = */
-        FT_Load_Glyph(font_face, oGlyph.index, FT_LOAD_DEFAULT);
+        FT_Load_Glyph(font_face, oGlyph.index,
+                      pixel_size > 0 ? (FT_LOAD_NO_HINTING | FT_LOAD_TARGET_MONO)
+                                     : FT_LOAD_DEFAULT);
         // TODO: iError != FT_Err_Ok
 
         /* iError = */
@@ -680,7 +695,7 @@ text_layout freetype_font::draw_text_wrapped(render_target* pCanvas,
     pEntry->last_x = 1 + (static_cast<int>(iLineWidth + iAlignDelta) >> 6);
 
     // Get a bitmap for each glyph.
-    bool bIsMonochrome = is_monochrome();
+    bool bIsMonochrome = pixel_size > 0 || is_monochrome();
     FT_Render_Mode eRenderMode =
         bIsMonochrome ? FT_RENDER_MODE_MONO : FT_RENDER_MODE_NORMAL;
     for (auto itr = mapGlyphs.begin(), itrEnd = mapGlyphs.end(); itr != itrEnd;
