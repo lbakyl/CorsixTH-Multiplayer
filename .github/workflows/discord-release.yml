@@ -1,0 +1,33 @@
+# A new release on Discord: when a release is published (test or stable),
+# its name, what is new in it, its platforms and where to play it go to the
+# Discord channel of the webhook in the repository secret
+# DISCORD_RELEASES_WEBHOOK (mp_server/corsixth_mp/release_post.py).
+# Without the secret nothing is posted and the run still succeeds.
+name: Discord release post
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to post again (e.g. mp-test-03fbbe02)
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: mp_server
+      - name: Post to Discord
+        working-directory: mp_server
+        env:
+          DISCORD_RELEASES_WEBHOOK: ${{ secrets.DISCORD_RELEASES_WEBHOOK }}
+          GITHUB_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: python3 -m corsixth_mp.release_post --tag "$TAG"
