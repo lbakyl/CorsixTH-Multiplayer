@@ -390,16 +390,28 @@ if(FETCH_UNICODE_FONT)
     message(FATAL_ERROR "Failed to download the pixel font: ${PIXEL_FONT_STATUS}")
   endif()
   file(MAKE_DIRECTORY "${PIXEL_FONT_DIR}")
+  # The licences of the fonts it is made from (with their copyright notices)
+  # by name: on Windows "LICENSES" alone unpacked an empty folder.
+  set(PIXEL_FONT_FILES
+    fusion-pixel-12px-proportional-zh_hans.ttf
+    OFL.txt
+    LICENSES/ark-pixel/OFL.txt
+    LICENSES/cubic-11/OFL.txt
+    LICENSES/galmuri/LICENSE.txt
+  )
   execute_process(
-    COMMAND ${CMAKE_COMMAND} -E tar xf "${PIXEL_FONT_ZIP}"
-      fusion-pixel-12px-proportional-zh_hans.ttf OFL.txt LICENSES
+    COMMAND ${CMAKE_COMMAND} -E tar xf "${PIXEL_FONT_ZIP}" ${PIXEL_FONT_FILES}
     WORKING_DIRECTORY "${PIXEL_FONT_DIR}"
     RESULT_VARIABLE PIXEL_FONT_EXTRACT
   )
-  if(NOT PIXEL_FONT_EXTRACT EQUAL 0
-     OR NOT EXISTS "${PIXEL_FONT_DIR}/fusion-pixel-12px-proportional-zh_hans.ttf")
+  if(NOT PIXEL_FONT_EXTRACT EQUAL 0)
     message(FATAL_ERROR "Failed to unpack the pixel font")
   endif()
+  foreach(PIXEL_FONT_FILE IN LISTS PIXEL_FONT_FILES)
+    if(NOT EXISTS "${PIXEL_FONT_DIR}/${PIXEL_FONT_FILE}")
+      message(FATAL_ERROR "The pixel font archive has no ${PIXEL_FONT_FILE}")
+    endif()
+  endforeach()
   message("  Pixel font found")
 endif()
 
