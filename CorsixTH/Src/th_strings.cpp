@@ -72,6 +72,22 @@ void skip_utf8_whitespace(const char*& sString, const char* end) {
   }
 }
 
+bool is_default_ignorable(unsigned int code_point) {
+  return code_point == 0x00AD || code_point == 0x034F || code_point == 0x061C ||
+         (code_point >= 0x115F && code_point <= 0x1160) ||
+         (code_point >= 0x17B4 && code_point <= 0x17B5) ||
+         (code_point >= 0x180B && code_point <= 0x180F) ||
+         (code_point >= 0x200B && code_point <= 0x200F) ||
+         (code_point >= 0x202A && code_point <= 0x202E) ||
+         (code_point >= 0x2060 && code_point <= 0x206F) ||
+         code_point == 0x3164 ||
+         (code_point >= 0xFE00 && code_point <= 0xFE0F) ||
+         code_point == 0xFEFF || code_point == 0xFFA0 ||
+         (code_point >= 0x1BCA0 && code_point <= 0x1BCA3) ||
+         (code_point >= 0x1D173 && code_point <= 0x1D17A) ||
+         (code_point >= 0xE0000 && code_point <= 0xE0FFF);
+}
+
 constexpr uint16_t unicode_to_cp437_table[0x60] = {
     0xFF, 0xAD, 0x9B, 0x9C, 0x3F, 0x9D, 0x3F, 0x3F, 0x3F, 0x3F, 0xA6, 0xAE,
     0xAA, 0x3F, 0x3F, 0x3F, 0xF8, 0xF1, 0xFD, 0x3F, 0x3F, 0x3F, 0x3F, 0xFA,

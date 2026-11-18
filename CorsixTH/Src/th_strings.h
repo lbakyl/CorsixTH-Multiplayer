@@ -16,6 +16,11 @@ const char* previous_utf8_codepoint(const char* sString);
 
 void skip_utf8_whitespace(const char*& sString, const char* end);
 
+//! Whether a code point is never drawn: zero-width spaces and joiners,
+//! direction marks, the soft hyphen, variation selectors and the like
+//! (Unicode's Default_Ignorable_Code_Point).
+bool is_default_ignorable(unsigned int code_point);
+
 unsigned int unicode_to_codepage_437(unsigned int iCodePoint);
 
 unsigned int unicode_to_codepage_mik(unsigned int iCodePoint);

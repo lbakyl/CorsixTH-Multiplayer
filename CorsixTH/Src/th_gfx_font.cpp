@@ -532,6 +532,18 @@ text_layout freetype_font::draw_text_wrapped(render_target* pCanvas,
         // TODO: iError != FT_Err_Ok
 
         oGlyph.metrics = font_face->glyph->metrics;
+        if (oGlyph.index == 0 && is_default_ignorable(iCode)) {
+          // A zero-width space or direction mark the face lacks (the pixel
+          // font has none): nothing, not the face's box for a missing letter.
+          FT_Done_Glyph(oGlyph.glyph);
+          FT_Load_Glyph(font_face, FT_Get_Char_Index(font_face, ' '),
+                        FT_LOAD_DEFAULT);
+          FT_Get_Glyph(font_face->glyph, &oGlyph.glyph);
+          oGlyph.metrics = font_face->glyph->metrics;
+          oGlyph.metrics.width = 0;
+          oGlyph.metrics.horiBearingX = 0;
+          oGlyph.metrics.horiAdvance = 0;
+        }
       }
 
       // Apply kerning
