@@ -96,6 +96,7 @@ add_library(CorsixTH_lib STATIC ${CorsixTH_generated_src_dir})
 target_include_directories(CorsixTH_lib PUBLIC ${CorsixTH_generated_src_dir})
 
 target_link_libraries(CorsixTH_lib PRIVATE RncLib)
+target_link_libraries(CorsixTH_lib PRIVATE MonocypherLib)
 if(SEARCH_LOCAL_DATADIRS)
   target_link_libraries(CorsixTH_lib PRIVATE WhereamiLib)
 endif()

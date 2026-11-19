@@ -31,12 +31,15 @@ SOFTWARE.
 #include <cstring>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include "bootstrap.h"
 #include "lua.hpp"
 #include "th.h"
 #include "th_lua.h"
 #include "th_lua_internal.h"
+#include "th_packs.h"
 
 const char* update_check_url =
     "https://corsixth.com/CorsixTH/check-for-updates";
@@ -291,6 +294,10 @@ int l_get_compile_options(lua_State* L) {
   lua_pushinteger(L, get_api_version());
   lua_setfield(L, -2, "api_version");
 
+  // The engine's level for game packs (OpenTH; th_packs.h)
+  lua_pushinteger(L, th::packs::engine_level);
+  lua_setfield(L, -2, "pack_engine");
+
 #ifdef CORSIX_TH_FONT
   // Set default value of font file
   lua_pushliteral(L, CORSIX_TH_FONT);
@@ -307,6 +314,39 @@ int l_crc32(lua_State* L) {
   lua_pushinteger(L, static_cast<lua_Integer>(crc32(
                          0L, pData, static_cast<unsigned int>(iDataLen))));
 
+  return 1;
+}
+
+//! TH.CheckPackSignature(data, signature): whether the signature (128
+//! hexadecimal digits) is an OpenTH release key's signature of the data.
+int l_check_pack_signature(lua_State* L) {
+  std::size_t size;
+  const char* data = luaL_checklstring(L, 1, &size);
+  std::size_t hex_size;
+  const char* hex = luaL_checklstring(L, 2, &hex_size);
+  uint8_t signature[64];
+  bool valid = th::packs::parse_hex(std::string_view(hex, hex_size), signature,
+                                    sizeof(signature)) &&
+               th::packs::signature_valid(reinterpret_cast<const uint8_t*>(data),
+                                          size, signature);
+  lua_pushboolean(L, valid ? 1 : 0);
+  return 1;
+}
+
+//! TH.InflatePack(data, max_size): the zlib data inflated, or nil if it is
+//! not valid or larger than max_size bytes.
+int l_inflate_pack(lua_State* L) {
+  std::size_t size;
+  const char* data = luaL_checklstring(L, 1, &size);
+  lua_Integer max_size = luaL_checkinteger(L, 2);
+  std::vector<uint8_t> out;
+  if (max_size <= 0 ||
+      !th::packs::inflate(reinterpret_cast<const uint8_t*>(data), size,
+                          static_cast<std::size_t>(max_size), out)) {
+    lua_pushnil(L);
+    return 1;
+  }
+  lua_pushlstring(L, reinterpret_cast<const char*>(out.data()), out.size());
   return 1;
 }
 
@@ -340,6 +380,8 @@ int luaopen_th(lua_State* L) {
   add_lua_function(pState, l_fetch_latest_version_info,
                    "FetchLatestVersionInfo");
   add_lua_function(pState, l_crc32, "CRC32File");
+  add_lua_function(pState, l_check_pack_signature, "CheckPackSignature");
+  add_lua_function(pState, l_inflate_pack, "InflatePack");
 
   // Classes
   lua_register_map(pState);
