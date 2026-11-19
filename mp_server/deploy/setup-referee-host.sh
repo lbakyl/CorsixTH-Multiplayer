@@ -32,6 +32,12 @@
 # Without it nothing is posted. --name names this server in the report
 # (default: the host's name; kept from the last run).
 #
+# A line in the team's #development channel when a new release lands here
+# ("A new release, mp-test-..., is now on server eu2 ... Details: <link>"):
+# put that channel's webhook into the secrets file as
+#   DISCORD_DEV_WEBHOOK_URL=https://discord.com/api/webhooks/...
+# Posted only when the release differs from the one this server ran before.
+#
 # Bots that learn from expert players (corsixth_mp/learn.py): --experts lists
 # their player names (kept from the last run; --experts none: nobody). While
 # one of them plays, the referee saves the game at every year's end and at
@@ -159,6 +165,8 @@ fi
 chown -R root:corsixth "$P" && chmod -R g+rX,o= "$P"
 
 say "Settings (/etc/corsixth-mp.env) and the service"
+# (The release this server ran until now: a new one is announced at the end.)
+OLD_RELEASE=$( (sed -n 's/^CORSIXTH_MP_RELEASE=//p' /etc/corsixth-mp.env 2>/dev/null || true) | head -1)
 if [[ -z "$NAME" && -f /etc/corsixth-mp.env ]]; then
   NAME=$(sed -n 's/^CORSIXTH_MP_SERVER_NAME=//p' /etc/corsixth-mp.env)
 fi
@@ -309,6 +317,23 @@ PY
 # Old referee builds are not needed any more.
 find "$BASE/referee" -mindepth 1 -maxdepth 1 -type d ! -name "$SHA" -exec rm -rf {} +
 say "Done: the server runs $RELEASE with the referee on port $PORT"
+# One line in #development when the release changed (DISCORD_DEV_WEBHOOK_URL
+# in the secrets; the address is never printed).
+DEV_HOOK=$( (sed -n 's/^DISCORD_DEV_WEBHOOK_URL=//p' /etc/corsixth-mp-secrets.env 2>/dev/null || true) | head -1)
+if [[ -n "$DEV_HOOK" && "$RELEASE" != "$OLD_RELEASE" ]]; then
+  where=${NAME:-$(hostname)}
+  [[ "$where" =~ ^eu[0-9]+$ ]] && where="$where ($where.openth.org)"
+  DEV_HOOK=$DEV_HOOK python3 - "$RELEASE" "$where" <<'PY' || echo "   (the #development line could not be posted)"
+import json, os, sys, urllib.request
+release, where = sys.argv[1], sys.argv[2]
+text = (f"A new release, **{release}**, is now on server {where}. Details: "
+        f"<https://github.com/openth-org/openth/releases/tag/{release}>")
+req = urllib.request.Request(os.environ["DEV_HOOK"], data=json.dumps({"content": text}).encode(),
+                             headers={"Content-Type": "application/json", "User-Agent": "openth-deploy"})
+urllib.request.urlopen(req, timeout=15).read()
+print("   Posted in #development: " + text)
+PY
+fi
 echo "   Logs: journalctl -u corsixth-mp -f; referee logs in /var/lib/corsixth/referee-work"
 if [[ -n "$EXPERTS" ]]; then
   echo "   Bots learn from: $EXPERTS (saves in /var/lib/corsixth/learn; journalctl -u corsixth-mp-learn)"
