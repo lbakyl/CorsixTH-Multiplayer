@@ -1,0 +1,272 @@
+---
+name: macOS signing
+
+# Signs a release's macOS app with OpenTH's Apple Developer ID and has Apple
+# notarize it, so that players open it with a double click (no System
+# Settings > Open Anyway). The one-time setup (certificate, notarization key,
+# the "macos-signing" environment and the MACOS_SIGNING variable) is in
+# docs/multiplayer/macos-signing.md; scripts/multiplayer/sign_macos_app.sh
+# does the signing.
+#
+# - A release is published: waits (up to 4 hours) for its macOS zip, signs it
+#   and puts the signed zip in its place, with the new SHA-256 in the notes.
+#   Only when the variable MACOS_SIGNING is "on".
+# - By hand (Actions > macOS signing > Run workflow, "Use workflow from" the
+#   release's tag): the same for one release; with "publish" off the signed
+#   zip is only kept as this run's artifact.
+# - A change to this workflow or the signing script on mp/team-hospitals: a
+#   test without any secret (ad hoc signature with the hardened runtime and
+#   the smoke tests) of the newest release's macOS zip.
+#
+# Only on GitHub's own Macs: the certificate never goes to a self-hosted
+# runner such as Iris's Mac (anything running on that machine could read it).
+# Its secrets are in the "macos-signing" environment, which only release tags
+# may use.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: release whose macOS zip to sign (empty = the tag this runs from)
+        required: false
+        default: ''
+      publish:
+        description: replace the release's macOS zip with the signed one
+        type: boolean
+        default: true
+  push:
+    branches:
+      - 'mp/team-hospitals'
+    paths:
+      - .github/workflows/sign-macos.yml
+      - scripts/multiplayer/sign_macos_app.sh
+      - scripts/multiplayer/macos-adhoc-test.entitlements
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sign-macos-${{ inputs.tag || github.event.release.tag_name || github.ref_name }}
+
+jobs:
+  find:
+    if: github.event_name != 'release' || vars.MACOS_SIGNING == 'on'
+    runs-on: ubuntu-latest
+    timeout-minutes: 250
+    outputs:
+      tag: ${{ steps.find.outputs.tag }}
+      asset: ${{ steps.find.outputs.asset }}
+    steps:
+      - name: Find the release and its macOS zip
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          TAG_IN: ${{ inputs.tag || github.event.release.tag_name || '' }}
+        run: |
+          if [ "$EVENT" = push ]; then
+            # The newest release that has one.
+            tag=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=30" --jq \
+              '[.[] | select(any(.assets[]; .name | test("-macos-.*\\.zip$")))][0].tag_name')
+          else
+            tag=${TAG_IN:-$GITHUB_REF_NAME}
+          fi
+          echo "Release: $tag"
+          # A release often gets its macOS zip after it is published.
+          tries=1
+          if [ "$EVENT" = release ]; then tries=120; fi
+          for i in $(seq 1 "$tries"); do
+            asset=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq \
+              '[.assets[] | select(.state == "uploaded" and (.name | test("-macos-.*\\.zip$")))][0].name // ""')
+            if [ -n "$asset" ]; then break; fi
+            if [ "$i" -lt "$tries" ]; then sleep 120; fi
+          done
+          if [ -z "$asset" ]; then
+            echo "::error::Release $tag has no macOS zip"
+            exit 1
+          fi
+          echo "macOS zip: $asset"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+
+  test:
+    if: github.event_name == 'push'
+    needs: find
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      TAG: ${{ needs.find.outputs.tag }}
+      ASSET: ${{ needs.find.outputs.asset }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download the release's macOS zip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$ASSET" --dir in
+      - name: Sign ad hoc with the hardened runtime
+        env:
+          SIGN_IDENTITY: '-'
+          ENTITLEMENTS: scripts/multiplayer/macos-adhoc-test.entitlements
+        run: bash scripts/multiplayer/sign_macos_app.sh "in/$ASSET" "out/$ASSET"
+      - name: Unpack the signed app
+        run: ditto -x -k "out/$ASSET" signed
+      - name: Smoke test (Lua modules, LuaSocket to a local server)
+        run: |
+          PYTHONPATH=mp_server python3 -m corsixth_mp --host 127.0.0.1 --port 47891 --log-level INFO > server.log 2>&1 &
+          server=$!
+          sleep 2
+          app=signed/CorsixTH-Multiplayer/CorsixTH.app
+          "$app/Contents/MacOS/CorsixTH" --interpreter="$PWD/scripts/multiplayer/macos_smoke.lua" \
+            --resources="$PWD/$app/Contents/Resources" --server=127.0.0.1:47891 | tee smoke.txt
+          kill "$server" || true
+          grep -q "MACOS SMOKE OK" smoke.txt
+      - name: Smoke test (the game starts and keeps running without game data)
+        run: |
+          app=$PWD/signed/CorsixTH-Multiplayer/CorsixTH.app
+          export SDL_VIDEODRIVER=dummy SDL_AUDIO_DRIVER=dummy SDL_RENDER_DRIVER=software
+          mkdir -p "$RUNNER_TEMP/run" && cd "$RUNNER_TEMP/run"
+          "$app/Contents/MacOS/CorsixTH" > game.log 2>&1 &
+          pid=$!
+          sleep 15
+          if kill -0 "$pid" 2>/dev/null; then
+            echo "Still running after 15 s"; kill "$pid"
+          else
+            wait "$pid" || true
+            echo "The game ended early:"; cat game.log; exit 1
+          fi
+          cat game.log
+
+  sign:
+    if: github.event_name != 'push'
+    needs: find
+    runs-on: macos-26
+    timeout-minutes: 120
+    environment: macos-signing
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.find.outputs.tag }}
+      ASSET: ${{ needs.find.outputs.asset }}
+      PUBLISH: ${{ github.event_name == 'release' || inputs.publish }}
+    steps:
+      - name: Only on GitHub's own Macs
+        run: |
+          if [ "$RUNNER_ENVIRONMENT" != github-hosted ]; then
+            echo "::error::Not one of GitHub's own machines: no signing here"
+            exit 1
+          fi
+      - name: Is the signing set up?
+        id: setup
+        env:
+          CERT: ${{ secrets.MACOS_CERT_P12 }}
+          KEY: ${{ secrets.NOTARY_KEY_P8 }}
+        run: |
+          if [ -z "$CERT" ] || [ -z "$KEY" ]; then
+            echo "::notice::No Developer ID certificate or notarization key in the macos-signing environment yet (docs/multiplayer/macos-signing.md): nothing signed"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v7
+        if: steps.setup.outputs.ready == 'true'
+      - name: Download the release's macOS zip
+        if: steps.setup.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$ASSET" --dir in
+      - name: Put the certificate in a keychain of this run
+        if: steps.setup.outputs.ready == 'true'
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          kc=$RUNNER_TEMP/signing.keychain-db
+          pw=$(uuidgen)
+          security create-keychain -p "$pw" "$kc"
+          security set-keychain-settings -lut 7200 "$kc"
+          security unlock-keychain -p "$pw" "$kc"
+          printf '%s' "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$pw" "$kc" > /dev/null
+          # shellcheck disable=SC2046
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          identity=$(security find-identity -v -p codesigning "$kc" |
+            awk -F'"' '/Developer ID Application/ {print $2; exit}')
+          if [ -z "$identity" ]; then
+            echo "::error::The certificate is not a Developer ID Application certificate"
+            exit 1
+          fi
+          echo "Signing as: $identity"
+          echo "SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+          echo "SIGN_KEYCHAIN=$kc" >> "$GITHUB_ENV"
+      - name: Sign, notarize, staple
+        if: steps.setup.outputs.ready == 'true'
+        env:
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          export NOTARY_KEY=$RUNNER_TEMP/notary.p8
+          printf '%s\n' "$NOTARY_KEY_P8" > "$NOTARY_KEY"
+          bash scripts/multiplayer/sign_macos_app.sh "in/$ASSET" "out/$ASSET"
+          rm -f "$NOTARY_KEY"
+      - name: Unpack the signed app
+        if: steps.setup.outputs.ready == 'true'
+        run: ditto -x -k "out/$ASSET" signed
+      - name: Smoke test (Lua modules, LuaSocket to a local server)
+        if: steps.setup.outputs.ready == 'true'
+        run: |
+          PYTHONPATH=mp_server python3 -m corsixth_mp --host 127.0.0.1 --port 47891 --log-level INFO > server.log 2>&1 &
+          server=$!
+          sleep 2
+          app=signed/CorsixTH-Multiplayer/CorsixTH.app
+          "$app/Contents/MacOS/CorsixTH" --interpreter="$PWD/scripts/multiplayer/macos_smoke.lua" \
+            --resources="$PWD/$app/Contents/Resources" --server=127.0.0.1:47891 | tee smoke.txt
+          kill "$server" || true
+          grep -q "MACOS SMOKE OK" smoke.txt
+      - name: Smoke test (the game starts and keeps running without game data)
+        if: steps.setup.outputs.ready == 'true'
+        run: |
+          app=$PWD/signed/CorsixTH-Multiplayer/CorsixTH.app
+          export SDL_VIDEODRIVER=dummy SDL_AUDIO_DRIVER=dummy SDL_RENDER_DRIVER=software
+          mkdir -p "$RUNNER_TEMP/run" && cd "$RUNNER_TEMP/run"
+          "$app/Contents/MacOS/CorsixTH" > game.log 2>&1 &
+          pid=$!
+          sleep 15
+          if kill -0 "$pid" 2>/dev/null; then
+            echo "Still running after 15 s"; kill "$pid"
+          else
+            wait "$pid" || true
+            echo "The game ended early:"; cat game.log; exit 1
+          fi
+          cat game.log
+      - name: Keep the signed zip
+        if: steps.setup.outputs.ready == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: CorsixTH-macos-signed
+          path: out/*.zip
+          if-no-files-found: error
+      - name: Put the signed zip on the release
+        if: steps.setup.outputs.ready == 'true' && env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          old=$(shasum -a 256 "in/$ASSET" | cut -d' ' -f1)
+          new=$(shasum -a 256 "out/$ASSET" | cut -d' ' -f1)
+          gh release upload "$TAG" "out/$ASSET" --clobber --repo "$GITHUB_REPOSITORY"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > notes.md
+          if grep -q "$old" notes.md; then
+            sed "s/$old/$new/g" notes.md > notes-new.md
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes-new.md
+            echo "Notes: SHA-256 $old -> $new"
+          else
+            echo "::warning::The notes do not name the old SHA-256 ($old); new: $new"
+          fi
+          echo "Signed and notarized $ASSET on $TAG (SHA-256 $new)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove the keychain
+        if: always() && steps.setup.outputs.ready == 'true'
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
