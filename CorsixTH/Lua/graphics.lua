@@ -174,30 +174,34 @@ function Graphics:_loadPalettes(gfx_set)
   self:_loadPalette("QData", "Town01V.pal", true, false)
 end
 
---- The pixel font the builds ship for text the original fonts cannot show
---- (Fusion Pixel, SIL Open Font License; its licences are in Fonts/).
+--- The pixel font the builds ship (Fusion Pixel, SIL Open Font License; its
+--- licences are in Fonts/). Not used by default any more: drawn at its own
+--- 12 px it is bigger than the bitmap fonts of many windows (the policy
+--- sliders, the casebook), so text ran out of its boxes (Jan, Czech,
+--- 2026-11-19). The smooth default is sized to each window's font.
 Graphics.PIXEL_FONT = "Fonts/fusion-pixel-12px-proportional-zh_hans.ttf"
 
---- The smooth fonts the builds shipped before the pixel font.
-local OLD_DEFAULT_FONTS = { "CorsixTHUnicode.ttf", "GoNotoKurrent-Regular.ttf" }
+--- The smooth fonts the builds ship (CorsixTHUnicode.ttf is Go Noto).
+local DEFAULT_FONTS = { "CorsixTHUnicode.ttf", "GoNotoKurrent-Regular.ttf" }
 
---- Whether a configured font is one of the old default fonts. The config file
---- remembers the default's path after the first start, so such a setting was
---- not the player's own choice.
+--- Whether a configured font is one the builds ship rather than the player's
+--- own choice. The config file remembers the font the game chose after the
+--- first start: the smooth default, or (builds of 2026-11-18) the pixel font.
 --- @param path string
 --- @return boolean
-local function isOldDefaultFont(path)
+local function isShippedFont(path)
   local name = path:match("([^/\\]+)$") or path
-  for _, default in ipairs(OLD_DEFAULT_FONTS) do
+  for _, default in ipairs(DEFAULT_FONTS) do
     if name == default then return true end
   end
-  return false
+  return name == Graphics.PIXEL_FONT:match("([^/]+)$")
 end
 
 --- Which Unicode font file to load.
 --- The order: the font given in the config file as unicode_font (unless it is
---- an old default font), the font of the compile setting WITH_FONT, the pixel
---- font in the CorsixTH folder, then the old default fonts there.
+--- one the builds ship), the font of the compile setting WITH_FONT, the smooth
+--- default font in the CorsixTH folder, a shipped font the config names
+--- elsewhere, then the pixel font.
 --- @param config_path string|nil unicode_font from the config file.
 --- @param compile_path string|nil The compile setting WITH_FONT.
 --- @param dir string The CorsixTH folder, ending in a path separator.
@@ -206,8 +210,8 @@ end
 --- @return string? error Why none was found.
 function Graphics.chooseFontFile(config_path, compile_path, dir, exists)
   local config_err, compile_err = "", ""
-  local config_is_old_default = config_path and isOldDefaultFont(config_path)
-  if config_path and not config_is_old_default then
+  local config_is_shipped = config_path and isShippedFont(config_path)
+  if config_path and not config_is_shipped then
     if exists(config_path) then return config_path end
     config_err = "Configured font set but not found. Check path " .. config_path
   end
@@ -215,11 +219,14 @@ function Graphics.chooseFontFile(config_path, compile_path, dir, exists)
     if exists(compile_path) then return compile_path end
     compile_err = " Compiled font path set but not found. Check path " .. compile_path
   end
-  if exists(dir .. Graphics.PIXEL_FONT) then return dir .. Graphics.PIXEL_FONT end
-  if config_is_old_default and exists(config_path) then return config_path end
-  for _, name in ipairs(OLD_DEFAULT_FONTS) do
+  for _, name in ipairs(DEFAULT_FONTS) do
     if exists(dir .. name) then return dir .. name end
   end
+  if config_is_shipped and exists(config_path) and not Graphics.pixelFontSize(config_path) then
+    return config_path
+  end
+  if exists(dir .. Graphics.PIXEL_FONT) then return dir .. Graphics.PIXEL_FONT end
+  if config_is_shipped and exists(config_path) then return config_path end
   return nil, config_err .. compile_err
 end
 
@@ -257,8 +264,8 @@ function Graphics:loadFontFile()
     if self.ttf_font_data and config_path ~= font_file then
       self.app.config.unicode_font = font_file
       self.app:saveConfig()
-      if config_path and isOldDefaultFont(config_path) and Graphics.pixelFontSize(font_file) then
-        print("Using the pixel font " .. font_file .. " instead of the old default font.")
+      if config_path and Graphics.pixelFontSize(config_path) and not Graphics.pixelFontSize(font_file) then
+        print("Using the smooth font " .. font_file .. " instead of the pixel font.")
       else
         print("Configured unicode font not found, using " .. font_file .. " instead.")
       end
