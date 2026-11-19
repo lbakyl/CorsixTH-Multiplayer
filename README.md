@@ -1,4 +1,7 @@
-<picture>![image](https://github.com/CorsixTH/CorsixTH/assets/20030128/923883d1-cd2b-48a9-8506-6ee03e2745dc)</picture>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/multiplayer/images/openth-logo-dark.png">
+  <img alt="OpenTH" src="docs/multiplayer/images/openth-logo.png" width="237">
+</picture>
 
 # CorsixTH Multiplayer
 
