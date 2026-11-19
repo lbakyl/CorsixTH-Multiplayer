@@ -9,11 +9,6 @@ from corsixth_mp import packs, server as srv
 from corsixth_mp.builds import BuildCheck, lua_checksum
 from corsixth_mp.protocol import decode, encode
 
-cryptography = pytest.importorskip("cryptography")
-from cryptography.hazmat.primitives import serialization  # noqa: E402
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: E402
-
-
 def source_tree(root):
     """A small CorsixTH folder like a source tree's."""
     (root / "Lua").mkdir(parents=True)
@@ -36,11 +31,28 @@ def source_tree(root):
 
 
 def key_file(tmp_path):
+    """A new signing key (the release side's library, not needed by servers)."""
+    pytest.importorskip("cryptography")
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
     key = Ed25519PrivateKey.generate()
     path = tmp_path / "key.pem"
     path.write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
                                        serialization.NoEncryption()))
     return key, path
+
+
+def served_pack(src, out, release):
+    """A pack as a server gets it, with a made-up signature (servers never
+    check it; the game does)."""
+    build = lua_checksum(src / "Lua")
+    raw = packs.container(packs.collect(src), build=build, api=packs.api_version(src),
+                          engine=packs.engine_level(src), release=release)
+    out.mkdir(parents=True, exist_ok=True)
+    pack_path, sig_path = out / packs.pack_name(build), out / packs.sig_name(build)
+    pack_path.write_bytes(zlib.compress(raw))
+    sig_path.write_text("ab" * 64 + "\n")
+    return pack_path, sig_path, build
 
 
 def test_pack_carries_what_the_game_installs_and_is_signed(tmp_path):
@@ -69,8 +81,7 @@ def test_names_a_pack_cannot_carry(tmp_path):
 def test_server_sends_its_pack_and_offers_it_to_other_builds(tmp_path):
     src = source_tree(tmp_path / "CorsixTH")
     (src / "Levels" / "big.map").write_bytes(os.urandom(3 * srv.PACK_CHUNK))  # (several pieces)
-    _, path = key_file(tmp_path)
-    pack_path, sig_path, build = packs.make(src, "mp-test-12345678", path, tmp_path / "packs")
+    pack_path, sig_path, build = served_pack(src, tmp_path / "packs", "mp-test-12345678")
     blob = pack_path.read_bytes()
 
     async def main():
@@ -122,8 +133,7 @@ def test_server_sends_its_pack_and_offers_it_to_other_builds(tmp_path):
 
 def test_a_pack_of_another_build_is_not_served(tmp_path):
     src = source_tree(tmp_path / "CorsixTH")
-    _, path = key_file(tmp_path)
-    pack_path, sig_path, build = packs.make(src, "mp-test-1", path, tmp_path / "packs")
+    pack_path, sig_path, build = served_pack(src, tmp_path / "packs", "mp-test-1")
     pack_path.rename(tmp_path / "packs" / packs.pack_name("0badf00d"))
     sig_path.rename(tmp_path / "packs" / packs.sig_name("0badf00d"))
     server = srv.Server(packs_dir=str(tmp_path / "packs"))
