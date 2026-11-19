@@ -76,6 +76,7 @@ function UIMultiplayerChat:UIMultiplayerChat(ui)
   self.font = ui.app.gfx:loadFontAndSpriteTable("QData", "Font01V", nil, nil, { apply_ui_scale = true })
   self:addKeyHandler("ingame_mp_chat", self.openInput)
   self:addKeyHandler("ingame_mp_next_hospital", self.nextHospital)
+  self:addKeyHandler("ingame_mp_own_hospital", self.ownHospital)
 end
 
 --! The next hospital key (ingame_mp_next_hospital, N by default): the view
@@ -88,6 +89,19 @@ function UIMultiplayerChat:nextHospital()
   local hospital = index and world.hospitals[index]
   if not hospital then return end
   self.looked_at = index
+  MultiplayerSession.lookAtHospital(self.ui, hospital)
+  self:add(_S.multiplayer_window.looking_at:format(hospital.name), true,
+      UIMultiplayerChat.colourOf(MultiplayerSession.hospitalColour(world, hospital)))
+end
+
+--! The own hospital key (ingame_mp_own_hospital, Shift+N by default): the
+--! view goes straight back to this player's own hospital (Argus), and the
+--! next hospital key starts again from there.
+function UIMultiplayerChat:ownHospital()
+  local world = self.ui.app.world
+  local hospital = self.ui.hospital
+  if not world or not world.mp_coop or not hospital then return end
+  self.looked_at = nil
   MultiplayerSession.lookAtHospital(self.ui, hospital)
   self:add(_S.multiplayer_window.looking_at:format(hospital.name), true,
       UIMultiplayerChat.colourOf(MultiplayerSession.hospitalColour(world, hospital)))

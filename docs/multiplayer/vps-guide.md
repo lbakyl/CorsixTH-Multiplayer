@@ -18,7 +18,7 @@ details: `referee.md`).
 On a fresh Debian or Ubuntu VPS, as root:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/lbakyl/CorsixTH-Multiplayer/master/mp_server/deploy/setup-vps.sh
+curl -fsSLO https://raw.githubusercontent.com/openth-org/openth/master/mp_server/deploy/setup-vps.sh
 sudo bash setup-vps.sh --motd "Welcome"            # add --ufw to set up the firewall too
 ```
 
@@ -71,7 +71,7 @@ thinking about it.
 ```bash
 sudo mkdir -p /opt/corsixth-mp && cd /opt/corsixth-mp
 sudo curl -fsSLo compose.yaml \
-  https://raw.githubusercontent.com/lbakyl/CorsixTH-Multiplayer/master/mp_server/compose.yaml
+  https://raw.githubusercontent.com/openth-org/openth/master/mp_server/compose.yaml
 ```
 
 `master` is the newest tested state of the fork.

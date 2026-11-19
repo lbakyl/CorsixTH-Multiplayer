@@ -7,7 +7,7 @@
 #        [--name eu2] [--experts "Argus,Matroftt"]
 #   (a stable release is named mp-stable-<commit>)
 #
-# --release  a test release of lbakyl/CorsixTH-Multiplayer: its Linux package
+# --release  a test release of openth-org/openth: its Linux package
 #            is the referee, and the server code comes from the same commit.
 #            The players must run that release (the build ids must match).
 # --code     optional: the server code and the referee's and bots' scripts
@@ -39,6 +39,10 @@
 # the bots learn from the new saves (hard bots build that way), and the
 # daily report says whose.
 #
+# The game pack of the release (openth-pack-<build>.bin and .sig, made and
+# signed by the release maker; corsixth_mp/packs.py), if it has one: players
+# of another build download it in the game instead of the release's page.
+#
 # Safe to run again, e.g. with the next release. Restarting the service drops
 # every connected player: check that nobody is playing first.
 set -euo pipefail
@@ -50,7 +54,7 @@ PORT=47800
 MOTD="CorsixTH multiplayer server (with referee)"
 NAME=""
 EXPERTS="-"
-REPO=lbakyl/CorsixTH-Multiplayer
+REPO=openth-org/openth
 BASE=/opt/corsixth-mp
 
 while [[ $# -gt 0 ]]; do
@@ -129,6 +133,31 @@ chown -R root:corsixth "$BASE/referee" "$BASE/src" && chmod -R g+rX,o= "$BASE/re
 missing=$(LD_LIBRARY_PATH="$R/game/lib" ldd "$R/game/corsix-th" | grep "not found" || true)
 [[ -z "$missing" ]] || die "the game binary misses libraries: $missing"
 
+say "Game pack of $RELEASE, if it has one"
+P="$BASE/packs"
+PACKS=""
+mkdir -p "$P"
+build=$(PYTHONPATH="$BASE/src/mp_server" "$BASE/venv/bin/python" -c \
+  'import sys; from corsixth_mp.builds import lua_checksum; print(lua_checksum(sys.argv[1]))' "$R/CorsixTH/Lua")
+for ext in bin sig; do
+  f="$P/openth-pack-$build.$ext"
+  if curl -fsSL -o "$f.part" "https://github.com/$REPO/releases/download/$RELEASE/openth-pack-$build.$ext"; then
+    mv "$f.part" "$f"
+  else
+    rm -f "$f.part" "$f"
+  fi
+done
+# (Only this build's: the server offers its own.)
+find "$P" -maxdepth 1 -type f ! -name "openth-pack-$build.*" -delete
+if [[ -f "$P/openth-pack-$build.bin" && -f "$P/openth-pack-$build.sig" ]]; then
+  PACKS="$P"
+  echo "players of other builds can download build $build in the game"
+else
+  rm -f "$P/openth-pack-$build".*
+  echo "no game pack in $RELEASE: players of other builds are sent to its page"
+fi
+chown -R root:corsixth "$P" && chmod -R g+rX,o= "$P"
+
 say "Settings (/etc/corsixth-mp.env) and the service"
 if [[ -z "$NAME" && -f /etc/corsixth-mp.env ]]; then
   NAME=$(sed -n 's/^CORSIXTH_MP_SERVER_NAME=//p' /etc/corsixth-mp.env)
@@ -143,6 +172,8 @@ cat > /etc/corsixth-mp.env <<EOF
 # the players' build: players of other builds are told to get this release.
 CORSIXTH_MP_MOTD=$MOTD
 CORSIXTH_MP_RELEASE=$RELEASE
+# Signed game pack of this build, downloaded by players of other builds.
+CORSIXTH_MP_PACKS=$PACKS
 CORSIXTH_MP_REFEREE_BINARY=$R/game/corsix-th
 CORSIXTH_MP_REFEREE_SOURCE=$R
 CORSIXTH_MP_REFEREE_DATA=$BASE/thdata/themehos

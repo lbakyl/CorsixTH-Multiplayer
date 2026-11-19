@@ -149,6 +149,19 @@ function MultiplayerLobby.botName(name, level)
   return _S.multiplayer_window.bot_named:format(name, MultiplayerLobby.botKind(level))
 end
 
+--! A player's name in capitals, as hospitals are named ("ANN + BEN"): Russian
+--! and Ukrainian letters too (Lua's upper changes only A to Z, and "Алёна"
+--! stayed as it was beside "JAN"). Other letters stay as they are: the
+--! original bitmap font has few capitals with accents.
+function MultiplayerLobby.capitals(text)
+  text = text:upper()
+  -- (U+0430 to U+043F, U+0440 to U+044F and U+0450 to U+045F, as UTF-8.)
+  text = text:gsub("\208([\176-\191])", function(c) return "\208" .. string.char(c:byte() - 32) end)
+  text = text:gsub("\209([\128-\143])", function(c) return "\208" .. string.char(c:byte() + 32) end)
+  text = text:gsub("\209([\144-\159])", function(c) return "\208" .. string.char(c:byte() - 16) end)
+  return (text:gsub("\210\145", "\210\144")) -- (Ukrainian ґ)
+end
+
 --! The mode of a running game, from its world.
 function MultiplayerLobby.worldMode(world)
   if not (world and world.mp_coop) then return "shared" end
@@ -174,6 +187,21 @@ function MultiplayerLobby.clampSpeed(speed, max_speed)
   if not rank then return max_speed or "Normal" end
   if max_rank and rank > max_rank then return max_speed end
   return speed
+end
+
+local speed_menu_keys = {["Pause"] = "pause", ["Slowest"] = "slowest", ["Slower"] = "slower",
+    ["Normal"] = "normal", ["Max speed"] = "max_speed", ["And then some more"] = "and_then_some_more"}
+
+--! A speed's name in the player's language, as the speed menu has it
+--! without its key ("And then some more" stayed English in Russian).
+function MultiplayerLobby.speedName(speed)
+  local key = speed_menu_keys[speed]
+  if not key then return speed end
+  local text = _S.menu_options_game_speed[key]
+  if type(text) == "userdata" then text = require("TH").stringProxy._unwrap(text) end
+  -- (Without the place for its key, "(%1%)".)
+  text = tostring(text):gsub("%(%%1%%%)", "")
+  return (text:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
 local function encode_value(v)
@@ -301,9 +329,23 @@ end
 function MultiplayerLobby.buildId(app)
   app = app or TheApp
   if MultiplayerLobby.cached_build then return MultiplayerLobby.cached_build end
+  local runtime = rawget(_G, "jit") and "luajit" or _VERSION:gsub("Lua ", "lua")
+  -- (Not the language: players in different languages play together. What
+  -- depended on it, how many random numbers a staff description takes, uses
+  -- the cosmetic ones in multiplayer, StaffProfile:randomiseOrganical.)
+  local build = string.format("%s-sv%d-%s-mp%d-%s", app:getReleaseString(),
+      app.savegame_version, runtime, MultiplayerLobby.PROTOCOL,
+      MultiplayerLobby.luaChecksum(app:getFullPath({"Lua"}, true)))
+  MultiplayerLobby.cached_build = build
+  return build
+end
+
+--! The checksum of the Lua game code in a folder (ending with a separator):
+--! CRC-32 of every .lua file's path and content (line endings ignored),
+--! sorted by path, as 8 hexadecimal digits; the last part of a build id.
+function MultiplayerLobby.luaChecksum(root)
   local lfs = require("lfs")
   local TH = require("TH")
-  local root = app:getFullPath({"Lua"}, true)
   local files = {}
   local function walk(dir, rel)
     for name in lfs.dir(dir) do
@@ -328,15 +370,7 @@ function MultiplayerLobby.buildId(app)
       fh:close()
     end
   end
-  local runtime = rawget(_G, "jit") and "luajit" or _VERSION:gsub("Lua ", "lua")
-  -- (Not the language: players in different languages play together. What
-  -- depended on it, how many random numbers a staff description takes, uses
-  -- the cosmetic ones in multiplayer, StaffProfile:randomiseOrganical.)
-  local build = string.format("%s-sv%d-%s-mp%d-%08x", app:getReleaseString(),
-      app.savegame_version, runtime, MultiplayerLobby.PROTOCOL,
-      TH.CRC32File(table.concat(parts, "\0")))
-  MultiplayerLobby.cached_build = build
-  return build
+  return string.format("%08x", TH.CRC32File(table.concat(parts, "\0")))
 end
 
 --!param params (table) Fields:
@@ -710,6 +744,44 @@ function MultiplayerLobby:canAddBots()
   return self:isOwner() and self.room.bots == "1"
 end
 
+--! An assistant: a bot that helps the person of place `peer` in their own
+--! hospital and takes none of the room's places (Argus, 2026-11-15). Anybody
+--! for themselves, the owner for anybody, one each, in a new game.
+function MultiplayerLobby:addAssistant(peer) self.error = nil; self:send("BOT", {assist = peer}) end
+
+--! Whether this player may give the person of place `peer` an assistant now.
+function MultiplayerLobby:mayAddAssistant(peer)
+  local p = self.players and self.players[tonumber(peer)]
+  if not (p and p.bot ~= "1" and self.room and self.room.bots == "1" and self:isFreeRoom()) then
+    return false
+  end
+  if tonumber(peer) ~= tonumber(self.room.peer) and not self:isOwner() then return false end
+  -- (One each: the server names those who have one, starting or not.)
+  for helped in (self.summary and self.summary.assisted or ""):gmatch("%d+") do
+    if tonumber(helped) == tonumber(peer) then return false end
+  end
+  -- (Not once the game has its most players, assistants too: PLACES.)
+  local everybody = tonumber(self.summary and self.summary.starting) or 0
+  for _ in pairs(self.players) do everybody = everybody + 1 end
+  return self:assistantOf(peer) == nil and everybody < MultiplayerLobby.PLACES
+end
+
+--! The assistant of the person of place `peer` (their entry), or nil.
+function MultiplayerLobby:assistantOf(peer)
+  for _, p in pairs(self.players or {}) do
+    if tonumber(p.assists) == tonumber(peer) then return p end
+  end
+  return nil
+end
+
+--! A bot's name as the lists show it: "Bot Agnes (hard bot)", or for an
+--! assistant whose it is, "Bot Agnes (Argus's assistant)".
+function MultiplayerLobby:botLine(p)
+  local person = p.assists and self.players and self.players[tonumber(p.assists)]
+  if person then return _S.multiplayer_window.assistant_named:format(p.name, person.name) end
+  return MultiplayerLobby.botName(p.name, p.level)
+end
+
 function MultiplayerLobby:sendChat(text) self:send("CHAT", {text = text}) end
 
 --! This player's allies still in the game, in peer order: in a race of
@@ -822,6 +894,9 @@ function MultiplayerLobby:_onJOINED(f)
   self.state = "in_room"
   self.players, self.players_pending = {}, {}
   self.ready = false
+  -- (The room's chat starts here: older lines, of another room or game,
+  -- are not shown in it.)
+  self.room_chat = {}
   self:_changed("joined", f)
 end
 
@@ -888,6 +963,12 @@ function MultiplayerLobby:_onCHAT(f)
   end
   self.chat[#self.chat + 1] = f
   if #self.chat > 20 then table.remove(self.chat, 1) end
+  -- The room's own chat, shown in the room before the game starts (Jan,
+  -- 2026-11-14: the players asked to talk there; everybody sees it all).
+  if self.state == "in_room" and self.room_chat then
+    self.room_chat[#self.room_chat + 1] = f
+    if #self.room_chat > 50 then table.remove(self.room_chat, 1) end
+  end
   local session = TheApp and TheApp.mp_session
   if session and session.lobby == self then
     -- In the game: the chat lines at the top left (to = a private message).
@@ -938,6 +1019,8 @@ function MultiplayerLobby:_attachChat(ui)
     chat:addKeyHandler("ingame_mp_chat", chat.openInput)
     chat:removeKeyHandler("ingame_mp_next_hospital")
     chat:addKeyHandler("ingame_mp_next_hospital", chat.nextHospital)
+    chat:removeKeyHandler("ingame_mp_own_hospital")
+    chat:addKeyHandler("ingame_mp_own_hospital", chat.ownHospital)
     return
   end
   ui:addWindow(UIMultiplayerChat(ui))
@@ -1249,7 +1332,7 @@ function MultiplayerLobby:_seatsFromSave(world, session)
     local found
     for i = 1, world.mp_coop.players do
       local hospital = world.hospitals[i]
-      if hospital and tostring(hospital.name):upper() == name then
+      if hospital and MultiplayerLobby.capitals(tostring(hospital.name)) == name then
         if found then return end -- two hospitals of that name
         found = i
       end
@@ -1685,12 +1768,12 @@ function MultiplayerLobby:_beginGame(f)
     local start_names = {}
     for n in (f.names or ""):gmatch("[^,]+") do start_names[#start_names + 1] = n end
     self.peer_names = {}
-    for i, p in ipairs(peers) do self.peer_names[p] = start_names[i] and start_names[i]:upper() end
+    for i, p in ipairs(peers) do self.peer_names[p] = start_names[i] and MultiplayerLobby.capitals(start_names[i]) end
     local names = {}
     for i, p in ipairs(peers) do
       local player = self.players[p]
       local index = self.peer_hospital[p]
-      local name = (start_names[i] or (player and player.name) or ("Player " .. p)):upper()
+      local name = MultiplayerLobby.capitals(start_names[i] or (player and player.name) or ("Player " .. p))
       names[index] = names[index] and (names[index] .. " + " .. name) or name
       if p == tonumber(f.peer) then my_index = index end
     end

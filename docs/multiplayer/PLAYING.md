@@ -21,13 +21,13 @@ It is a test version: expect rough edges, and please report what you find.
   with. A server with a referee only lets in the build it runs; it tells
   you which release to download.
 - **A server address** (`host:port`, port 47800 by default).
-  `eu1.bachelor-tech.com:47800` runs the newest stable release,
-  `eu2.bachelor-tech.com:47800` the newest test build.
+  `eu1.openth.org:47800` runs the newest stable release,
+  `eu2.openth.org:47800` the newest test build.
   Anybody can run one; see [SERVER-SETUP.md](SERVER-SETUP.md).
 
 ## Get the game
 
-1. Open the fork's [Releases](https://github.com/lbakyl/CorsixTH-Multiplayer/releases)
+1. Open the fork's [Releases](https://github.com/openth-org/openth/releases)
    and download the newest **Multiplayer test build** zip (no GitHub account
    needed). Unzip it into a new folder.
 2. Start `CorsixTH.exe`. The first time it asks for your Theme Hospital
@@ -93,13 +93,19 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
    colour. With several hospitals the game seats team mates next to each
    other on the map and names each hospital after its players ("JAN + ABI").
    One shared hospital plays the campaign's levels (1 to 12); several
-   hospitals play the multiplayer levels (1 to 9; a higher number plays
-   level 9, as the room says). A saved game keeps its colours and teams.
+   hospitals play the multiplayer levels (1 to 10; a higher number plays
+   level 10, as the room says). A saved game keeps its colours and teams.
    **How many players:** a room has as many places as its level has
-   hospitals. Theme Hospital's maps have room for 4; TEAM TOWN (level 8) also
+   hospitals. Theme Hospital's maps have room for 4; TEAM TOWN (level 9) also
    has a map for 5 to 8 hospitals: four more hospitals north and south of the
-   middle (the empty ones' plots are for sale), and CROSSROADS (level 9) is
-   made for 8, so their rooms have up to 8 places.
+   middle (the empty ones' plots are for sale), and CROSSROADS (level 10) is
+   made for 8, so their rooms have up to 8 places. MOUNT EVEREST (level 8)
+   is made for 6: three districts north of the town square and three south
+   of it, all laid out alike, each a start hospital with five buildings for
+   sale round it (and four big ones beside the square), with climbing
+   seasons that bring about a hundred patients to every hospital each April
+   and October, an earthquake every three months for four years, and only
+   junior doctors to hire in years 2 and 3.
 5. **Sharing a hospital:** team mates build, hire and answer faxes in the
    same hospital. A bot can share yours too: it builds in your hospital along
    with you (a desk, rooms, staff), and whatever you have already built it
@@ -141,7 +147,22 @@ more towards the goals, only every second death counts, and it bids higher at
 auctions).
 The room, the places of a running game and the Players window say which:
 "Bot Agnes (hard bot)". Whatever helps a bot stops once a person plays its
-hospital. A bot builds its
+hospital.
+
+**An assistant for your hospital.** In a new game's room, the **Assistants**
+column beside the places has "+ Add assistant" beside your own line (the menu
+on your line, a right or double click, offers it too): a bot joins your
+hospital to help you, as any bot that shares a person's hospital does (it
+builds, hires and looks after staff, pays bonuses, shares research; with
+**Allied bots build** off it does all but the building). It takes none of the
+room's places,
+so on a map for four, four people can each have one. It shows beside your
+line, keeps your colour and team (it moves with you), and leaves the room
+with you; in a game it plays on in your hospital if you leave, and no other
+bot comes for your place. One each; the host may add one for anybody. A
+click on it (yours, or the host's on any) sends it away again; the host's
+right click picks how good it is. The game's 8 players count assistants
+too: with 8 people there is no room for one. A bot builds its
 hospital slowly, as a beginner would (a desk, a GP's office, then one room
 after the other), hires staff, opens, and chats a little. In co-op it accepts
 whatever you offer it and thanks you; in a competitive race it plays a dirty
@@ -348,8 +369,8 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 ## Levels
 
 **One shared hospital** plays the campaign levels 1 to 12, as in single
-player. **A hospital each** (co-op and the race) has nine levels of its own,
-on Theme Hospital's multiplayer maps (levels 6 and 7 are scenarios, below; levels 8 and 9 are Matroftt's Team Town and Crossroads). Each takes its diseases, rooms and
+player. **A hospital each** (co-op and the race) has ten levels of its own,
+on Theme Hospital's multiplayer maps (levels 6 and 7 are scenarios, below; level 8 is Mount Everest, a scenario too; levels 9 and 10 are Matroftt's Team Town and Crossroads). Each takes its diseases, rooms and
 research from a campaign level, so level 1 is the smallest. From level 2 on
 the training room is there from the start (there are few staff to hire, so
 training should begin early). Every hospital hires from its own list: each

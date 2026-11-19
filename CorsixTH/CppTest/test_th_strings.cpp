@@ -31,3 +31,31 @@ TEST_CASE("remove entire string of whitespace", "[skip_utf8_whitespace]") {
 
   REQUIRE_THAT(str, Catch::Matchers::Equals(""));
 }
+
+TEST_CASE("Russian letters in the Russian game's font", "[unicode_to_codepage_mik]") {
+  REQUIRE(unicode_to_codepage_mik('A') == 'A');
+  REQUIRE(unicode_to_codepage_mik(0x0410) == 0x80);  // Cyrillic capital A
+  REQUIRE(unicode_to_codepage_mik(0x0435) == 0xA5);  // Cyrillic small ye
+}
+
+TEST_CASE("letters and signs MIK lacks drawn as the nearest it has",
+          "[unicode_to_codepage_mik]") {
+  REQUIRE(unicode_to_codepage_mik(0x0401) == 0x85);  // Yo as Ye
+  REQUIRE(unicode_to_codepage_mik(0x0451) == 0xA5);  // yo as ye
+  REQUIRE(unicode_to_codepage_mik(0x00AB) == '"');   // guillemets
+  REQUIRE(unicode_to_codepage_mik(0x00BB) == '"');
+  REQUIRE(unicode_to_codepage_mik(0x2014) == '-');  // em dash
+  REQUIRE(unicode_to_codepage_mik(0x4E2D) == '?');  // a Chinese letter
+}
+
+TEST_CASE("characters never drawn", "[is_default_ignorable]") {
+  REQUIRE(is_default_ignorable(0x200B));   // zero-width space
+  REQUIRE(is_default_ignorable(0x200F));   // right-to-left mark
+  REQUIRE(is_default_ignorable(0x00AD));   // soft hyphen
+  REQUIRE(is_default_ignorable(0xFEFF));   // byte order mark
+  REQUIRE(is_default_ignorable(0xFE0F));   // emoji variation selector
+  REQUIRE_FALSE(is_default_ignorable(' '));
+  REQUIRE_FALSE(is_default_ignorable(0x3000));  // ideographic space
+  REQUIRE_FALSE(is_default_ignorable(0x4E2D));  // a Chinese letter
+  REQUIRE_FALSE(is_default_ignorable(0xAC00));  // a Korean letter
+}

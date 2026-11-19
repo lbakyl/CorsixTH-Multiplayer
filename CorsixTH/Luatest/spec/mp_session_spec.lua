@@ -631,6 +631,116 @@ describe("MultiplayerSession game options", function()
     assert.is_true(math.abs(left2 - 10) < 0.05)
     assert.is_true(math.abs(left3 - 10) < 0.05)
   end)
+
+  -- Argus, 2026-11-15: matroftt borrowed for each bid and paid the loan back
+  -- at once; he led three auctions for one plot and could pay for none.
+  local function money_world(balances, loans)
+    local hospitals = {}
+    for i, balance in ipairs(balances) do
+      local h = {balance = balance, loan = loans[i] or 0, value = 100000, name = "H" .. i}
+      function h.receiveMoney(self, amount) self.balance = self.balance + amount end
+      function h.spendMoney(self, amount) self.balance = self.balance - amount end
+      function h.purchasePlot(self, plot, cost)
+        if cost > self.balance then return false end
+        self.balance, self.plot = self.balance - cost, plot
+        return true
+      end
+      hospitals[i] = h
+    end
+    return {hospitals = hospitals, mp_coop = {},
+        getHospitalIndex = function(_, h)
+          for i, x in ipairs(hospitals) do if x == h then return i end end
+        end}
+  end
+  local function with_texts(f)
+    local saved_S, saved_app = rawget(_G, "_S"), rawget(_G, "TheApp")
+    rawset(_G, "_S", {transactions = {}, multiplayer_window = {auction_sold = "Plot %d sold to %s for $%d.",
+        auction_not_sold = "Plot %d was not sold.", auction_not_paid = "Plot %d was not sold: %s could not pay the $%d bid.",
+        auction_loan_note = "The bank lent you $%d to pay for plot %d."}})
+    rawset(_G, "TheApp", {}) -- no mp_session: nothing logged
+    local ok, err = pcall(f)
+    rawset(_G, "_S", saved_S)
+    rawset(_G, "TheApp", saved_app)
+    assert(ok, err)
+  end
+
+  it("goes on with a waiting room exactly as saved after a load", function()
+    -- (A game that loads alone, as in a quorum repair, must go on as those
+    -- that did not load: the same step and game hour, the map untouched.)
+    local waiting = {kind = "build_room", peer = 2, seq = 7, step = 105, retry_at_hour = 50, retries = 3}
+    local late = {kind = "build_room", peer = 1, seq = 4, step = 90}
+    local world = {mp_retries = {["2:7"] = waiting, ["1:4"] = late},
+        map = {th = setmetatable({}, {__index = function() error("the map is not touched") end})}}
+    local session = {pending = {}}
+    MultiplayerSession._resumeRetries(session, world, 100)
+    assert.equal(2, #session.pending)
+    assert.same({105, 50, 3}, {waiting.step, waiting.retry_at_hour, waiting.retries})
+    assert.equal(101, late.step)
+  end)
+
+  it("counts the map's tile flags and lists the messages for a desync's dump", function()
+    local cells = {[1] = {passable = true}, [2] = {passable = true, avoidTile = true}}
+    local th = {size = function() return 2, 1 end,
+        getCellFlags = function(_, x, _, t)
+          for k in pairs(t) do t[k] = nil end
+          for k, v in pairs(cells[x]) do t[k] = v end
+          return t
+        end}
+    local h1 = {}
+    local world = {map = {th = th}, hospitals = {h1},
+        getHospitalIndex = function(_, h) return h == h1 and 1 or nil end,
+        ui = {bottom_panel = {allMessageIcons = function()
+          return {{mp_id = 3, type = "personality", hospital = h1, timer = 12}, {type = "mp_vote"}}
+        end}}}
+    local counts = MultiplayerSession.flagCounts(world)
+    assert.truthy(counts:find("passable=2/", 1, true))
+    assert.truthy(counts:find("avoidTile=1/2069", 1, true)) -- (2 * 1031 + 1 * 7)
+    assert.truthy(counts:find("buildable=0/0", 1, true))
+    assert.equal("3:personality:1:12,nil:mp_vote:-:nil", MultiplayerSession.messageList(world))
+  end)
+
+  it("keeps the money for the bid a hospital leads with: no loan paid back below it", function()
+    with_texts(function()
+      local world = money_world({8000, 8000}, {10000, 10000})
+      world.mp_auction = {id = 4, plot = 13, bid = 6000, step = 400, leader = 1, bidders = {1, 2},
+          bids = {[1] = 6000}, out = {}, frames = 0, limit = 100}
+      local loan = MultiplayerSession.default_handlers.loan
+      local ok1, why1 = loan(world, {hospital = 1, amount = -5000})
+      local ok2 = loan(world, {hospital = 2, amount = -5000})
+      local ok3 = loan(world, {hospital = 1, amount = -2000})
+      world.mp_auction = nil
+      local ok4 = loan(world, {hospital = 1, amount = -5000})
+      assert.is_false(ok1)
+      assert.equal("leading an auction", why1)
+      assert.is_true(ok2 and ok3 and ok4)
+      assert.same({1000, 3000}, {world.hospitals[1].balance, world.hospitals[2].balance})
+    end)
+  end)
+
+  it("lends a winner short of money the rest; one the bank cannot help is named", function()
+    with_texts(function()
+      local pass = MultiplayerSession.default_handlers.auction_pass
+      -- $2175 left of a $7175 bid: the bank lends $5000 and the plot is sold.
+      local world = money_world({2175, 50000}, {0, 0})
+      world.mp_auction = {id = 13, plot = 13, bid = 7175, step = 400, leader = 1, bidders = {1, 2},
+          bids = {[1] = 7175, [2] = 6775}, out = {}, frames = 0, limit = 100}
+      assert.is_true(pass(world, {hospital = 2, auction = 13}))
+      local h = world.hospitals[1]
+      assert.is_nil(world.mp_auction)
+      assert.same({13, 5000, 0}, {h.plot, h.loan, h.balance})
+      assert.equal("Plot 13 sold to H1 for $7175.", MultiplayerSession.auctionResult(world.mp_auction_last))
+      -- The loan at its limit (a third of $100000 and $10000): not sold,
+      -- and the players are told why.
+      world = money_world({2175, 50000}, {40000, 0})
+      world.mp_auction = {id = 14, plot = 13, bid = 7175, step = 400, leader = 1, bidders = {1, 2},
+          bids = {[1] = 7175, [2] = 6775}, out = {}, frames = 0, limit = 100}
+      assert.is_true(pass(world, {hospital = 2, auction = 14}))
+      h = world.hospitals[1]
+      assert.same({nil, 40000, 2175}, {h.plot, h.loan, h.balance})
+      assert.equal("Plot 13 was not sold: H1 could not pay the $7175 bid.",
+          MultiplayerSession.auctionResult(world.mp_auction_last))
+    end)
+  end)
 end)
 
 describe("Evil handyman hints", function()

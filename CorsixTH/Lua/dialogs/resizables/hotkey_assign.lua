@@ -346,6 +346,7 @@ function UIHotkeyAssign:UIHotkeyAssign(ui, mode)
             "ingame_patient_gohome",
             "ingame_mp_chat",
             "ingame_mp_next_hospital",
+            "ingame_mp_own_hospital",
             "ingame_setTransparent",
             "ingame_toggleTransparent" }}}},
     {

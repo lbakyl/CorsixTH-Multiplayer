@@ -39,7 +39,8 @@ add_custom_target(AllTests)
 add_executable(UnitTests "")
 target_link_libraries(UnitTests
   Catch2::Catch2WithMain
-  CorsixTH_lib)
+  CorsixTH_lib
+  ZLIB::ZLIB)
 
 set_property(TARGET UnitTests PROPERTY CXX_STANDARD 17)
 set_property(TARGET UnitTests PROPERTY CXX_EXTENSIONS OFF)
@@ -58,6 +59,7 @@ target_sources(UnitTests
     ${CMAKE_CURRENT_SOURCE_DIR}/test_th_lua.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/test_th_lua_map.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/test_th_lua_ui.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_th_packs.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/test_th_pathfind.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/test_th_strings.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/test_xmi2mid.cpp

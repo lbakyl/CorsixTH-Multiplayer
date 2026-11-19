@@ -167,7 +167,7 @@ codesign --verify --strict --verbose=2 "$app"
 
 cat > "$pkg/README-MULTIPLAYER.txt" <<EOF
 CorsixTH-Multiplayer test build (macOS $MACOSX_DEPLOYMENT_TARGET or newer, $([[ $arch == arm64 ]] && echo "Apple Silicon" || echo "Intel; Apple Silicon runs it through Rosetta"))
-Commit $label of https://github.com/lbakyl/CorsixTH-Multiplayer
+Commit $label of https://github.com/openth-org/openth
 
 Move CorsixTH.app to Applications (or anywhere) and open it. The app is not
 notarized by Apple: the first time macOS refuses to open it. Then open

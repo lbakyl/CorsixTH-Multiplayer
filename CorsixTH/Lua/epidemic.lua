@@ -641,7 +641,7 @@ function Epidemic:spawnInspector()
   self.inspector = inspector
   inspector:setType("Inspector")
 
-  local spawn_point = self.world.spawn_points[math.random(1, #self.world.spawn_points)]
+  local spawn_point = self.world:spawnPointFor(self.hospital)
   inspector:setNextAction(SpawnAction("spawn", spawn_point))
   inspector:setHospital(self.hospital)
   inspector:queueAction(SeekReceptionAction())

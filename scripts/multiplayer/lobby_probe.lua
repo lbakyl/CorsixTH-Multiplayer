@@ -289,6 +289,106 @@ local function photo_hospital(world, h, what)
   ui:setZoom(1)
 end
 
+--! MP_ASSISTANT=1: this player clicks "+ Add assistant" beside their own
+--! line in the room (the assistants' column, UIMultiplayer:clickSide), waits
+--! until the bot has joined their hospital, and logs the room's lines and the
+--! column (with MP_SHOT_DIR: pictures before and after; and the menu on the
+--! player's own line, which offers one too).
+local function add_assistant(lobby)
+  if os.getenv("MP_ASSISTANT") ~= "1" then return end
+  local me = tonumber(lobby.room.peer)
+  wait_for("the room window", function() return lobby_window() and lobby_window().view == "room" end, 10)
+  -- (As a person would: once the lobby offers it.)
+  wait_for("an assistant offered", function() return lobby:mayAddAssistant(me) end, 20)
+  local win = lobby_window()
+  win:_updateRoom()
+  local function column()
+    local out = {}
+    for k, panel in ipairs(win.side_panels or {}) do out[k] = plain_text(panel.label or "") end
+    return table.concat(out, " | ")
+  end
+  local line
+  for k = 1, #win.player_panels do
+    local e = win.side_entry and win.side_entry[k]
+    if e and e.add == me then line = k end
+  end
+  log("UI: assistants column before: " .. column())
+  shot("assistant-add")
+  -- (The menu on this player's own line offers one too.)
+  local my_line
+  for k = 1, #win.player_panels do
+    local p = win:rowPlayer(k)
+    if p and tonumber(p.peer) == me then my_line = k end
+  end
+  win:playerMenu(my_line)
+  local items = {}
+  for k, panel in ipairs(win.player_dropdown and win.player_dropdown.item_panels or {}) do
+    items[k] = plain_text(panel.label or "")
+  end
+  log("UI: menu on my line: " .. table.concat(items, " | "))
+  if win.player_dropdown then win.player_dropdown:close() end
+  if not line then error("no \"+ Add assistant\" beside my line") end
+  win:clickSide(line)
+  wait_for("my assistant", function()
+    local a = lobby:assistantOf(me)
+    return a ~= nil and a.ready == "1"
+  end, 60)
+  win = lobby_window()
+  win:_updateRoom()
+  local lines = {}
+  for k = 1, #win.player_panels do
+    local p = win:rowPlayer(k)
+    lines[k] = plain_text(win.player_panels[k].label or "") ..
+        (p and p.colour and string.format(" [colour %s, team %s]", p.colour, p.team or "?") or "")
+  end
+  log(string.format("UI: room lines with my assistant (%d lines, open %s): %s", #win.player_panels,
+      tostring(lobby.summary.open), table.concat(lines, " | ")))
+  log("UI: assistants column: " .. column())
+  shot("room-assistant")
+end
+
+--! MP_ROOM_CHAT=<text>: say it in the room's chat before the game (typed
+--! into the room window's box, Enter), wait until MP_ROOM_CHAT_WAIT (another
+--! player's name) has said something too, and log the lines the window shows.
+local function room_chat(lobby)
+  local text = os.getenv("MP_ROOM_CHAT")
+  if not text then return end
+  local win = lobby_window()
+  win.chat_box:setText(text)
+  win.chat_box:confirm()
+  local other = os.getenv("MP_ROOM_CHAT_WAIT")
+  wait_for("the room's chat", function()
+    local own, theirs = false, other == nil
+    for _, f in ipairs(lobby.room_chat or {}) do
+      if f.text == text then own = true end
+      if other and f.name == other then theirs = true end
+    end
+    return own and theirs
+  end, 20)
+  win = lobby_window()
+  win:_updateRoom()
+  local shown = {}
+  for i, panel in ipairs(win.chat_panels) do shown[i] = tostring(panel.label or "") end
+  local bar = win.chat_scrollbar
+  log("UI: room chat: " .. table.concat(shown, " | ") .. "; box now \"" .. tostring(win.chat_box.text) .. "\"" ..
+      string.format("; %d rows, scrollbar %d of %d, handle at the bottom: %s", #win.chat_panels, bar.value,
+          bar.max_value - bar.page_size + 1, tostring(bar.slider.y == bar.slider.max_y)))
+  shot("room-chat")
+  -- The room's map (the Map button): who plays where, then back.
+  win:buttonRoomMap()
+  local map_win = TheApp.ui:getWindow(UIMultiplayerLevels)
+  tick()
+  local m = map_win and map_win.room
+  local where = {}
+  for i = 1, m and m.count or 0 do where[i] = i .. "=" .. tostring(m.colours[i]) .. ":" .. tostring(m.names[i]) end
+  log(string.format("UI: room map: level %s, %s hospital(s), file %s; %s", tostring(m and m.level),
+      tostring(m and m.count), tostring(map_win and map_win:mapFile()), table.concat(where, " ")))
+  shot("room-map")
+  map_win:close()
+  tick()
+  log("UI: back in the room: " .. tostring(lobby_window() and lobby_window().view))
+end
+
 local function run_lobby()
   local menu = assert(TheApp.ui:getWindow(UIMainMenu), "no main menu")
   shot("main-menu")
@@ -403,6 +503,7 @@ local function run_lobby()
       log(string.format("UI: game option %s=%s", option, value))
     end
     pick_team(lobby)
+    add_assistant(lobby)
     -- Bots: click the first empty place, once per bot, as a person would.
     local add_bots = tonumber(os.getenv("MP_ADD_BOTS") or "0")
     for k = 1, add_bots do
@@ -415,7 +516,7 @@ local function run_lobby()
       local add_text = (tostring(_S.multiplayer_window.add_bot):gsub("^<LocalisedString> Current value:%s*", ""))
       local empty
       for i = 1, tonumber(lobby.room.max) or 2 do
-        if not empty and not lobby.players[i] and labels[i] == add_text then empty = i end
+        if not empty and not win:rowPlayer(i) and labels[i] == add_text then empty = i end
       end
       log(string.format("UI: room places before bot %d: %s", k, table.concat(labels, " | ")))
       if not empty then error("no empty place to click for a bot") end
@@ -463,7 +564,7 @@ local function run_lobby()
       -- (With MP_SHOT_DIR: the level menu on the first bot's line, as a
       -- right click opens it.)
       for i = 1, #win.player_panels do
-        local p = lobby.players[i]
+        local p = win:rowPlayer(i)
         if shot_dir and p and p.bot == "1" then
           win:playerMenu(i)
           local level_menu, items = win.player_dropdown, {}
@@ -485,7 +586,9 @@ local function run_lobby()
         n = n + 1
         if peer ~= 1 and p.ready ~= "1" then ready = false end
       end
-      return n >= want_players and ready and lobby.summary ~= nil
+      -- (MP_WAIT_PLAYERS: fewer than the room's places, for a look at a
+      -- big room's window.)
+      return n >= (tonumber(os.getenv("MP_WAIT_PLAYERS") or "") or want_players) and ready and lobby.summary ~= nil
     end, 60)
     -- MP_COLOURS: "peer:colour,..." the host gives those places these
     -- hospital colours (1-8; the shirts of 5 to 8 are recoloured ones).
@@ -540,6 +643,7 @@ local function run_lobby()
       tick()
       shot("room-auctions-off")
     end
+    room_chat(lobby)
     -- MP_KICK=<place>: the host double-clicks that player's line and picks
     -- the menu's "remove" (UIMultiplayer:playerMenu), then stops.
     local kick = tonumber(os.getenv("MP_KICK") or "")
@@ -549,7 +653,12 @@ local function run_lobby()
       win:clickPlace(kick)
       log("UI: kick menu open: " .. tostring(win.player_dropdown ~= nil))
       shot("kick-menu")
-      win.player_dropdown:selectItem(1)
+      -- (The "remove" item: the menu also offers an assistant for them.)
+      local remove_text, pick = plain_text(_S.multiplayer_window.kick_player:format(lobby.players[kick].name)), 1
+      for k, panel in ipairs(win.player_dropdown.item_panels) do
+        if plain_text(panel.label or "") == remove_text then pick = k end
+      end
+      win.player_dropdown:selectItem(pick)
       wait_for("the player removed", function() return lobby.players[kick] == nil end, 10)
       log("UI: after the kick: " .. seats_text(lobby))
       local until_t = socket.gettime() + 4
@@ -629,6 +738,8 @@ local function run_lobby()
     lobby_window():buttonReady(true)
     wait_for("lobby update", function() return lobby.summary ~= nil end, 10)
     shot("lobby-room-joined")
+    room_chat(lobby)
+    add_assistant(lobby)
     if os.getenv("MP_EXPECT_KICK") then
       -- Removed by the host: back in the room list, told why; joining that
       -- room again is refused for a while.
@@ -1078,6 +1189,13 @@ local function run()
         if not desk_x then desk_x, desk_y = builder.anchor(world) end
         local a, live = entry.action, entry.live
         if a == "buy" then builder.ui_buy(world, desk_x, desk_y, entry.arg, log)
+        elseif a == "bigoutline" or a == "nooutline" then
+          -- A room outline over the whole map, as a player dragging it far
+          -- out would send (the others show only the tiles on this
+          -- player's land); nooutline: none any more.
+          local mw, mh = world.map.th:size()
+          session:showBlueprint(a == "bigoutline" and {room = "gp", x = 1, y = 1, w = mw, h = mh} or nil)
+          log(string.format("UI: %s sent at step %d (map %dx%d)", a, session.step, mw, mh))
         elseif a == "openhospital" then
           local watch
           for _, win in ipairs(world.ui.windows) do
@@ -1452,6 +1570,14 @@ local function run()
           end
         elseif a == "shot" then
           shot(entry.arg)
+        elseif a == "hotkeys" then
+          -- The hotkey window on its in-game page (the multiplayer keys at
+          -- its end), a picture, closed again.
+          local win = UIHotkeyAssign(world.ui)
+          world.ui:addWindow(win)
+          win:showKeyPane("ingame")
+          shot("hotkeys", true)
+          win:close()
         elseif a == "staffwindow" then
           -- Open the staff window of this hospital's first <arg> (a screenshot
           -- shows it), then click its send icon: the trade window opens.

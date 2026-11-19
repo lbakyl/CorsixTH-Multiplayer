@@ -331,17 +331,26 @@ end
 
 --! A corridor tile inside `hospital`'s building near its start view (a few
 --! tries at random, the same on every peer), or nil.
-function sabotage.corridorTile(world, hospital)
+--! A corridor tile of `hospital` near its entrance view (up to 30 random
+--! tries). With `level` (a litter bomb's): the first with room for all its
+--! litter, else the roomiest of those tried (a bomb going off in a
+--! hospital's hands once found a nook with room for 2 pieces of 15).
+function sabotage.corridorTile(world, hospital, level)
   local th = world.map.th
   local cx, cy = th:getCameraTile(hospital:getPlayerIndex())
   local width, height = th:size()
+  local best_x, best_y, best_n = nil, nil, -1
   for _ = 1, 30 do
     local x, y = cx + math.random(-15, 15), cy + math.random(-15, 15)
     if x >= 1 and y >= 1 and x <= width and y <= height and hospital:isInHospital(x, y) and
         th:getCellFlags(x, y).passable and not world:getRoom(x, y) then
-      return x, y
+      if not level then return x, y end
+      local n = #sabotage.litterSpots(world, hospital, x, y, level)
+      if n >= (sabotage.BOMB_LITTER[level] or 15) then return x, y end
+      if n > best_n then best_x, best_y, best_n = x, y, n end
     end
   end
+  return best_x, best_y
 end
 
 --! Walk the evil handyman to (x, y), then let him stand there.
@@ -580,7 +589,7 @@ function sabotage.startEpidemic(world, target, level)
   local disease = contagious[math.random(1, #contagious)]
   local x, y = target:getHeliportSpawnPosition()
   if not x then
-    local spawn_point = world.spawn_points[math.random(1, #world.spawn_points)]
+    local spawn_point = world:spawnPointFor(target)
     x, y = spawn_point.x, spawn_point.y
   end
   for _ = 1, EPIDEMIC_PATIENTS[level] do
@@ -1125,7 +1134,9 @@ end
 --! Litter thrown about by a bomb of `level` gone off at (x, y): pieces on
 --! corridor tiles of `hospital` around it (nothing standing on them), at
 --! random (the game's random: the same on every peer). How many it threw.
-function sabotage.scatterLitter(world, hospital, x, y, level)
+--! The tiles a bomb at x, y of `level` may litter: within its radius, in the
+--! hospital, on corridor floor with nothing but litter on it.
+function sabotage.litterSpots(world, hospital, x, y, level)
   local radius = sabotage.BOMB_RADIUS[level] or 2
   local th = world.map.th
   local spots = {}
@@ -1142,6 +1153,11 @@ function sabotage.scatterLitter(world, hospital, x, y, level)
       end
     end
   end
+  return spots
+end
+
+function sabotage.scatterLitter(world, hospital, x, y, level)
+  local spots = sabotage.litterSpots(world, hospital, x, y, level)
   local count = 0
   for i = 1, math.min(sabotage.BOMB_LITTER[level] or 15, #spots) do
     local j = math.random(i, #spots)
@@ -1162,7 +1178,7 @@ function sabotage.bombGoesOff(world, bomb)
   local in_hands = not bomb.tile_x
   local x, y = bomb.tile_x, bomb.tile_y
   if in_hands then
-    x, y = sabotage.corridorTile(world, hospital)
+    x, y = sabotage.corridorTile(world, hospital, b.level)
     if x then bomb:setTile(x, y) end
   end
   if x then bomb:playSound("explode.wav") end

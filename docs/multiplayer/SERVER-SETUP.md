@@ -1,7 +1,7 @@
 # Setting up your own multiplayer server (with the referee)
 
-This guide sets up a server like `eu1.bachelor-tech.com` and
-`eu2.bachelor-tech.com`: the lobby where players make and join rooms, plus
+This guide sets up a server like `eu1.openth.org` and
+`eu2.openth.org`: the lobby where players make and join rooms, plus
 the **referee**, a copy of every game that runs on the server. The referee
 repairs games that get out of sync within a moment, lets a player whose game
 crashed join again, and runs the computer players (bots). One script does
@@ -128,7 +128,7 @@ ls ~/themehos
 ## 4. Pick the game version
 
 Every player and the server must run **the same release**. Open the releases
-page: <https://github.com/lbakyl/CorsixTH-Multiplayer/releases>
+page: <https://github.com/openth-org/openth/releases>
 
 - **Stable** releases are called `mp-stable-<number>` (the one marked
   *Latest*). eu1 runs the newest stable one.
@@ -145,7 +145,7 @@ release name, and the welcome text (`--motd`, shown to players when they
 connect) with your own:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/lbakyl/CorsixTH-Multiplayer/master/mp_server/deploy/setup-referee-host.sh
+curl -fsSLO https://raw.githubusercontent.com/openth-org/openth/master/mp_server/deploy/setup-referee-host.sh
 sudo bash setup-referee-host.sh --release mp-stable-a03adfdc --data ~/themehos --motd "Welcome to my CorsixTH server"
 ```
 
@@ -201,7 +201,7 @@ When a new release comes out, run the script again with its name, **without
 `--data`** (the server keeps the game files from the first time):
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/lbakyl/CorsixTH-Multiplayer/master/mp_server/deploy/setup-referee-host.sh
+curl -fsSLO https://raw.githubusercontent.com/openth-org/openth/master/mp_server/deploy/setup-referee-host.sh
 sudo bash setup-referee-host.sh --release mp-stable-NEWNUMBER --motd "Welcome to my CorsixTH server"
 ```
 
@@ -277,12 +277,16 @@ What happens then:
   `/var/lib/corsixth/learn/saves` (a few MB each). A hospital a bot played at
   any time, even for a while for a player who left, is never learnt from.
 - Every morning at 6:30 (Prague time) the server reads the new saves and
-  writes what the bots learnt to `/var/lib/corsixth/learn/learned.lua`. Hard
+  writes what the bots learnt to `/var/lib/corsixth/learn/learned.lua`. Each
+  game counts once, as its latest save has it (a game continued from a save
+  is saved again: its saves are recognised by the rooms and corridor objects
+  they share). Hard
   bots of games started after that build that way (a new bot is a hard one
   unless the room's owner picks another level); easy and normal bots keep
   their own rules.
-- The daily Discord report names the saves and players learnt from that
-  night (nothing is said on a night without new ones).
+- The daily Discord report names the games and players learnt from that
+  night, each game by its latest save and how many saves it had (nothing is
+  said on a night without new ones).
 
 Tell the players you name that their games are saved on your server for
 this. To start over, stop the service and delete

@@ -71,10 +71,43 @@ local function amount(n)
   end
 end
 
+--! A room's map as its game would start now (Jan, 2026-11-14: the players
+--! asked to see the map and where each colour plays before the start):
+--! {level, count (hospitals), shared, colours = hospital -> colour, names =
+--! hospital -> "ANN + BEN"}, from the players' colours and teams the way the
+--! game start works them out (MultiplayerLobby.layout).
+function UIMultiplayerLevels.roomMap(lobby)
+  local level = tonumber(lobby.room and lobby.room.level) or 1
+  local peers, colour_of, team_of = {}, {}, {}
+  for peer, p in pairs(lobby.players or {}) do
+    peers[#peers + 1] = peer
+    colour_of[peer], team_of[peer] = tonumber(p.colour) or 1, tonumber(p.team) or 1
+  end
+  table.sort(peers)
+  local mp_levels = corsixth.require("mp_levels")
+  local layout = MultiplayerLobby.layout(peers, colour_of, team_of, function(count)
+    return mp_levels.hospitalTiles(TheApp, count, level)
+  end)
+  local mode = lobby.summary and lobby.summary.mode or layout.mode
+  local shared = not MultiplayerLobby.hospitalEach(mode)
+  local map = {level = level, count = shared and 1 or math.max(2, layout.count), shared = shared,
+      colours = {}, names = {}}
+  for _, peer in ipairs(peers) do
+    local index = shared and 1 or layout.peer_hospital[peer]
+    local name = lobby.players[peer].name or "?"
+    map.names[index] = map.names[index] and (map.names[index] .. " + " .. name) or name
+    map.colours[index] = map.colours[index] or (shared and colour_of[peer]) or layout.colours[index]
+  end
+  return map
+end
+
 --!param level (integer) the level picked now (1-12)
 --!param players (integer) the room's number of players (the map shown)
-function UIMultiplayerLevels:UIMultiplayerLevels(ui, level, players)
+--!param room (MultiplayerLobby) a room's map instead (UIMultiplayerLevels.roomMap):
+--! only the map, with who plays where, and Back to the room
+function UIMultiplayerLevels:UIMultiplayerLevels(ui, level, players, room)
   self:UIResizable(ui, WIDTH, HEIGHT, col.bg)
+  if room then return self:_roomView(ui, room) end
   self.esc_closes = true
   self.resizable = false
   self.modal_class = "main menu"
@@ -118,6 +151,52 @@ function UIMultiplayerLevels:UIMultiplayerLevels(ui, level, players)
   self.choose_button = self:addBevelPanel(WIDTH - 220, HEIGHT - 40, 200, 30, col.button):setLabel("")
       :makeButton(0, 0, 200, 30, nil, self.buttonChoose)
   self:setShared(self.shared)
+end
+
+--! The room's map (UIMultiplayerLevels.roomMap), kept up to date while the
+--! room changes; the lobby keeps running here (the game may start).
+function UIMultiplayerLevels:_roomView(ui, lobby)
+  self.esc_closes = true
+  self.resizable = false
+  self.modal_class = "main menu"
+  self.on_top = true
+  self:setDefaultPosition(0.5, 0.25)
+  self.default_button_sound = "selectx.wav"
+  self.font = ui.app.gfx:loadFontAndSpriteTable("QData", "Font01V", nil, nil, {apply_ui_scale = true})
+  self.levels = corsixth.require("mp_levels")
+  self.lobby, self.seen_version = lobby, -1
+  self.previews = {}
+  self.skip = 0
+  local S = _S.multiplayer_window
+  self:addBevelPanel(20, 10, WIDTH - 40, 20, col.title):setLabel(S.room_map_caption).lowered = true
+  self:addBevelPanel(20, HEIGHT - 40, 150, 30, col.button):setLabel(S.back)
+      :makeButton(0, 0, 150, 30, nil, self.close)
+  self:_updateRoomMap()
+end
+
+--! The room's map again, as its players' colours and teams are now.
+function UIMultiplayerLevels:_updateRoomMap()
+  self.room = UIMultiplayerLevels.roomMap(self.lobby)
+  self.players, self.shared = self.room.count, self.room.shared
+  -- (A level above the multiplayer ones with a hospital each plays the last.)
+  self.level = self.shared and self.room.level or self.levels.clamp(self.room.level)
+end
+
+function UIMultiplayerLevels:onTick()
+  local lobby = self.lobby
+  if lobby then
+    lobby:poll()
+    if lobby.state == "in_game" then return end -- (the game's screen replaced this one)
+    if lobby.state ~= "in_room" then
+      self:close()
+      return
+    end
+    if lobby.version ~= self.seen_version then
+      self.seen_version = lobby.version
+      self:_updateRoomMap()
+    end
+  end
+  UIResizable.onTick(self)
 end
 
 --! How many levels the list has now.
@@ -174,7 +253,7 @@ end
 
 --! The mouse wheel scrolls the briefing.
 function UIMultiplayerLevels:onMouseWheel(x, y)
-  if y == 0 then return UIResizable.onMouseWheel(self, x, y) end
+  if y == 0 or not self.scrollbar then return UIResizable.onMouseWheel(self, x, y) end
   self:scroll(-y)
   return true
 end
@@ -194,7 +273,7 @@ end
 function UIMultiplayerLevels:close()
   UIResizable.close(self)
   -- Back to the lobby (its room list), or the main menu if it went away.
-  if TheApp.mp_lobby and TheApp.mp_lobby.state == "connected" then
+  if TheApp.mp_lobby and (TheApp.mp_lobby.state == "connected" or TheApp.mp_lobby.state == "in_room") then
     self.ui:addWindow(UIMultiplayer(self.ui))
   else
     self.ui:addWindow(UIMainMenu(self.ui))
@@ -222,7 +301,12 @@ end
 --! ({x, length, {r, g, b}}), or false if the map cannot be read.
 function UIMultiplayerLevels:preview()
   local file, players = self:mapFile()
+  local room = self.room
+  -- (A room's: the colours as its players chose them.)
   local key = file .. "/" .. players
+  if room then
+    for i = 1, players do key = key .. "/" .. tostring(room.colours[i]) end
+  end
   if self.previews[key] ~= nil then return self.previews[key] end
   local ok, data = pcall(TheApp.readDataFile, TheApp, "Levels", file)
   local th = ok and type(data) == "string" and require("TH").map()
@@ -243,8 +327,11 @@ function UIMultiplayerLevels:preview()
       if plot == 0 then
         c = f.passable and GROUND or NATURE
       elseif plot <= owners then
-        local rgb = MultiplayerSession.colourRGB(plot)
-        local k = f.hospital and 0.6 or 1
+        local rgb = MultiplayerSession.colourRGB(room and room.colours[plot] or plot)
+        -- (The building darker; a light colour only a little: white at 60%
+        -- was the grey of the plots for sale. Jan, 2026-11-14.)
+        local light = math.min(rgb[1], rgb[2], rgb[3]) > 200
+        local k = f.hospital and (light and 0.85 or 0.6) or 1
         c = {math.floor(rgb[1] * k), math.floor(rgb[2] * k), math.floor(rgb[3] * k)}
       else
         c = f.hospital and SALE_IN or SALE_OUT
@@ -314,7 +401,16 @@ function UIMultiplayerLevels:draw(canvas, x, y)
   for _, line in ipairs(lines) do
     ly = self.font:drawWrapped(canvas, line, x + INFO_X * s, ly, (WIDTH - 20 - INFO_X) * s) + 4 * s
   end
-  if not self.shared then
+  if self.room then
+    -- Who plays where (on the left, where the browser lists the levels):
+    -- each hospital's colour, and its players.
+    local wy = y + MAP_Y * s
+    for i = 1, self.room.count do
+      local rgb = MultiplayerSession.colourRGB(self.room.colours[i] or i)
+      canvas:drawRect(canvas:mapRGB(rgb[1], rgb[2], rgb[3]), x + 20 * s, wy + 2 * s, 12 * s, 12 * s)
+      wy = self.font:drawWrapped(canvas, self.room.names[i] or "-", x + 38 * s, wy, (MAP_X - 48) * s) + 6 * s
+    end
+  elseif not self.shared then
     self.font:drawWrapped(canvas, _S.multiplayer_window.levels_legend, x + INFO_X * s, ly + 6 * s,
         (WIDTH - 20 - INFO_X) * s)
   end

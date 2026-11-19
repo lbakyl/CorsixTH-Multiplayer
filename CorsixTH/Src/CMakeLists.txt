@@ -33,6 +33,7 @@ target_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/th_map.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/th_map_overlays.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/th_movie.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/th_packs.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/th_pathfind.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/th_sound.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/th_strings.cpp
@@ -64,6 +65,7 @@ target_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/th_map.h
     ${CMAKE_CURRENT_SOURCE_DIR}/th_map_overlays.h
     ${CMAKE_CURRENT_SOURCE_DIR}/th_movie.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/th_packs.h
     ${CMAKE_CURRENT_SOURCE_DIR}/th_pathfind.h
     ${CMAKE_CURRENT_SOURCE_DIR}/th_sound.h
     ${CMAKE_CURRENT_SOURCE_DIR}/th_strings.h

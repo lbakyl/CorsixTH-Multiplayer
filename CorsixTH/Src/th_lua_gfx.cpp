@@ -407,6 +407,11 @@ argb_colour read_color_from_lua(lua_State* L, argb_colour defaultColor) {
 //!        shadow is drawn. Alternately ttf_shadow can be set to true to draw
 //!        a shadow with default parameters, or false to disable any shadow.
 //!        </dd>
+//!    <dt>ttf_pixel_size</dt>
+//!    <dd>For a pixel font: its design size in pixels. The font is then drawn
+//!        at the whole multiple of that size nearest the character height
+//!        (at least once), times scale_factor, without hinting or
+//!        anti-aliasing; ttf_width is not used.</dd>
 //!    </dl>
 //! @param L Lua stack
 //! @return argument count
@@ -469,10 +474,27 @@ int l_freetype_font_set_font_options(lua_State* L) {
   shadowOptions.offset_y *= scale_factor;
   lua_pop(L, 1);
 
+  // A pixel font is drawn at a whole multiple of its design size (the one
+  // nearest the height of the bitmap font it stands in for), times the scale.
+  lua_getfield(L, 3, "ttf_pixel_size");
+  int design_size = static_cast<int>(luaL_optinteger(L, -1, 0));
+  lua_pop(L, 1);
+  int pixel_size = 0;
+  if (design_size > 0) {
+    int unscaled_height = scale_factor > 0 ? height / scale_factor : height;
+    int multiple = (unscaled_height + design_size / 2) / design_size;
+    if (multiple < 1) multiple = 1;
+    pixel_size = design_size * multiple * scale_factor;
+  }
+
   pFont->set_font_color(color);
   pFont->set_shadow_options(shadowOptions);
-  l_freetype_throw_error_code(L,
-                              pFont->set_ideal_character_size(width, height));
+  if (pixel_size > 0) {
+    l_freetype_throw_error_code(L, pFont->set_pixel_size(pixel_size));
+  } else {
+    l_freetype_throw_error_code(L,
+                                pFont->set_ideal_character_size(width, height));
+  }
   lua_settop(L, 1);
   return 1;
 }

@@ -930,6 +930,13 @@ function M:projects(s)
   -- nurse is on a break stands still.
   local nurses = staff("Nurse")
   if nurses >= want.Nurse and nurses < want.Nurse + M.nurseSlack(want.Nurse) then hire("Nurse", 9) end
+  -- M.SURGEONS_PER_THEATRE surgeons for each operating theatre, once the
+  -- theatres have the two they need.
+  local theatres = s.rooms.operating_theatre or 0
+  local surgeons = staff("Surgeon")
+  if theatres > 0 and surgeons >= (want.Surgeon or 0) and surgeons < theatres * M.SURGEONS_PER_THEATRE then
+    hire("Surgeon", 9)
+  end
   -- A room that cannot work for want of a specialist (or of anybody of a
   -- kind) comes before new rooms, and an emergency's rooms before all but
   -- the basics: its patients die while the room waits. (A research room
@@ -1459,6 +1466,11 @@ end
 -- doctors than its rooms need and M.doctorSlack, the least wanted one its
 -- rooms do not need is let go.
 local SURPLUS_FROM, SURPLUS_EVERY = 90, 7
+-- Surgeons a bot keeps for each operating theatre (it needs 2): one more, for
+-- breaks (Argus, 2026-11-14: "if there are 2 operating theatres, there
+-- should be 6 surgeons in the hospital at least; 3 with one"). Hired after
+-- the ones a theatre lacks, and never let go as spare doctors.
+M.SURGEONS_PER_THEATRE = 3
 
 --! How many doctors more than its rooms need (`n`) a hospital keeps, for
 --! those on a break: 1, and 1 more for every 8 places (19 places: 3).
@@ -1516,6 +1528,10 @@ function M:spareDoctors(s)
     if rm.hospital == hosp and rm.is_active and rm.room_info.id ~= "training" then
       for cat, n in pairs(rm.room_info.required_staff or {}) do
         if need[cat] then need[cat] = need[cat] + n end
+      end
+      if rm.room_info.id == "operating_theatre" then
+        need.Surgeon = need.Surgeon + math.max(0, M.SURGEONS_PER_THEATRE -
+            ((rm.room_info.required_staff or {}).Surgeon or 0))
       end
       if rm.room_info.id == "research" and rm.objects then
         local desks = 0

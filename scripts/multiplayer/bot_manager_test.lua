@@ -789,8 +789,8 @@ print("research room ok")
 
 -- Doctors no room needs (Jan, 2026-11-14: Bertie's corridors were full of
 -- them): a GP's office (a doctor), a psychiatry (a psychiatrist), an
--- operating theatre (2 surgeons), a research room with 3 desks (3
--- researchers). 11 doctors: those 7 and 4 more; from the 4th month, once a
+-- operating theatre (2 surgeons and a third: M.SURGEONS_PER_THEATRE), a
+-- research room with 3 desks (3 researchers). 12 doctors: those 8 and 4 more; from the 4th month, once a
 -- week, one is let go while more than M.doctorSlack are spare, the least
 -- wanted first.
 do
@@ -815,6 +815,7 @@ do
       objects = {[desk()] = true, [desk()] = true, [desk()] = true}},
   }
   doctor(0.8, {is_surgeon = 1}); doctor(0.6, {is_surgeon = 1}); doctor(0.7, {is_psychiatrist = 1})
+  local third_surgeon = doctor(0.3, {is_surgeon = 1}) -- (a theatre keeps 3: Argus)
   doctor(0.5, {is_researcher = 1}); doctor(0.6, {is_researcher = 1}); doctor(0.9, {is_researcher = 1})
   doctor(0.9, {is_consultant = 1}) -- the GP
   local spare_a = doctor(0.5)
@@ -828,6 +829,9 @@ do
       note = function() end, issue = function(_, cmd) issued[#issued + 1] = cmd return true end}, M)
   local spare = m:spareDoctors({day = 100, hosp = hosp})
   eq(#spare, 4, "four doctors no room needs")
+  for _, st in ipairs(spare) do
+    eq(st == third_surgeon, false, "the theatre's third surgeon is not spare")
+  end
   eq(spare[1], junior, "the junior is the least wanted")
   eq(spare[2] == spare_b and spare[3] == spare_a, true, "then by skill")
   m:surplusDoctors({day = 60, hosp = hosp})
@@ -836,8 +840,8 @@ do
   eq(issued[1] and issued[1].staff, junior.mp_id, "the junior is let go first")
   m:surplusDoctors({day = 103, hosp = hosp})
   eq(#issued, 1, "once a week")
-  -- One doctor more than the rooms need (7 places: M.doctorSlack 1) stays.
-  for i = #hosp.staff, 9, -1 do hosp.staff[i] = nil end
+  -- One doctor more than the rooms need (8 places: M.doctorSlack 2) stays.
+  for i = #hosp.staff, 10, -1 do hosp.staff[i] = nil end
   m:surplusDoctors({day = 110, hosp = hosp})
   eq(#issued, 1, "one spare doctor stays")
   eq(M.doctorSlack(19), 3, "Bertie's 19 places keep 3 spare")

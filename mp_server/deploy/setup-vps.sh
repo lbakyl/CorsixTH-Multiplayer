@@ -2,7 +2,7 @@
 # One-command setup of the CorsixTH multiplayer server on a Debian or Ubuntu
 # VPS. Run as root (or with sudo). Safe to run again: it updates the server.
 #
-#   curl -fsSLO https://raw.githubusercontent.com/lbakyl/CorsixTH-Multiplayer/master/mp_server/deploy/setup-vps.sh
+#   curl -fsSLO https://raw.githubusercontent.com/openth-org/openth/master/mp_server/deploy/setup-vps.sh
 #   sudo bash setup-vps.sh [options]
 #
 # Options:
@@ -25,7 +25,7 @@ REF=master
 MOTD=""
 UFW=0
 DIR=/opt/corsixth-mp
-REPO=lbakyl/CorsixTH-Multiplayer
+REPO=openth-org/openth
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

@@ -2,8 +2,8 @@
 
 # CorsixTH Multiplayer
 
-[![Latest release](https://img.shields.io/github/v/release/lbakyl/CorsixTH-Multiplayer?style=for-the-badge&color=green&label=latest%20release)](https://github.com/lbakyl/CorsixTH-Multiplayer/releases/latest)
-[![Linux and Tests](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/Linux.yml/badge.svg?branch=master)](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/Linux.yml) [![Windows](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/Windows.yml/badge.svg?branch=master&event=push)](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/Windows.yml) [![Linux package](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/LinuxPackage.yml/badge.svg?branch=master)](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/LinuxPackage.yml) [![macOS app](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/macOS.yml/badge.svg?branch=master)](https://github.com/lbakyl/CorsixTH-Multiplayer/actions/workflows/macOS.yml)
+[![Latest release](https://img.shields.io/github/v/release/openth-org/openth?style=for-the-badge&color=green&label=latest%20release)](https://github.com/openth-org/openth/releases/latest)
+[![Linux and Tests](https://github.com/openth-org/openth/actions/workflows/Linux.yml/badge.svg?branch=master)](https://github.com/openth-org/openth/actions/workflows/Linux.yml) [![Windows](https://github.com/openth-org/openth/actions/workflows/Windows.yml/badge.svg?branch=master&event=push)](https://github.com/openth-org/openth/actions/workflows/Windows.yml) [![Linux package](https://github.com/openth-org/openth/actions/workflows/LinuxPackage.yml/badge.svg?branch=master)](https://github.com/openth-org/openth/actions/workflows/LinuxPackage.yml) [![macOS app](https://github.com/openth-org/openth/actions/workflows/macOS.yml/badge.svg?branch=master)](https://github.com/openth-org/openth/actions/workflows/macOS.yml)
 
 **Network multiplayer for [CorsixTH](https://github.com/CorsixTH/CorsixTH)**, the open-source reimplementation of Bullfrog's 1997 business sim Theme Hospital. Play with friends over the internet, **up to 8 players**: in **one shared hospital**, **each in your own hospital as a team**, or **in a race against each other** with dirty tricks, land auctions and computer players (bots) for the empty places. Windows, Linux and macOS players play together, each in their own game language.
 
@@ -13,12 +13,12 @@ This is a fork of CorsixTH, not an official CorsixTH release. Single player work
 
 ## Getting Started ##
 
-1. **Download the game** for your system from the [latest release](https://github.com/lbakyl/CorsixTH-Multiplayer/releases/latest):
+1. **Download the game** for your system from the [latest release](https://github.com/openth-org/openth/releases/latest):
    - **Windows** (64-bit): unzip `...-win64.zip` and start `CorsixTH.exe`.
    - **Linux** (x86_64, Ubuntu 24.04, Linux Mint 22 or newer): unpack `...-linux-x86_64.tar.gz` and start `CorsixTH-Multiplayer/CorsixTH-Multiplayer.sh`.
    - **macOS** (Apple Silicon, the macOS version the release names, usually 27 or newer): unzip `...-macos-arm64.zip` and move `CorsixTH.app` to Applications. The app is not notarized by Apple: the first time, open **System Settings > Privacy & Security** and click **Open Anyway**.
 2. **Theme Hospital's game data** is needed, as for CorsixTH: the original CD, or a download from [GOG.com](https://www.gog.com/game/theme_hospital) or [EA](https://www.ea.com/games/theme/theme-hospital). The first start asks for its folder.
-3. **Main menu > Multiplayer**: click **EU1: stable** (`eu1.bachelor-tech.com:47800`, the newest stable release) or **EU2: test builds** (`eu2.bachelor-tech.com:47800`, the newest test build), enter your name, then **Connect**.
+3. **Main menu > Multiplayer**: click **EU1: stable** (`eu1.openth.org:47800`, the newest stable release) or **EU2: test builds** (`eu2.openth.org:47800`, the newest test build), enter your name, then **Connect**.
 4. **Create a room** (the level, how many places, a password if you like) or **join** one. Everybody picks a colour and a team: the same colour shares a hospital, the same team wins together. Click an empty place to add a bot. When everybody is ready, the room's owner starts the game. The lobby measures everybody's connection and sets the top speed that stays smooth.
 5. Everybody in a game must run the **same release**. A server only lets in the release it runs, and tells you which one to download.
 
@@ -28,7 +28,7 @@ The full guide, with co-op, races, trading, saving and what to do if something g
 The whole single player game of CorsixTH (you can complete the full campaign), and multiplayer for two to eight players.
 
 ##### Multiplayer #####
-- **Up to 8 players**, people and bots, with 8 colours and 8 teams. Levels 8 and 9, **TEAM TOWN** and **CROSSROADS** (maps by Matroftt), have room for 8 hospitals; the other levels use Theme Hospital's maps for up to 4, where more players can share a hospital.
+- **Up to 8 players**, people and bots, with 8 colours and 8 teams. Levels 9 and 10, **TEAM TOWN** and **CROSSROADS** (maps by Matroftt), have room for 8 hospitals, level 8, **MOUNT EVEREST**, for 6; the other levels use Theme Hospital's maps for up to 4, where more players can share a hospital.
 - **One shared hospital:** everybody builds, hires and manages the same hospital; single player rules for winning and losing.
 - **A hospital each, as a team (co-op):** each player runs their own hospital; the level is won when every hospital has reached its goals, and lost if one keeps failing them.
 - **Races:** everyone for themselves, teams against teams, or team mates running one hospital together against another team's. The first to reach the goals wins, and a hospital that fails them at two year ends is out. Standings come by fax.
@@ -110,7 +110,7 @@ The whole single player game of CorsixTH (you can complete the full campaign), a
 
 ## Multiplayer development
 
-How it works, in a short tour with diagrams (what runs where, what travels over the network, how the games stay in step): [docs/multiplayer/HOW-IT-WORKS.md](docs/multiplayer/HOW-IT-WORKS.md). The details (deterministic lockstep, the relay server, the referee), the tests and the lessons learned: [docs/multiplayer/README.md](docs/multiplayer/README.md), with [protocol.md](docs/multiplayer/protocol.md), [referee.md](docs/multiplayer/referee.md) and [coop-architecture.md](docs/multiplayer/coop-architecture.md). Work in progress lives on `mp/*` branches until it is tested and moved to `master`. Problems with multiplayer: please [open an issue on this fork](https://github.com/lbakyl/CorsixTH-Multiplayer/issues/new) (server, room name, time, what you were doing).
+How it works, in a short tour with diagrams (what runs where, what travels over the network, how the games stay in step): [docs/multiplayer/HOW-IT-WORKS.md](docs/multiplayer/HOW-IT-WORKS.md). The details (deterministic lockstep, the relay server, the referee), the tests and the lessons learned: [docs/multiplayer/README.md](docs/multiplayer/README.md), with [protocol.md](docs/multiplayer/protocol.md), [referee.md](docs/multiplayer/referee.md) and [coop-architecture.md](docs/multiplayer/coop-architecture.md). Work in progress lives on `mp/*` branches until it is tested and moved to `master`. Problems with multiplayer: please [open an issue on this fork](https://github.com/openth-org/openth/issues/new) (server, room name, time, what you were doing).
 
 ----
 

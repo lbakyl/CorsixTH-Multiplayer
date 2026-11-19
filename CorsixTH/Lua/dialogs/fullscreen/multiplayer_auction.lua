@@ -321,6 +321,12 @@ function UIMultiplayerAuction:repayLoan()
     self.ui:playSound("wrong2.wav")
     return
   end
+  -- (Not while that money pays for the bid this hospital leads with.)
+  if MultiplayerSession.leadingBid(self.world, hospital) > hospital.balance - LOAN_STEP then
+    self.ui:playSound("wrong2.wav")
+    session.notify(MultiplayerSession.rejection_texts.loan["leading an auction"])
+    return
+  end
   session:issue({kind = "loan", amount = -LOAN_STEP})
   self.ui:playSound("selectx.wav")
 end
@@ -531,8 +537,7 @@ function UIMultiplayerAuction:draw(canvas, x_, y_)
   -- player may do.
   local status
   if not auction then
-    status = last and (last.sold and S.auction_sold:format(last.plot, last.name, last.bid) or
-        S.auction_not_sold:format(last.plot)) or ""
+    status = last and MultiplayerSession.auctionResult(last) or ""
   else
     local going = self:going_stage()
     local now

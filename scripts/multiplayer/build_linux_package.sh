@@ -140,7 +140,7 @@ chmod +x "$pkg/CorsixTH-Multiplayer.sh" "$pkg/corsix-th"
 
 cat > "$pkg/README-MULTIPLAYER.txt" <<EOF
 CorsixTH-Multiplayer test build (Linux x86_64)
-Commit $label of https://github.com/lbakyl/CorsixTH-Multiplayer
+Commit $label of https://github.com/openth-org/openth
 
 Start it with ./CorsixTH-Multiplayer.sh (the first time it asks for your
 Theme Hospital folder; the game data is not included). Settings and saves

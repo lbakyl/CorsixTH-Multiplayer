@@ -431,7 +431,14 @@ function UIMultiplayerLitterBomb:onTick()
     self.preview_anim = self.bomb.animation_idx
     self.preview:setAnimation(self.world.anims, self.preview_anim)
   end
-  self.preview:tick()
+  -- The blueprint's fuse burns, and beeps, a frame a game hour, as a bomb's
+  -- on the floor does (Argus: in the hands it beeped on every screen tick,
+  -- three times as often at Normal speed, more at the slower ones, and on
+  -- in a paused game). (Its frames carry the original's beep.)
+  local hours = self.world.mp_hours or 0
+  local last = self.preview_hours or hours
+  for _ = 1, math.min(hours - last, 4) do self.preview:tick() end
+  self.preview_hours = hours
   return UIResizable.onTick(self)
 end
 

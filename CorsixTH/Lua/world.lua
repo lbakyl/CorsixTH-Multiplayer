@@ -497,6 +497,69 @@ function World:_findClosestSpawnToDesk(staffed_desks, spawns)
   return best_spawn_point
 end
 
+-- Multiplayer: people come to a hospital from (and leave by) one of the edge
+-- points with the shortest walk to its staffed reception desks: the nearest
+-- one and those up to a little further (at most SPAWN_NEAR_MAX of them), so
+-- they do not all come by the same point.
+local SPAWN_NEAR_MAX = 3
+
+--! Multiplayer: the indices (into self.spawn_points) of the edge points
+--! nearest to `hospital`, nearest first; none when it has no staffed desk or
+--! none can be walked to. Kept on the hospital, and so saved with the game:
+--! every peer, and a game loaded from a save, picks from the same points.
+--! Looked at again each month and when its staffed desks change.
+function World:_mpSpawnPointsNear(hospital)
+  local desks = hospital:getReceptionDesks(true) or {}
+  -- (The desks' order comes from a pairs() walk: sorted for the key.)
+  local tiles = {}
+  for _, desk in ipairs(desks) do
+    if desk.tile_x then tiles[#tiles + 1] = desk.tile_x .. "," .. desk.tile_y end
+  end
+  table.sort(tiles)
+  local key = self.game_date:monthOfGame() .. "/" .. #self.spawn_points .. "/" .. table.concat(tiles, ";")
+  local near = hospital.mp_spawn_near
+  if near and near.key == key then return near.points end
+
+  local found = {}
+  for index, point in ipairs(self.spawn_points) do
+    local best
+    for _, desk in ipairs(desks) do
+      if desk.tile_x then
+        local distance = self:getPathDistance(desk.tile_x, desk.tile_y, point.x, point.y)
+        if distance and (not best or distance < best) then best = distance end
+      end
+    end
+    if best then found[#found + 1] = {index = index, distance = best} end
+  end
+  -- (Equal walks in edge order: the same everywhere, whatever the sort.)
+  table.sort(found, function(a, b)
+    if a.distance ~= b.distance then return a.distance < b.distance end
+    return a.index < b.index
+  end)
+  local points = {}
+  local limit = found[1] and found[1].distance + 10 + found[1].distance / 4
+  for _, entry in ipairs(found) do
+    if #points < SPAWN_NEAR_MAX and entry.distance <= limit then
+      points[#points + 1] = entry.index
+    end
+  end
+  hospital.mp_spawn_near = {key = key, points = points}
+  return points
+end
+
+--! The edge point where someone coming to (or leaving) `hospital` appears
+--! (or goes). Multiplayer: one of those nearest to it (Argus: patients
+--! walked across the whole map, past the other hospitals). Otherwise, and
+--! when none of those can be walked to, any of them, as ever.
+--!param hospital (Hospital or nil)
+function World:spawnPointFor(hospital)
+  local spawns = self.spawn_points
+  local near = self.mp_coop and hospital and spawns[1] and self:_mpSpawnPointsNear(hospital)
+  local index = near and #near > 0 and near[math.random(1, #near)]
+  if index and spawns[index] then return spawns[index] end
+  return spawns[math.random(1, #spawns)]
+end
+
 --! Multiplayer co-op: the hospital a new patient goes to. Patients are
 --! shared out in turn; one whose turn falls on a hospital that is not open
 --! yet goes to the next open one instead of being lost (a player who opened
@@ -565,9 +628,15 @@ function World:spawnPatient(hospital)
   -- Construct patient.
   local spawns = self.spawn_points
   -- Let the first patient to the player use the shortest path to a reception desk
-  local spawn_point = hospital:isPlayerHospital() and not hospital:hadPatients() and
-      self:_findClosestSpawnToDesk(hospital:getReceptionDesks(true), spawns) or
-      spawns[math.random(1, #spawns)]
+  -- (Multiplayer: every patient comes by an edge point near their hospital.)
+  local spawn_point
+  if self.mp_coop then
+    spawn_point = self:spawnPointFor(hospital)
+  else
+    spawn_point = hospital:isPlayerHospital() and not hospital:hadPatients() and
+        self:_findClosestSpawnToDesk(hospital:getReceptionDesks(true), spawns) or
+        spawns[math.random(1, #spawns)]
+  end
 
   local patient = self:newEntity("Patient", 2, 1)
   local SpawnAction = _G["SpawnAction"] ---@type SpawnAction
@@ -600,7 +669,7 @@ function World:spawnVIP(name, hospital)
   local SpawnAction = _G["SpawnAction"] ---@type SpawnAction
   local SeekReceptionAction = _G["SeekReceptionAction"] ---@type SeekReceptionAction
 
-  local spawn_point = self.spawn_points[math.random(1, #self.spawn_points)]
+  local spawn_point = self:spawnPointFor(hospital)
   vip:setNextAction(SpawnAction("spawn", spawn_point))
   vip:setHospital(hospital)
   vip:updateDynamicInfo()
@@ -1750,10 +1819,31 @@ function World:onEndMonth()
   self:_prepareSpawnDates(false)
 
   self:makeAvailableStaff(self.game_date:monthOfGame())
+  -- Multiplayer: a bot standing in for a person who left may begin or end a
+  -- year at hard (MultiplayerSession.standInLevels); everybody hears it.
+  if self.mp_coop then
+    local S = _S.multiplayer_window
+    for _, c in ipairs(MultiplayerSession.standInLevels(self)) do
+      local hosp = self.hospitals[c.index]
+      local text = c.level == "hard" and S.standin_hard or c.back and S.standin_back or S.standin_normal
+      MultiplayerSession.tellOthers(self, nil, text:format(hosp.name))
+      local session = self.app.mp_session
+      if session then
+        session.log(string.format("stand-in for hospital %d now %s%s", c.index, c.level,
+            c.back and " (a person took the place)" or ""))
+      end
+    end
+  end
   -- Multiplayer: a hospital only bots play gets a hidden bonus every month
-  -- (no line on its bank statement); not one a person plays too.
+  -- (no line on its bank statement); not one a person plays too. And one a
+  -- bot plays for a person who left, in its hard year.
+  local paying = {}
+  for bot_index in pairs(self.mp_coop and self.mp_coop.bot_hospitals or {}) do paying[bot_index] = true end
+  for i, h in ipairs(self.mp_coop and self.hospitals or {}) do
+    if h.mp_standin_hard_until and h.mp_player_away then paying[i] = true end
+  end
   local paid, bots = {}, false
-  for bot_index in pairs(self.mp_coop and self.mp_coop.bot_hospitals or {}) do
+  for bot_index in pairs(paying) do
     local hospital = self.hospitals[bot_index]
     local level = MultiplayerSession.botLevel(self, bot_index)
     bots = true

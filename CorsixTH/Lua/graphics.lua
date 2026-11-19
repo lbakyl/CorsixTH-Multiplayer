@@ -174,6 +174,65 @@ function Graphics:_loadPalettes(gfx_set)
   self:_loadPalette("QData", "Town01V.pal", true, false)
 end
 
+--- The pixel font the builds ship for text the original fonts cannot show
+--- (Fusion Pixel, SIL Open Font License; its licences are in Fonts/).
+Graphics.PIXEL_FONT = "Fonts/fusion-pixel-12px-proportional-zh_hans.ttf"
+
+--- The smooth fonts the builds shipped before the pixel font.
+local OLD_DEFAULT_FONTS = { "CorsixTHUnicode.ttf", "GoNotoKurrent-Regular.ttf" }
+
+--- Whether a configured font is one of the old default fonts. The config file
+--- remembers the default's path after the first start, so such a setting was
+--- not the player's own choice.
+--- @param path string
+--- @return boolean
+local function isOldDefaultFont(path)
+  local name = path:match("([^/\\]+)$") or path
+  for _, default in ipairs(OLD_DEFAULT_FONTS) do
+    if name == default then return true end
+  end
+  return false
+end
+
+--- Which Unicode font file to load.
+--- The order: the font given in the config file as unicode_font (unless it is
+--- an old default font), the font of the compile setting WITH_FONT, the pixel
+--- font in the CorsixTH folder, then the old default fonts there.
+--- @param config_path string|nil unicode_font from the config file.
+--- @param compile_path string|nil The compile setting WITH_FONT.
+--- @param dir string The CorsixTH folder, ending in a path separator.
+--- @param exists function path -> true if that file exists.
+--- @return string|nil font_file The font file, or nil.
+--- @return string? error Why none was found.
+function Graphics.chooseFontFile(config_path, compile_path, dir, exists)
+  local config_err, compile_err = "", ""
+  local config_is_old_default = config_path and isOldDefaultFont(config_path)
+  if config_path and not config_is_old_default then
+    if exists(config_path) then return config_path end
+    config_err = "Configured font set but not found. Check path " .. config_path
+  end
+  if compile_path then
+    if exists(compile_path) then return compile_path end
+    compile_err = " Compiled font path set but not found. Check path " .. compile_path
+  end
+  if exists(dir .. Graphics.PIXEL_FONT) then return dir .. Graphics.PIXEL_FONT end
+  if config_is_old_default and exists(config_path) then return config_path end
+  for _, name in ipairs(OLD_DEFAULT_FONTS) do
+    if exists(dir .. name) then return dir .. name end
+  end
+  return nil, config_err .. compile_err
+end
+
+--- The design size of a pixel font file, or nil for an ordinary font.
+--- Fusion Pixel's files name it: fusion-pixel-12px-....ttf.
+--- @param path string
+--- @return number|nil
+function Graphics.pixelFontSize(path)
+  local name = (path:match("([^/\\]+)$") or path):lower()
+  local size = name:match("^fusion%-pixel%-(%d+)px")
+  return size and tonumber(size) or nil
+end
+
 --- Tries to load the font file given in the config file as unicode_font.
 --- If it is not found it tries to use the font file from the compile setting WITH_FONT,
 --- or look for one in the CorsixTH folder, the grandparent of this file.
@@ -182,31 +241,8 @@ function Graphics:loadFontFile()
   local function check(path) return lfs.attributes(path, "mode") == "file" end
   local config_path, compile_path = self.app.config.unicode_font, TH.GetCompileOptions().font
 
-  local function getFontPath()
-    local config_err, compile_err = "", ""
-    -- Check for font specified in config file
-    if config_path then
-      if check(config_path) then return config_path
-      else config_err = "Configured font set but not found. Check path " .. config_path
-      end
-    end
-    -- Check for font specified in compile options
-    if compile_path then
-      if check(compile_path) then return compile_path
-      else compile_err = " Compiled font path set but not found. Check path " .. compile_path
-      end
-    end
-    -- Check the CorsixTH directory for our unicode font
-    local path = self.app:getFullPath()
-    local font_names = { "CorsixTHUnicode.ttf", "GoNotoKurrent-Regular.ttf" }
-    for _, name in ipairs(font_names) do
-      if check(path .. name) then
-        return path .. name
-      end
-    end
-    return nil, config_err .. compile_err
-  end
-  local font_file, err = getFontPath()
+  local font_file, err = Graphics.chooseFontFile(config_path, compile_path,
+      self.app:getInstalledPath(), check)
 
   if not font_file then
     print("Unicode font not found, no fallback available.", err)
@@ -216,11 +252,16 @@ function Graphics:loadFontFile()
   local font = io.open(font_file, "rb")
   if font then
     self.ttf_font_data = font:read("*a")
+    self.ttf_pixel_size = Graphics.pixelFontSize(font_file)
     font:close()
     if self.ttf_font_data and config_path ~= font_file then
       self.app.config.unicode_font = font_file
       self.app:saveConfig()
-      print("Configured unicode font not found, using " .. font_file .. " instead.")
+      if config_path and isOldDefaultFont(config_path) and Graphics.pixelFontSize(font_file) then
+        print("Using the pixel font " .. font_file .. " instead of the old default font.")
+      else
+        print("Configured unicode font not found, using " .. font_file .. " instead.")
+      end
       print("This will be written to the config file.")
     end
   end
@@ -444,20 +485,77 @@ function Graphics:hasLanguageFont(font)
   end
 end
 
+-- Which texts the original bitmap fonts cannot show, by text (reset when
+-- it grows large: chat lines and names come and go).
+local beyond_cache, beyond_cache_size = {}, 0
+
+--- Whether `text` has letters the original bitmap font (Theme Hospital's
+--- own) cannot show: another script's, e.g. a Russian player's name for a
+--- player of the English game, or Chinese in the multiplayer chat. Code
+--- page 437 shows the Latin-1 letters, the Russian game's MIK the Russian
+--- ones (and Ё, drawn as Е). Punctuation and symbols (U+2000 to U+2E7F)
+--- stay with the bitmap font, as before.
+--- @param text (string) UTF-8 text
+--- @param mik (boolean) the Russian game's font, else code page 437
+--- @return boolean
+local function beyond_bitmap_font(text, mik)
+  if not text:find("[\195-\244]") then return false end
+  local key = mik and "m" .. text or text
+  local known = beyond_cache[key]
+  if known ~= nil then return known end
+  local beyond = false
+  for c in text:gmatch("[\195-\244][\128-\191]*") do
+    local b1, b2, b3 = c:byte(1, 3)
+    b2, b3 = (b2 or 0x80) - 0x80, (b3 or 0x80) - 0x80
+    local cp
+    if b1 < 0xE0 then
+      cp = (b1 - 0xC0) * 64 + b2
+    elseif b1 < 0xF0 then
+      cp = (b1 - 0xE0) * 4096 + b2 * 64 + b3
+    else
+      cp = 0x10000
+    end
+    if cp >= 0x2E80 or (cp < 0x2000 and cp >= (mik and 0xC0 or 0x100) and
+        not (mik and (cp == 0x401 or cp == 0x451 or (cp >= 0x410 and cp <= 0x44F)))) then
+      beyond = true
+      break
+    end
+  end
+  if beyond_cache_size >= 2000 then beyond_cache, beyond_cache_size = {}, 0 end
+  beyond_cache[key] = beyond
+  beyond_cache_size = beyond_cache_size + 1
+  return beyond
+end
+
+--- The font that draws `text`: a bitmap font's Unicode stand-in (the
+--- same size and colour) when the bitmap font cannot show it.
+--- @param self The font proxy.
+--- @param text The text, a string or a game string.
+local function font_for(self, text)
+  local unicode = self._unicode
+  if not unicode then return self._proxy end
+  if type(text) == "userdata" then text = TH.stringProxy._unwrap(text) end
+  if type(text) ~= "string" or not beyond_bitmap_font(text, unicode.mik) then return self._proxy end
+  if not unicode.font then
+    unicode.font = unicode.gfx:_loadTrueTypeFont("unicode", unicode.sprite_table, unicode.font_options)
+  end
+  return unicode.font
+end
+
 --- Font proxy meta table wrapping the C++ class.
 local font_proxy_mt = {
   __index = {
-    sizeOf = function(self, ...)
-      return self._proxy:sizeOf(...)
+    sizeOf = function(self, text, ...)
+      return font_for(self, text):sizeOf(text, ...)
     end,
-    draw = function(self, ...)
-      return self._proxy:draw(...)
+    draw = function(self, canvas, text, ...)
+      return font_for(self, text):draw(canvas, text, ...)
     end,
-    drawWrapped = function(self, ...)
-      return self._proxy:drawWrapped(...)
+    drawWrapped = function(self, canvas, text, ...)
+      return font_for(self, text):drawWrapped(canvas, text, ...)
     end,
-    drawTooltip = function(self, ...)
-      return self._proxy:drawTooltip(...)
+    drawTooltip = function(self, canvas, text, ...)
+      return font_for(self, text):drawTooltip(canvas, text, ...)
     end,
     isBitmap = function(self)
       return self._proxy:isBitmap()
@@ -477,6 +575,7 @@ function Graphics:onChangeLanguage()
         local fn = info[1]
         local new_object = fn(unpack(info, 2))
         object._proxy = new_object._proxy
+        object._unicode = new_object._unicode
       end
     end
     g.load_info = load_info
@@ -680,6 +779,7 @@ function Graphics:_loadTrueTypeFont(name, sprite_table, font_options)
   local cache = self.cache.language_fonts[cache_key]
   local font = cache and cache[sprite_table]
   local s = self:getUIScale()
+  font_options.ttf_pixel_size = self.ttf_pixel_size
 
   if font and font_options.apply_ui_scale and font_options.scale_factor ~= s then
     font_options.scale_factor = s
@@ -795,6 +895,7 @@ function Graphics:loadFont(sprite_table, font_options, y_sep, ttf_color, force_b
   local use_bitmap_font = font_options.force_bitmap or
       self:_isLanguageSupportedByTHAssets() or not sprite_table:isVisible(46)
   local font
+  local unicode -- the Unicode font for text the bitmap font cannot show
   if use_bitmap_font then
     font = TH.bitmap_font()
     font:setSeparation(font_options.x_sep or 0, font_options.y_sep or 0)
@@ -802,13 +903,18 @@ function Graphics:loadFont(sprite_table, font_options, y_sep, ttf_color, force_b
     if font_options.apply_ui_scale then
       font:setScaleFactor(self:getUIScale())
     end
+    if self.ttf_font_data and not font_options.force_bitmap and sprite_table:isVisible(46) then
+      -- (Made when first needed: font_for.)
+      unicode = {gfx = self, sprite_table = sprite_table, font_options = font_options,
+          mik = self.th_charset == charsets["mik"]}
+    end
   else
     font = self:_loadTrueTypeFont("unicode", sprite_table, font_options)
   end
   -- A change of language or scale might cause the font to change,
   -- so wrap it in a proxy object which allows the actual object to
   -- be changed easily.
-  font = setmetatable({ _proxy = font }, font_proxy_mt)
+  font = setmetatable({ _proxy = font, _unicode = unicode }, font_proxy_mt)
   self.load_info[font] = { self.loadFont, self, sprite_table, font_options }
   return font
 end

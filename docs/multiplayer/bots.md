@@ -17,6 +17,18 @@ person (it reuses the scripted player's helpers in `probe_builder.lua`), so the
 other games need nothing new apart from the lobby button. A server without a
 referee build cannot run bots (the button is not shown there).
 
+- Assistants (Argus, 2026-11-15): `BOT assist=<peer>` adds a bot to that
+  person's hospital (a person for their own, the host for anybody's, one
+  each, new games only). It takes none of the room's places (`Room.is_full`
+  counts `assistant_of == 0` players; the game's 8 players still cap
+  everybody), always has its person's colour and team (`_on_seat` refuses
+  its own changes and moves it with its person), goes when its person leaves
+  the lobby, and in a game plays on when they leave (`_stand_in_due` starts
+  no stand-in for that place). LOBBY says `assistants=` and `open=` (places a
+  person or bot may still take), `assisted=` (who has one), PLAYER
+  `assists=<peer>`. The room window has an Assistants column beside the
+  places (`sideColumn`, `_updateSide`): each assistant beside its person,
+  "+ Add assistant" beside one's own line (the host's: every person's).
 - Server (`mp_server/corsixth_mp/server.py`): `BOT add=1` / `BOT remove=<peer>`
   from the room owner in the lobby. The server picks a name (`BOT_NAMES`; in
   a continued game the first saved hospital nobody has taken), starts the
@@ -69,6 +81,10 @@ best project it can afford is done, one every one to four game days.
   needs is let go (a junior first, then by skill; specialists stay for the
   rooms that need their skill; a research room needs one for every desk;
   students in training are not counted).
+- **Surgeons** (Argus, 2026-11-14: "with 2 operating theatres, 6 surgeons
+  at least; 3 with one"): a bot keeps 3 surgeons for each operating theatre
+  (it needs 2), hired once the theatres have their two, and never let go as
+  spare doctors (`M.SURGEONS_PER_THEATRE`).
 - **A spare nurse** (Jan, 2026-11-14: Clive's two wards stood without a nurse
   while his were on a break): once two rooms or more need a nurse, a bot
   hires 1 nurse more than they need, and 1 more for every 8 places.

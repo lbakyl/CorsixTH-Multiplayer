@@ -32,6 +32,27 @@ end
 -- found there too: in the macOS app, as in the Windows program folder.)
 package.path = code_dir .. "?.lua;" .. code_dir .. "?/init.lua;" .. base_dir .. "?.lua;" .. package.path
 
+-- A build of the game downloaded from a multiplayer server (Lua/mp_pack.lua)
+-- may start in place of this one (Lua/mp_pack_start.lua says which). It
+-- keeps this game's engine, libraries and fonts.
+do
+  local start = loadfile(code_dir .. "mp_pack_start.lua")
+  local ok, main, extra = false, nil, nil
+  if start then ok, main, extra = pcall(start, base_dir, code_dir, ...) end
+  if ok and main then
+    local chunk, err = loadfile(main)
+    if chunk then
+      local args = {}
+      for _, a in ipairs(extra) do args[#args + 1] = a end
+      for _, a in ipairs{...} do args[#args + 1] = a end
+      return chunk((table.unpack or unpack)(args))
+    end
+    print("Could not start the downloaded build: " .. tostring(err))
+  elseif not ok and main then
+    print("Could not choose a downloaded build: " .. tostring(main))
+  end
+end
+
 local done_files = {}
 local persist = require("persist")
 local save_results

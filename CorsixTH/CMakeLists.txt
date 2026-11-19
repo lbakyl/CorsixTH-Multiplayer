@@ -96,6 +96,7 @@ add_library(CorsixTH_lib STATIC ${CorsixTH_generated_src_dir})
 target_include_directories(CorsixTH_lib PUBLIC ${CorsixTH_generated_src_dir})
 
 target_link_libraries(CorsixTH_lib PRIVATE RncLib)
+target_link_libraries(CorsixTH_lib PRIVATE MonocypherLib)
 if(SEARCH_LOCAL_DATADIRS)
   target_link_libraries(CorsixTH_lib PRIVATE WhereamiLib)
 endif()
@@ -372,6 +373,47 @@ if(FETCH_UNICODE_FONT)
   else()
     message("  Unicode font found")
   endif()
+
+  # Fusion Pixel (SIL Open Font License): a pixel font for text the game's
+  # bitmap fonts cannot show (Cyrillic, Chinese, ...). The game prefers it
+  # over GoNoto. Only the 12 px simplified Chinese face and the licences are
+  # kept from the archive.
+  set(PIXEL_FONT_ZIP "${CMAKE_BINARY_DIR}/fusion-pixel-font-12px-proportional-ttf-v2026.11.10.zip")
+  set(PIXEL_FONT_DIR "${CMAKE_BINARY_DIR}/Fonts")
+  file(
+    DOWNLOAD https://github.com/TakWolf/fusion-pixel-font/releases/download/2026.11.10/fusion-pixel-font-12px-proportional-ttf-v2026.11.10.zip
+    "${PIXEL_FONT_ZIP}"
+    EXPECTED_HASH SHA256=aa6b4da3f80d95af45f41d74b37db0fa3a832d7f428adeb7234b4758d50bbae9
+    STATUS PIXEL_FONT_STATUS
+  )
+  list(GET PIXEL_FONT_STATUS 0 PIXEL_FONT_STATUS_CODE)
+  if(NOT PIXEL_FONT_STATUS_CODE EQUAL 0)
+    message(FATAL_ERROR "Failed to download the pixel font: ${PIXEL_FONT_STATUS}")
+  endif()
+  file(MAKE_DIRECTORY "${PIXEL_FONT_DIR}")
+  # The licences of the fonts it is made from (with their copyright notices)
+  # by name: on Windows "LICENSES" alone unpacked an empty folder.
+  set(PIXEL_FONT_FILES
+    fusion-pixel-12px-proportional-zh_hans.ttf
+    OFL.txt
+    LICENSES/ark-pixel/OFL.txt
+    LICENSES/cubic-11/OFL.txt
+    LICENSES/galmuri/LICENSE.txt
+  )
+  execute_process(
+    COMMAND ${CMAKE_COMMAND} -E tar xf "${PIXEL_FONT_ZIP}" ${PIXEL_FONT_FILES}
+    WORKING_DIRECTORY "${PIXEL_FONT_DIR}"
+    RESULT_VARIABLE PIXEL_FONT_EXTRACT
+  )
+  if(NOT PIXEL_FONT_EXTRACT EQUAL 0)
+    message(FATAL_ERROR "Failed to unpack the pixel font")
+  endif()
+  foreach(PIXEL_FONT_FILE IN LISTS PIXEL_FONT_FILES)
+    if(NOT EXISTS "${PIXEL_FONT_DIR}/${PIXEL_FONT_FILE}")
+      message(FATAL_ERROR "The pixel font archive has no ${PIXEL_FONT_FILE}")
+    endif()
+  endforeach()
+  message("  Pixel font found")
 endif()
 
 if(WITH_TRACY)
@@ -485,6 +527,7 @@ if(NOT USE_SOURCE_DATADIRS)
   endif()
   if(FETCH_UNICODE_FONT)
     install(FILES ${GONOTO_FILE} DESTINATION ${CORSIX_TH_DATADIR})
+    install(DIRECTORY ${PIXEL_FONT_DIR} DESTINATION ${CORSIX_TH_DATADIR})
   endif()
 
   if(UNIX AND NOT APPLE)

@@ -112,4 +112,35 @@ describe("hospital.lua: ", function()
     mine.world.rooms[3] = busy
     assert.are.equal(busy, mine:getRandomBusyRoom())
   end)
+
+  -- A level may switch a diagnosis machine off but keep its diagnosis known:
+  -- its casebook entry stays, and there is nothing to research for it (it
+  -- used to fail the level's loading, "attempt to index a nil value").
+  describe("canConcentrateResearch", function()
+    local function research_hospital(available_rooms)
+      local scanner = {id = "scanner", default_strength = 10}
+      local hospital = setmetatable({
+        disease_casebook = {
+          diag_scanner = {pseudo = true, disease = {id = "diag_scanner"}},
+        },
+        research = {research_progress = {[scanner] = {start_strength = 8}}},
+        world = {
+          available_rooms = available_rooms,
+          object_types = {scanner = scanner, console = {id = "console"}},
+          map = {level_config = {gbv = {MaxObjectStrength = 20}}},
+        },
+      }, {__index = Hospital})
+      return hospital
+    end
+
+    it("is false for a diagnosis whose room the level lacks", function()
+      local hospital = research_hospital({})
+      assert.is_false(hospital:canConcentrateResearch("diag_scanner"))
+    end)
+
+    it("is true for a diagnosis machine that can still improve", function()
+      local hospital = research_hospital({scanner = {objects_needed = {scanner = 1, console = 1}}})
+      assert.is_true(hospital:canConcentrateResearch("diag_scanner"))
+    end)
+  end)
 end)

@@ -62,6 +62,7 @@ local function fake_world(players, discovered)
     self.mp_turns[event] = turn
     return self.hospitals[turn]
   end
+  function world:spawnPointFor() return self.spawn_points[1] end -- (as World:spawnPointFor)
   function world:newEntity()
     local patient = {}
     function patient:setDisease(d) self.disease = d end
@@ -136,32 +137,43 @@ describe("Multiplayer levels", function()
     assert.equal("net44", levels.levelId(4, 5))
     assert.equal("net32", levels.levelId(3, 3))
     assert.equal("net42_6", levels.levelId(4, 6))
-    assert.equal("net20_9", levels.levelId(1, 10)) -- (2 to 4 players, levels 1 to 9; 9 on map 0)
+    assert.equal("net20_10", levels.levelId(1, 11)) -- (2 to 4 players, levels 1 to 10; 10 on map 0)
     assert.equal("net33_7", levels.levelId(3, 7)) -- level 7 on map 3
     -- (with four players on a map of its own, Map:load)
     assert.equal("cutthroat4.map", levels.LEVELS[7].map_files[4])
     assert.is_nil(levels.LEVELS[7].map_files[3])
-    -- (level 8 with four players on a player's map for two against two)
-    assert.equal("level40teams.map", levels.LEVELS[8].map_files[4])
-    assert.equal("net40_8", levels.levelId(4, 8))
+    -- (level 9, TEAM TOWN, with four players on a player's map for two against two)
+    assert.equal("level40teams.map", levels.LEVELS[9].map_files[4])
+    assert.equal("net40_9", levels.levelId(4, 9))
     -- (up to 8 hospitals on a level with a map for 8; 4 on the others)
-    assert.equal(8, levels.maxHospitals(8))
-    assert.equal(4, levels.maxHospitals(1))
-    assert.equal("net60_8", levels.levelId(6, 8))
-    assert.equal("net80_8", levels.levelId(9, 8))
-    assert.equal("net43", levels.levelId(8, 4))
-    assert.equal("teamtown8.map", levels.ownMap(levels.LEVELS[8], 5))
-    assert.equal("teamtown8.map", levels.ownMap(levels.LEVELS[8], 8))
-    assert.is_nil(levels.ownMap(levels.LEVELS[8], 3))
-    assert.is_nil(levels.ownMap(levels.LEVELS[7], 6))
-    -- (level 9: a map for 8 that serves 2 to 8 players, the corners for 2 to 4)
     assert.equal(8, levels.maxHospitals(9))
-    assert.equal("net80_9", levels.levelId(8, 9))
-    assert.equal("net20_9", levels.levelId(2, 9))
+    assert.equal(4, levels.maxHospitals(1))
+    assert.equal("net60_9", levels.levelId(6, 9))
+    assert.equal("net80_9", levels.levelId(9, 9))
+    assert.equal("net43", levels.levelId(8, 4))
+    assert.equal("teamtown8.map", levels.ownMap(levels.LEVELS[9], 5))
+    assert.equal("teamtown8.map", levels.ownMap(levels.LEVELS[9], 8))
+    assert.is_nil(levels.ownMap(levels.LEVELS[9], 3))
+    assert.is_nil(levels.ownMap(levels.LEVELS[7], 6))
+    -- (level 10, CROSSROADS: a map for 8 that serves 2 to 8 players, the corners for 2 to 4)
+    assert.equal(8, levels.maxHospitals(10))
+    assert.equal("net80_10", levels.levelId(8, 10))
+    assert.equal("net20_10", levels.levelId(2, 10))
     for players = 2, 8 do
-      assert.equal("crossroads8.map", levels.ownMap(levels.LEVELS[9], players))
+      assert.equal("crossroads8.map", levels.ownMap(levels.LEVELS[10], players))
     end
-    local players, digits, level = levels.parseLevelId("net42_6")
+    -- (level 8, MOUNT EVEREST: a map for 6, the corners for 2 to 4)
+    assert.equal(6, levels.maxHospitals(8))
+    assert.equal("net60_8", levels.levelId(6, 8))
+    assert.equal("net60_8", levels.levelId(8, 8))
+    for players = 2, 6 do
+      assert.equal("everest6.map", levels.ownMap(levels.LEVELS[8], players))
+    end
+    local players, digits, level = levels.parseLevelId("net60_8")
+    assert.equal(6, players)
+    assert.equal("60", digits)
+    assert.equal(8, level)
+    players, digits, level = levels.parseLevelId("net42_6")
     assert.equal(4, players)
     assert.equal("42", digits)
     assert.equal(6, level)
@@ -233,11 +245,11 @@ describe("Multiplayer levels", function()
     assert.equal(map_quakes, config.quake_control)
     -- A map without any (TEAM TOWN, map 0): the campaign level's.
     config = {}
-    levels.apply(config, campaign, 8, 4)
+    levels.apply(config, campaign, 9, 4)
     assert.equal(campaign_quakes, config.quake_control)
     -- CROSSROADS: its own, one every half year from month 7, each stronger.
     config = {}
-    levels.apply(config, campaign, 9, 6)
+    levels.apply(config, campaign, 10, 6)
     local quakes = config.quake_control
     assert.equal(7, quakes[0].StartMonth)
     for i = 1, #quakes do
@@ -617,6 +629,90 @@ describe("Multiplayer levels", function()
     assert.equal(15, world.hospitals[2].rep)
   end)
 
+  it("gives level 8 its doctors and an earthquake every three months", function()
+    local config = {}
+    levels.apply(config, {objects = {}}, 8, 6)
+    assert.equal(8, config.mp_level)
+    assert.equal("everest", config.mp_events)
+    -- (an entry with Month = m makes the lists from month m + 1 on)
+    local staff = config.staff_levels
+    local function entry(month)
+      local found
+      for i = 0, #staff do
+        if staff[i].Month < month then found = staff[i] end
+      end
+      return found
+    end
+    -- Months 1 to 3: consultants (all but a junior now and then).
+    for month = 1, 3 do
+      assert.equal(1, entry(month).ConsRate)
+      assert.truthy(entry(month).JrRate >= 5)
+    end
+    -- Months 4 to 12: some consultants still.
+    for month = 4, 12 do assert.truthy(entry(month).ConsRate > 0) end
+    -- Years 2 and 3: juniors only.
+    for month = 13, 36 do
+      assert.equal(1, entry(month).JrRate)
+      assert.equal(0, entry(month).ConsRate)
+    end
+    -- From year 4: a mix again, for years.
+    for month = 37, 120 do
+      assert.truthy(entry(month).ConsRate > 0 and entry(month).JrRate > 1)
+    end
+    for i = 0, #staff do
+      assert.truthy(staff[i].Doctors >= 5 and staff[i].Nurses >= 3)
+      assert.truthy(staff[i].Receptionists >= 1 and staff[i].Handymen >= 1)
+    end
+    -- Sixteen earthquakes, one in each quarter of the first four years, in
+    -- its first two months, a little stronger each year.
+    local quakes = config.quake_control
+    assert.equal(15, #quakes)
+    for n = 0, 15 do
+      assert.equal(3 * n + 2, quakes[n].StartMonth)
+      assert.equal(3 * n + 3, quakes[n].EndMonth)
+      assert.truthy(quakes[n].Severity >= 2 and quakes[n].Severity <= 6)
+      if n >= 4 then assert.truthy(quakes[n].Severity >= quakes[n - 4].Severity) end
+    end
+  end)
+
+  it("brings about a hundred climbers to every hospital each April and October", function()
+    local world = fake_world(6)
+    world.map.level_config.mp_events = "everest"
+    local came = {}
+    function world:spawnPatient(hospital)
+      local month = self.game_date:monthOfGame()
+      came[month] = came[month] or {}
+      came[month][hospital.index] = (came[month][hospital.index] or 0) + 1
+    end
+    _S.multiplayer_window.level_everest_season = "season %d"
+    _S.multiplayer_window.level_everest_university_warning = "university"
+    _S.multiplayer_window.level_everest_juniors_only = "juniors"
+    _S.multiplayer_window.level_everest_doctors_back = "doctors"
+    play(world, 365 * 3 + 125) -- (to the end of April in the fourth year)
+    for month = 1, 40 do
+      local season = (month - 1) % 12 + 1 == 4 or (month - 1) % 12 + 1 == 10
+      if season then
+        local n = came[month][1]
+        assert.truthy(n >= 90 and n <= 110, "month " .. month .. ": " .. n)
+        for index = 2, 6 do assert.equal(n, came[month][index]) end
+      else
+        assert.is_nil(came[month], "climbers in month " .. month)
+      end
+    end
+    -- Told: each season, the university's fall (month 9, by the 15th), the
+    -- juniors (month 13) and the new university (month 37).
+    local told = {}
+    for _, t in ipairs(world.told) do
+      local key = t.text:match("^season") and "season" or t.text
+      told[key] = told[key] or {}
+      table.insert(told[key], t.month)
+    end
+    assert.same({4, 10, 16, 22, 28, 34, 40}, told.season)
+    assert.same({9}, told.university)
+    assert.same({13}, told.juniors)
+    assert.same({37}, told.doctors)
+  end)
+
   it("does nothing on the other levels", function()
     local world = fake_world(2)
     world.map.level_config.mp_events = nil
@@ -682,7 +778,7 @@ describe("Multiplayer levels", function()
         local index = tile[2] * 128 + tile[1]
         data[#data + 1] = string.char(index % 256, math.floor(index / 256))
       end
-      local tiles = levels.hospitalTiles(app, 7, 8)
+      local tiles = levels.hospitalTiles(app, 7, 9)
       assert.equal("Levels:/levels/teamtown8.map", read)
       assert.same({MAP41[1], MAP41[2], MAP41[3], MAP41[4], extra[1], extra[2], extra[3]}, tiles)
       -- (A file that cannot be read: none.)

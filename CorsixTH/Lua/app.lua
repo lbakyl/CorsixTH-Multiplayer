@@ -102,6 +102,17 @@ function App:getFullPath(folders, trailing_slash)
   return debug.getinfo(1, "S").source:sub(2, -12) .. table.concat(folders, pathsep) .. ending
 end
 
+--- The folder of the installed game, ending with a path separator: this
+--- game's own folder, or for a build downloaded from a multiplayer server
+--- (mp_pack.lua) the game it was started from, whose fonts and sound font it
+--- uses (a download brings only the game's scripts and data).
+--- @return (string) fullpath
+function App:getInstalledPath()
+  local install = self.command_line and self.command_line["pack-of"]
+  if install and install ~= "" then return install end
+  return self:getFullPath()
+end
+
 function App:init()
   -- App initialisation 1st goal: Get the loading screen up
 
@@ -399,6 +410,9 @@ function App:init()
   local function callback_after_movie()
     self:loadMainMenu()
     self.audio:playRandomBackgroundTrack()
+    -- (A build downloaded from a multiplayer server: it started, and joins
+    -- the server it was downloaded for.)
+    corsixth.require("mp_pack").afterStart(self)
 
     -- If we couldn't properly load the language, show an information dialog
     if not language_load_success then
@@ -443,7 +457,8 @@ function App:init()
   TheApp:saveConfig()
   TheApp:saveHotkeys()
 
-  if self.config.play_intro then
+  -- (Not when the game restarted to join a server as another build.)
+  if self.config.play_intro and not corsixth.require("mp_pack").rejoinPending(self) then
     self.moviePlayer:playIntro(callback_after_movie)
   else
     callback_after_movie()
@@ -1655,7 +1670,7 @@ function App:checkInstallFolder()
 end
 
 function App:findSoundFont()
-  local data_dir = self:getFullPath()
+  local data_dir = self:getInstalledPath()
 
   local possible_locations = {
     self.config.soundfont or false,

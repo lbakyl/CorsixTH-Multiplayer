@@ -17,7 +17,9 @@ PROTOCOL_VERSION = 1
 MAX_LINE_BYTES = 64 * 1024
 
 _ENCODE_RE = re.compile(r"[%\s=]")
-_FIELD_RE = re.compile(r"^([A-Za-z0-9_]+)=(\S*)$")
+# (ASCII whitespace only, like Lua's %s: the game leaves a no-break space or
+# the ideographic space of Chinese and Japanese typing in a value as it is.)
+_FIELD_RE = re.compile(r"^([A-Za-z0-9_]+)=(\S*)$", re.ASCII)
 
 
 def encode_value(value: object) -> str:

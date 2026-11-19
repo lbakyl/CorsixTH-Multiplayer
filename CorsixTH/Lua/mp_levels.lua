@@ -62,6 +62,22 @@ levels.LEVELS = {
   {campaign = 8, map = 3, cash = 50000, scenario = "cutthroat", intro = "level_intro_7",
     name = "CUTTHROAT", map_files = {[4] = "cutthroat4.map"}, map_author = "Matroftt",
     goals = {reputation = 650, balance = 150000, value = 150000, cured = 300, cure_rate = 55}},
+  -- MOUNT EVEREST, Jan's town square (2026-11-14) made into a town for six
+  -- (Levels/everest6.map, 256 x 256, by scripts/multiplayer/make_everest6.py):
+  -- three districts north of the square and three south of it, the same
+  -- mirrored. Each is a start hospital with five smaller buildings round it,
+  -- in 8 plots for sale; four big buildings in the middle band (4 plots
+  -- each) and the square's four houses are for sale too: 68 plots of 144 to
+  -- 299 tiles, land to fight over at auctions. Level 9's rooms, diseases and
+  -- research (all but the DNA fixer and the jelly vat); the climbing seasons,
+  -- the earthquakes and the doctors of the scenario "everest" (the end of
+  -- this file). With 2 to 4 players the corner districts are taken, with 5
+  -- the southern middle one is for sale.
+  {campaign = 9, map = 0, cash = 70000, scenario = "everest", intro = "level_intro_everest",
+    name = "MOUNT EVEREST",
+    map_files = {[2] = "everest6.map", [3] = "everest6.map", [4] = "everest6.map",
+      [6] = "everest6.map"},
+    goals = {reputation = 650, balance = 150000, value = 170000, cured = 450, cure_rate = 50}},
   -- Made for two against two (Matroftt's map, Levels/level40teams.map,
   -- 2026-11-02): the four hospitals in pairs in the middle of town, team
   -- mates side by side, land for sale all around; level 3's rooms and
@@ -580,7 +596,7 @@ local function epidemicWave(world)
         for _ = 1, between(EPIDEMIC_PATIENTS) do
           local patient = world:newEntity("Patient", 2, 1)
           patient:setDisease(disease)
-          patient:setNextAction(SpawnAction("spawn", world.spawn_points[math.random(1, #world.spawn_points)]))
+          patient:setNextAction(SpawnAction("spawn", world:spawnPointFor(hospital)))
           patient:setHospital(hospital)
           hospital:addToEpidemic(patient)
         end
@@ -1026,13 +1042,140 @@ local function cutthroatDay(world)
   checkBreakthroughs(world, state)
 end
 
+
+-- Level 8, "Mount Everest" --------------------------------------------------
+--
+-- Six hospitals at the foot of the mountain. Twice a year, in the climbing
+-- seasons (April and October), about a hundred climbers come down to every
+-- hospital within the month, on top of the usual patients. Earthquakes shake
+-- the valley every three months for the first four years, a little harder
+-- each year. The hiring list starts with consultants; in the ninth month the
+-- medical university in the capital collapses (players are warned in the
+-- middle of the month), and from the second year until the end of the third
+-- only junior doctors look for work. From the fourth year a new university
+-- sends trained doctors again.
+
+--! The climbing seasons: months of the year, how many climbers each
+--! hospital gets (one number per season, the same for all) over how many
+--! days.
+local SEASON_MONTHS = {4, 10}
+local SEASON_CLIMBERS = {90, 110}
+local SEASON_DAYS = 28
+--! The doctors: the warning (month, day), juniors only from month
+--! JUNIORS_FROM to JUNIORS_TO (the hiring list of a month is made at the end
+--! of the month before).
+local UNIVERSITY_WARNING = {month = 9, day = 15}
+local JUNIORS_FROM, JUNIORS_TO = 13, 36
+--! Earthquakes: one in each three months for the first four years, in the
+--! first two months of the three (the last one's shaking is over before the
+--! next window opens), severity by year.
+local function everestQuakes()
+  local quakes = {}
+  local severity = {{2, 2, 3, 3}, {3, 3, 4, 4}, {3, 4, 4, 5}, {4, 5, 5, 6}}
+  for n = 0, 15 do
+    quakes[n] = {StartMonth = 3 * n + 2, EndMonth = 3 * n + 3,
+        Severity = severity[math.floor(n / 4) + 1][n % 4 + 1]}
+  end
+  return quakes
+end
+
+--! The hiring list (every hospital has its own, World:staffPool; an entry
+--! with Month = m is used for the lists from month m + 1 on): consultants
+--! first, an ordinary mix until the end of the first year, only juniors in
+--! years 2 and 3, then a different mix each quarter.
+local function everestStaff()
+  local result, i = {}, 0
+  local function entry(month, doctors, cons_rate, jr_rate)
+    result[i] = {
+      Month = month,
+      Doctors = doctors,
+      Nurses = 5 + math.random(0, 3),
+      Handymen = 2 + math.random(0, 2),
+      Receptionists = 2 + math.random(0, 1),
+      ShrkRate = 4, SurgRate = 4, RschRate = 4,
+      ConsRate = cons_rate, JrRate = jr_rate,
+    }
+    i = i + 1
+  end
+  -- Months 1 to 3: about one junior in six doctors, the rest consultants.
+  entry(0, 6, 1, 6)
+  -- Months 4 to 12: mostly doctors (registrars), some of either.
+  entry(3, 6, 4, 3)
+  -- Years 2 and 3: juniors only, a few more of them.
+  entry(JUNIORS_FROM - 1, 8, 0, 1)
+  -- From year 4: each quarter a mix of its own.
+  for month = JUNIORS_TO, 120, 3 do
+    entry(month, 5 + math.random(0, 3), math.random(2, 6), math.random(2, 5))
+  end
+  return result
+end
+
+levels.SCENARIOS.everest = {
+  apply = function(config, _)
+    config.mp_events = "everest"
+    config.staff_levels = everestStaff()
+    config.quake_control = everestQuakes()
+  end,
+}
+
+--! An announcement for every player, shown `longer` times as long.
+local function announce(world, text, longer)
+  MultiplayerSession.tellOthers(world, nil, text, longer)
+end
+
+--! Level 8's events, at the end of every day.
+local function everestDay(world)
+  local state = world.mp_level_events
+  if not state then
+    state = {}
+    world.mp_level_events = state
+  end
+  local date = world.game_date
+  local month, day = date:monthOfGame(), date:dayOfMonth()
+  local S = _S.multiplayer_window
+  if month == UNIVERSITY_WARNING.month and day == UNIVERSITY_WARNING.day then
+    announce(world, S.level_everest_university_warning, 3)
+  end
+  if day == 1 and month ~= state.month then
+    state.month = month
+    if month == JUNIORS_FROM then announce(world, S.level_everest_juniors_only, 3) end
+    if month == JUNIORS_TO + 1 then announce(world, S.level_everest_doctors_back, 2) end
+    -- A climbing season begins.
+    if isIn(SEASON_MONTHS, (month - 1) % 12 + 1) then
+      local climbers = between(SEASON_CLIMBERS)
+      state.season = {days = SEASON_DAYS, left = {}}
+      for index = 1, world.mp_coop.players do state.season.left[index] = climbers end
+      announce(world, S.level_everest_season:format(climbers), 2)
+    end
+  end
+  -- The season's climbers: each day an even share of those still to come,
+  -- hospital by hospital (one that is not open or has no staffed desk
+  -- loses them, as with any patient).
+  local season = state.season
+  if season then
+    for index = 1, world.mp_coop.players do
+      local hospital = world.hospitals[index]
+      local left = season.left[index] or 0
+      local today = math.ceil(left / season.days)
+      if hospital and not hospital.mp_place then
+        for _ = 1, today do world:spawnPatient(hospital) end
+      end
+      season.left[index] = left - today
+    end
+    season.days = season.days - 1
+    if season.days <= 0 then state.season = nil end
+  end
+end
+
 --! The level's events, at the end of every day (World:onEndDay).
 function levels.onEndDay(world)
   if not world.mp_coop then return end
   local events = world.map.level_config.mp_events
-  if events ~= "emergency" and events ~= "cutthroat" then return end
+  if events ~= "emergency" and events ~= "cutthroat" and events ~= "everest" then return end
   corsixth.require("mp_session")
-  if events == "emergency" then emergencyDay(world) else cutthroatDay(world) end
+  if events == "emergency" then emergencyDay(world)
+  elseif events == "cutthroat" then cutthroatDay(world)
+  else everestDay(world) end
 end
 
 return levels

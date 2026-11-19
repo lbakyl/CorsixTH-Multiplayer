@@ -194,10 +194,12 @@ named like an expert plays their own hospital: at the end of every game year
 and when the game ends, into `<dir>/saves/<time> <room> y<Y>-<MM>-<DD>.sav`
 with a `.json` beside it (room, date, level, each hospital and whether a bot
 ever played it), and it notes the experts' building commands as they run in
-`<dir>/builds/<room>.jsonl`. The referee's state does not change: the save is
+`<dir>/builds/<room>.jsonl`. An expert who did nothing since the last save (no game
+command but the speed, saving or being away: a save loaded and only looked
+at) is left out; with no expert left, nothing is saved. The referee's state does not change: the save is
 the same as for a repair. Once a night `python -m corsixth_mp.learn` reads
 the new saves with layout_dump.lua and writes `<dir>/learned.lua`
-(layout_learn.py), which the bots read when they start (bot_learned.lua):
+(layout_learn.py; each game once, from its latest save), which the bots read when they start (bot_learned.lua):
 room recipes (size, door, every object's tiles seen from the door) and plans
 (every room and corridor object of an expert's hospital, for the same level,
 map size, number of hospitals and place).

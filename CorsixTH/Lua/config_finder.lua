@@ -272,6 +272,7 @@ local function new_hotkeys_defaults()
     ingame_patient_gohome = "h",
     ingame_mp_chat = "y",
     ingame_mp_next_hospital = "n",
+    ingame_mp_own_hospital = {"shift", "n"},
     ingame_storePosition_1 = {"alt", "1"},
     ingame_storePosition_2 = {"alt", "2"},
     ingame_storePosition_3 = {"alt", "3"},
@@ -1021,6 +1022,10 @@ param(hotkeys_values, 'ingame_mp_chat') .. [=[
 -- your own among them) in a multiplayer game with several hospitals.
 --]=] .. '\n' ..
 param(hotkeys_values, 'ingame_mp_next_hospital') .. [=[
+-- This takes the view straight back to your own hospital's starting place in
+-- a multiplayer game.
+--]=] .. '\n' ..
+param(hotkeys_values, 'ingame_mp_own_hospital') .. [=[
 ]=]
 
   return table.concat(parts)

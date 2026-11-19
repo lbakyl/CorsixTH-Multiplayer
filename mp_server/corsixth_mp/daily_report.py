@@ -82,9 +82,12 @@ def report(day: str, env: dict[str, str] | None = None) -> str:
     # What the bots learnt that night from expert players' saves (learn.py);
     # nothing said when nothing was new (Jan, 2026-11-12).
     for entry in learn.learnt_on(day, env):
+        # (One line a game: its latest save, and how many it had that night.)
         day_part = str(entry.get("date", "")).split("T")[0]
+        saves = int(entry.get("saves", 1) or 1)
+        more = f", latest of {saves} saves" if saves > 1 else ""
         lines.append(f"Bots learnt from {entry.get('player', '?')}: {entry.get('save', '?')} "
-                     f"({entry.get('level', '')} {day_part}, {entry.get('rooms', 0)} rooms)")
+                     f"({entry.get('level', '')} {day_part}, {entry.get('rooms', 0)} rooms{more})")
     text = "\n".join(lines)
     return text if len(text) <= DISCORD_LIMIT else text[:DISCORD_LIMIT - 3] + "..."
 

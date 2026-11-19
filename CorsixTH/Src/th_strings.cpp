@@ -72,6 +72,22 @@ void skip_utf8_whitespace(const char*& sString, const char* end) {
   }
 }
 
+bool is_default_ignorable(unsigned int code_point) {
+  return code_point == 0x00AD || code_point == 0x034F || code_point == 0x061C ||
+         (code_point >= 0x115F && code_point <= 0x1160) ||
+         (code_point >= 0x17B4 && code_point <= 0x17B5) ||
+         (code_point >= 0x180B && code_point <= 0x180F) ||
+         (code_point >= 0x200B && code_point <= 0x200F) ||
+         (code_point >= 0x202A && code_point <= 0x202E) ||
+         (code_point >= 0x2060 && code_point <= 0x206F) ||
+         code_point == 0x3164 ||
+         (code_point >= 0xFE00 && code_point <= 0xFE0F) ||
+         code_point == 0xFEFF || code_point == 0xFFA0 ||
+         (code_point >= 0x1BCA0 && code_point <= 0x1BCA3) ||
+         (code_point >= 0x1D173 && code_point <= 0x1D17A) ||
+         (code_point >= 0xE0000 && code_point <= 0xE0FFF);
+}
+
 constexpr uint16_t unicode_to_cp437_table[0x60] = {
     0xFF, 0xAD, 0x9B, 0x9C, 0x3F, 0x9D, 0x3F, 0x3F, 0x3F, 0x3F, 0xA6, 0xAE,
     0xAA, 0x3F, 0x3F, 0x3F, 0xF8, 0xF1, 0xFD, 0x3F, 0x3F, 0x3F, 0x3F, 0xFA,
@@ -283,6 +299,24 @@ unsigned int unicode_to_codepage_mik(unsigned int code_point) {
       return 0xFE;
     case 0x00A0:
       return 0xFF;
+    // Not in MIK: the nearest letter or sign it has, as Russian is often
+    // written anyway (Yo as Ye, quotes and dashes plain).
+    case 0x0401:    // Cyrillic capital Yo
+      return 0x85;  // Cyrillic capital Ye
+    case 0x0451:    // Cyrillic small yo
+      return 0xA5;  // Cyrillic small ye
+    case 0x00AB:    // left guillemet
+    case 0x00BB:    // right guillemet
+    case 0x201C:    // left double quotation mark
+    case 0x201D:    // right double quotation mark
+    case 0x201E:    // low double quotation mark
+      return 0x22;
+    case 0x2018:  // left single quotation mark
+    case 0x2019:  // right single quotation mark
+      return 0x27;
+    case 0x2013:  // en dash
+    case 0x2014:  // em dash
+      return 0x2D;
     default:
       return 0x3F;  // '?'
   }

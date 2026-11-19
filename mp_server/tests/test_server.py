@@ -601,6 +601,15 @@ def test_quorum_repairs_only_the_game_that_differs():
                 break
             await asyncio.sleep(0.01)
         assert room.verified_step == 5 and room.desync_step is None
+        # Cid differs again soon after: this time everybody loads the
+        # referee's game (Bot Bertie on MOUNT EVEREST, 2026-11-15: 145
+        # repairs of his game alone, each differing again).
+        a.send("S 1 6 fp-six")
+        b.send("S 2 6 fp-six")
+        c.send("S 3 6 fp-odd")
+        for x in (a, b, c):
+            assert (await x.expect("HOLD"))["step"] == "6"
+        assert room.quorum_repaired == {}
     run_with_referee(body)
 
 
@@ -1223,7 +1232,7 @@ def test_bot_of_another_build_or_on_a_plain_server(run):
 
 def test_other_builds_are_turned_away_with_the_release():
     check = BuildCheck(checksum="210d8203", release="mp-test-6d85201a",
-                       url="https://github.com/lbakyl/CorsixTH-Multiplayer/releases/tag/mp-test-6d85201a")
+                       url="https://github.com/openth-org/openth/releases/tag/mp-test-6d85201a")
 
     async def main():
         server = srv.Server(build_check=check)
@@ -1264,7 +1273,7 @@ def test_build_check_settings(tmp_path):
 
     check = BuildCheck.from_env({"CORSIXTH_MP_RELEASE": "mp-test-6d85201a"}, referee)
     assert check.checksum == expected and check.release == "mp-test-6d85201a"
-    assert check.url == "https://github.com/lbakyl/CorsixTH-Multiplayer/releases/tag/mp-test-6d85201a"
+    assert check.url == "https://github.com/openth-org/openth/releases/tag/mp-test-6d85201a"
     assert check.accepts(f"v0.70.1-sv269-lua5.5-mp1-english-{expected}")
     assert not check.accepts("v0.70.1-sv269-lua5.5-mp1-english-00000000")
     assert not check.accepts(expected + "x")
@@ -1731,4 +1740,123 @@ def test_a_returning_name_takes_its_silent_place_in_a_running_game(monkeypatch):
         assert len(bots) == 2 and server.rooms["race"].owner is server.rooms["race"].players[1]
         while await asyncio.wait_for(ann.reader.readline(), 3):
             pass
+    run_with_bots(body, with_referees=True)
+
+
+def test_assistants_help_in_a_hospital_and_take_no_place(monkeypatch):
+    """Argus, 2026-11-15: a bot that helps a person in their own hospital
+    should not take one of the map's places."""
+    async def body(server, port, bots):
+        ann = await Client.connect(port, "Ann")
+        ann.send(encode("CREATE", room="help", password="", max=2, mode="coop", level=2, hospitals=2))
+        await ann.expect("JOINED")
+        ben = await Client.connect(port, "Ben")
+        ben.send(encode("JOIN", room="help", password=""))
+        await ben.expect("JOINED")
+        # Both places taken; Ann's assistant still comes, to her hospital.
+        ann.send(encode("BOT", assist=1))
+        await started_bots(bots, 1)
+        lobby = await ann.expect("LOBBY", assistants=1)
+        assert lobby["open"] == "0" and lobby["starting"] == "1" and lobby["assisted"] == "1"
+        agnes = await connect_bot(port, bots[0])
+        assert (await agnes.expect("JOINED"))["peer"] == "3"
+        me = await ann.expect("PLAYER", name="Ann")
+        helper = await ann.expect("PLAYER", name="Bot Agnes")
+        assert (helper["assists"], helper["colour"], helper["team"]) == ("1", me["colour"], me["team"])
+        # Ben (not the owner) adds his own, not one for Ann, and one only.
+        ben.send(encode("BOT", assist=1))
+        assert (await ben.expect("ERROR"))["code"] == "not_owner"
+        ben.send(encode("BOT", assist=2))
+        ben.send(encode("BOT", assist=2))
+        assert (await ben.expect("ERROR"))["code"] == "has_assistant"
+        await started_bots(bots, 2)
+        bertie = await connect_bot(port, bots[1])
+        await bertie.expect("JOINED")
+        # A person still finds the room full.
+        carl = await Client.connect(port, "Carl")
+        carl.send(encode("JOIN", room="help", password=""))
+        assert (await carl.expect("ERROR"))["code"] == "room_full"
+        # The assistant follows its person to another hospital; nobody moves
+        # it by itself.
+        ann.send(encode("SEAT", colour=5))
+        await ben.expect("PLAYER", name="Bot Agnes", colour="5")
+        ann.send(encode("SEAT", peer=3, colour=1))
+        assert (await ann.expect("ERROR"))["code"] == "assistant"
+        # Ben sends his away, adds it again, and it leaves with him.
+        ben.send(encode("BOT", remove=4))
+        with pytest.raises(ConnectionError):
+            await bertie.expect("NEVER")
+        await ann.expect("CHAT", text="Bot Bertie left")
+        ben.send(encode("BOT", assist=2))
+        await started_bots(bots, 3)
+        bertie = await connect_bot(port, bots[2])
+        await bertie.expect("JOINED")
+        await ann.expect("PLAYER", name="Bot Bertie", assists="2")
+        await ben.close()
+        with pytest.raises(ConnectionError):
+            await bertie.expect("NEVER")
+        # Not in a saved game.
+        tom = await Client.connect(port, "Tom")
+        tom.send(encode("CREATE", room="again", password="", max=2, mode="coop", level=3,
+                        step=300, date="1-02-10T05", seats="SARA,TOM", **{"continue": 1}))
+        await tom.expect("JOINED")
+        tom.send(encode("BOT", assist=1))
+        assert (await tom.expect("ERROR"))["code"] == "locked"
+        # The game: Ann and her assistant in one hospital.
+        ann.send(encode("START"))
+        st = await ann.expect("START")
+        assert st["colours"] == "1:5,3:5" and st["bots"] == "3"
+    run_with_bots(body)
+
+
+def test_assistants_keep_to_the_games_players(monkeypatch):
+    """No more players than a game can have (MAX_PLACES), assistants too."""
+    monkeypatch.setattr(srv, "MAX_PLACES", 3)
+
+    async def body(server, port, bots):
+        ann = await Client.connect(port, "Ann")
+        ann.send(encode("CREATE", room="tight", password="", max=3, mode="coop", level=2, hospitals=3))
+        await ann.expect("JOINED")
+        ann.send(encode("BOT", assist=1))
+        ben = await Client.connect(port, "Ben")
+        ben.send(encode("JOIN", room="tight", password=""))
+        await ben.expect("JOINED")
+        lobby = await ann.expect("LOBBY", count=2)
+        assert lobby["open"] == "0"  # (three in all, with Ann's assistant)
+        ben.send(encode("BOT", assist=2))
+        assert (await ben.expect("ERROR"))["code"] == "room_full"
+        carl = await Client.connect(port, "Carl")
+        carl.send(encode("JOIN", room="tight", password=""))
+        assert (await carl.expect("ERROR"))["code"] == "room_full"
+    run_with_bots(body)
+
+
+def test_no_stand_in_while_the_persons_assistant_plays_on(monkeypatch):
+    monkeypatch.setattr(srv, "STAND_IN_DELAY", 0.05)
+
+    async def body(server, port, bots, referees):
+        ann = await Client.connect(port, "Ann")
+        ann.send(encode("CREATE", room="duo", password="", max=2, mode="coop", level=2, hospitals=2))
+        await ann.expect("JOINED")
+        ben = await Client.connect(port, "Ben")
+        ben.send(encode("JOIN", room="duo", password=""))
+        await ben.expect("JOINED")
+        ben.send(encode("READY", ready=1))
+        ben.send(encode("BOT", assist=2))
+        await started_bots(bots, 1)
+        helper = await connect_bot(port, bots[0])
+        await helper.expect("JOINED")
+        ann.send(encode("START"))
+        await ann.expect("START")
+        for _ in range(100):
+            if referees:
+                break
+            await asyncio.sleep(0.01)
+        ref = await connect_referee(port, "duo", referees[0])
+        await ref.expect("START")
+        # Ben goes: his assistant plays on in his hospital, no stand-in.
+        await ben.close()
+        await ann.expect("LEFT", peer=2)
+        await asyncio.sleep(0.3)
+        assert len(bots) == 1 and 3 in server.rooms["duo"].players
     run_with_bots(body, with_referees=True)

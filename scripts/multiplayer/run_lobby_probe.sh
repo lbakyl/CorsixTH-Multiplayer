@@ -96,7 +96,9 @@
 #      sale in both games
 #  34. the host removes a player ("kick"): kip double-clicks lev's line,
 #      the menu's "remove" -> lev is back in the room list, told why, and
-#      joining that room again is refused ("kicked")
+#      joining that room again is refused ("kicked"); before it both say a line in the
+#      room's chat and see each other's in the room window, and kip opens the
+#      room's map (who plays where) and comes back
 #  35. the year end waits ("yearhold", co-op): wes keeps the annual
 #      report open for 80 steps; xan closes it at once and gets the box
 #      "the game waits while WES read...", and no game hours pass until wes
@@ -118,7 +120,11 @@
 # transparent walls and other warmth colours, kept through the repair, and
 # each player still sees the hospital under their own name); 16.
 # rejoin after a quit; 36. a quorum repair with three players: only the one
-# whose game differs loads the referee's game, the others go on, not told.
+# whose game differs loads the referee's game, the others go on, not told;
+# 37. assistants (Argus, 2026-11-15): in a co-op room for two, yuri and zoe
+# each add an assistant from the menu on their own line (a bot that helps in
+# their hospital and takes no place): four lines, two hospitals of two
+# ("YURI + BOT ...") -> IN SYNC, the referee agrees.
 # Exits 0 only if all checks behave as expected.
 #
 # Needs LuaSocket (LUASOCKET_TREE, a LuaRocks tree containing it) and python3.
@@ -156,7 +162,7 @@ else
     export CORSIXTH_MP_REFEREE_BINARY="$binary" CORSIXTH_MP_REFEREE_SOURCE="$source_dir"
     export CORSIXTH_MP_REFEREE_DATA="$game_data" CORSIXTH_MP_REFEREE_WORKDIR="$out/referee"
     export CORSIXTH_MP_REFEREE_LUA_CPATH="$MP_LUA_CPATH" CORSIXTH_MP_REFEREE_LUA_PATH="$MP_LUA_PATH"
-    export MP_REFEREE_PROBE_SCENARIO="crowd=busy;staff=busy;edit=busy;cardio=none;epi=busy;wreck=none;lang=busy" # the probes' own start, see below
+    export MP_REFEREE_PROBE_SCENARIO="crowd=busy;staff=busy;edit=busy;cardio=none;epi=busy;wreck=none;lang=busy;assist=none" # the probes' own start, see below
   fi
   PYTHONPATH="$source_dir/mp_server" python3 -m corsixth_mp --host 127.0.0.1 --port "$port" \
     --log-level INFO --max-per-address 96 --max-connections 128 > "$out/server.log" 2>&1 &
@@ -218,7 +224,7 @@ run_probe frank MP_ROLE=join MP_ROOM=leave MP_STEPS=800 MP_FURNISH_PACE=40 \
   MP_UI_SCRIPT="200:furnishroom:gp:5:5;300:quit" & pids+=($!)
 run_probe gina MP_ROLE=host MP_ROOM=build MP_STEPS=900 MP_DRAW_EVERY=4   MP_UI_SCRIPT="50:enterchat;100:room:gp:5:5:window;400:buy:bench" & pids+=($!)
 sleep 1
-run_probe hugo MP_ROLE=join MP_ROOM=build MP_STEPS=900   MP_UI_SCRIPT="100:room:pharmacy:4:4;300:room:toilets:4:4" & pids+=($!)
+run_probe hugo MP_ROLE=join MP_ROOM=build MP_STEPS=900   MP_UI_SCRIPT="100:room:pharmacy:4:4;300:room:toilets:4:4;600:bigoutline;640:nooutline" & pids+=($!)
 run_probe ivan MP_ROLE=host MP_ROOM=crowd MP_STEPS=1200 MP_SCENARIO=busy & pids+=($!)
 sleep 1
 run_probe judy MP_ROLE=join MP_ROOM=crowd MP_STEPS=1200 MP_SCENARIO=busy   MP_UI_SCRIPT="300:crowdroom:gp:4:4;340:crowdroom:gp:4:4;380:crowdroom:gp:4:4;500:crowdroom:toilets:4:4;700:buyunder:bench" & pids+=($!)
@@ -278,9 +284,10 @@ run_probe ana MP_ROLE=host MP_ROOM=auction MP_COOP=1 MP_LEVEL=2 MP_STEPS=600   M
 sleep 1
 run_probe ben MP_ROLE=join MP_ROOM=auction MP_STEPS=600   MP_UI_SCRIPT="30:openhospital;110:auctionshot;150:auctionbid;170:auctionhide;176:auctionshot;190:auctionback;196:auctionshot" & pids+=($!)
 # The host removes a player from the room.
-run_probe kip MP_ROLE=host MP_ROOM=kick MP_KICK=2 & pids+=($!)
+# (First they talk in the room's chat.)
+run_probe kip MP_ROLE=host MP_ROOM=kick MP_KICK=2 MP_ROOM_CHAT=hello-lev MP_ROOM_CHAT_WAIT=lev & pids+=($!)
 sleep 1
-run_probe lev MP_ROLE=join MP_ROOM=kick MP_EXPECT_KICK=1 & pids+=($!)
+run_probe lev MP_ROLE=join MP_ROOM=kick MP_EXPECT_KICK=1 MP_ROOM_CHAT=hi-kip MP_ROOM_CHAT_WAIT=kip & pids+=($!)
 # The year end waits for everybody's annual report.
 run_probe wes MP_ROLE=host MP_ROOM=yearhold MP_COOP=1 MP_STEPS=400 MP_KEEP_REPORT=80   MP_UI_SCRIPT="20:openhospital;100:yearend" & pids+=($!)
 sleep 1
@@ -405,6 +412,10 @@ if [[ "${MP_REFEREE:-0}" == 1 ]]; then
   (for _ in $(seq 600); do grep -qs "UI: quitting" "$out/vera/log.txt" && break; sleep 0.1; done
    sleep 1
    run_probe vera-back MP_NAME=vera MP_ROLE=join MP_ROOM=back MP_STEPS=1500 MP_REJOIN=1) & pids+=($!)
+  # Assistants (check 37): each adds one to their own hospital.
+  run_probe yuri MP_ROLE=host MP_ROOM=assist MP_COOP=1 MP_LEVEL=2 MP_PLAYERS=2 MP_WAIT_PLAYERS=4 MP_ASSISTANT=1     MP_SCENARIO=none MP_STEPS=600 MP_UI_SCRIPT="40:openhospital;550:hospitals" & pids+=($!)
+  sleep 1
+  run_probe zoe MP_ROLE=join MP_ROOM=assist MP_ASSISTANT=1 MP_SCENARIO=none MP_STEPS=600     MP_UI_SCRIPT="50:openhospital;560:hospitals" & pids+=($!)
 fi
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
@@ -502,10 +513,15 @@ kept = re.search(r'UI: outline of gp after the checkmark: (\d+) of (\d+) tiles b
 kept = bool(kept and kept.group(1) == kept.group(2) and int(kept.group(3)) > 0)
 enter = re.search(r'UI: chat key with a room editor open at step 50: chat opened, text "", editor \w+; Enter for (\S+); Shift: chat opened, text ""', g)
 enter = bool(enter and 'UIEditRoom' in enter.group(1).split(',') and 'UIMultiplayerChat' not in enter.group(1))
+# An outline over the whole map (hugo) shows only on hugo's land at gina's
+# (Jan, 2026-11-14: Matroftt's covered everything).
+big5 = re.search(r'showing reserved area of player 2: gp at 1,1 size (\d+)x(\d+) \((\d+) tiles on their land\)', g)
+clipped = bool(big5 and 0 < int(big5.group(3)) < int(big5.group(1)) * int(big5.group(2)) // 4)
 ok5 = (result('gina').startswith('IN SYNC') and result('hugo').startswith('IN SYNC')
-       and rooms_g == rooms_h and built == ['gp', 'toilets'] and saw and kept and enter)
+       and rooms_g == rooms_h and built == ['gp', 'toilets'] and saw and kept and enter and clipped)
 print(f"5. Rooms:                   {result('gina')}; built on both: {rooms_g == rooms_h} {rooms_g}; reserved outlines seen: {saw}; "
-      f"own outline kept: {kept}; Y opens the chat, Enter the editor's: {enter}")
+      f"own outline kept: {kept}; Y opens the chat, Enter the editor's: {enter}; "
+      f"whole-map outline only on its land: {clipped} {big5.group(3) + ' tiles' if big5 else '-'}")
 fail |= not ok5
 if not ok5: bad.append("ok5")
 
@@ -794,7 +810,7 @@ fail |= not ok29
 if not ok29: bad.append("ok29")
 
 lv30 = re.search(r"UI: levels listed \[(.*?)\]; map drawn: (\w+); shared level 3: (.*?); chosen: level (\d+), room name kept: (\w+)", log('kai'))
-ok30 = bool(lv30 and len(lv30.group(1).split(' | ')) == 9 and lv30.group(1).endswith('CUTTHROAT | TEAM TOWN | CROSSROADS')
+ok30 = bool(lv30 and len(lv30.group(1).split(' | ')) == 10 and lv30.group(1).endswith('CUTTHROAT | MOUNT EVEREST | TEAM TOWN | CROSSROADS')
             and lv30.group(2) == 'true' and lv30.group(3) == 'LARGECHESTER' and lv30.groups()[3:] == ('6', 'true'))
 print(f"30. Level browser:          {lv30.groups() if lv30 else '-'}")
 fail |= not ok30
@@ -856,11 +872,22 @@ menu34 = re.search(r'UI: kick menu open: (\w+)', log('kip'))
 after34 = re.search(r'UI: after the kick: (.*)', log('kip'))
 told34 = re.search(r'UI: kicked: (.*); view (\w+)', log('lev'))
 again34 = re.search(r'UI: joining again: (\w+)', log('lev'))
+# Before that, both talked in the room's chat and saw each other's line.
+chat_k = re.search(r'UI: room chat: (.*); box now "(.*)"', log('kip'))
+chat_l = re.search(r'UI: room chat: (.*); box now "(.*)"', log('lev'))
+chat34 = all(c and 'kip: hello-lev' in c.group(1) and 'lev: hi-kip' in c.group(1) and c.group(2) == ''
+             for c in (chat_k, chat_l))
+# ... and opened the room's map: who plays where (one hospital for both).
+map34 = re.search(r'UI: room map: level \d+, 1 hospital\(s\), file (\S+); 1=\d+:kip \+ lev', log('kip'))
+back34 = 'UI: back in the room: room' in log('kip')
+chat34 = chat34 and bool(map34) and back34
 ok34 = (bool(menu34) and menu34.group(1) == 'true' and bool(after34) and 'lev' not in after34.group(1)
         and bool(told34) and told34.group(2) == 'rooms' and 'removed you' in told34.group(1)
-        and bool(again34) and again34.group(1) == 'kicked')
+        and bool(again34) and again34.group(1) == 'kicked' and chat34)
 print(f"34. Kick from the room:     menu {menu34 and menu34.group(1)}; after {after34 and after34.group(1)}; "
-      f"lev told {told34 and told34.groups()}; joining again {again34 and again34.group(1)}")
+      f"lev told {told34 and told34.groups()}; joining again {again34 and again34.group(1)}; "
+      f"room chat seen by both, room map: {chat34} {chat_k.group(1) if chat_k else '-'}; "
+      f"map {map34.group(0)[13:] if map34 else '-'}, back {back34}")
 fail |= not ok34
 if not ok34: bad.append("ok34")
 
@@ -1125,6 +1152,28 @@ if with_referee:
           f"referee confirmed {confirmed_after('quorum')} (referee repaired alone in: {alone or 'none'})")
     fail |= not ok36
     if not ok36: bad.append("ok36")
+
+    # Assistants: a bot in each player's hospital, no place of its own.
+    lines37 = [re.search(r'UI: room lines with my assistant \((\d+) lines, open (\w+)\): (.*)', log(n)) for n in ('yuri', 'zoe')]
+    zoe37 = lines37[1].group(3) if lines37[1] else ''
+    column37 = re.search(r'UI: assistants column: (.*)', log('zoe'))
+    side37 = column37.group(1).split(' | ') if column37 else []
+    hosp37 = re.search(r'UI: hospitals at step \d+ .*', log('yuri'))
+    names37 = re.findall(r'\[\d+ ([A-Z +]+?) opened=', hosp37.group(0)) if hosp37 else []
+    added37 = re.findall(r"room 'assist': '(\w+)' adds '([\w ]+)' to help '(\w+)'", server)
+    ok37 = (all(lines37) and lines37[1].group(1) == '4' and lines37[1].group(2) == '0'
+            and zoe37.startswith('yuri (host)') and ' | zoe ' in zoe37 and 'Bot' not in zoe37
+            and len(side37) >= 2 and side37[0].startswith('Bot ') and side37[1].startswith('Bot ')
+            and len(names37) == 2 and names37[0].startswith('YURI + BOT') and names37[1].startswith('ZOE + BOT')
+            and sorted((a, c) for a, _, c in added37) == [('yuri', 'yuri'), ('zoe', 'zoe')]
+            and all(result(n).startswith('IN SYNC through step 600') for n in ('yuri', 'zoe'))
+            and int(confirmed_after('assist')) >= 500)
+    print(f"37. Assistants:             zoe's lines {lines37[1].groups()[:2] if lines37[1] else '-'}: {zoe37[:120]}; "
+          f"column {side37}; "
+          f"hospitals {names37}; added {added37}; {result('yuri')} / {result('zoe')}; "
+          f"referee confirmed {confirmed_after('assist')}")
+    fail |= not ok37
+    if not ok37: bad.append("ok37")
 if bad:
     print("failed checks: " + " ".join(bad))
 sys.exit(1 if fail else 0)

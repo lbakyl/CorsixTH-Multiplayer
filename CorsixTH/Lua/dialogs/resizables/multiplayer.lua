@@ -19,6 +19,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
 corsixth.require("mp_lobby")
+corsixth.require("mp_pack")
 
 --! Multiplayer lobby window, opened from the main menu. Shows one of four
 --! views depending on the lobby state: connect to a server, pick or create a
@@ -55,8 +56,16 @@ local function view_of(lobby)
   return "rooms"
 end
 
--- (The places view: a line more for each place, as the room view.)
-local heights = {connect = 225, rooms = 435, room = 295, seats = 185}
+-- The room's chat (Jan, 2026-11-14): its last rows (a long line wraps onto
+-- more), a scrollbar to read back, and a box to type in. 5 rows with up to 6
+-- places, one fewer for each place more (Jan: with 8 places the room did
+-- not fit a smaller screen), and no more than the screen has room for.
+local CHAT_ROWS, CHAT_MIN_ROWS, CHAT_ROW_H = 5, 2, 18
+local CHAT_GAP = 33 -- (above the rows, and the box under them)
+local CHAT_SCROLL_W = 20
+-- (The places view: a line more for each place, as the room view. The
+-- room's height without its chat rows.)
+local heights = {connect = 225, rooms = 435, room = 295 + CHAT_GAP, seats = 185}
 -- The room view has a line per place: 4 in that height, 27 pixels more for
 -- each more (a room for up to 8).
 local PLACE_H = 27
@@ -67,6 +76,17 @@ local function placesOf(lobby)
   return math.max(4, math.min(MultiplayerLobby.PLACES, max))
 end
 
+-- The assistants (bots that help in a person's hospital, no place of their
+-- own: Argus, 2026-11-15) in a column beside the room's places, each beside
+-- its person (Jan: beside the window, not lines of their own).
+local SIDE_W = 170
+
+--! Whether the room view has the assistants' column: a new game on a server
+--! that runs bots.
+local function sideColumn(lobby)
+  return lobby ~= nil and lobby.room ~= nil and lobby.room.bots == "1" and lobby.room.free == "1"
+end
+
 --! How many places a new room on this level may have: as many as the level
 --! has hospitals (mp_levels.maxHospitals; a level above the multiplayer
 --! levels plays the last one with several hospitals).
@@ -75,11 +95,31 @@ local function placesFor(level)
 end
 
 --! The height of a view of the window.
+--! How many rows of the room's chat the room view shows (CHAT_ROWS).
+local function chatRows(lobby)
+  local places = placesOf(lobby)
+  local rows = CHAT_ROWS - math.max(0, places - 6)
+  -- (And what the screen has room for, with a margin: the size drawn now,
+  -- not the config's, which in fullscreen is the window's. Jan, 2026-11-15:
+  -- 2 rows on a screen with room for 5.)
+  local video = TheApp and TheApp.video
+  local scale = TheApp and TheApp.gfx and TheApp.gfx:getUIScale() or 1
+  local ok, _, screen_h = pcall(function() return video:getRenderSize() end)
+  if ok and screen_h and screen_h > 0 then
+    local free = math.floor(screen_h / scale) - 20 - heights.room - (places - 4) * PLACE_H
+    rows = math.min(rows, math.floor(free / CHAT_ROW_H))
+  end
+  return math.max(CHAT_MIN_ROWS, rows)
+end
+
 local function viewHeight(view, lobby)
   if view == "seats" then
     return heights.seats + #lobby.seat_choice.seats * PLACE_H
   end
-  return heights[view] + (view == "room" and (placesOf(lobby) - 4) * PLACE_H or 0)
+  if view == "room" then
+    return heights.room + (placesOf(lobby) - 4) * PLACE_H + chatRows(lobby) * CHAT_ROW_H
+  end
+  return heights[view]
 end
 
 -- The new room's settings as last sent with Create: shown again when the
@@ -89,10 +129,18 @@ local last_room_form = nil
 function UIMultiplayer:UIMultiplayer(ui, status)
   local lobby = TheApp.mp_lobby
   self.view = view_of(lobby)
-  -- A server that turned this game version away says where to get its own.
+  -- A server that turned this game version away says where to get its own;
+  -- or the game can get it from the server (a game pack, mp_pack.lua).
   self.download = self.view == "connect" and lobby and MultiplayerLobby.downloadOffer(lobby.error)
       or nil
-  self:UIResizable(ui, WIDTH, viewHeight(self.view, lobby) + (self.download and 35 or 0), col.bg)
+  self.pack_offer = self.view == "connect" and lobby and MultiplayerPack.offer(TheApp, lobby.error)
+      or nil
+  if self.pack_offer then
+    status = self.pack_offer.how == "newer_game" and _S.multiplayer_window.version_newer_game or
+        _S.multiplayer_window.version_other
+  end
+  self:UIResizable(ui, WIDTH + (self.view == "room" and sideColumn(lobby) and SIDE_W or 0),
+      viewHeight(self.view, lobby) + ((self.download or self.pack_offer) and 35 or 0), col.bg)
   self.esc_closes = true
   self.resizable = false
   self.modal_class = "main menu"
@@ -181,8 +229,8 @@ end
 --! The public servers offered on the connect view (eu2 is the default the
 --! first time: test builds are played there).
 UIMultiplayer.SERVERS = {
-  {label = "server_eu1", address = "eu1.bachelor-tech.com:47800"},
-  {label = "server_eu2", address = "eu2.bachelor-tech.com:47800"},
+  {label = "server_eu1", address = "eu1.openth.org:47800"},
+  {label = "server_eu2", address = "eu2.openth.org:47800"},
 }
 
 function UIMultiplayer:_buildConnect()
@@ -205,7 +253,14 @@ function UIMultiplayer:_buildConnect()
   end
   button(self, 20, 185, 180, S.connect, self.buttonConnect, T.connect)
   button(self, WIDTH - 200, 185, 180, S.back, self.close)
-  if self.download then
+  local offer = self.pack_offer
+  if offer and offer.how ~= "newer_game" then
+    -- (The server's build, downloaded by the game, or one it has already.)
+    local text = offer.how == "download" and
+        S.get_version:format(UIMultiplayerDownload.megabytes(offer.size)) or S.switch_version
+    button(self, 20, 220, WIDTH - 40, text, self.buttonGetVersion,
+        offer.how == "download" and T.get_version or T.switch_version)
+  elseif self.download then
     local release = self.download.release ~= "" and self.download.release or S.server_version
     button(self, 20, 220, WIDTH - 40, S.download:format(release), self.buttonDownload, T.download)
   end
@@ -213,6 +268,20 @@ end
 
 function UIMultiplayer:buttonDownload()
   openURL(self.download.url)
+end
+
+--! Get the server's build of the game and restart as it (it joins the
+--! server again by itself).
+function UIMultiplayer:buttonGetVersion()
+  local offer = self.pack_offer
+  if not offer then return end
+  local address = self.lobby and self.lobby.address ~= "" and self.lobby.address or self.address_box.text
+  local name = self.name_box.text
+  if offer.how == "download" then
+    self.ui:addWindow(UIMultiplayerDownload(self.ui, offer, address, name))
+  else
+    MultiplayerPack.switchTo(TheApp, offer.how == "switch" and offer.build or nil, address, name)
+  end
 end
 
 function UIMultiplayer:buttonConnect()
@@ -589,9 +658,49 @@ function UIMultiplayer:_buildRoom()
         :setLabel(""):makeButton(0, 0, team_w, 25, nil, function() self:clickTeam(i) end)
         :setTooltip(T.team)
   end
+  -- The assistants' column: beside each person their assistant, or (for
+  -- this player's own line, and the host's for everybody's) a button that
+  -- adds one; a click on an assistant sends it away, a right click (the
+  -- host) picks its level.
+  self.side_panels, self.side_buttons, self.side_add = {}, {}, {}
+  if sideColumn(self.lobby) then
+    self:addBevelPanel(WIDTH - 10, 10, SIDE_W - 10, 20, col.title):setLabel(S.assistants_caption).lowered = true
+    for i = 1, places do
+      local y = 40 + (i - 1) * PLACE_H
+      self.side_panels[i] = label(self, WIDTH - 10, y, SIDE_W - 10, "")
+      self.side_buttons[i] = self.side_panels[i]:makeButton(0, 0, SIDE_W - 10, 25, nil,
+          function() self:clickSide(i) end, nil, function() self:sideMenu(i) end)
+      -- ("+ Add assistant": a button in the same place, shown instead.)
+      self.side_add[i] = self:addBevelPanel(WIDTH - 10, y, SIDE_W - 10, 25, col.button)
+          :setLabel(S.add_assistant_short):makeButton(0, 0, SIDE_W - 10, 25, nil, function() self:clickSide(i) end)
+          :setTooltip(T.add_assistant_button)
+    end
+  end
   self.summary_panel = label(self, 20, 40 + places * PLACE_H + 5, WIDTH - 40, "")
-  self.mode_panel = label(self, 20, 40 + (places + 1) * PLACE_H + 5, WIDTH - 40, "")
+  -- What the room plays, and its map (with who plays where) a click away.
+  self.mode_panel = label(self, 20, 40 + (places + 1) * PLACE_H + 5, WIDTH - 40 - 75, "")
+  self:addBevelPanel(WIDTH - 90, 40 + (places + 1) * PLACE_H + 5, 70, 25, col.button):setLabel(S.room_map)
+      :makeButton(0, 0, 70, 25, nil, self.buttonRoomMap):setTooltip(_S.tooltip.multiplayer_window.room_map)
   self.hint_panel = label(self, 20, 40 + (places + 2) * PLACE_H + 5, WIDTH - 40, S.room_hint)
+  -- The room's chat: the last lines, and a box; Enter sends what is typed.
+  local chat_y = 40 + (places + 3) * PLACE_H + 8
+  local rows = chatRows(self.lobby)
+  self.chat_panels = {}
+  for i = 1, rows do
+    local line = self:addBevelPanel(20, chat_y + (i - 1) * CHAT_ROW_H, WIDTH - 45 - CHAT_SCROLL_W, CHAT_ROW_H,
+        col.bg, col.bg, col.bg)
+    line:setLabel("", nil, "left"):setAutoClip(true)
+    line.lowered = true
+    self.chat_panels[i] = line
+  end
+  -- The scrollbar: back through the room's chat (the mouse wheel too).
+  local bar_base = self:addBevelPanel(WIDTH - 20 - CHAT_SCROLL_W, chat_y, CHAT_SCROLL_W, rows * CHAT_ROW_H, col.bg)
+  bar_base.lowered = true
+  self.chat_scrollbar = bar_base:makeScrollbar(col.setting, function() self:_showRoomChat() end, 1, 1, rows, 1)
+  self.chat_at_end = true
+  self.chat_box = textbox(self, 20, chat_y + rows * CHAT_ROW_H + 4, WIDTH - 40, "", 120, {"all"},
+      _S.tooltip.multiplayer_window.room_chat)
+  self.chat_box.confirm_callback = function() self:sendRoomChat() end
   local y = viewHeight("room", self.lobby) - 50
   -- The game's options (UIMultiplayerRoomOptions): the host sets them,
   -- everybody may look.
@@ -605,9 +714,105 @@ function UIMultiplayer:_buildRoom()
   self:_updateRoom()
 end
 
+--! The Map button: the room's map with who plays where
+--! (UIMultiplayerLevels.roomMap), which opens this window again when done.
+function UIMultiplayer:buttonRoomMap()
+  local ui = self.ui
+  self.rebuilding = true
+  self:close()
+  ui:addWindow(UIMultiplayerLevels(ui, nil, nil, self.lobby))
+end
+
+--! Send what is typed in the room's chat box (nothing when it is empty).
+function UIMultiplayer:sendRoomChat()
+  local box = self.chat_box
+  local text = box and type(box.text) == "string" and box.text:gsub("^%s+", ""):gsub("%s+$", "") or ""
+  if text ~= "" then
+    self.lobby:sendChat(text)
+    box:setText("")
+  end
+end
+
+--! A chat line as rows that fit `width` pixels of `font`: wrapped at spaces,
+--! a word longer than a row cut into pieces.
+function UIMultiplayer.wrapChat(text, font, width)
+  local rows, row = {}, ""
+  local function fits(t) return font:sizeOf(t) <= width end
+  for word in text:gmatch("%S+") do
+    local try = row == "" and word or (row .. " " .. word)
+    if fits(try) then
+      row = try
+    else
+      if row ~= "" then rows[#rows + 1] = row end
+      row = word
+      -- (A word too long for a row on its own: as much of it as fits.)
+      while not fits(row) do
+        local n = #row - 1
+        while n > 1 and not fits(row:sub(1, n)) do n = n - 1 end
+        -- (Not inside a letter of several bytes: Russian, say.)
+        while n > 1 and (row:byte(n + 1) or 0) >= 0x80 and (row:byte(n + 1) or 0) < 0xC0 do n = n - 1 end
+        rows[#rows + 1] = row:sub(1, n)
+        row = row:sub(n + 1)
+      end
+    end
+  end
+  if row ~= "" or #rows == 0 then rows[#rows + 1] = row end
+  return rows
+end
+
+--! The room's chat as rows, "name: text" wrapped to the rows' width; the
+--! scrollbar's range follows, and stays at the newest rows unless the player
+--! scrolled back.
+function UIMultiplayer:_updateRoomChat()
+  local panels = self.chat_panels
+  if not panels or not panels[1] then return end
+  local font = panels[1].label_font
+  local width = (panels[1].w - 8) * TheApp.gfx:getUIScale()
+  local rows = {}
+  for _, f in ipairs(self.lobby.room_chat or {}) do
+    for _, row in ipairs(UIMultiplayer.wrapChat((f.name or "?") .. ": " .. (f.text or ""), font, width)) do
+      rows[#rows + 1] = row
+    end
+  end
+  self.chat_rows = rows
+  local bar, page = self.chat_scrollbar, #panels
+  local last = math.max(1, #rows - page + 1)
+  local value = (self.chat_at_end or not bar.value) and last or math.min(bar.value, last)
+  bar:setRange(1, math.max(#rows, page), page, value)
+  self:_settleChatBar()
+  self:_showRoomChat()
+end
+
+--! At the newest rows the scrollbar's handle sits at the very bottom (the
+--! game's scrollbar puts it one step short of it, which looked as if there
+--! were more below: Jan, 2026-11-15).
+function UIMultiplayer:_settleChatBar()
+  local bar = self.chat_scrollbar
+  if bar and bar.value >= bar.max_value - bar.page_size + 1 then bar.slider.y = bar.slider.max_y end
+end
+
+--! The rows of the room's chat from the scrollbar's place.
+function UIMultiplayer:_showRoomChat()
+  local rows, bar = self.chat_rows or {}, self.chat_scrollbar
+  local first = bar and bar.value or 1
+  self.chat_at_end = first >= #rows - #self.chat_panels + 1
+  for i, panel in ipairs(self.chat_panels) do panel:setLabel(rows[first + i - 1] or "") end
+end
+
+--! The mouse wheel scrolls the room's chat.
+function UIMultiplayer:onMouseWheel(x, y)
+  local bar = self.view == "room" and self.chat_scrollbar
+  if not bar or y == 0 then return UIResizable.onMouseWheel(self, x, y) end
+  bar:setRange(bar.min_value, bar.max_value, bar.page_size, math.max(1, bar.value - y))
+  self:_settleChatBar()
+  self:_showRoomChat()
+  return true
+end
+
 function UIMultiplayer:_updateRoom()
   local S = _S.multiplayer_window
   local lobby = self.lobby
+  self:_updateRoomChat()
   local max = tonumber(lobby.room.max) or 2
   local bots = lobby:canAddBots()
   -- Bots the server is still starting take the first empty places.
@@ -617,35 +822,58 @@ function UIMultiplayer:_updateRoom()
   -- every bot's name, or (one too long for its line) after none.
   local scale = TheApp.gfx:getUIScale()
   local hint = bots and S.bot_remove or nil
+  -- The places' lines: the people and the bots in their place number order
+  -- (assistants beside their person, in the column), then the empty ones.
+  local rows = {}
+  for peer, p in pairs(lobby.players) do
+    if not p.assists then rows[#rows + 1] = peer end
+  end
+  table.sort(rows)
+  self.row_peer = rows
+  -- (Bots starting for a place, not assistants starting.)
+  local helpers = 0
+  for _, p in pairs(lobby.players) do
+    if p.assists then helpers = helpers + 1 end
+  end
+  starting = math.max(0, starting - math.max(0, (tonumber(lobby.summary and lobby.summary.assistants) or 0) - helpers))
   for i = 1, #self.player_panels do
-    local p, panel = lobby.players[i], self.player_panels[i]
+    local p, panel = self:rowPlayer(i), self.player_panels[i]
     if hint and p and p.bot == "1" and
-        panel.label_font:sizeOf(MultiplayerLobby.botName(p.name, p.level) .. hint) > (panel.w - 8) * scale then
+        panel.label_font:sizeOf(lobby:botLine(p) .. hint) > (panel.w - 8) * scale then
       hint = nil
     end
   end
+  -- (The places still open, from the server: assistants take none; an
+  -- older server: the lines up to the room's size.)
+  local open = tonumber(lobby.summary and lobby.summary.open)
+  self.add_lines = {}
   for i = 1, #self.player_panels do
-    local p = lobby.players[i]
+    local p = self:rowPlayer(i)
     local text = ""
     if p and p.bot == "1" then
-      local name = MultiplayerLobby.botName(p.name, p.level)
+      local name = lobby:botLine(p)
       text = hint and (name .. hint) or name
     elseif p then
       -- (The host is not asked whether they are ready.)
       text = S.player_line:format(p.name, p.owner == "1" and S.owner_mark or "", p.rtt or "?",
           p.owner == "1" and "" or (p.ready == "1" and S.is_ready or S.not_ready))
-    elseif i <= max and starting > 0 then
+    elseif starting > 0 and (open or i <= max) then
       starting = starting - 1
       text = S.bot_starting
-    elseif i <= max then
+    elseif (open and open > 0) or (not open and i <= max) then
+      open = open and open - 1
       text = bots and S.add_bot or S.waiting_player
+      self.add_lines[i] = true
     end
     self.player_panels[i]:setLabel(text)
     self.place_buttons[i]:setTooltip(p and p.bot == "1" and bots and
-        _S.tooltip.multiplayer_window.bot_level or nil)
+        _S.tooltip.multiplayer_window.bot_level or
+        p and p.bot ~= "1" and lobby:mayAddAssistant(p.peer) and _S.tooltip.multiplayer_window.add_assistant or nil)
     -- (Only one's own, and the host anybody's, in a new game.)
     local seated = p ~= nil and tonumber(p.colour) ~= nil
-    local may = seated and lobby:isFreeRoom() and (lobby:isOwner() or p.peer == lobby.room.peer)
+    -- (An assistant's are its person's: they move it.)
+    local may = seated and lobby:isFreeRoom() and (lobby:isOwner() or p.peer == lobby.room.peer) and
+        not p.assists
     local colour_button, team_button = self.colour_buttons[i], self.team_buttons[i]
     colour_button:setVisible(seated)
     colour_button:enable(may)
@@ -660,8 +888,10 @@ function UIMultiplayer:_updateRoom()
       team_button.panel_for_sprite:setLabel(S.team_button:format(tonumber(p.team) or 1))
     end
   end
+  self:_updateSide()
   local s = lobby.summary
-  self.summary_panel:setLabel(s and S.recommendation:format(s.speed, s.latency or "?") or S.measuring)
+  self.summary_panel:setLabel(s and S.recommendation:format(MultiplayerLobby.speedName(s.speed),
+      s.latency or "?") or S.measuring)
   -- What the colours and teams make now, and the level it plays.
   local mode = s and s.mode or lobby.room.mode
   local level = tonumber(lobby.room.level) or 1
@@ -698,11 +928,85 @@ function UIMultiplayer:_updateRoom()
   self.ready_button:enable(not owner)
 end
 
+--! The player on line i of the room's places (nil: an empty place).
+function UIMultiplayer:rowPlayer(i)
+  local peer = self.row_peer and self.row_peer[i]
+  return peer and self.lobby.players[peer] or nil
+end
+
+--! The assistants' column: line i, beside the person on line i: their
+--! assistant ("Bot Agnes", "starting..."), or the button that adds one.
+function UIMultiplayer:_updateSide()
+  local panels = self.side_panels
+  if not panels or not panels[1] then return end
+  local S, T = _S.multiplayer_window, _S.tooltip.multiplayer_window
+  local lobby = self.lobby
+  local me, owner = tonumber(lobby.room.peer), lobby:isOwner()
+  local assisted = {}
+  for p in (lobby.summary and lobby.summary.assisted or ""):gmatch("%d+") do assisted[tonumber(p)] = true end
+  self.side_entry = {}
+  for i, panel in ipairs(panels) do
+    local p = self:rowPlayer(i)
+    local text, tip, entry = "", nil, nil
+    local helper = p and p.bot ~= "1" and lobby:assistantOf(p.peer)
+    if helper then
+      local mine = tonumber(helper.assists) == me
+      text = helper.level and helper.level ~= "normal" and
+          S.bot_named:format(helper.name, MultiplayerLobby.botKind(helper.level)) or helper.name
+      entry = {peer = tonumber(helper.peer), helper = helper}
+      tip = (owner and T.assistant_host) or (mine and T.assistant_mine) or T.assistant
+    elseif p and p.bot ~= "1" and assisted[tonumber(p.peer)] then
+      text = S.assistant_starting
+    elseif p and p.bot ~= "1" and lobby:mayAddAssistant(p.peer) then
+      text = S.add_assistant_short
+      entry = {add = tonumber(p.peer)}
+      tip = T.add_assistant_button
+    end
+    panel:setLabel(text)
+    local add = entry ~= nil and entry.add ~= nil
+    self.side_add[i]:setVisible(add)
+    self.side_add[i]:enable(add)
+    self.side_buttons[i]:setVisible(not add)
+    self.side_buttons[i]:enable(entry ~= nil and (entry.add ~= nil or owner or
+        tonumber(entry.helper.assists) == me))
+    self.side_buttons[i]:setTooltip(tip)
+    self.side_entry[i] = entry
+  end
+end
+
+--! A click in the assistants' column: add one (this player's own line, or
+--! the host's on anybody's), or send one away (its person or the host).
+function UIMultiplayer:clickSide(i)
+  local entry = self.side_entry and self.side_entry[i]
+  if not entry then return end
+  if entry.add then
+    self.lobby:addAssistant(entry.add)
+  else
+    self.lobby:removeBot(entry.peer)
+  end
+end
+
+--! A right click on an assistant: the host picks its level (its menu, under
+--! the assistant's line).
+function UIMultiplayer:sideMenu(i)
+  local entry = self.side_entry and self.side_entry[i]
+  local lobby = self.lobby
+  if not (entry and entry.helper and lobby:canAddBots()) then return end
+  local S, peer = _S.multiplayer_window, entry.peer
+  local levels = {"easy", "normal", "hard"}
+  local current = 2
+  for index, level in ipairs(levels) do
+    if level == (entry.helper.level or "normal") then current = index end
+  end
+  self:_placeMenu(i, {{text = S.bot_menu_easy}, {text = S.bot_menu_normal}, {text = S.bot_menu_hard}},
+      function(_, index) lobby:setBotLevel(peer, levels[index]) end, current, self.side_panels[i])
+end
+
 --! A place in the room's player list was clicked: the host adds a bot to an
 --! empty place or takes a bot away.
 function UIMultiplayer:clickPlace(i)
   local lobby = self.lobby
-  local p = lobby.players[i]
+  local p = self:rowPlayer(i)
   -- (A second click on a person within half a second: the menu.)
   local now = MultiplayerSession.defaultClock()()
   if p and p.bot ~= "1" then
@@ -717,7 +1021,7 @@ function UIMultiplayer:clickPlace(i)
   if not lobby:canAddBots() then return end
   if p and p.bot == "1" then
     lobby:removeBot(i)
-  elseif not p and i <= (tonumber(lobby.room.max) or 2) then
+  elseif not p and self.add_lines and self.add_lines[i] then
     lobby:addBot()
   end
 end
@@ -735,28 +1039,45 @@ function UIMultiplayer:buttonOptions()
   options:setPosition(math.max(0, math.floor((self.width - options.width) / 2)), 80)
 end
 
---! The host's menu on another person's line: remove them from the room; on a
---! bot's line: its level (easy, normal, hard: Jan, 2026-11-12).
+--! The menu on a place's line. A bot's: its level (easy, normal, hard: Jan,
+--! 2026-11-12), for the host; an assistant's: sending it away, for its
+--! person too. A person's: an assistant for their hospital (their own, the
+--! host anybody's: Argus, 2026-11-15), and for the host removing them.
 function UIMultiplayer:playerMenu(i)
   local lobby = self.lobby
-  local p = lobby.players[i]
-  if p and p.bot == "1" and lobby:canAddBots() then
-    local S, peer = _S.multiplayer_window, p.peer
-    local levels = {"easy", "normal", "hard"}
-    local current = 2
-    for index, level in ipairs(levels) do
-      if level == (p.level or "normal") then current = index end
+  local p = self:rowPlayer(i)
+  if not p then return end
+  local S, peer = _S.multiplayer_window, p.peer
+  local items, actions, current = {}, {}, nil
+  if p.bot == "1" then
+    if lobby:canAddBots() then
+      local levels = {"easy", "normal", "hard"}
+      current = 2
+      for index, level in ipairs(levels) do
+        if level == (p.level or "normal") then current = index end
+      end
+      for index, text in ipairs({S.bot_menu_easy, S.bot_menu_normal, S.bot_menu_hard}) do
+        items[#items + 1] = {text = text}
+        actions[#actions + 1] = function() lobby:setBotLevel(peer, levels[index]) end
+      end
     end
-    self:_placeMenu(i, {{text = S.bot_menu_easy}, {text = S.bot_menu_normal}, {text = S.bot_menu_hard}},
-        function(_, index) lobby:setBotLevel(peer, levels[index]) end, current)
-    return
+    if p.assists and (lobby:isOwner() or tonumber(p.assists) == tonumber(lobby.room.peer)) then
+      items[#items + 1] = {text = S.remove_assistant}
+      actions[#actions + 1] = function() lobby:removeBot(peer) end
+    end
+  else
+    if lobby:mayAddAssistant(peer) then
+      local mine = tonumber(peer) == tonumber(lobby.room.peer)
+      items[#items + 1] = {text = mine and S.add_assistant or S.add_assistant_for:format(p.name)}
+      actions[#actions + 1] = function() lobby:addAssistant(peer) end
+    end
+    if lobby:isOwner() and tonumber(peer) ~= tonumber(lobby.room.peer) then
+      items[#items + 1] = {text = S.kick_player:format(p.name)}
+      actions[#actions + 1] = function() lobby:kickPlayer(peer) end
+    end
   end
-  if not (p and p.bot ~= "1" and lobby:isOwner() and tonumber(p.peer) ~= tonumber(lobby.room.peer)) then
-    return
-  end
-  local peer, name = p.peer, p.name
-  self:_placeMenu(i, {{text = _S.multiplayer_window.kick_player:format(name)}},
-      function() lobby:kickPlayer(peer) end)
+  if #items == 0 then return end
+  self:_placeMenu(i, items, function(_, index) actions[index]() end, current)
 end
 
 -- A place's menu: at least this wide, and this much wider than its longest
@@ -767,11 +1088,11 @@ local MENU_MIN_W, MENU_PAD, MENU_FRAME = 90, 12, 9
 --! the room's lines (Jan, 2026-11-12: the level menu looked like more of
 --! them): as wide as its longest item, in the middle of the line, darker, and
 --! framed as a window. `current`: the item shown pressed (the level now).
-function UIMultiplayer:_placeMenu(i, items, callback, current)
+function UIMultiplayer:_placeMenu(i, items, callback, current, line_panel)
   for _, w in ipairs(self.windows or {}) do -- (one menu at a time)
     if w == self.player_dropdown then w:close() break end
   end
-  local line = self.place_buttons[i].panel_for_sprite
+  local line = line_panel or self.place_buttons[i].panel_for_sprite
   local s = TheApp.gfx:getUIScale()
   local w = 0
   for _, item in ipairs(items) do
@@ -797,7 +1118,7 @@ end
 --! sharing their hospital); the host may change anybody's.
 function UIMultiplayer:clickColour(i)
   local lobby = self.lobby
-  local p = lobby.players[i]
+  local p = self:rowPlayer(i)
   if not (p and lobby:isFreeRoom()) then return end
   local colour = (tonumber(p.colour) or 1) % MultiplayerLobby.COLOURS + 1
   if p.peer == lobby.room.peer then
@@ -811,7 +1132,7 @@ end
 --! the host may change anybody's.
 function UIMultiplayer:clickTeam(i)
   local lobby = self.lobby
-  local p = lobby.players[i]
+  local p = self:rowPlayer(i)
   if not (p and lobby:isFreeRoom()) then return end
   local team = (tonumber(p.team) or 1) % MultiplayerLobby.TEAMS + 1
   if p.peer == lobby.room.peer then
@@ -861,12 +1182,19 @@ function UIMultiplayer:onTick()
         self.ui:addWindow(UIInformation(self.ui, {_S.multiplayer_window.data_mismatch_help}))
       end
       local download = self.view == "connect" and MultiplayerLobby.downloadOffer(lobby.error)
-      if view_of(lobby) ~= self.view or (download and not self.download) then
+      local pack_offer = self.view == "connect" and MultiplayerPack.offer(TheApp, lobby.error)
+      if view_of(lobby) ~= self.view or (download and not self.download) or
+          (pack_offer and not self.pack_offer) then
         self:rebuild(status)
         return
       end
       if self.view == "room" then self:_updateRoom() end
       if self.view == "rooms" then self:_updateRooms() end
+      if status and self.pack_offer then
+        -- (Not the server's words about GitHub: the game can get its version.)
+        status = self.pack_offer.how == "newer_game" and _S.multiplayer_window.version_newer_game or
+            _S.multiplayer_window.version_other
+      end
       if status then self:setStatus(status) end
     end
     -- The room list keeps itself up to date.
