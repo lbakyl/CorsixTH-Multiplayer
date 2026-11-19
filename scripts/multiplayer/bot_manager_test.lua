@@ -59,6 +59,11 @@ eq(M.requirements({endconditions = {win_goals = {}, getAttribute = ec.getAttribu
 
 -- What a bot says it lacks: one requirement, the furthest away first, and a
 -- different one the next time.
+-- The bots' lines: bot_chat in english.lua.
+local BotChat = dofile((arg[1]:gsub("bot_manager%.lua$", "bot_chat.lua")))
+local EN_CHAT = assert(BotChat.load((arg[1]:gsub("scripts/multiplayer/bot_manager%.lua$",
+    "CorsixTH/Lua/languages/english.lua"))))
+
 local fill = function(line, vars) return (line:gsub("{(%w+)}", function(k) return vars[k] end)) end
 local manager = setmetatable({
   fill_in = fill, pick = function(list) return list[1] end,
@@ -201,6 +206,7 @@ do
   local bot = {world = tworld, gameDay = function() return today end, freeFloor = function() return free_floor end,
       freeTile = function(_, x, y) local p = plot_of(x) return owner[p] == 2 and y > (room_rows[p] or 0) end}
   local m = setmetatable({bot = bot, log = function() end, pick = function(l) return l[1] end, fill_in = fill,
+      chat = EN_CHAT, ref = function(_, _, text) return text end,
       no_space = {}, plot_bought = {}, plot_sent = {}}, M)
   local function ask(plot, asker_index) return m:plotRequest(asker_index or 1, plot, 15000, "ann") end
   local function gives(v, plot, price, what)
@@ -545,12 +551,7 @@ do
   eq(M.priceText(12500), "$12,500", "price 12500")
   TheApp = saved
 
-  local bf = assert(io.open((arg[1]:gsub("bot_manager%.lua$", "bot.lua"))))
-  local bsrc = bf:read("*a")
-  bf:close()
-  local a = assert(bsrc:find("  research_please = {", 1, true))
-  local b = assert(bsrc:find("  -- Its answers to another bot's ask", a, true))
-  local lines = assert((loadstring or load)("return {" .. bsrc:sub(a, b - 1) .. "}"))()
+  local lines = EN_CHAT.lines
   for _, set in ipairs({"research_buy", "research_please", "staff_ask_rival"}) do
     for _, t in ipairs(lines[set]) do
       local text = t:gsub("{name}", "Bot Clive and ann"):gsub("{item}", "X-Ray"):gsub("{price}", "$3,500")

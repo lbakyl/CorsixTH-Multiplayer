@@ -320,6 +320,15 @@ function M.new(bot, ctx)
   self.bot, self.log, self.rand, self.pick = bot, ctx.log, ctx.rand, ctx.pick
   self.sabotage, self.lines, self.typing = ctx.sabotage, ctx.lines, ctx.typing
   self.fill_in = ctx.fill
+  -- bot_chat of english.lua, and game words as references (bot.lua: ref) so
+  -- that each player's game writes them in its language.
+  self.chat = ctx.chat or {}
+  self.ref = ctx.ref or function(_, _, text) return text end
+  self.names_ref = ctx.names_ref or function(names, word)
+    if #names <= 1 then return names[1] or "" end
+    return table.concat(names, ", ", 1, #names - 1) .. " " .. (word or "and") .. " " .. names[#names]
+  end
+  self.line_ref = ctx.line_ref or function(text) return text end
   self.demand = {}         -- room id -> patients who needed it lately (decaying)
   self.next_project = 0    -- game day of the next project
   self.next_daily = -1
@@ -1842,12 +1851,7 @@ end
 -- A plot an ally offers is taken when less than this much of its own land is
 -- free (its rooms take more than 65% of the indoor floor).
 local PLOT_TAKE_FREE = 0.35
-local PLOT_LINES = {
-  take = {"Thanks, %s, I'll take the plot. I was running out of room.",
-      "A plot, %s? Yes please, my hospital is getting cramped."},
-  roomy = {"Thanks, %s, but I still have plenty of room.", "No thanks, %s, my land is mostly empty still."},
-  broke = {"Sorry %s, I cannot afford that plot right now.", "I'd love it, %s, but I cannot pay for the plot."},
-}
+-- (What it says about plots: bot_chat.plot and bot_chat.plot_ask in english.lua.)
 
 --! An ally offers a plot (offer.plot, offer.price): take it when little of
 --! its own land is free (under PLOT_TAKE_FREE, by MultiplayerSession.landFill)
@@ -1870,7 +1874,7 @@ function M:plotAnswer(offer)
   self.log(string.format("plot %s offered for $%d: %d%% of its land free, balance $%d, may borrow $%d: %s",
       tostring(offer.plot), price, math.floor(free * 100 + 0.5), math.floor(hosp.balance), borrow,
       verdict and "accepts" or ("declines (" .. why .. ")")))
-  return verdict, self.pick(PLOT_LINES[why])
+  return verdict, self.pick(self.chat.plot[why])
 end
 
 --! Do the most urgent project it can afford (one at a time, like a person).
@@ -2836,8 +2840,11 @@ end
 local function wish_words(key)
   local kind, what = key:match("^(%a+):([^:]+)")
   local function room_name(id)
-    local ok, name = pcall(function() return _S.rooms_short[id] end)
-    return (ok and type(name) == "string" and name or id:gsub("_", " ")) .. " room"
+    -- (The room's short name from its definition: "GP", "X-Ray". The
+    -- strings name rooms their own way, rooms_short.gps_office.)
+    local rt = rawget(_G, "TheApp") and TheApp.rooms and room_types()[id]
+    local name = rt and rt.name and plain(rt.name)
+    return (name or (id:gsub("_", " "))) .. " room"
   end
   if kind == "room" then
     return room_name(what)
@@ -2876,8 +2883,8 @@ function M:tellWisher(w, kind, key)
       local lines = (kind == "wish_done" and key:find("^add:") and self.lines.wish_done_add) or
           (kind == "wish_done" and key:find("^remove:") and self.lines.wish_done_remove) or
           (kind == "wish_done" and w.near_missed and self.lines.wish_done_far) or self.lines[kind]
-      local line = self.fill_in(self.pick(lines), {name = name, what = wish_words(key),
-          near = w.near_missed and near_words(w.near_missed) or ""})
+      local line = self.fill_in(self.pick(lines), {name = name, what = self.ref("wish", key, wish_words(key)),
+          near = w.near_missed and self.ref("near", w.near_missed, near_words(w.near_missed)) or ""})
       bot:say(line, self.typing(line), peer)
     end
   end
@@ -3017,9 +3024,9 @@ function M:helpAllies(s)
           self:note(string.format("day %d: offered %s (%s) to hospital %d for its %s", s.day, who, sh.cat, index, sh.room))
           local peers, people = bot:peopleOfHospital(index)
           if #peers > 0 then
-            local line = self.fill_in(self.pick(self.lines.staff_sent), {names = table.concat(people, " and "),
-                who = who, kind = sh.cat:lower(), room = room_name(sh.room),
-                urgent = sh.emergency and self.pick(self.lines.staff_for_emergency) or ""})
+            local line = self.fill_in(self.pick(self.lines.staff_sent), {names = self.names_ref(people),
+                who = who, kind = self.ref("staff", sh.cat, sh.cat:lower()), room = self.ref("room", sh.room, room_name(sh.room)),
+                urgent = sh.emergency and self.line_ref(self.pick(self.lines.staff_for_emergency)) or ""})
             bot:say(line, self.typing(line), table.concat(peers, ","))
           end
           return -- (one at a time)
@@ -3119,15 +3126,16 @@ function M:askAllies(s)
       -- (Nobody to read it, or an allied bot sends one anyway.)
       if not bot_spares and #everybody > 0 then
         self.asked_for[sh.cat] = s.day
-        local urgent = sh.emergency and self.pick(self.lines.staff_for_emergency) or ""
-        local needs = sh.need .. " " .. sh.cat:lower() .. (sh.need > 1 and "s" or "")
+        local urgent = sh.emergency and self.line_ref(self.pick(self.lines.staff_for_emergency)) or ""
+        local needs = self.ref("count", sh.need .. ":" .. sh.cat, sh.need .. " " .. sh.cat:lower() .. (sh.need > 1 and "s" or ""))
+        local kind, room = self.ref("staff", sh.cat, sh.cat:lower()), self.ref("room", sh.room, room_name(sh.room))
         local line, to
         if #spare_peers > 0 then
-          line = self.fill_in(self.pick(self.lines.staff_ask_one), {names = table.concat(spare_names, " or "),
-              kind = sh.cat:lower(), room = room_name(sh.room), needs = needs, have = sh.have, urgent = urgent})
+          line = self.fill_in(self.pick(self.lines.staff_ask_one), {names = self.names_ref(spare_names, "or"),
+              kind = kind, room = room, needs = needs, have = sh.have, urgent = urgent})
           to = table.concat(spare_peers, ",")
         else
-          line = self.fill_in(self.pick(self.lines.staff_ask_all), {kind = sh.cat:lower(), room = room_name(sh.room),
+          line = self.fill_in(self.pick(self.lines.staff_ask_all), {kind = kind, room = room,
               needs = needs, have = sh.have, urgent = urgent})
           to = "team"
         end
@@ -3336,12 +3344,12 @@ function M:winChat(s)
   local first = 0
   -- Somebody on its side got there: a good word, from one bot.
   if #newly > 0 and self:isCaller() then
-    say(self.fill_in(self.pick(self.lines.win_good), {names = join_names(newly)}))
+    say(self.fill_in(self.pick(self.lines.win_good), {names = self.names_ref(newly)}))
     first = 3
   end
   -- The people who share its hospital got there with it.
   if i_newly and #mates > 0 then
-    say(self.fill_in(self.pick(self.lines.win_own), {names = join_names(mates)}))
+    say(self.fill_in(self.pick(self.lines.win_own), {names = self.names_ref(mates)}))
     first = 3
   elseif mine and (#newly > 0 or (i_newly and human_met)) then
     say(self.pick(self.lines.win_me_too), first + 3)
@@ -3386,7 +3394,7 @@ function M:rivalWatch(s)
   self.rival_next = s.day + RIVAL_WARN_DAYS
   if not self:isCaller() or self:sideReaders() == 0 then return end
   local line = self.fill_in(self.pick(#names > 1 and self.lines.win_rivals or self.lines.win_rival),
-      {names = join_names(names)})
+      {names = self.names_ref(names)})
   self:note(string.format("day %d: warns the team: %s meet the winning conditions", s.day, join_names(names)))
   bot:say(line, self.typing(line), "team")
 end
@@ -3569,11 +3577,11 @@ function M:rivalOffer(offer, name)
     local kind = self:lackedKind(s, world:getEntityById(offer.entity))
     if not kind then return false end
     if price > RIVAL_STAFF_PAY then
-      return false, say(L.rival_staff_dear, {value = price_text(RIVAL_STAFF_PAY), kind = kind:lower()})
+      return false, say(L.rival_staff_dear, {value = price_text(RIVAL_STAFF_PAY), kind = self.ref("staff", kind, kind:lower())})
     end
     if s.balance - price < RESERVE then return false, say(L.rival_broke) end
     self:note(string.format("day %d: buys a %s from %s for $%d", s.day, kind, name, price))
-    return true, say(L.rival_staff_yes, {kind = kind:lower()})
+    return true, say(L.rival_staff_yes, {kind = self.ref("staff", kind, kind:lower())})
   end
   return false
 end
@@ -3623,7 +3631,7 @@ function M:askForNeeds(s)
   if not world.mp_coop or s.month < ASK_FROM_MONTH or self.asked_month == s.month then return end
   if bot:sharesWithPerson() or s.hosp.mp_place then return end
   local function ask(target, set, vars, what)
-    vars.name = table.concat(target.who.names, " and ")
+    vars.name = self.names_ref(target.who.names)
     local line = self.fill_in(self.pick(set), vars)
     self.player_asked[target.index] = s.day
     self.asked_month = s.month
@@ -3645,7 +3653,7 @@ function M:askForNeeds(s)
         for _, target in ipairs(self:askable(s, rivals)) do
           local item = research_for_room(target.hosp, s.hosp, rid)
           if item then
-            local vars = {item = plain(item.name), room = room_name(rid)}
+            local vars = {item = self.ref("obj", item.object.id, plain(item.name)), room = self.ref("room", rid, room_name(rid))}
             if rivals then
               vars.price = price_text(M.researchValue(world, s.hosp, item.key, need))
               ask(target, self.lines.research_buy, vars, item.key .. " for " .. vars.price)
@@ -3665,7 +3673,8 @@ function M:askForNeeds(s)
       for _, target in ipairs(self:askable(s, true)) do
         if M.spareStaff(world, target.hosp, sh.cat, M.emergencyRooms(world, target.hosp)) > 0 then
           self.rival_staff_asked[sh.cat] = s.day
-          ask(target, self.lines.staff_ask_rival, {kind = sh.cat:lower(), room = room_name(sh.room)},
+          ask(target, self.lines.staff_ask_rival, {kind = self.ref("staff", sh.cat, sh.cat:lower()),
+              room = self.ref("room", sh.room, room_name(sh.room))},
               "a " .. sh.cat)
           return
         end
@@ -3741,9 +3750,10 @@ function M:botRequest(peer, name, text)
     for _, it in ipairs(shareable) do
       if plain(it.name) == ask.item then item = it end
     end
+    local item_word = item and item.object and self.ref("obj", item.object.id, ask.item) or ask.item
     if not item or world.mp_coop.sharing_off then
       self:note(string.format("day %d: %s asked for %s research: none to give", s.day, name, tostring(ask.item)))
-      return reply(L.ask_research_none, {item = ask.item})
+      return reply(L.ask_research_none, {item = item_word})
     end
     local price = rival and math.max(MultiplayerSession.RIVAL_MIN_PRICE or 1000, ask.price or 0) or 0
     if rival and not self:helpsRival(s, h) then
@@ -3752,7 +3762,7 @@ function M:botRequest(peer, name, text)
     end
     if self:issue({kind = "offer_research", to = index, items = item.key, price = price}) then
       self:note(string.format("day %d: offers %s research to %s for $%d (asked)", s.day, item.key, name, price))
-      reply(rival and L.ask_research_sold or L.ask_research_shared, {item = ask.item, price = price_text(price)})
+      reply(rival and L.ask_research_sold or L.ask_research_shared, {item = item_word, price = price_text(price)})
     end
   elseif ask.set == "staff_ask_rival" then
     local cat
@@ -3864,8 +3874,14 @@ function M:failing(s)
   return reasons
 end
 
+--! goalWords as a reference (each game writes it in its language).
+function M:goalRef(s)
+  local words, name = self:goalWords(s)
+  return self.ref("goal", name or "other", words)
+end
+
 --! What the weakest of the level's goals needs, in words after "to": raise the
---! value of my hospital, cure more patients...
+--! value of my hospital, cure more patients... (and the goal's name).
 function M:goalWords(s)
   local me = M.requirements(self.bot.world, s.hosp)
   local worst
@@ -3876,7 +3892,8 @@ function M:goalWords(s)
       num_cured = "cure more patients", percentage_cured = "cure more patients",
       percentage_killed = "keep more patients alive", staff_happiness = "make my staff happier",
       patient_happiness = "make my patients happier", balance = "get my finances back in order"}
-  return words[worst and worst.name or ""] or "get back on track"
+  local name = worst and words[worst.name] and worst.name or nil
+  return words[worst and worst.name or ""] or "get back on track", name
 end
 
 --! A project in words after "to": build a new X-Ray room, hire a surgeon...
@@ -3896,6 +3913,13 @@ local function purpose_words(key)
     return "replace the machine in the " .. wish_words("room:" .. what)
   end
   return nil
+end
+
+--! spentWords as a reference ("<project key>:<sum>"), or nil.
+function M:spentRef(day)
+  local words = self:spentWords(day)
+  if not words then return nil end
+  return self.ref("spent", self.spent.key .. ":$" .. dollars(self.spent.cost), words)
 end
 
 --! The bot's last big spending (M:noteSpent) in words for the chat: "the new
@@ -3963,51 +3987,7 @@ local PLOT_FRESH_DAYS = 30
 local PLOT_SENT_DAYS = 1
 -- What it says: {name}, {plot}, {price}, {terms} ("for free", "for $8,000"),
 -- {want} (the value goal).
-local PLOT_ASK_LINES = {
-  free = {"Plot {plot} is yours, {name}, free of charge. Just accept the fax.",
-      "You can have plot {plot} for nothing, {name}. The offer is in your faxes.",
-      "Sure, {name}: plot {plot}, free. Accept the fax and it's yours."},
-  price = {"You can have plot {plot} for ${price}, {name}: what it cost me. My bank is low, sorry.",
-      "Plot {plot} is yours for ${price}, {name}. That's what I paid, and I'm short of cash right now.",
-      "{name}, I'm low on money, so plot {plot} is ${price}, what it cost me. The offer is in your faxes."},
-  wait = {"Plot {plot} is yours {terms}, {name}. Somebody is on it right now: the fax comes once they're off.",
-      "You can have plot {plot} {terms}, {name}. I'll send the offer as soon as nobody is on it.",
-      "{name}, plot {plot} is yours {terms} once the people on it have walked off. The fax follows."},
-  in_use = {"Sorry {name}, I use plot {plot}: there are rooms or things of mine on it.",
-      "Plot {plot} is in use, {name}. My rooms and things stand on it.",
-      "I can't give you plot {plot}, {name}, my rooms and things are on it."},
-  land = {"Sorry {name}, I need plot {plot} myself: my hospital would be short of floor without it.",
-      "I'd be too cramped without plot {plot}, {name}. I need the space.",
-      "{name}, plot {plot} stays with me: I need the land for my rooms."},
-  fresh = {"Sorry {name}, I only just bought plot {plot} for my next rooms.",
-      "Plot {plot} is for my next rooms, {name}. I bought it for them.",
-      "{name}, I bought plot {plot} a few days ago to build on. It stays with me."},
-  value = {"Sorry {name}, without plot {plot} my hospital value would be under the {want} the level asks for.",
-      "I need plot {plot} for the hospital value goal ({want}), {name}.",
-      "{name}, plot {plot} counts towards my hospital value, and I need it for the level's goal of {want}."},
-  none = {"Sorry {name}, I have no plot to spare right now.",
-      "I have no land to spare, {name}. My plots are all in use.",
-      "Nothing to spare, {name}: I use all my land or need it."},
-  not_mine = {"Plot {plot} isn't mine, {name}.", "I don't own plot {plot}, {name}.",
-      "{name}, plot {plot} belongs to somebody else, not me."},
-  no_such = {"There is no plot {plot}, {name}.", "Plot {plot}? There's no such plot, {name}."},
-  start = {"Plot {plot} is my starting plot, {name}. That one stays with me.",
-      "I can't give away plot {plot}, {name}: my hospital started there."},
-  joins = {"Plot {plot} joins the rest of my land to my hospital, {name}. I can't give it away.",
-      "Without plot {plot} the rest of my land would be cut off, {name}. Sorry."},
-  far = {"Plot {plot} doesn't touch your land, {name}, so I can't hand it over.",
-      "{name}, plot {plot} would have to touch your land for me to give it to you."},
-  offered = {"I've already offered plot {plot}, {name}. Check the faxes.",
-      "Plot {plot} is already on offer, {name}."},
-  auction = {"Ask me again after the auction, {name}.", "Not during the auction, {name}. Ask me again after it."},
-  same = {"We share this hospital, {name}: its land is yours as much as mine.",
-      "No need, {name}: we run the same hospital and its land."},
-  -- (A plot promised once nobody is on it, Bot:plotWaitTick: people kept
-  -- walking over it.)
-  busy = {"Sorry {name}, people keep walking over plot {plot}. Ask me again later.",
-      "{name}, plot {plot} is never empty of people for long. Try asking me again later."},
-}
-M.PLOT_ASK_LINES = PLOT_ASK_LINES
+-- (The lines: bot_chat.plot_ask in english.lua.)
 -- plotRefusal's reasons -> the line it says.
 local PLOT_REFUSED = {["no such plot"] = "no_such", ["not your plot"] = "not_mine", ["starting plot"] = "start",
     ["an auction is on"] = "auction", ["plot not empty"] = "in_use", ["joins your land"] = "joins",
@@ -4103,7 +4083,7 @@ end
 --! first (MultiplayerSession.plotsTouching), then the smallest, then the
 --! lowest number; with none, it says why it keeps the best of the rest.
 --!return {give = true: offer `plot` for `price` (wait = "people": once nobody
---! is on it), why = the kind of answer (a key of PLOT_ASK_LINES), line = what
+--! is on it), why = the kind of answer (a key of bot_chat.plot_ask), line = what
 --! it says}
 function M:plotRequest(asker, plot, keep, name)
   local bot, world = self.bot, self.bot.world
@@ -4115,8 +4095,10 @@ function M:plotRequest(asker, plot, keep, name)
   local function answer(why, detail, want)
     v.why = why
     local price = v.price > 0 and dollars(v.price)
-    v.line = self.fill_in(self.pick(PLOT_ASK_LINES[why]), {name = name, plot = v.plot or "", price = price or "",
-        terms = price and ("for $" .. price .. ", what it cost me") or "for free", want = want and money(want) or ""})
+    v.line = self.fill_in(self.pick(self.chat.plot_ask[why]), {name = name, plot = v.plot or "", price = price or "",
+        terms = self.ref("terms", price and ("price:$" .. price) or "free",
+            price and ("for $" .. price .. ", what it cost me") or "for free"),
+        want = want and money(want) or ""})
     self.log(string.format("plot request from %s (plot %s): %s%s", tostring(name), tostring(plot or "any"),
         v.give and string.format("offers plot %d for $%d", v.plot, v.price) or ("keeps it: " .. why),
         detail and (" (" .. detail .. ")") or ""))
@@ -4213,12 +4195,12 @@ function M:askForHelp(s, reasons)
     local p = list[i]
     if not pick and p.cost > 0 and purpose_words(p.key) then pick = p end
   end
-  local vars = {goal = self:goalWords(s)}
+  local vars = {goal = self:goalRef(s)}
   local line
   if pick then
     local need = pick.cost + RESERVE - s.balance
     vars.amount = dollars(math.min(30000, math.max(2000, math.ceil(math.max(need, pick.cost) / 1000) * 1000)))
-    vars.purpose = purpose_words(pick.key)
+    vars.purpose = self.ref("purpose", pick.key, purpose_words(pick.key))
     line = self.fill_in(self.pick(self.lines.rescue_ask), vars)
     -- (The server cuts a chat line at 200 letters: a long room name takes the short form.)
     if #line > 195 then pick = nil end

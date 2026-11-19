@@ -470,8 +470,10 @@ describe("A bot offered a plot", function()
       end,
     }
     local world = {map = {th = th}, ui = {hospital = bot_hospital}}
+    -- (The bots' lines: bot_chat in english.lua, as the bot loads them.)
+    local chat = dofile("../../scripts/multiplayer/bot_chat.lua").load("../../CorsixTH/Lua/languages/english.lua")
     local manager = setmetatable({bot = {world = world}, log = function() end,
-        pick = function(list) return list[1] end}, Manager)
+        pick = function(list) return list[1] end, chat = chat}, Manager)
     return manager
   end
 

@@ -262,11 +262,15 @@ class Advisor:
             return None
         return next((b.text for b in response.content if b.type == "text"), None)
 
-    async def plan(self, report: str, menu: list[str], system: str = PLAN_SYSTEM) -> dict | None:
+    async def plan(self, report: str, menu: list[str], system: str = PLAN_SYSTEM,
+                   language: str | None = None) -> dict | None:
         """Priorities from the menu for this hospital: {"actions": [(action, weight)],
-        "note": str}. `system` is the prompt (PLAN_SYSTEM; RESCUE_SYSTEM for a failing hospital)."""
+        "note": str}. `system` is the prompt (PLAN_SYSTEM; RESCUE_SYSTEM for a failing hospital).
+        `language`: the language the note is written in (its team mates'); English if None."""
         text = (f"Report:\n{report[:MAX_REPORT]}\n\nMenu of projects: {', '.join(menu)}\n\n"
                 "Choose up to six priorities.")
+        if language:
+            text += f" Write the note in {language}."
         answer = await self._ask(system, text, 4000, PLAN_SCHEMA)
         if not answer:
             return None
@@ -284,9 +288,9 @@ class Advisor:
         note = " ".join(str(data.get("note", "")).split())[:MAX_CHAT_OUT]
         return {"actions": actions, "note": note}
 
-    async def rescue(self, report: str, menu: list[str]) -> dict | None:
+    async def rescue(self, report: str, menu: list[str], language: str | None = None) -> dict | None:
         """A plan to revive a hospital that is failing its objectives (see plan)."""
-        return await self.plan(report, menu, RESCUE_SYSTEM)
+        return await self.plan(report, menu, RESCUE_SYSTEM, language)
 
     async def chat(self, name: str, rival: bool, context: str, lines: list[str]) -> str | None:
         """The bot's answer to the last chat line."""

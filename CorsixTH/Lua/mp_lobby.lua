@@ -400,6 +400,13 @@ function MultiplayerLobby:MultiplayerLobby(params)
   local hello = {proto = MultiplayerLobby.PROTOCOL, build = self.build, name = self.name,
       data = params.data or MultiplayerLobby.dataId()}
   if hello.data == "" then hello.data = nil end
+  -- The game's language ("cs"): a bot's notes to its team are written in its
+  -- team mates' language (server: _note_language).
+  local app = rawget(_G, "TheApp")
+  if app and app.strings and app.config and app.config.language then
+    local ok, code = pcall(app.strings.getLangCode, app.strings, app.config.language)
+    if ok and type(code) == "string" then hello.lang = code:lower() end
+  end
   -- Extra fields, e.g. role/room/token for the server's headless referee.
   for k, v in pairs(params.hello or {}) do hello[k] = v end
   self.is_referee = hello.role == "referee"
@@ -1022,8 +1029,176 @@ function MultiplayerLobby:botCount()
   return n
 end
 
+--! A word with its first letter in lower case: Latin (A-Z) and Cyrillic
+--! (А-Я, Ѐ-Џ with Ё, Є, І, Ї; Ґ) capitals, UTF-8.
+function MultiplayerLobby.lowerFirst(word)
+  local b1, b2 = word:byte(1, 2)
+  if not b1 then return word end
+  if b1 < 128 then return (word:gsub("^%u", string.lower)) end
+  local rest = word:sub(3)
+  if b1 == 0xD0 and b2 >= 0x90 and b2 <= 0x9F then return string.char(0xD0, b2 + 0x20) .. rest end
+  if b1 == 0xD0 and b2 >= 0xA0 and b2 <= 0xAF then return string.char(0xD1, b2 - 0x20) .. rest end
+  if b1 == 0xD0 and b2 >= 0x80 and b2 <= 0x8F then return string.char(0xD1, b2 + 0x10) .. rest end
+  if b1 == 0xD2 and b2 == 0x90 then return string.char(0xD2, 0x91) .. rest end
+  return word
+end
+
+-- A bot's line in this game's language (MultiplayerLobby.botChatText).
+local function chat_fill(template, values)
+  return (tostring(template):gsub("{(%w+)}", function(k)
+    local v = values[k]
+    return v ~= nil and tostring(v) or nil
+  end))
+end
+
+--! A game word of a bot's line (a reference: kind and id, see bot.lua: ref)
+--! in the language of `root` (a raw string table), or nil.
+local function chat_word(root, kind, id, render)
+  local W = root.bot_chat.words
+  local function staff(cat)
+    local key = cat:lower()
+    local w = tostring(key == "handyman" and root.staff_class.handyman or root.staff_title[key])
+    if tonumber(W.lower_staff) == 1 then w = MultiplayerLobby.lowerFirst(w) end
+    return w
+  end
+  -- (A room's names come from its definition: the strings name rooms their
+  -- own way, rooms_short.psychiatric for the room psych.)
+  local function room_def(room)
+    local app = rawget(_G, "TheApp")
+    for _, rt in ipairs(app and app.rooms or {}) do
+      if rt.id == room then return rt end
+    end
+  end
+  local function plain(v)
+    if type(v) == "userdata" then return require("TH").stringProxy._unwrap(v) end
+    return v
+  end
+  local function short(room)
+    local rt = room_def(room)
+    if rt and rt.name then return tostring(plain(rt.name)) end
+    return tostring(root.rooms_short[room])
+  end
+  local function long(room)
+    local rt = room_def(room)
+    if rt and (rt.long_name or rt.name) then return tostring(plain(rt.long_name or rt.name)) end
+    local ok, name = pcall(function() return root.rooms_long[room] end)
+    return tostring(ok and name or short(room))
+  end
+  local function object(obj) return tostring(root.object[obj]) end
+  local function wish(key)
+    local what_kind, what = key:match("^(%a+):([^:]+)")
+    if key == "buy:land" then return tostring(W.wish_land) end
+    if what_kind == "room" then return chat_fill(W.wish_room, {room = short(what)}) end
+    if what_kind == "add" then
+      return chat_fill(W.wish_add, {object = object(key:match("^add:[^:]+:(.+)$")), room = short(what)})
+    end
+    if what_kind == "bigger" then return chat_fill(W.wish_bigger, {room = short(what)}) end
+    if what_kind == "remove" then return chat_fill(W.wish_remove, {room = short(what)}) end
+    if what_kind == "hire" then return chat_fill(W.wish_hire, {staff = staff(what)}) end
+    return nil
+  end
+  if kind == "room" then
+    return long(id)
+  elseif kind == "staff" then
+    return staff(id)
+  elseif kind == "obj" then
+    return object(id)
+  elseif kind == "wish" then
+    return wish(id)
+  elseif kind == "near" then
+    if id == "reception" then return tostring(W.near_reception) end
+    if id == "entrance" then return tostring(W.near_entrance) end
+    return wish("room:" .. id)
+  elseif kind == "terms" then
+    if id == "free" then return tostring(W.terms_free) end
+    return chat_fill(W.terms_price, {price = id:match("^price:(.*)$")})
+  elseif kind == "names" then
+    local parts = {}
+    for part in (id .. "\t"):gmatch("([^\t]*)\t") do parts[#parts + 1] = part end
+    local word = table.remove(parts, 1)
+    if #parts <= 1 then return parts[1] or "" end
+    local text = parts[1]
+    for i = 2, #parts - 1 do text = tostring(W.list_comma):format(text, parts[i]) end
+    return tostring(word == "or" and W.list_or or W.list_and):format(text, parts[#parts])
+  elseif kind == "line" then
+    return render(id, {})
+  elseif kind == "count" then
+    local n, cat = id:match("^(%d+):(%a+)$")
+    return chat_fill(W.staff_count, {n = n, staff = staff(cat)})
+  elseif kind == "everybody" then
+    return tostring(W.everybody)
+  elseif kind == "goal" then
+    local ok, goal = pcall(function() return W["goal_" .. id] end)
+    return tostring(ok and goal or W.goal_other)
+  elseif kind == "purpose" or kind == "spent" then
+    local key, cost = id, nil
+    if kind == "spent" then key, cost = id:match("^(.*):([^:]*)$") end
+    local what_kind, what = key:match("^(%a+):([^:@]+)")
+    local name = kind .. "_"
+    if key == "buy:land" then return chat_fill(W[name .. "land"], {cost = cost}) end
+    if key == "loan" or key == "trick" then return chat_fill(W[name .. key], {cost = cost}) end
+    if what_kind == "room" or what_kind == "hire" or what_kind == "add" then
+      return chat_fill(W[name .. what_kind], {what = wish(key), cost = cost})
+    end
+    if what_kind == "repair" or what_kind == "replace" or what_kind == "bigger" then
+      return chat_fill(W[name .. what_kind], {what = wish("room:" .. what), cost = cost})
+    end
+    if what_kind == "buy" then return chat_fill(W[name .. "buy"], {object = object(what), cost = cost}) end
+    if what_kind == "gift" then return chat_fill(W[name .. "gift"], {name = what, cost = cost}) end
+  end
+  return nil
+end
+
+--! A bot's chat line in this game's language. The bot sends with its English
+--! text the line's place in bot_chat (f.line, "lines.tricked.rats.2") and
+--! its values (f.v_<name>; a game word as "@kind:id|English words"), and for
+--! a second line said with it f.line2 and f.w_<name>. Nil when this game has
+--! no such line or something does not fit: then the English text is shown.
+--!param f (table) the CHAT message
+--!param root (table) optional: the raw string table (default: this game's)
+function MultiplayerLobby.botChatText(f, root)
+  if not f.line then return nil end
+  local ok, text = pcall(function()
+    root = root or require("TH").stringProxy._unwrap(_S)
+    local function render(path, values)
+      local t = root.bot_chat
+      for part in path:gmatch("[^.]+") do t = t[tonumber(part) or part] end
+      if type(t) ~= "string" then error("no line " .. path) end
+      local filled = {}
+      for k, v in pairs(values) do
+        local kind, id, english = v:match("^@(%a+):([^|]*)|(.*)$")
+        if kind then
+          local okw, word = pcall(chat_word, root, kind, id, render)
+          filled[k] = okw and word or english
+        else
+          filled[k] = v
+        end
+      end
+      return chat_fill(t, filled)
+    end
+    local function values_of(prefix)
+      local out = {}
+      for k, v in pairs(f) do
+        if k:sub(1, 2) == prefix then out[k:sub(3)] = v end
+      end
+      return out
+    end
+    local first = render(f.line, values_of("v_"))
+    if f.line2 then first = first .. " " .. render(f.line2, values_of("w_")) end
+    return first
+  end)
+  if ok and type(text) == "string" and not text:find("{%w+}") then return text end
+  return nil
+end
+
 function MultiplayerLobby:_onCHAT(f)
+  -- A bot's line in this game's language (an English game shows the text as
+  -- it came: it is English).
   local config = TheApp and TheApp.config
+  if f.line and config and tostring(config.language):lower() ~= "english" then
+    local text = MultiplayerLobby.botChatText(f)
+    if text then f.text = text end
+  end
   if not MultiplayerLobby.chatShown(config and config.multiplayer_bot_chat, f, self.players[tonumber(f.peer)],
       self:botCount()) then
     return

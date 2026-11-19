@@ -887,6 +887,56 @@ def test_banter_mark_goes_along(run):
     run(body)
 
 
+def test_bot_line_place_and_values_go_along(run):
+    async def body(server, port):
+        a, b = await two_players_in_room(port)
+        # A bot's line: its place in bot_chat and its values reach the others
+        # (each game shows it in its own language); nonsense is left out.
+        a.send(encode("CHAT", text="Nice rats, Ann.", line="lines.tricked.rats.4", v_name="Ann",
+                      v_room="@room:gp|GP", line2="lines.gift_spent.1", w_spent="@spent:loan:$5,000|x",
+                      v_bad_KEY="x", other="y"))
+        got = await b.expect("CHAT", text="Nice rats, Ann.")
+        assert got["line"] == "lines.tricked.rats.4" and got["v_name"] == "Ann"
+        assert got["v_room"] == "@room:gp|GP" and got["line2"] == "lines.gift_spent.1"
+        assert got["w_spent"] == "@spent:loan:$5,000|x"
+        assert "v_bad_KEY" not in got and "other" not in got
+        # Values without a valid line go nowhere.
+        a.send(encode("CHAT", text="plain", line="../etc", v_name="Ann"))
+        got = await b.expect("CHAT", text="plain")
+        assert "line" not in got and "v_name" not in got
+    run(body)
+
+
+def test_chat_line_fields_are_checked():
+    fields = srv._chat_line_fields({"line": "lines.greet.friendly.3", "v_name": "x" * 400,
+                                    **{f"v_{chr(97 + i)}": "1" for i in range(20)}})
+    assert fields["line"] == "lines.greet.friendly.3"
+    assert sum(1 for k in fields if k.startswith("v_")) == 12
+    assert all(len(v) <= 300 for v in fields.values())
+    assert srv._chat_line_fields({"v_name": "Ann"}) == {}
+    assert srv._chat_line_fields({"line": "lines"}) == {}
+
+
+def test_bot_note_language_is_its_team_mates():
+    room = srv.Room.__new__(srv.Room)
+    room.players = {}
+    bot = srv.Player(writer=None, pid=1, name="Bot Agnes", is_bot=True, team=1, lang="en")
+    ann = srv.Player(writer=None, pid=2, name="Ann", team=1, lang="cs")
+    bob = srv.Player(writer=None, pid=3, name="Bob", team=2, lang="de")
+    for peer, p in enumerate((bot, ann, bob), 1):
+        p.peer, p.room = peer, room
+        room.players[peer] = p
+    s = srv.Server.__new__(srv.Server)
+    assert s._note_language(bot) == "Czech"
+    carl = srv.Player(writer=None, pid=4, name="Carl", team=1, lang="de", peer=4, room=room)
+    room.players[4] = carl
+    assert s._note_language(bot) is None  # two languages on its team: English
+    carl.lang = "cs"
+    assert s._note_language(bot) == "Czech"
+    ann.lang = carl.lang = "en"
+    assert s._note_language(bot) is None
+
+
 def test_competitive_room_and_continued_seats(run):
     async def body(server, port):
         a = await Client.connect(port, "Ann")
