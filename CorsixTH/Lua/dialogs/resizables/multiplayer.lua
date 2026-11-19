@@ -19,6 +19,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
 corsixth.require("mp_lobby")
+corsixth.require("mp_pack")
 
 --! Multiplayer lobby window, opened from the main menu. Shows one of four
 --! views depending on the lobby state: connect to a server, pick or create a
@@ -128,11 +129,18 @@ local last_room_form = nil
 function UIMultiplayer:UIMultiplayer(ui, status)
   local lobby = TheApp.mp_lobby
   self.view = view_of(lobby)
-  -- A server that turned this game version away says where to get its own.
+  -- A server that turned this game version away says where to get its own;
+  -- or the game can get it from the server (a game pack, mp_pack.lua).
   self.download = self.view == "connect" and lobby and MultiplayerLobby.downloadOffer(lobby.error)
       or nil
+  self.pack_offer = self.view == "connect" and lobby and MultiplayerPack.offer(TheApp, lobby.error)
+      or nil
+  if self.pack_offer then
+    status = self.pack_offer.how == "newer_game" and _S.multiplayer_window.version_newer_game or
+        _S.multiplayer_window.version_other
+  end
   self:UIResizable(ui, WIDTH + (self.view == "room" and sideColumn(lobby) and SIDE_W or 0),
-      viewHeight(self.view, lobby) + (self.download and 35 or 0), col.bg)
+      viewHeight(self.view, lobby) + ((self.download or self.pack_offer) and 35 or 0), col.bg)
   self.esc_closes = true
   self.resizable = false
   self.modal_class = "main menu"
@@ -245,7 +253,14 @@ function UIMultiplayer:_buildConnect()
   end
   button(self, 20, 185, 180, S.connect, self.buttonConnect, T.connect)
   button(self, WIDTH - 200, 185, 180, S.back, self.close)
-  if self.download then
+  local offer = self.pack_offer
+  if offer and offer.how ~= "newer_game" then
+    -- (The server's build, downloaded by the game, or one it has already.)
+    local text = offer.how == "download" and
+        S.get_version:format(UIMultiplayerDownload.megabytes(offer.size)) or S.switch_version
+    button(self, 20, 220, WIDTH - 40, text, self.buttonGetVersion,
+        offer.how == "download" and T.get_version or T.switch_version)
+  elseif self.download then
     local release = self.download.release ~= "" and self.download.release or S.server_version
     button(self, 20, 220, WIDTH - 40, S.download:format(release), self.buttonDownload, T.download)
   end
@@ -253,6 +268,20 @@ end
 
 function UIMultiplayer:buttonDownload()
   openURL(self.download.url)
+end
+
+--! Get the server's build of the game and restart as it (it joins the
+--! server again by itself).
+function UIMultiplayer:buttonGetVersion()
+  local offer = self.pack_offer
+  if not offer then return end
+  local address = self.lobby and self.lobby.address ~= "" and self.lobby.address or self.address_box.text
+  local name = self.name_box.text
+  if offer.how == "download" then
+    self.ui:addWindow(UIMultiplayerDownload(self.ui, offer, address, name))
+  else
+    MultiplayerPack.switchTo(TheApp, offer.how == "switch" and offer.build or nil, address, name)
+  end
 end
 
 function UIMultiplayer:buttonConnect()
@@ -1153,12 +1182,19 @@ function UIMultiplayer:onTick()
         self.ui:addWindow(UIInformation(self.ui, {_S.multiplayer_window.data_mismatch_help}))
       end
       local download = self.view == "connect" and MultiplayerLobby.downloadOffer(lobby.error)
-      if view_of(lobby) ~= self.view or (download and not self.download) then
+      local pack_offer = self.view == "connect" and MultiplayerPack.offer(TheApp, lobby.error)
+      if view_of(lobby) ~= self.view or (download and not self.download) or
+          (pack_offer and not self.pack_offer) then
         self:rebuild(status)
         return
       end
       if self.view == "room" then self:_updateRoom() end
       if self.view == "rooms" then self:_updateRooms() end
+      if status and self.pack_offer then
+        -- (Not the server's words about GitHub: the game can get its version.)
+        status = self.pack_offer.how == "newer_game" and _S.multiplayer_window.version_newer_game or
+            _S.multiplayer_window.version_other
+      end
       if status then self:setStatus(status) end
     end
     -- The room list keeps itself up to date.

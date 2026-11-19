@@ -699,6 +699,8 @@ class Server:
             if pack is not None:
                 # (Games that can download it offer that instead of the web page.)
                 refusal["pack"] = str(len(pack.blob))
+                refusal["pack_api"] = str(pack.api)
+                refusal["pack_engine"] = str(pack.engine)
             player.send(encode("ERROR", **refusal))
             return False
         if self.data_check is not None and not self.data_check.accepts(f.get("data", "")):

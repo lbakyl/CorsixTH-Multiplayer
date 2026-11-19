@@ -329,9 +329,23 @@ end
 function MultiplayerLobby.buildId(app)
   app = app or TheApp
   if MultiplayerLobby.cached_build then return MultiplayerLobby.cached_build end
+  local runtime = rawget(_G, "jit") and "luajit" or _VERSION:gsub("Lua ", "lua")
+  -- (Not the language: players in different languages play together. What
+  -- depended on it, how many random numbers a staff description takes, uses
+  -- the cosmetic ones in multiplayer, StaffProfile:randomiseOrganical.)
+  local build = string.format("%s-sv%d-%s-mp%d-%s", app:getReleaseString(),
+      app.savegame_version, runtime, MultiplayerLobby.PROTOCOL,
+      MultiplayerLobby.luaChecksum(app:getFullPath({"Lua"}, true)))
+  MultiplayerLobby.cached_build = build
+  return build
+end
+
+--! The checksum of the Lua game code in a folder (ending with a separator):
+--! CRC-32 of every .lua file's path and content (line endings ignored),
+--! sorted by path, as 8 hexadecimal digits; the last part of a build id.
+function MultiplayerLobby.luaChecksum(root)
   local lfs = require("lfs")
   local TH = require("TH")
-  local root = app:getFullPath({"Lua"}, true)
   local files = {}
   local function walk(dir, rel)
     for name in lfs.dir(dir) do
@@ -356,15 +370,7 @@ function MultiplayerLobby.buildId(app)
       fh:close()
     end
   end
-  local runtime = rawget(_G, "jit") and "luajit" or _VERSION:gsub("Lua ", "lua")
-  -- (Not the language: players in different languages play together. What
-  -- depended on it, how many random numbers a staff description takes, uses
-  -- the cosmetic ones in multiplayer, StaffProfile:randomiseOrganical.)
-  local build = string.format("%s-sv%d-%s-mp%d-%08x", app:getReleaseString(),
-      app.savegame_version, runtime, MultiplayerLobby.PROTOCOL,
-      TH.CRC32File(table.concat(parts, "\0")))
-  MultiplayerLobby.cached_build = build
-  return build
+  return string.format("%08x", TH.CRC32File(table.concat(parts, "\0")))
 end
 
 --!param params (table) Fields:

@@ -84,6 +84,7 @@ def test_server_sends_its_pack_and_offers_it_to_other_builds(tmp_path):
             verb, f = decode((await r.readline()).decode())
             assert verb == "ERROR" and f["code"] == "build_mismatch"
             assert f["need"] == build and f["pack"] == str(len(blob))
+            assert f["pack_api"] == "2721" and f["pack_engine"] == "3"
             w.close()
 
             async def download(start=0):

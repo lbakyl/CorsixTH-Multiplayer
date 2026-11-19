@@ -186,6 +186,8 @@ class ServedPack:
     blob: bytes
     signature: str
     release: str
+    api: int = 0
+    engine: int = 0
 
     @classmethod
     def load(cls, folder: str | os.PathLike[str], build: str) -> "ServedPack | None":
@@ -200,7 +202,8 @@ class ServedPack:
         info, _ = read(blob)
         if info.build != build:
             raise ValueError(f"{pack_path} is the pack of build {info.build}")
-        return cls(build=build, blob=blob, signature=signature, release=info.release)
+        return cls(build=build, blob=blob, signature=signature, release=info.release, api=info.api,
+                   engine=info.engine)
 
 
 def main(argv: list[str] | None = None) -> int:

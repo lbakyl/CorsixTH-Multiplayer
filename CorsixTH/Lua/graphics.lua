@@ -242,7 +242,7 @@ function Graphics:loadFontFile()
   local config_path, compile_path = self.app.config.unicode_font, TH.GetCompileOptions().font
 
   local font_file, err = Graphics.chooseFontFile(config_path, compile_path,
-      self.app:getFullPath(), check)
+      self.app:getInstalledPath(), check)
 
   if not font_file then
     print("Unicode font not found, no fallback available.", err)
