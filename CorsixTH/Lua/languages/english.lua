@@ -693,6 +693,8 @@ multiplayer_window = {
   staff_received_note = "%s sent you a member of staff: %s",
   staff_on_the_way = "On the way to %s",
   saving_note = "Saving the game on every player's computer...",
+  save_caption = "Save the game for everybody",
+  save_button = "Save",
   -- Vouching for an ally (reputation)
   rep_vouch_caption = "Vouch: give them some of your reputation",
   rep_amount = "Points: %d",
@@ -1061,6 +1063,7 @@ multiplayer_window = {
 }
 
 tooltip.multiplayer_window = {
+  save_name = "The save's name. Your name and the game date are added to it.",
   add_assistant = "Right click: an assistant, a bot that helps in this hospital and takes no place",
   add_assistant_button = "Add an assistant: a bot that helps in this hospital and takes no place",
   assistant = "A bot that helps in this hospital",

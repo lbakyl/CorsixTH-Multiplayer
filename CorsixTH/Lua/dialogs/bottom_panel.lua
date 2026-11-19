@@ -240,6 +240,8 @@ function UIBottomPanel:openJukebox()
 end
 
 function UIBottomPanel:openSave()
+  -- Multiplayer: everybody's game saves (a local save could not be continued).
+  if MultiplayerSession.openSave(self.ui) then return end
   local UISaveGame = _G["UISaveGame"] ---@type UISaveGame
   self.ui:addWindow(UISaveGame(self.ui))
 end

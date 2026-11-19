@@ -61,7 +61,7 @@ globals = { -- Globals
             "UIGraphicSettings", "UIGraphs", "UIHireStaff", "UIHotkeyAssign",
             "UIHotkeyAssignKeyPane", "UIInformation", "UIJukebox", "UILoadGame", "UILoadMultiplayerGame", "UIMultiplayerLevels",
             "UILoadMap", "UILuaConsole", "UIMachine", "UIMakeDebugPatient",
-            "UIMainMenu", "UIMapEditor", "UIMenu", "UIMenuBar", "UIMenuList", "UIMultiplayer", "UIMultiplayerChooseHospital", "UIMultiplayerDownload", "UIMultiplayerOffer", "UIMultiplayerAskMoney", "UIMultiplayerChat", "UIMultiplayerChatInput", "UIMultiplayerGivePlot", "UIMultiplayerPlayers", "UIMultiplayerResearch", "UIMultiplayerSabotage", "UIMultiplayerSpy", "UIMultiplayerLitterBomb", "UIMultiplayerTrade",
+            "UIMainMenu", "UIMapEditor", "UIMenu", "UIMenuBar", "UIMenuList", "UIMultiplayer", "UIMultiplayerChooseHospital", "UIMultiplayerDownload", "UIMultiplayerSave", "UIMultiplayerOffer", "UIMultiplayerAskMoney", "UIMultiplayerChat", "UIMultiplayerChatInput", "UIMultiplayerGivePlot", "UIMultiplayerPlayers", "UIMultiplayerResearch", "UIMultiplayerSabotage", "UIMultiplayerSpy", "UIMultiplayerLitterBomb", "UIMultiplayerTrade",
             "UIMessage", "UINewGame", "UIOptions", "UIPatient", "UIMachineMenu",
             "UIPlaceObjects", "UIPlaceStaff", "UIPolicy", "UIProgressReport",
             "UIQueue", "UIQueuePopup", "UIResizable", "UIResearch",

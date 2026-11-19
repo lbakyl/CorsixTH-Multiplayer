@@ -528,8 +528,65 @@ function MultiplayerLobby.savesDir()
   return dir .. "Multiplayer" .. sep
 end
 
+-- Russian and Ukrainian letters in Latin ones, for file names.
+local TRANSLIT = {}
+for _, pair in ipairs({
+  {"а", "А", "a"}, {"б", "Б", "b"}, {"в", "В", "v"}, {"г", "Г", "g"}, {"ґ", "Ґ", "g"},
+  {"д", "Д", "d"}, {"е", "Е", "e"}, {"ё", "Ё", "yo"}, {"є", "Є", "ye"}, {"ж", "Ж", "zh"},
+  {"з", "З", "z"}, {"и", "И", "i"}, {"і", "І", "i"}, {"ї", "Ї", "yi"}, {"й", "Й", "y"},
+  {"к", "К", "k"}, {"л", "Л", "l"}, {"м", "М", "m"}, {"н", "Н", "n"}, {"о", "О", "o"},
+  {"п", "П", "p"}, {"р", "Р", "r"}, {"с", "С", "s"}, {"т", "Т", "t"}, {"у", "У", "u"},
+  {"ф", "Ф", "f"}, {"х", "Х", "kh"}, {"ц", "Ц", "ts"}, {"ч", "Ч", "ch"}, {"ш", "Ш", "sh"},
+  {"щ", "Щ", "shch"}, {"ъ", "Ъ", ""}, {"ы", "Ы", "y"}, {"ь", "Ь", ""}, {"э", "Э", "e"},
+  {"ю", "Ю", "yu"}, {"я", "Я", "ya"},
+}) do
+  TRANSLIT[pair[1]] = {pair[3], false}
+  TRANSLIT[pair[2]] = {pair[3]:sub(1, 1):upper() .. pair[3]:sub(2), true}
+end
+
+--! Text made fit for a file name on every system (Windows names are not
+--! UTF-8 here): Russian and Ukrainian letters become Latin ones ("Алёна" ->
+--! "Alyona", "ЖЕНЯ" -> "ZHENYA"), ASCII letters, digits, spaces, - _ and '
+--! stay, anything else goes. At most `limit` bytes (default 40).
+function MultiplayerLobby.fileSafe(text, limit)
+  local words = {}
+  for word in tostring(text or ""):gmatch("%S+") do
+    local parts, lower, upper = {}, false, false
+    for ch in word:gmatch("[\1-\127\194-\244][\128-\191]*") do
+      local t = TRANSLIT[ch]
+      if t then
+        parts[#parts + 1] = t[1]
+        if t[2] then upper = true elseif t[1] ~= "" then lower = true end
+      elseif ch:match("^[%w%-_']$") then
+        parts[#parts + 1] = ch
+        if ch:match("%l") then lower = true elseif ch:match("%u") then upper = true end
+      end
+    end
+    local w = table.concat(parts)
+    if upper and not lower then w = w:upper() end
+    if w ~= "" then words[#words + 1] = w end
+  end
+  local s = table.concat(words, " ")
+  limit = limit or 40
+  if #s > limit then s = s:sub(1, limit):gsub("%s+$", "") end
+  return s
+end
+
+--! A multiplayer save's file name (without .sav): the name the saving
+--! player gave it (the level's name unless changed), the player and the
+--! game date, e.g. "TEAM TOWN Jan y3-m12-d21".
+function MultiplayerLobby.saveLabel(name, by, year, month, day)
+  local parts = {}
+  for _, part in ipairs({MultiplayerLobby.fileSafe(name, 40), MultiplayerLobby.fileSafe(by, 20)}) do
+    if part ~= "" then parts[#parts + 1] = part end
+  end
+  parts[#parts + 1] = string.format("y%d-m%02d-d%02d", year, month, day)
+  return table.concat(parts, " ")
+end
+
 --! Multiplayer saves that can be continued, newest first:
---! {label, path, info = {room, mode, level, difficulty, step, date, hospitals, players}}.
+--! {label, path, info = {room, mode, level, difficulty, step, date, hospitals, players,
+--! and for a save (not an autosave) name and by: its name and who saved, as typed}}.
 function MultiplayerLobby.listSaves()
   local lfs = require("lfs")
   local dir = MultiplayerLobby.savesDir()
@@ -562,15 +619,20 @@ end
 
 --! Write this game to the multiplayer saves folder, with an .mpinfo file
 --! next to it for the lobby. Every peer does this at the same step.
-function MultiplayerLobby:_writeLocalSave(session, kind)
+--!param info (table) for a save: {name, by} from the save_game command (the
+--! name the player gave it and who saved), so every peer names it the same.
+function MultiplayerLobby:_writeLocalSave(session, kind, info)
   local lfs = require("lfs")
   local world = TheApp.world
   local dir = MultiplayerLobby.savesDir()
   if not lfs.attributes(dir, "mode") then lfs.mkdir(dir) end
-  local room = (self.room and self.room.room or "game"):gsub("[^%w%-_ ']", "_")
+  local room = MultiplayerLobby.fileSafe(self.room and self.room.room or "game")
+  if room == "" then room = "game" end
   local date = world.game_date
+  info = info or {}
+  local name = info.name ~= nil and tostring(info.name) or tostring(world.map.level_name or room)
   local label = kind == "autosave" and (room .. " autosave") or
-      string.format("%s y%d-%02d-%02d", room, date:year(), date:monthOfYear(), date:dayOfMonth())
+      MultiplayerLobby.saveLabel(name, info.by, date:year(), date:monthOfYear(), date:dayOfMonth())
   local path = dir .. label .. ".sav"
   -- (Staff this player is moving are only hidden on this screen.)
   session:withHiddenShown(TheApp.save, TheApp, path)
@@ -595,6 +657,11 @@ function MultiplayerLobby:_writeLocalSave(session, kind)
       "colours=", table.concat(colours, ","), "\n",
       "teams=", table.concat(teams, ","), "\n",
       "players=", tostring(world.mp_coop and n or #session.peers), "\n")
+  if kind ~= "autosave" then
+    -- As typed (the file name may have lost letters): the name and who saved.
+    local function line(v) return (tostring(v or ""):gsub("[\r\n]", " ")) end
+    f:write("name=", line(name), "\n", "by=", line(info.by), "\n")
+  end
   f:close()
   self.log(string.format("multiplayer: SAVED %s at step %d: %s", label, session.step,
       MultiplayerSession.defaultFingerprint(world)))
@@ -1239,10 +1306,10 @@ MultiplayerLobby.SAVE_CHUNK = 48000
 --! shared one.
 function MultiplayerLobby:serviceSaves(session)
   if session.local_save and session.step >= session.local_save.at then
-    local kind = session.local_save.kind
+    local kind, info = session.local_save.kind, session.local_save.info
     session.local_save = nil
     local ok, err = pcall(session.withoutBlueprints, session, function()
-      self:_writeLocalSave(session, kind)
+      self:_writeLocalSave(session, kind, info)
     end)
     if not ok then self.log("multiplayer: could not save: " .. tostring(err)) end
   end

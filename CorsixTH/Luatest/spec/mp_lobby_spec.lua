@@ -79,6 +79,24 @@ describe("MultiplayerLobby", function()
     assert.equal("Max speed", MultiplayerLobby.clampSpeed("Speed Up", "Max speed"))
   end)
 
+  it("names a save after its name, the saver and the game date, fit for any file system", function()
+    assert.equal("TEAM TOWN Jan y3-m12-d21", MultiplayerLobby.saveLabel("TEAM TOWN", "Jan", 3, 12, 21))
+    assert.equal("Final round Argus y1-m03-d05", MultiplayerLobby.saveLabel("  Final  round ", "Argus", 1, 3, 5))
+    -- Russian and Ukrainian letters in Latin ones; a name in capitals stays in capitals.
+    assert.equal("Alyona", MultiplayerLobby.fileSafe("Алёна"))
+    assert.equal("ZHENYA Yizhak", MultiplayerLobby.fileSafe("ЖЕНЯ Їжак"))
+    assert.equal("Bolnitsa Matroftt y2-m01-d30",
+        MultiplayerLobby.saveLabel("Больница", "Matroftt", 2, 1, 30))
+    -- Characters a file name cannot have go; a name with nothing left is left out.
+    assert.equal("Jan's room no 1", MultiplayerLobby.fileSafe("Jan's room: no. 1?"))
+    assert.equal("ab-b_c", MultiplayerLobby.fileSafe('a/b\\-b_c<>|*"'))
+    assert.equal("y4-m06-d01", MultiplayerLobby.saveLabel("医院", nil, 4, 6, 1))
+    assert.equal("CROSSROADS y4-m06-d01", MultiplayerLobby.saveLabel("CROSSROADS", "", 4, 6, 1))
+    -- At most 40 letters of the name, 20 of the player.
+    local long = MultiplayerLobby.saveLabel(string.rep("x", 60), string.rep("p", 30), 1, 1, 1)
+    assert.equal(string.rep("x", 40) .. " " .. string.rep("p", 20) .. " y1-m01-d01", long)
+  end)
+
   it("parses server addresses", function()
     assert.same({"example.org", 47800}, {MultiplayerLobby.parseAddress("example.org")})
     assert.same({"10.0.0.2", 5000}, {MultiplayerLobby.parseAddress(" 10.0.0.2:5000 ")})

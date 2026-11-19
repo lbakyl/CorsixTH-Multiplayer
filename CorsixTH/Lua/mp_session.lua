@@ -479,18 +479,36 @@ end
 --! autosave, both in the simulation). Written between ticks, see
 --! MultiplayerLobby:serviceSaves.
 --!param kind (string) "save" or "autosave"
-function MultiplayerSession:requestLocalSave(kind)
+--!param info (table) a save's {name, by} (MultiplayerLobby:_writeLocalSave)
+function MultiplayerSession:requestLocalSave(kind, info)
   if self.observer or self.local_save then return end
-  self.local_save = {at = self.step + 1, kind = kind}
+  self.local_save = {at = self.step + 1, kind = kind, info = info}
 end
 
---! File > Save in a multiplayer game: every player's game saves at the same
---! game hour, so any of them can continue it later from the lobby.
-function MultiplayerSession.saveTogether()
+--! Every player's game saves at the same game hour, so any of them can
+--! continue it later from the lobby. The file is named after `name` (the
+--! level's name if none), this player and the game date.
+--!param name (string) the name the player gave the save, or nil
+function MultiplayerSession.saveTogether(name)
   local session = TheApp and TheApp.mp_session
   if not session then return false end
-  session:issue({kind = "save_game"})
+  local lobby = TheApp.mp_lobby
+  local cmd = {kind = "save_game", by = lobby and lobby.name or TheApp.config.player_name}
+  name = name and tostring(name):match("^%s*(.-)%s*$")
+  if name and name ~= "" then cmd.name = name:sub(1, 120) end
+  session:issue(cmd)
   session.notify(_S.multiplayer_window.saving_note)
+  return true
+end
+
+--! File > Save (or its key) in a multiplayer game: a box for the save's name,
+--! the level's name to start with, then MultiplayerSession.saveTogether.
+--! False outside multiplayer.
+function MultiplayerSession.openSave(ui)
+  if not (TheApp and TheApp.mp_session) then return false end
+  local world = TheApp.world
+  local level = world and world.map and world.map.level_name
+  ui:addWindow(UIMultiplayerSave(ui, level and tostring(level) or ""))
   return true
 end
 
@@ -2118,10 +2136,11 @@ function handlers.sell_object(world, cmd)
   return true
 end
 
---! Save the game on every player's machine (File > Save): {}.
+--! Save the game on every player's machine (File > Save): {name, by}, the
+--! name the player gave it and who saved (both may be missing).
 function handlers.save_game(world, cmd) -- luacheck: ignore 212
   local session = TheApp and TheApp.mp_session
-  if session then session:requestLocalSave("save") end
+  if session then session:requestLocalSave("save", {name = cmd.name, by = cmd.by}) end
   return true
 end
 
