@@ -291,13 +291,13 @@ calls_dispatcher = {
   close = "Zavřít",
 }
 town_map = {
-  number = "Číslo pozemku",
-  area = "Oblast pozemku",
+  number = "Pozemek č.",
+  area = "Plocha",
   not_for_sale = "Nelze vlastnit",
-  owner = "Vlastník pozemku",
+  owner = "Vlastník",
   chat = "Podrobnosti města",
   for_sale = "Na prodej",
-  price = "Cena pozemku",
+  price = "Cena",
 }
 confirmation = {
   replace_machine = "Opravdu chcete nahradit %s za %d$?",

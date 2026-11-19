@@ -697,18 +697,28 @@ function UITownMap:draw(canvas, x, y)
       plot_num = self.hover_plot
     end
   end
-  self.city_font:draw(canvas, _S.town_map.number, x + 227 * s, y + 435 * s)
-  self.city_font:draw(canvas, ":",                x + 300 * s, y + 435 * s)
-  self.city_font:draw(canvas, plot_num,           x + 315 * s, y + 435 * s)
-  self.city_font:draw(canvas, _S.town_map.owner,  x + 227 * s, y + 450 * s)
-  self.city_font:draw(canvas, ":",                x + 300 * s, y + 450 * s)
-  self.city_font:draw(canvas, owner,              x + 315 * s, y + 450 * s)
-  self.city_font:draw(canvas, _S.town_map.area,   x + 432 * s, y + 435 * s)
-  self.city_font:draw(canvas, ":",                x + 495 * s, y + 435 * s)
-  self.city_font:draw(canvas, tile_count,         x + 515 * s, y + 435 * s)
-  self.city_font:draw(canvas, _S.town_map.price,  x + 432 * s, y + 450 * s)
-  self.city_font:draw(canvas, ":",                x + 495 * s, y + 450 * s)
-  self.city_font:draw(canvas, price,              x + 515 * s, y + 450 * s)
+  -- Two columns of "label: value". A label longer than the room the
+  -- original left for it (Czech "Vlastník pozemku") moves its column's
+  -- colons and values right instead of running into them.
+  local font = self.city_font
+  local function column(label_x, colon_x, value_x, rows)
+    local widest = 0
+    for _, row in ipairs(rows) do widest = math.max(widest, (font:sizeOf(row[1]))) end
+    local shift = math.max(0, label_x + widest + 3 * s - colon_x)
+    for _, row in ipairs(rows) do
+      font:draw(canvas, row[1], label_x, row[3])
+      font:draw(canvas, ":", colon_x + shift, row[3])
+      font:draw(canvas, row[2], value_x + shift, row[3])
+    end
+  end
+  column(x + 227 * s, x + 300 * s, x + 315 * s, {
+    {_S.town_map.number, plot_num, y + 435 * s},
+    {_S.town_map.owner, owner, y + 450 * s},
+  })
+  column(x + 432 * s, x + 495 * s, x + 515 * s, {
+    {_S.town_map.area, tile_count, y + 435 * s},
+    {_S.town_map.price, price, y + 450 * s},
+  })
 end
 
 function UITownMap:decreaseHeat()
