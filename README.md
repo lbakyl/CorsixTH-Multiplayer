@@ -3,7 +3,7 @@
   <img alt="OpenTH" src="docs/multiplayer/images/openth-logo.png" width="237">
 </picture>
 
-# CorsixTH Multiplayer
+# OpenTH
 
 [![Latest release](https://img.shields.io/github/v/release/openth-org/openth?style=for-the-badge&color=green&label=latest%20release)](https://github.com/openth-org/openth/releases/latest)
 [![Linux and Tests](https://github.com/openth-org/openth/actions/workflows/Linux.yml/badge.svg?branch=master)](https://github.com/openth-org/openth/actions/workflows/Linux.yml) [![Windows](https://github.com/openth-org/openth/actions/workflows/Windows.yml/badge.svg?branch=master&event=push)](https://github.com/openth-org/openth/actions/workflows/Windows.yml) [![Linux package](https://github.com/openth-org/openth/actions/workflows/LinuxPackage.yml/badge.svg?branch=master)](https://github.com/openth-org/openth/actions/workflows/LinuxPackage.yml) [![macOS app](https://github.com/openth-org/openth/actions/workflows/macOS.yml/badge.svg?branch=master)](https://github.com/openth-org/openth/actions/workflows/macOS.yml)
