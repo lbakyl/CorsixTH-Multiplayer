@@ -419,8 +419,8 @@ function MultiplayerPack:poll(app)
     self.state = "receiving"
   end
   if self.state == "receiving" then
-    -- (A frame's worth: the rest comes next frame.)
-    for _ = 1, 40 do
+    -- (A tick's worth, 10 lines of 36000 bytes: the window stays smooth.)
+    for _ = 1, 10 do
       local line = self.transport:receive()
       if not line then break end
       local verb, f = MultiplayerLobby.decode(line)
