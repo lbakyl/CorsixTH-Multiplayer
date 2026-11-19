@@ -324,7 +324,7 @@ say "Done: the server runs $RELEASE with the referee on port $PORT"
 DEV_HOOK=$( (sed -n 's/^DISCORD_DEV_WEBHOOK_URL=//p' /etc/corsixth-mp-secrets.env 2>/dev/null || true) | head -1)
 if [[ -n "$DEV_HOOK" && "$RELEASE" != "$OLD_RELEASE" ]]; then
   where=${NAME:-$(hostname)}
-  [[ "$where" =~ ^eu[0-9]+$ ]] && where="$where ($where.openth.org)"
+  [[ "$where" =~ ^[a-z]{2,4}[0-9]+$ ]] && where="$where ($where.openth.org)"
   DEV_HOOK=$DEV_HOOK python3 - "$RELEASE" "$where" <<'PY' || echo "   (the #development line could not be posted)"
 import calendar, json, os, re, sys, time, urllib.request
 release, where = sys.argv[1], sys.argv[2]
