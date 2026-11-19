@@ -24,6 +24,8 @@ SOFTWARE. --]]
 --! player who saved and the game date: "TEAM TOWN Jan y3-m12-d21".
 class "UIMultiplayerSave" (UIResizable)
 
+---@class UIMultiplayerSave: UIResizable
+---@operator call: UIMultiplayerSave
 local UIMultiplayerSave = _G["UIMultiplayerSave"] ---@type UIMultiplayerSave
 
 local col = {
