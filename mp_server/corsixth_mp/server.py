@@ -20,11 +20,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import hashlib
 import hmac
 import logging
 import os
 import random
+import re
 import secrets
 import signal
 import time
@@ -33,6 +35,7 @@ from dataclasses import dataclass, field
 from . import pacing, stats
 from .advisor import Advisor
 from .builds import BuildCheck, DataCheck
+from .packs import ServedPack
 from .referee import RefereeConfig, start_bot, start_referee
 from .protocol import (MAX_LINE_BYTES, PROTOCOL_VERSION, ProtocolError, command_peer, command_step,
                        decode, encode, is_game_line, parse_step_report)
@@ -40,6 +43,11 @@ from .protocol import (MAX_LINE_BYTES, PROTOCOL_VERSION, ProtocolError, command_
 log = logging.getLogger("corsixth_mp")
 
 SERVER_VERSION = "0.1"
+# Game packs (packs.py): bytes of a pack per PACKDATA line (48000 characters
+# of base64, like the save data), packs sent at once, and how long one may take.
+PACK_CHUNK = 36000
+MAX_PACK_SENDS = 8
+PACK_SEND_TIMEOUT = 600.0
 MAX_NAME = 32
 MAX_ROOMS = 64
 # A new room is "free": every player picks a colour (the hospital they play
@@ -454,8 +462,14 @@ class Server:
                  max_per_address: int = MAX_PER_ADDRESS,
                  referee: RefereeConfig | None = None, max_bots: int = MAX_BOTS,
                  build_check: BuildCheck | None = None,
-                 data_check: DataCheck | None = None, advisor: Advisor | None = None) -> None:
+                 data_check: DataCheck | None = None, advisor: Advisor | None = None,
+                 packs_dir: str | None = None) -> None:
         self.referee_config = referee
+        # Signed game packs players of other builds may download (packs.py;
+        # None: none), the ones read so far, and how many are being sent.
+        self.packs_dir = packs_dir
+        self._packs: dict[str, ServedPack | None] = {}
+        self.pack_sends = 0
         # Advice for the bots from a language model (advisor.py; None: off).
         self.advisor = advisor
         # Only this game build may connect (None: any; builds.py).
@@ -544,6 +558,15 @@ class Server:
             writer.write(encode("OK", rooms=len(self.rooms), players=len(self.players)).encode() + b"\n")
             await self._close_writer(writer)
             return
+        if first.startswith(b"PACK "):
+            # A player of another build downloads this server's (mp_pack.lua).
+            try:
+                await asyncio.wait_for(self._send_pack(first.decode("utf-8", "replace"), writer),
+                                       PACK_SEND_TIMEOUT)
+            except (asyncio.TimeoutError, ConnectionError) as exc:
+                log.info("pack download from %s stopped: %s", peername, exc.__class__.__name__)
+            await self._close_writer(writer)
+            return
         player = Player(pid=self.next_pid, writer=writer)
         self._writers.add(writer)
         self.next_pid += 1
@@ -601,6 +624,50 @@ class Server:
         except asyncio.CancelledError:
             pass
 
+    def pack(self, build: str) -> ServedPack | None:
+        """The signed pack of a build this server hands out, if it has one."""
+        if not self.packs_dir or not re.fullmatch(r"[0-9a-f]{8}", build or ""):
+            return None
+        if build not in self._packs:
+            try:
+                self._packs[build] = ServedPack.load(self.packs_dir, build)
+            except (OSError, ValueError, KeyError) as exc:
+                log.warning("pack of build %s unusable: %s", build, exc)
+                self._packs[build] = None
+        return self._packs[build]
+
+    async def _send_pack(self, line: str, writer: asyncio.StreamWriter) -> None:
+        """PACK build=<checksum> [from=<byte>]: PACKINFO, PACKDATA lines of
+        base64 and PACKEND; or ERROR."""
+        try:
+            _, f = decode(line)
+        except ProtocolError:
+            f = {}
+        pack = self.pack(f.get("build", ""))
+        if pack is None:
+            writer.write(encode("ERROR", code="no_pack",
+                                text="This server has no download of that version").encode() + b"\n")
+            return
+        if self.pack_sends >= MAX_PACK_SENDS:
+            writer.write(encode("ERROR", code="busy", text="Too many downloads, try again soon")
+                         .encode() + b"\n")
+            return
+        start_text = f.get("from", "0")
+        start = int(start_text) if start_text.isdigit() else 0
+        start = min(start - start % PACK_CHUNK, len(pack.blob))
+        self.pack_sends += 1
+        log.info("sending the pack of build %s (%d bytes, from %d)", pack.build, len(pack.blob), start)
+        try:
+            writer.write(encode("PACKINFO", build=pack.build, size=len(pack.blob), sig=pack.signature,
+                                release=pack.release, **{"from": start}).encode() + b"\n")
+            for at in range(start, len(pack.blob), PACK_CHUNK):
+                data = base64.b64encode(pack.blob[at:at + PACK_CHUNK]).decode("ascii")
+                writer.write(encode("PACKDATA", d=data).encode() + b"\n")
+                await writer.drain()
+            writer.write(encode("PACKEND", size=len(pack.blob)).encode() + b"\n")
+        finally:
+            self.pack_sends -= 1
+
     # --------------------------------------------------------------- messages
 
     def _error(self, player: Player, code: str, text: str) -> None:
@@ -627,7 +694,12 @@ class Server:
         if self.build_check is not None and not self.build_check.accepts(player.build):
             log.info("player %d (%r) refused: build %s, this server needs %s", player.pid, name,
                      player.build, self.build_check.checksum)
-            player.send(encode("ERROR", **self.build_check.refusal()))
+            refusal = self.build_check.refusal()
+            pack = self.pack(self.build_check.checksum)
+            if pack is not None:
+                # (Games that can download it offer that instead of the web page.)
+                refusal["pack"] = str(len(pack.blob))
+            player.send(encode("ERROR", **refusal))
             return False
         if self.data_check is not None and not self.data_check.accepts(f.get("data", "")):
             if self.referee_config is None:
@@ -2327,10 +2399,13 @@ def main(argv: list[str] | None = None) -> None:
         data_check = DataCheck.from_env(referee=referee)
         if data_check:
             log.info("players must have Theme Hospital data %s", data_check.data)
+        packs_dir = os.environ.get("CORSIXTH_MP_PACKS", "").strip() or None
         server = Server(motd=args.motd, max_connections=args.max_connections,
                         max_per_address=args.max_per_address, referee=referee,
                         max_bots=args.max_bots, build_check=build_check, data_check=data_check,
-                        advisor=Advisor())
+                        advisor=Advisor(), packs_dir=packs_dir)
+        if build_check and server.pack(build_check.checksum):
+            log.info("players of other builds can download build %s here", build_check.checksum)
         await server.start(args.host, args.port)
         # Stop cleanly on SIGTERM (docker stop) as well as Ctrl+C.
         stop = asyncio.Event()
