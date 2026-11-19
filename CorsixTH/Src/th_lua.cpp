@@ -327,8 +327,8 @@ int l_check_pack_signature(lua_State* L) {
   uint8_t signature[64];
   bool valid = th::packs::parse_hex(std::string_view(hex, hex_size), signature,
                                     sizeof(signature)) &&
-               th::packs::signature_valid(reinterpret_cast<const uint8_t*>(data),
-                                          size, signature);
+               th::packs::signature_valid(
+                   reinterpret_cast<const uint8_t*>(data), size, signature);
   lua_pushboolean(L, valid ? 1 : 0);
   return 1;
 }

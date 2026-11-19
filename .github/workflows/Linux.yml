@@ -78,8 +78,10 @@ jobs:
       - name: Run simple code tests
         if: matrix.static_analysis
         run: |
-          # Check if there is bad whitespace.
-          python3 scripts/check_whitespace.py -e scanner.cpp -e parser.cpp -e build
+          # Check if there is bad whitespace (libs/monocypher is kept as
+          # released upstream).
+          python3 scripts/check_whitespace.py -e scanner.cpp -e parser.cpp -e build \
+            -e libs/monocypher
           # Check for incorrectly encoded files.
           python3 scripts/check_language_files_not_BOM.py
           # Check if there are lua classes with invalid/improper declarations.
@@ -197,6 +199,7 @@ jobs:
           clang-format-20 -i CorsixTH/Src/*.cpp CorsixTH/Src/*.h AnimView/*.cpp \
             AnimView/*.h libs/rnc/*.cpp libs/rnc/*.h CorsixTH/SrcUnshared/main.cpp
           git diff
-          # Clang-tidy linter
-          run-clang-tidy-20 -p build/dev-vcpkg
+          # Clang-tidy linter (not on libs/monocypher, kept as released
+          # upstream)
+          run-clang-tidy-20 -p build/dev-vcpkg '^(?!.*/libs/monocypher/)'
           git diff --quiet # exit if clang-format made any changes
