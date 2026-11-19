@@ -9,6 +9,12 @@ The webhook is DISCORD_RELEASES_WEBHOOK (a repository secret; never in a log).
 Without it nothing is posted and the run still succeeds, so a fork or a
 repository without the secret does not fail. GITHUB_TOKEN (or GH_TOKEN), if
 set, is used to read the release. --dry-run prints the message instead.
+
+The post's address on Discord goes into the release notes as a hidden line,
+<!-- discord-post: https://discord.com/channels/... -->, so that the
+servers' deploy script can link to it in the team's #development channel
+(setup-referee-host.sh). That needs a token that may edit releases; without
+one the post stands and only the line is missing.
 """
 from __future__ import annotations
 
@@ -134,10 +140,47 @@ def message(release: dict) -> dict:
     }
 
 
-def post(url: str, payload: dict) -> None:
+POST_LINE_RE = re.compile(r"\n*<!-- discord-post: (\S+) -->\s*$")
+
+
+def post(url: str, payload: dict) -> dict:
+    """Post it; Discord answers with the message it made (wait=true)."""
     request = urllib.request.Request(url + ("&" if "?" in url else "?") + "wait=true",
                                      data=json.dumps(payload).encode("utf-8"), method="POST",
                                      headers={"Content-Type": "application/json",
+                                              "User-Agent": "openth-release-post/1"})
+    with urllib.request.urlopen(request, timeout=20) as response:
+        return json.load(response)
+
+
+def webhook_guild(url: str) -> str:
+    """The Discord server of a webhook (a GET only reads the webhook)."""
+    request = urllib.request.Request(url, headers={"User-Agent": "openth-release-post/1"})
+    with urllib.request.urlopen(request, timeout=20) as response:
+        return str(json.load(response).get("guild_id") or "")
+
+
+def message_link(guild: str, posted: dict) -> str:
+    """The address of a posted message, or "" without what it needs."""
+    channel, message_id = posted.get("channel_id"), posted.get("id")
+    if not (guild and channel and message_id):
+        return ""
+    return f"https://discord.com/channels/{guild}/{channel}/{message_id}"
+
+
+def with_post_line(body: str, link: str) -> str:
+    """Release notes with the hidden line of the Discord post at the end
+    (instead of an older one)."""
+    return POST_LINE_RE.sub("", body or "").rstrip() + f"\n\n<!-- discord-post: {link} -->\n"
+
+
+def record_link(repo: str, release: dict, link: str, token: str) -> None:
+    body = json.dumps({"body": with_post_line(release.get("body") or "", link)}).encode("utf-8")
+    request = urllib.request.Request(f"https://api.github.com/repos/{repo}/releases/{release['id']}",
+                                     data=body, method="PATCH",
+                                     headers={"Accept": "application/vnd.github+json",
+                                              "Authorization": f"Bearer {token}",
+                                              "Content-Type": "application/json",
                                               "User-Agent": "openth-release-post/1"})
     with urllib.request.urlopen(request, timeout=20) as response:
         response.read()
@@ -150,7 +193,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="print the message, do not post it")
     args = parser.parse_args(argv)
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
-    payload = message(fetch_release(args.repo, args.tag, token))
+    rel = fetch_release(args.repo, args.tag, token)
+    payload = message(rel)
     if args.dry_run:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return 0
@@ -159,12 +203,23 @@ def main(argv: list[str] | None = None) -> int:
         print("DISCORD_RELEASES_WEBHOOK is not set: nothing posted")
         return 0
     try:
-        post(url, payload)
+        posted = post(url, payload)
     except (urllib.error.URLError, OSError) as exc:
         # (Never the URL: it is a secret.)
         print(f"posting failed: {exc.__class__.__name__}: {getattr(exc, 'code', '')}", file=sys.stderr)
         return 1
     print(f"{args.tag} posted")
+    # Where it is, for the servers' line in #development (the post stands either way).
+    try:
+        link = message_link(webhook_guild(url), posted or {})
+        if link and token and rel.get("id"):
+            record_link(args.repo, rel, link, token)
+            print(f"post's address kept in the release notes: {link}")
+        else:
+            print("post's address not kept (no token or no address)")
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        print(f"keeping the post's address failed: {exc.__class__.__name__}: {getattr(exc, 'code', '')}",
+              file=sys.stderr)
     return 0
 
 

@@ -33,7 +33,8 @@
 # (default: the host's name; kept from the last run).
 #
 # A line in the team's #development channel when a new release lands here
-# ("A new release, mp-test-..., is now on server eu2 ... Details: <link>"):
+# ("A new release, mp-test-..., is now on server eu2 ... Details: <link>",
+# the link to the release's post in the releases channel, else to GitHub):
 # put that channel's webhook into the secrets file as
 #   DISCORD_DEV_WEBHOOK_URL=https://discord.com/api/webhooks/...
 # Posted only when the release differs from the one this server ran before.
@@ -324,10 +325,28 @@ if [[ -n "$DEV_HOOK" && "$RELEASE" != "$OLD_RELEASE" ]]; then
   where=${NAME:-$(hostname)}
   [[ "$where" =~ ^eu[0-9]+$ ]] && where="$where ($where.openth.org)"
   DEV_HOOK=$DEV_HOOK python3 - "$RELEASE" "$where" <<'PY' || echo "   (the #development line could not be posted)"
-import json, os, sys, urllib.request
+import calendar, json, os, re, sys, time, urllib.request
 release, where = sys.argv[1], sys.argv[2]
-text = (f"A new release, **{release}**, is now on server {where}. Details: "
-        f"<https://github.com/openth-org/openth/releases/tag/{release}>")
+# The release's own post in the releases channel, if its poster
+# (corsixth_mp/release_post.py) left its address in the notes; a release
+# published a moment ago may not have it yet. Else the release's page.
+link = f"https://github.com/openth-org/openth/releases/tag/{release}"
+for attempt in range(8):
+    try:
+        req = urllib.request.Request(f"https://api.github.com/repos/openth-org/openth/releases/tags/{release}",
+                                     headers={"User-Agent": "openth-deploy"})
+        rel = json.load(urllib.request.urlopen(req, timeout=15))
+    except OSError:
+        break
+    m = re.search(r"<!-- discord-post: (https://discord\.com/channels/\d+/\d+/\d+) -->", rel.get("body") or "")
+    if m:
+        link = m.group(1)
+        break
+    published = calendar.timegm(time.strptime(rel.get("published_at") or "1970-01-01T00:00:00Z", "%Y-%m-%dT%H:%M:%SZ"))
+    if time.time() - published > 900 or attempt == 7:
+        break
+    time.sleep(15)
+text = f"A new release, **{release}**, is now on server {where}. Details: <{link}>"
 req = urllib.request.Request(os.environ["DEV_HOOK"], data=json.dumps({"content": text}).encode(),
                              headers={"Content-Type": "application/json", "User-Agent": "openth-deploy"})
 urllib.request.urlopen(req, timeout=15).read()
