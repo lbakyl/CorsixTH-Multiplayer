@@ -115,40 +115,12 @@ The whole single player game of CorsixTH (you can complete the full campaign), a
 
 How it works, in a short tour with diagrams (what runs where, what travels over the network, how the games stay in step): [docs/multiplayer/HOW-IT-WORKS.md](docs/multiplayer/HOW-IT-WORKS.md). The details (deterministic lockstep, the relay server, the referee), the tests and the lessons learned: [docs/multiplayer/README.md](docs/multiplayer/README.md), with [protocol.md](docs/multiplayer/protocol.md), [referee.md](docs/multiplayer/referee.md) and [coop-architecture.md](docs/multiplayer/coop-architecture.md). Work in progress lives on `mp/*` branches until it is tested and moved to `master`. Problems with multiplayer: please [open an issue on this fork](https://github.com/openth-org/openth/issues/new) (server, room name, time, what you were doing).
 
-----
-
-*The rest of this page is from upstream CorsixTH: the project this fork is built on, its community and how to help it.*
-
-## Developers
-### Coders and non-coders we want you!
-
-We are always looking for help with improving CorsixTH. The code base is made up of Lua and C++. Most of the game logic is written in Lua, we love Lua and its approachable and easy to pick up nature, so hit fork and get started! But don't worry if you don't code as we can always use your help in other areas and if you have ideas for the project please contact us or open a new issue! We could also use help updating the documentation in the wiki and keeping the issue list up to date.\
-You can also [click here](https://github.com/CorsixTH/CorsixTH/issues?q=is%3Aissue+is%3Aopen+label%3A%22Good+First+Issue%22) to find issues that would suit a first-time contributor to take on!
-
-###### Features & Bugfixes ######
-We still have features to add and bugs to fix, check out the issue tracker [here](https://github.com/CorsixTH/CorsixTH/issues). Want to talk about adding a feature? post on our Google group or [contact us](#Contact).
-
-###### Translation ######
-CorsixTH has translations for more than 20 different languages, some of which need updating. Read our [wiki](https://github.com/CorsixTH/CorsixTH/wiki/Localization) for more information.
-
-## More
-
-Our [wiki](https://github.com/CorsixTH/CorsixTH/wiki) is a good place to start, if you can't find what you are looking for feel free to contact us using one of the methods below.
-
 ## Contact
 
-- Follow us on [Reddit](https://www.reddit.com/r/corsixth), Twitter/X ([**@CorsixTH**](https://twitter.com/CorsixTH)), and on [Facebook](https://facebook.com/CorsixTH)
-- <details>
-  <summary>Hit us up on Matrix! (Discord bridged) [click to expand]</summary>
-  
-  - **CorsixTH Space** (includes all rooms below, if your client supports it) [#CorsixTH:matrix.org](https://matrix.to/#/#CorsixTH:matrix.org)
-  - **General Chat** [#corsixth-general:matrix.org](https://matrix.to/#/#corsixth-general:matrix.org)
-  - **Announcements** [#corsixth-announcements:matrix.org](https://matrix.to/#/#corsixth-announcements:matrix.org)
-  - **Technical Discussion** (DevOps) [#corsixth-technical:matrix.org](https://matrix.to/#/#corsixth-technical:matrix.org)
-  - **Help!** [#corsixth-help:matrix.org](https://matrix.to/#/#corsixth-help:matrix.org)
-  - **Community Content** [#corsixth-usercontent:matrix.org](https://matrix.to/#/#corsixth-usercontent:matrix.org)
-  
-</details>
+- **Website:** [openth.org](https://openth.org), with the [roadmap](https://openth.org/roadmap) and how to [get involved](https://openth.org/get-involved)
+- **Discord:** [openth.org/discord](https://openth.org/discord), to arrange games, hear about new builds and ask for help
+- **Bugs and ideas:** [GitHub issues](https://github.com/openth-org/openth/issues)
 
-- Join the server on [Discord](https://discord.gg/Mxeztvh)
-- Subscribe to our [Google Developer group](https://groups.google.com/g/corsix-th-dev)
+----
+
+*OpenTH is built on [CorsixTH](https://github.com/CorsixTH/CorsixTH), the open-source reimplementation of Theme Hospital: the engine, single player and most translations come from there. To help CorsixTH itself, see its [wiki](https://github.com/CorsixTH/CorsixTH/wiki), its [issues](https://github.com/CorsixTH/CorsixTH/issues) and [where to find its community](https://github.com/CorsixTH/CorsixTH#contact).*
