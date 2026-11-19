@@ -49,7 +49,7 @@ referee it sends `DESYNC` when they differ; with one it repairs the games
 | `WELCOME proto id server motd` | accepted |
 | `ERROR code text` | request refused; codes: `expected_hello`, `protocol`, `bad_room`, `room_exists`, `no_room`, `bad_password`, `build_mismatch`, `running`, `busy`, `room_full`, `in_room`, `not_owner`, `not_ready`, `not_enough`, `bad_speed`, `too_fast`, `bad_report`, `bad_command`, `unknown_verb`, `bad_message`, `not_referee`, `bad_seat`, `locked` |
 | `ERROR code=data_mismatch text need` | answer to `HELLO` with `data` (the Theme Hospital level files' CRC-32, `MultiplayerLobby.dataId`) other than the server's (`CORSIXTH_MP_DATA`) on a server without a referee; the server then hangs up. A server with a referee lets such a player in: in a new game their `START` has `resume=1` (no level is loaded), the others get `HOLD step=0 why=rejoin`, and everybody loads the referee's game at step 0 |
-| `ERROR code=build_mismatch text need release url` | answer to `HELLO` on a server that only lets in its referee's build (`referee.md`): `need` is the Lua code checksum it wants (the last part of the build id), `release` and `url` the release to get and its download page (both optional); the server then hangs up. The game offers `url` only if it is a `https://github.com/` page |
+| `ERROR code=build_mismatch text need release url` | answer to `HELLO` on a server that only lets in its referee's build (`referee.md`): `need` is the Lua code checksum it wants (the last part of the build id), `release` and `url` the release to get and its download page (both optional); the server then hangs up. The game offers `url` only if it is a `https://github.com/` page. A server with its build's signed game pack adds `pack` (its size in bytes), `pack_api` and `pack_engine` (what the pack's scripts need from the engine); a game that can take packs offers to download it instead (see Game packs below) |
 | `ROOM room players max mode level locked state build_ok continue` | one per room after `LIST`, then `ROOMS_END count`; `continue=1` for a saved game |
 | `JOINED room peer owner mode free level difficulty max continue date bots` | you are in the room as player `peer` (`free=1`: a new game, colours and teams can change; `mode`: what they make now; `continue`, `date`: a saved game; `bots=1`: this server can add bots) |
 | `PLAYER peer name ready rtt owner bot colour team level` | one per player (`bot=1`: a computer player, `level` an easy or hard one, none: normal; `colour`, `team`: 1-4, a continued game's saved ones), followed by |
@@ -178,3 +178,29 @@ the room with `continue=1`; on `START` (with `resume=1`, and in co-op `seats`:
 the free ones in order) no game loads a level; the host's game sends the
 save, and the server passes it to everybody as `LOAD`/`SAVEDATA`/`LOADEND`/
 `RESUME`, like a desync repair.
+
+## Game packs
+
+A player whose game is another build than the server's can get the server's
+build in the game (`CorsixTH/Lua/mp_pack.lua`): its scripts and data (the
+`Lua`, `Campaigns`, `Levels`, `Sounds` and `Bitmap` files and `CorsixTH.lua`),
+zlib data signed with an OpenTH release key (`mp_server/corsixth_mp/packs.py`).
+The game keeps its own engine, libraries and fonts.
+
+On a connection of its own, the game's first line is
+`PACK build=<checksum> from=<byte>` (like `HEALTH`, no `HELLO`). The server
+answers `PACKINFO build size sig release from` (`sig`: the Ed25519 signature
+of the pack file, 128 hexadecimal digits), then `PACKDATA d=<base64>` lines of
+36000 bytes each, then `PACKEND size`, and hangs up; or `ERROR` (`no_pack`,
+`busy`: more than 8 downloads at once). `from` goes on after a cut, from the
+start of the piece it was in.
+
+The game takes the pack only if the engine finds the signature of a key built
+into it (`CorsixTH/Src/th_packs.cpp`), its scripts need this engine's
+`api_version` and no higher engine level for packs, its files are only under
+those folders, and its Lua code has the checksum asked for. It unpacks it into
+`builds/<checksum>/` beside the config file, writes the checksum into
+`builds/current.txt` and restarts; `CorsixTH.lua` (`Lua/mp_pack_start.lua`)
+then starts that build with `--pack-of=<installed game>`, which joins the
+server again (`builds/rejoin.txt`). A start that never reaches the main menu
+leaves `builds/starting.txt`, and the installed game starts the next time.
