@@ -48,6 +48,8 @@ SERVER_VERSION = "0.1"
 PACK_CHUNK = 36000
 MAX_PACK_SENDS = 8
 PACK_SEND_TIMEOUT = 600.0
+# After sending a pack: how long the game may take to read it and close.
+PACK_LINGER = 60.0
 MAX_NAME = 32
 MAX_ROOMS = 64
 # A new room is "free": every player picks a colour (the hospital they play
@@ -590,6 +592,12 @@ class Server:
             try:
                 await asyncio.wait_for(self._send_pack(first.decode("utf-8", "replace"), writer),
                                        PACK_SEND_TIMEOUT)
+                # The game closes the connection itself after PACKEND. Closed
+                # here first, a game that still had lines to read gave up as
+                # "connection lost" (it reads ten a frame and then looks
+                # whether the connection is closed: a 3.5 MB pack stopped at
+                # 2.1 MB, eu2, 2026-11-19).
+                await asyncio.wait_for(reader.read(), PACK_LINGER)
             except (asyncio.TimeoutError, ConnectionError) as exc:
                 log.info("pack download from %s stopped: %s", peername, exc.__class__.__name__)
             await self._close_writer(writer)
