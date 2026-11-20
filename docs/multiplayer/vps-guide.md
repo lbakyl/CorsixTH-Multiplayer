@@ -74,7 +74,7 @@ sudo curl -fsSLo compose.yaml \
   https://raw.githubusercontent.com/openth-org/openth/master/mp_server/compose.yaml
 ```
 
-`master` is the newest tested state of the fork.
+`master` is the newest tested state of OpenTH.
 
 Optional settings go in `/opt/corsixth-mp/.env` (all have defaults):
 

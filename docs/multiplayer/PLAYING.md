@@ -1,10 +1,11 @@
-# Playing CorsixTH multiplayer (test version)
+# Playing OpenTH
 
-This fork adds network multiplayer to CorsixTH: two to eight players run one
+OpenTH adds network multiplayer to CorsixTH: two to eight players run one
 game together over the internet, either in **one shared hospital**, in
 **a hospital each** as a team (co-op), or in a **competitive race** with a
 hospital each, on Theme Hospital's original multiplayer maps.
-It is a test version: expect rough edges, and please report what you find.
+There are stable releases and test builds with the newest changes (expect
+rough edges in those); please report what you find.
 
 ## What you need
 
@@ -13,23 +14,24 @@ It is a test version: expect rough edges, and please report what you find.
   (macOS 26 for releases built on GitHub's machines). Players on all three can play together.
 - **Your own Theme Hospital game data** (GOG, EA or the original CD). It is
   not included and must never be shared. Editions differ in their
-  multiplayer maps and level settings; the servers eu1 and eu2 have the GOG
+  multiplayer maps and level settings; OpenTH's servers have the GOG
   edition. With another edition (an old CD, say) you can play there too:
   your game then starts from the server's own copy of the game (it takes a
   moment longer to start).
-- **The multiplayer build of this fork**, the same one as everybody you play
-  with. A server with a referee only lets in the build it runs; it tells
-  you which release to download.
+- **OpenTH**, the same release as everybody you play with. A server with a
+  referee only lets in the build it runs; it tells you which release to
+  download.
 - **A server address** (`host:port`, port 47800 by default).
-  `eu1.openth.org:47800` runs the newest stable release,
-  `eu2.openth.org:47800` the newest test build.
+  `eu2.openth.org:47800` runs the newest test build, every other OpenTH
+  server the newest stable release; https://openth.org/play lists them.
   Anybody can run one; see [SERVER-SETUP.md](SERVER-SETUP.md).
 
 ## Get the game
 
-1. Open the fork's [Releases](https://github.com/openth-org/openth/releases)
-   and download the newest **Multiplayer test build** zip (no GitHub account
-   needed). Unzip it into a new folder.
+1. Open OpenTH's [Releases](https://github.com/openth-org/openth/releases)
+   and download the newest stable release's `...-win64.zip` (or the newest
+   test build's, for EU2; no GitHub account needed). Unzip it into a new
+   folder.
 2. Start `CorsixTH.exe`. The first time it asks for your Theme Hospital
    folder.
 3. Any game language works: players in different languages play together
@@ -51,15 +53,16 @@ Anyway** (once). (Or in Terminal:
 `xattr -dr com.apple.quarantine /Applications/CorsixTH.app`.) Settings
 and saves are in the hidden folder `~/.config/CorsixTH`.
 
-Everybody in a game must use the same test build, and the server must run the
+Everybody in a game must use the same release, and the server must run the
 matching version (each release names its server image). Builds of newer
-commits are also on the fork's **Actions** tab (a run of the Windows, the
+commits are also on OpenTH's **Actions** tab (a run of the Windows, the
 Linux package or the macOS app workflow on `master`, Artifacts; this needs a GitHub account).
 
 ## Play
 
-1. Main menu, **Multiplayer**. Click **EU1: stable** or **EU2: test builds**
-   (or type another server's address), enter your name, then **Connect**.
+1. Main menu, **Multiplayer**. Click a server's button (EU2 runs test
+   builds, the others the stable release), or type another server's
+   address; enter your name, then **Connect**.
 2. **To host:** type a room name, and a password if you like, choose the
    level and the number of players (or a saved game with **Load MP game**, see
    below), then **Create**. When everybody has pressed **Ready**, press
@@ -606,14 +609,14 @@ Trading staff and money and sharing research work as in co-op.
 Servers that run the headless referee repair this automatically, within a
 second: everybody loads the server's copy of the game and plays on, each
 player's view stays where it was, and the adviser says "Your game got out of
-sync and was recovered successfully." (People may jump a little.) The test
-server runs the referee for the current test release.
+sync and was recovered successfully." (People may jump a little.) All of
+OpenTH's servers run the referee.
 
 ## Joining a game that is already running
 
-On a server with the referee (eu1 and eu2) a running game stays open. The
-room list shows it as "playing, 2 free": two places somebody may take. Join
-it (with its password, if it has one):
+On a server with the referee (all of OpenTH's servers) a running game stays
+open. The room list shows it as "playing, 2 free": two places somebody may
+take. Join it (with its password, if it has one):
 
 - **Your connection dropped:** join the same room under the same name and
   you are back in your own hospital at once (also while the server still
@@ -647,9 +650,10 @@ please report it (below).
 
 ## Reporting a problem
 
-Please tell the fork's owner (an issue on the fork is fine): the server
-address, the room name, roughly when it happened, and what you were doing,
-and attach the newest file from the game's `Logs` folder (in
+Please tell us, in an [issue on GitHub](https://github.com/openth-org/openth/issues)
+or on [Discord](https://openth.org/discord): the server address, the room
+name, roughly when it happened, and what you were doing, and attach the
+newest file from the game's `Logs` folder (in
 `%APPDATA%\CorsixTH`, or next to `CorsixTH.exe` if `config.txt` is there).
 After an out-of-sync, a game error or a game that stopped, the server's log
 also says what happened, which helps a lot.

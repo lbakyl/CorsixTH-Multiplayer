@@ -1,6 +1,6 @@
-# CorsixTH-Multiplayer: developer handover
+# OpenTH: developer handover
 
-Start here if you are picking up this fork. This page is the map: the current
+Start here if you are picking up OpenTH. This page is the map: the current
 state, how to build and test, where things are, and what we learned the hard
 way. The other files in this folder are detailed reports from each step.
 
@@ -8,8 +8,8 @@ Last updated: 2026-10-18, branch `mp/coop-full`.
 
 ## 1. Goal and approach
 
-An experimental multiplayer mod for CorsixTH (an open-source Theme Hospital
-remake), planned in this order:
+OpenTH: multiplayer for CorsixTH (an open-source Theme Hospital remake),
+planned in this order:
 
 1. **Co-build**: 2–4 players run one shared hospital. *(works)*
 2. **Co-op**: one hospital each, with trades between them: money, staff
@@ -58,7 +58,7 @@ data, saves from it, or logs that contain it.**
 | Windows | CI artifact includes LuaSocket. **S0 passed**: Windows (MSVC) and Linux (GCC), both Lua 5.5, identical for 3 game years; shared and co-op games between a Windows and a Linux player IN SYNC (`cross-platform.md`) |
 | Save and continue | File > Save and a monthly autosave save every player's game at the same hour (`Multiplayer` save folder); the lobby's Continue button starts a room from such a save, players get their own hospitals back by name, everybody loads the host's save (check 11) |
 | Real network | LAN (Windows desktop ↔ Linux VM), and over the internet: server on a Hetzner VPS in Helsinki (set up with `setup-vps.sh`), 20 scripted players at home in Prague (30 ms round trip): all 10 lobby checks pass. The server chose delay 2 and Normal (one way 17 to 20 ms between players; one sample of 31 ms gave delay 3). Windows players over the internet: not yet |
-| Linux CI | Fails in the static-analysis step on upstream's own `CMakeLists.txt` formatting (gersemi); not caused by this fork's changes |
+| Linux CI | Fails in the static-analysis step on upstream's own `CMakeLists.txt` formatting (gersemi); not caused by OpenTH's changes |
 
 ## 3. Branches
 
@@ -68,7 +68,7 @@ once the checks pass.
 
 One branch per step, each stacked on the previous one. PRs #1–#6 cover the
 first six; the newer branches have no PR yet (upstream `AGENTS.md` says AI
-agents must not open PRs, so the owner opens them).
+agents must not open PRs, so a maintainer opens them).
 
 | Branch | What |
 |---|---|
@@ -103,7 +103,7 @@ Gameplay code (`CorsixTH/Lua/`):
 | `world.lua` | Lockstep in `World:onTick`/`_advanceHours`; co-op hospitals, `getUIHospital`, `getTileHospital`, co-op opening countdowns |
 | `map.lua` | Loads original multiplayer maps (`"net20"` … `"net44"`) |
 | `mp_levels.lua` | The five levels with a hospital each: what each takes from a campaign level, starting money, goals |
-| `audio.lua` (`Audio:playOwnAnnouncement`), `CorsixTH/Sounds/` | Announcements of CorsixTH's own (not in the game's sound archive), loaded by `soundEffects:addExtraSound` and played by `playExtra` (`Src/th_lua_sound.cpp`, `th_sound.cpp`): "a player has left the game" |
+| `audio.lua` (`Audio:playOwnAnnouncement`), `CorsixTH/Sounds/` | Announcements of OpenTH's own (not in the game's sound archive), loaded by `soundEffects:addExtraSound` and played by `playExtra` (`Src/th_lua_sound.cpp`, `th_sound.cpp`): "a player has left the game" |
 | `dialogs/edit_room.lua`, `place_objects.lua`, `place_staff.lua`, `furnish_corridor.lua`, `hire_staff.lua`, `watch.lua`, `fullscreen/fax.lua`, `message.lua`, `bottom_panel.lua` | Player actions turned into commands; fax numbering and game-hour timeouts |
 
 **Everything multiplayer is gated on `TheApp.mp_session`** (and co-op on
@@ -355,7 +355,7 @@ or on a VPS with Docker: see `vps-guide.md` (image `ghcr.io/lbakyl/corsixth-mp-s
 
 1. **Internet test**: the server on the VPS, two Windows clients (S7);
    real latency for the pacing.
-2. **Referee in production**: a Linux CorsixTH build in the server image (or
+2. **Referee in production**: a Linux build of the game in the server image (or
    next to it), the game data on a read-only volume; regular saves; restart a
    crashed referee.
 3. **VPS**: image, compose file, guide and setup script are done

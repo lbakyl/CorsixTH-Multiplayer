@@ -1,4 +1,4 @@
-# CorsixTH multiplayer server
+# OpenTH multiplayer server
 
 The lobby and relay that players connect to from the game (main menu,
 **Multiplayer**): rooms with passwords, a game-build check, ping measurement
@@ -16,7 +16,7 @@ referee (below).
 |---|---|---|
 | **Plain server** ([quick start](#quick-start-plain-server)) | Any computer with Python 3.11+ (Windows, Linux, macOS) | Rooms and games, on your LAN or the internet. Without a referee a game that gets out of sync ends, a player who left cannot come back, and there are no bots; the referee can be added on Windows too ([below](#with-the-referee-and-bots-on-windows)) |
 | **Docker on a VPS** ([`vps-guide.md`](../docs/multiplayer/vps-guide.md), `deploy/setup-vps.sh`) | A Linux VPS with Docker | The plain server as a service on the internet |
-| **Server with the referee** ([`SERVER-SETUP.md`](../docs/multiplayer/SERVER-SETUP.md), `deploy/setup-referee-host.sh`) | A Linux x86-64 machine (Ubuntu 24.04+ or Debian 13) and your own Theme Hospital files | What eu1 and eu2 run: games repair themselves when they get out of sync, players can rejoin, bots, players with another Theme Hospital edition can join |
+| **Server with the referee** ([`SERVER-SETUP.md`](../docs/multiplayer/SERVER-SETUP.md), `deploy/setup-referee-host.sh`) | A Linux x86-64 machine (Ubuntu 24.04+ or Debian 13) and your own Theme Hospital files | What OpenTH's servers run: games repair themselves when they get out of sync, players can rejoin, bots, players with another Theme Hospital edition can join |
 
 ## Quick start (plain server)
 

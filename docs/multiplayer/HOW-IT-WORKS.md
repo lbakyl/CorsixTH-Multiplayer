@@ -1,4 +1,4 @@
-# How CorsixTH Multiplayer works
+# How OpenTH works
 
 A tour for programmers: what runs where, what travels over the network, and
 why every player sees the same hospital. Written for build `8141203d`
@@ -31,15 +31,15 @@ that input. Most of the multiplayer work went there.
 ```mermaid
 flowchart LR
   subgraph PC1["Player 1's computer"]
-    G1["CorsixTH<br/>the whole game + the screen"]
+    G1["OpenTH<br/>the whole game + the screen"]
   end
   subgraph PC2["Player 2's computer"]
-    G2["CorsixTH<br/>the whole game + the screen"]
+    G2["OpenTH<br/>the whole game + the screen"]
   end
   subgraph SRV["Server machine"]
     S["Relay and lobby server<br/>Python, no game code"]
-    R["Referee<br/>CorsixTH without a screen"]
-    B["Bot<br/>CorsixTH without a screen<br/>+ a bot script"]
+    R["Referee<br/>the game without a screen"]
+    B["Bot<br/>the game without a screen<br/>+ a bot script"]
   end
   G1 <-->|"TCP port 47800<br/>commands + step reports"| S
   G2 <-->|"TCP port 47800"| S
@@ -49,10 +49,10 @@ flowchart LR
 
 | Piece | What it is | Code |
 |---|---|---|
-| The game | CorsixTH with the multiplayer code, all in Lua. Runs the full simulation and draws your view of it. | `CorsixTH/Lua/mp_session.lua` (lockstep, commands), `mp_lobby.lua` (server connection, lobby, start, repairs), `mp_transport.lua` (text lines over TCP, LuaSocket) |
+| The game | OpenTH: CorsixTH with the multiplayer code, all in Lua. Runs the full simulation and draws your view of it. | `CorsixTH/Lua/mp_session.lua` (lockstep, commands), `mp_lobby.lua` (server connection, lobby, start, repairs), `mp_transport.lua` (text lines over TCP, LuaSocket) |
 | The server | A small Python (asyncio) program. Rooms and passwords, the build check, ping and pacing, the start of a game, relaying lines, comparing fingerprints, organising repairs. It never runs the game. | `mp_server/corsixth_mp/server.py`, `pacing.py`, `protocol.py` |
 | The referee | One more copy of each running game, started by the server, without a screen. It checks the players and repairs their games. Optional. | `scripts/multiplayer/referee.lua`, `mp_server/corsixth_mp/referee.py` |
-| Bots | Computer players. Each one is again CorsixTH without a screen, started by the server, playing one place through commands, like a person. | `scripts/multiplayer/bot.lua`, `bot_manager.lua` |
+| Bots | Computer players. Each one is again the game without a screen, started by the server, playing one place through commands, like a person. | `scripts/multiplayer/bot.lua`, `bot_manager.lua` |
 
 Everything multiplayer in the game is behind `TheApp.mp_session`. Without a
 session the code paths are the original single-player ones. A test run of
@@ -281,7 +281,7 @@ last few steps), so the cause can be found afterwards
 
 ### The referee
 
-The referee is CorsixTH without a screen on the server machine, one for each
+The referee is the game without a screen on the server machine, one for each
 running game. The server starts it when the game starts; it connects to
 `127.0.0.1` with a token, and the server replays to it every line it missed.
 It plays the same game from the same commands, never issues one, and the
@@ -318,7 +318,7 @@ referee.
 
 ## Bots
 
-A bot is a separate CorsixTH process without a screen, started by the server
+A bot is a separate game process without a screen, started by the server
 when the room owner adds one. It joins like a person (`HELLO role=bot` with a
 token) and takes a place. From then on it is just another player. It has its
 own copy of the world and reads it directly (no screen reading), decides what
@@ -366,7 +366,8 @@ whole saved game travels only for a repair, a join or a continued game
 
 ## The servers
 
-The public servers (eu1: the stable release, eu2: test builds) each run:
+OpenTH's public servers (eu2 runs test builds, every other one the stable
+release; https://openth.org/play lists them) each run:
 
 ```mermaid
 flowchart TB

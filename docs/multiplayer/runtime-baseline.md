@@ -177,7 +177,7 @@ interactive main loop, so it does not test normal shutdown or SDL event polling.
 `.github/workflows/Windows.yml` already builds the default `win-x64-rel` preset,
 runs CTest, installs into `artifact/`, and uploads a CorsixTH artifact. It runs on
 push and pull request. No workflow modification is needed merely to get a
-Windows download. Whether a particular fork run succeeds must be checked on
+Windows download. Whether a particular OpenTH run succeeds must be checked on
 GitHub; the repository settings screenshot alone is not a successful build.
 The asset-dependent smoke runner must not be wired to public CI with private
 game data.
