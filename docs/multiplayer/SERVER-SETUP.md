@@ -1,7 +1,7 @@
 # Setting up your own multiplayer server (with the referee)
 
-This guide sets up a server like `eu1.openth.org` and
-`eu2.openth.org`: the lobby where players make and join rooms, plus
+This guide sets up a server like OpenTH's own (`eu1.openth.org`,
+`us1.openth.org`, ...): the lobby where players make and join rooms, plus
 the **referee**, a copy of every game that runs on the server. The referee
 repairs games that get out of sync within a moment, lets a player whose game
 crashed join again, and runs the computer players (bots). One script does
@@ -27,8 +27,8 @@ takes about 15 minutes.
   part of any download here and must not be shared publicly.
 - **Theme Hospital game files for the referee.** Players with another
   edition (other multiplayer maps and level settings) can play too: their
-  game starts from the referee's instead of their own level files. eu1 and
-  eu2 use the **GOG** edition.
+  game starts from the referee's instead of their own level files. OpenTH's
+  servers use the **GOG** edition.
 
 ## 2. Firewall and security
 
@@ -52,8 +52,8 @@ sudo ufw enable
 
 Any server on the internet gets thousands of password guesses on SSH (port
 22) a day. **fail2ban** watches the SSH log and blocks an address on port 22
-for an hour after 5 failed logins within 10 minutes. eu1 and eu2 run exactly
-this setup.
+for an hour after 5 failed logins within 10 minutes. OpenTH's servers run
+exactly this setup.
 
 Install it and write its settings:
 
@@ -104,7 +104,7 @@ server updated (`sudo apt update && sudo apt upgrade`).
 ## 3. Copy your Theme Hospital files to the server
 
 Find the folder with the game files: it has the folders **DATA**, **QDATA**,
-**LEVELS** and **SOUND** inside. It is the folder you chose when CorsixTH first
+**LEVELS** and **SOUND** inside. It is the folder you chose when the game first
 asked where Theme Hospital is.
 
 - GOG on a Mac: `/Applications/Theme Hospital.app/Contents/Resources/game`
@@ -131,7 +131,7 @@ Every player and the server must run **the same release**. Open the releases
 page: <https://github.com/openth-org/openth/releases>
 
 - **Stable** releases are called `mp-stable-<number>` (the one marked
-  *Latest*). eu1 runs the newest stable one.
+  *Latest*). Every OpenTH server except eu2 runs the newest stable one.
 - **Test** releases are called `mp-test-<number>` (marked *Pre-release*). eu2
   runs the newest test one.
 
@@ -146,7 +146,7 @@ connect) with your own:
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/openth-org/openth/master/mp_server/deploy/setup-referee-host.sh
-sudo bash setup-referee-host.sh --release mp-stable-a03adfdc --data ~/themehos --motd "Welcome to my CorsixTH server"
+sudo bash setup-referee-host.sh --release mp-stable-a03adfdc --data ~/themehos --motd "Welcome to my OpenTH server"
 ```
 
 Add `--port 47900` if you want another port than 47800 (then open that one in
@@ -202,7 +202,7 @@ When a new release comes out, run the script again with its name, **without
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/openth-org/openth/master/mp_server/deploy/setup-referee-host.sh
-sudo bash setup-referee-host.sh --release mp-stable-NEWNUMBER --motd "Welcome to my CorsixTH server"
+sudo bash setup-referee-host.sh --release mp-stable-NEWNUMBER --motd "Welcome to my OpenTH server"
 ```
 
 - **Updating restarts the server and drops everybody who is playing.** Check
@@ -245,7 +245,9 @@ sudo bash setup-referee-host.sh --release mp-stable-NEWNUMBER --motd "Welcome to
   `--release`.
 - **A game got out of sync:** the referee repairs it by itself within a
   moment; the log shows `state of ...` lines about it. If you want the cause
-  found, send those log lines to the maintainers.
+  found, send those log lines to us, in an
+  [issue on GitHub](https://github.com/openth-org/openth/issues) or on
+  [Discord](https://openth.org/discord).
 - **The bots do not build like your experts (section 10):** only hard bots
   do, in games started after the morning's learning. See what it learnt with
   `sudo journalctl -u corsixth-mp-learn -n 20` (a save it could not read is

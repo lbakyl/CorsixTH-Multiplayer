@@ -18,8 +18,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
--- Which Unicode font the game loads: the shipped pixel font replaces the old
--- smooth default, but never a font the player chose.
+-- Which Unicode font the game loads: the smooth default, sized to each
+-- window's font, also in place of a pixel font the config file remembered;
+-- never in place of a font the player chose.
 describe("Unicode font file", function()
   local Graphics
   setup(function()
@@ -32,36 +33,41 @@ describe("Unicode font file", function()
 
   local dir = "/game/CorsixTH/"
   local pixel = dir .. "Fonts/fusion-pixel-12px-proportional-zh_hans.ttf"
+  local smooth = dir .. "CorsixTHUnicode.ttf"
   local function files(list)
     local set = {}
     for _, f in ipairs(list) do set[f] = true end
     return function(path) return set[path] == true end
   end
 
-  it("prefers the shipped pixel font", function()
-    local exists = files({pixel, dir .. "CorsixTHUnicode.ttf"})
-    assert.equal(pixel, Graphics.chooseFontFile(nil, nil, dir, exists))
+  it("prefers the smooth default font", function()
+    local exists = files({pixel, smooth})
+    assert.equal(smooth, Graphics.chooseFontFile(nil, nil, dir, exists))
   end)
 
-  it("replaces an old default the config file remembered", function()
-    local exists = files({pixel, dir .. "CorsixTHUnicode.ttf", "CorsixTHUnicode.ttf"})
-    assert.equal(pixel, Graphics.chooseFontFile("CorsixTHUnicode.ttf", nil, dir, exists))
-    assert.equal(pixel, Graphics.chooseFontFile(dir .. "CorsixTHUnicode.ttf", nil, dir, exists))
-    assert.equal(pixel, Graphics.chooseFontFile("C:\\Games\\CorsixTH\\GoNotoKurrent-Regular.ttf",
-        nil, dir, exists))
+  it("replaces the pixel font the config file remembered", function()
+    local exists = files({pixel, smooth})
+    assert.equal(smooth, Graphics.chooseFontFile(pixel, nil, dir, exists))
+    assert.equal(smooth, Graphics.chooseFontFile(
+        "C:\\Games\\OpenTH\\Fonts\\fusion-pixel-12px-proportional-zh_hans.ttf", nil, dir, exists))
+  end)
+
+  it("keeps the smooth default the config file remembered", function()
+    local exists = files({pixel, smooth, "CorsixTHUnicode.ttf"})
+    assert.equal(smooth, Graphics.chooseFontFile("CorsixTHUnicode.ttf", nil, dir, exists))
+    assert.equal(smooth, Graphics.chooseFontFile(smooth, nil, dir, exists))
   end)
 
   it("keeps a font the player chose", function()
-    local exists = files({pixel, "/fonts/MyFont.ttf"})
+    local exists = files({pixel, smooth, "/fonts/MyFont.ttf"})
     assert.equal("/fonts/MyFont.ttf", Graphics.chooseFontFile("/fonts/MyFont.ttf", nil, dir, exists))
   end)
 
-  it("falls back to the old default without the pixel font", function()
-    local exists = files({dir .. "CorsixTHUnicode.ttf"})
-    assert.equal(dir .. "CorsixTHUnicode.ttf", Graphics.chooseFontFile(nil, nil, dir, exists))
-    local old = files({"/old/CorsixTHUnicode.ttf"})
+  it("falls back to a remembered smooth font, then the pixel font", function()
+    local old = files({"/old/CorsixTHUnicode.ttf", pixel})
     assert.equal("/old/CorsixTHUnicode.ttf",
         Graphics.chooseFontFile("/old/CorsixTHUnicode.ttf", nil, dir, old))
+    assert.equal(pixel, Graphics.chooseFontFile(nil, nil, dir, files({pixel})))
   end)
 
   it("says why when there is no font at all", function()

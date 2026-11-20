@@ -748,8 +748,8 @@ function UIMenuBar:makeGameMenu(app)
       self.ui:addWindow(UILoadGame(self.ui, "game"))
     end)
     :appendItem(_S.menu_file.save:format(hotkey_value_label("ingame_saveMenu", hotkeys)), function()
-      -- Multiplayer: everybody's game saves at the same hour.
-      if MultiplayerSession.saveTogether() then return end
+      -- Multiplayer: a name, then everybody's game saves at the same hour.
+      if MultiplayerSession.openSave(self.ui) then return end
       self.ui:addWindow(UISaveGame(self.ui))
     end)
     :appendItem(_S.menu_file.restart:format(hotkey_value_label("ingame_restartLevel", hotkeys)), function()

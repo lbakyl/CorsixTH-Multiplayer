@@ -400,6 +400,13 @@ function MultiplayerLobby:MultiplayerLobby(params)
   local hello = {proto = MultiplayerLobby.PROTOCOL, build = self.build, name = self.name,
       data = params.data or MultiplayerLobby.dataId()}
   if hello.data == "" then hello.data = nil end
+  -- The game's language ("cs"): a bot's notes to its team are written in its
+  -- team mates' language (server: _note_language).
+  local app = rawget(_G, "TheApp")
+  if app and app.strings and app.config and app.config.language then
+    local ok, code = pcall(app.strings.getLangCode, app.strings, app.config.language)
+    if ok and type(code) == "string" then hello.lang = code:lower() end
+  end
   -- Extra fields, e.g. role/room/token for the server's headless referee.
   for k, v in pairs(params.hello or {}) do hello[k] = v end
   self.is_referee = hello.role == "referee"
@@ -528,8 +535,65 @@ function MultiplayerLobby.savesDir()
   return dir .. "Multiplayer" .. sep
 end
 
+-- Russian and Ukrainian letters in Latin ones, for file names.
+local TRANSLIT = {}
+for _, pair in ipairs({
+  {"а", "А", "a"}, {"б", "Б", "b"}, {"в", "В", "v"}, {"г", "Г", "g"}, {"ґ", "Ґ", "g"},
+  {"д", "Д", "d"}, {"е", "Е", "e"}, {"ё", "Ё", "yo"}, {"є", "Є", "ye"}, {"ж", "Ж", "zh"},
+  {"з", "З", "z"}, {"и", "И", "i"}, {"і", "І", "i"}, {"ї", "Ї", "yi"}, {"й", "Й", "y"},
+  {"к", "К", "k"}, {"л", "Л", "l"}, {"м", "М", "m"}, {"н", "Н", "n"}, {"о", "О", "o"},
+  {"п", "П", "p"}, {"р", "Р", "r"}, {"с", "С", "s"}, {"т", "Т", "t"}, {"у", "У", "u"},
+  {"ф", "Ф", "f"}, {"х", "Х", "kh"}, {"ц", "Ц", "ts"}, {"ч", "Ч", "ch"}, {"ш", "Ш", "sh"},
+  {"щ", "Щ", "shch"}, {"ъ", "Ъ", ""}, {"ы", "Ы", "y"}, {"ь", "Ь", ""}, {"э", "Э", "e"},
+  {"ю", "Ю", "yu"}, {"я", "Я", "ya"},
+}) do
+  TRANSLIT[pair[1]] = {pair[3], false}
+  TRANSLIT[pair[2]] = {pair[3]:sub(1, 1):upper() .. pair[3]:sub(2), true}
+end
+
+--! Text made fit for a file name on every system (Windows names are not
+--! UTF-8 here): Russian and Ukrainian letters become Latin ones ("Алёна" ->
+--! "Alyona", "ЖЕНЯ" -> "ZHENYA"), ASCII letters, digits, spaces, - _ and '
+--! stay, anything else goes. At most `limit` bytes (default 40).
+function MultiplayerLobby.fileSafe(text, limit)
+  local words = {}
+  for word in tostring(text or ""):gmatch("%S+") do
+    local parts, lower, upper = {}, false, false
+    for ch in word:gmatch("[\1-\127\194-\244][\128-\191]*") do
+      local t = TRANSLIT[ch]
+      if t then
+        parts[#parts + 1] = t[1]
+        if t[2] then upper = true elseif t[1] ~= "" then lower = true end
+      elseif ch:match("^[%w%-_']$") then
+        parts[#parts + 1] = ch
+        if ch:match("%l") then lower = true elseif ch:match("%u") then upper = true end
+      end
+    end
+    local w = table.concat(parts)
+    if upper and not lower then w = w:upper() end
+    if w ~= "" then words[#words + 1] = w end
+  end
+  local s = table.concat(words, " ")
+  limit = limit or 40
+  if #s > limit then s = s:sub(1, limit):gsub("%s+$", "") end
+  return s
+end
+
+--! A multiplayer save's file name (without .sav): the name the saving
+--! player gave it (the level's name unless changed), the player and the
+--! game date, e.g. "TEAM TOWN Jan y3-m12-d21".
+function MultiplayerLobby.saveLabel(name, by, year, month, day)
+  local parts = {}
+  for _, part in ipairs({MultiplayerLobby.fileSafe(name, 40), MultiplayerLobby.fileSafe(by, 20)}) do
+    if part ~= "" then parts[#parts + 1] = part end
+  end
+  parts[#parts + 1] = string.format("y%d-m%02d-d%02d", year, month, day)
+  return table.concat(parts, " ")
+end
+
 --! Multiplayer saves that can be continued, newest first:
---! {label, path, info = {room, mode, level, difficulty, step, date, hospitals, players}}.
+--! {label, path, info = {room, mode, level, difficulty, step, date, hospitals, players,
+--! and for a save (not an autosave) name and by: its name and who saved, as typed}}.
 function MultiplayerLobby.listSaves()
   local lfs = require("lfs")
   local dir = MultiplayerLobby.savesDir()
@@ -562,15 +626,20 @@ end
 
 --! Write this game to the multiplayer saves folder, with an .mpinfo file
 --! next to it for the lobby. Every peer does this at the same step.
-function MultiplayerLobby:_writeLocalSave(session, kind)
+--!param info (table) for a save: {name, by} from the save_game command (the
+--! name the player gave it and who saved), so every peer names it the same.
+function MultiplayerLobby:_writeLocalSave(session, kind, info)
   local lfs = require("lfs")
   local world = TheApp.world
   local dir = MultiplayerLobby.savesDir()
   if not lfs.attributes(dir, "mode") then lfs.mkdir(dir) end
-  local room = (self.room and self.room.room or "game"):gsub("[^%w%-_ ']", "_")
+  local room = MultiplayerLobby.fileSafe(self.room and self.room.room or "game")
+  if room == "" then room = "game" end
   local date = world.game_date
+  info = info or {}
+  local name = info.name ~= nil and tostring(info.name) or tostring(world.map.level_name or room)
   local label = kind == "autosave" and (room .. " autosave") or
-      string.format("%s y%d-%02d-%02d", room, date:year(), date:monthOfYear(), date:dayOfMonth())
+      MultiplayerLobby.saveLabel(name, info.by, date:year(), date:monthOfYear(), date:dayOfMonth())
   local path = dir .. label .. ".sav"
   -- (Staff this player is moving are only hidden on this screen.)
   session:withHiddenShown(TheApp.save, TheApp, path)
@@ -595,6 +664,11 @@ function MultiplayerLobby:_writeLocalSave(session, kind)
       "colours=", table.concat(colours, ","), "\n",
       "teams=", table.concat(teams, ","), "\n",
       "players=", tostring(world.mp_coop and n or #session.peers), "\n")
+  if kind ~= "autosave" then
+    -- As typed (the file name may have lost letters): the name and who saved.
+    local function line(v) return (tostring(v or ""):gsub("[\r\n]", " ")) end
+    f:write("name=", line(name), "\n", "by=", line(info.by), "\n")
+  end
   f:close()
   self.log(string.format("multiplayer: SAVED %s at step %d: %s", label, session.step,
       MultiplayerSession.defaultFingerprint(world)))
@@ -955,8 +1029,176 @@ function MultiplayerLobby:botCount()
   return n
 end
 
+--! A word with its first letter in lower case: Latin (A-Z) and Cyrillic
+--! (А-Я, Ѐ-Џ with Ё, Є, І, Ї; Ґ) capitals, UTF-8.
+function MultiplayerLobby.lowerFirst(word)
+  local b1, b2 = word:byte(1, 2)
+  if not b1 then return word end
+  if b1 < 128 then return (word:gsub("^%u", string.lower)) end
+  local rest = word:sub(3)
+  if b1 == 0xD0 and b2 >= 0x90 and b2 <= 0x9F then return string.char(0xD0, b2 + 0x20) .. rest end
+  if b1 == 0xD0 and b2 >= 0xA0 and b2 <= 0xAF then return string.char(0xD1, b2 - 0x20) .. rest end
+  if b1 == 0xD0 and b2 >= 0x80 and b2 <= 0x8F then return string.char(0xD1, b2 + 0x10) .. rest end
+  if b1 == 0xD2 and b2 == 0x90 then return string.char(0xD2, 0x91) .. rest end
+  return word
+end
+
+-- A bot's line in this game's language (MultiplayerLobby.botChatText).
+local function chat_fill(template, values)
+  return (tostring(template):gsub("{(%w+)}", function(k)
+    local v = values[k]
+    return v ~= nil and tostring(v) or nil
+  end))
+end
+
+--! A game word of a bot's line (a reference: kind and id, see bot.lua: ref)
+--! in the language of `root` (a raw string table), or nil.
+local function chat_word(root, kind, id, render)
+  local W = root.bot_chat.words
+  local function staff(cat)
+    local key = cat:lower()
+    local w = tostring(key == "handyman" and root.staff_class.handyman or root.staff_title[key])
+    if tonumber(W.lower_staff) == 1 then w = MultiplayerLobby.lowerFirst(w) end
+    return w
+  end
+  -- (A room's names come from its definition: the strings name rooms their
+  -- own way, rooms_short.psychiatric for the room psych.)
+  local function room_def(room)
+    local app = rawget(_G, "TheApp")
+    for _, rt in ipairs(app and app.rooms or {}) do
+      if rt.id == room then return rt end
+    end
+  end
+  local function plain(v)
+    if type(v) == "userdata" then return require("TH").stringProxy._unwrap(v) end
+    return v
+  end
+  local function short(room)
+    local rt = room_def(room)
+    if rt and rt.name then return tostring(plain(rt.name)) end
+    return tostring(root.rooms_short[room])
+  end
+  local function long(room)
+    local rt = room_def(room)
+    if rt and (rt.long_name or rt.name) then return tostring(plain(rt.long_name or rt.name)) end
+    local ok, name = pcall(function() return root.rooms_long[room] end)
+    return tostring(ok and name or short(room))
+  end
+  local function object(obj) return tostring(root.object[obj]) end
+  local function wish(key)
+    local what_kind, what = key:match("^(%a+):([^:]+)")
+    if key == "buy:land" then return tostring(W.wish_land) end
+    if what_kind == "room" then return chat_fill(W.wish_room, {room = short(what)}) end
+    if what_kind == "add" then
+      return chat_fill(W.wish_add, {object = object(key:match("^add:[^:]+:(.+)$")), room = short(what)})
+    end
+    if what_kind == "bigger" then return chat_fill(W.wish_bigger, {room = short(what)}) end
+    if what_kind == "remove" then return chat_fill(W.wish_remove, {room = short(what)}) end
+    if what_kind == "hire" then return chat_fill(W.wish_hire, {staff = staff(what)}) end
+    return nil
+  end
+  if kind == "room" then
+    return long(id)
+  elseif kind == "staff" then
+    return staff(id)
+  elseif kind == "obj" then
+    return object(id)
+  elseif kind == "wish" then
+    return wish(id)
+  elseif kind == "near" then
+    if id == "reception" then return tostring(W.near_reception) end
+    if id == "entrance" then return tostring(W.near_entrance) end
+    return wish("room:" .. id)
+  elseif kind == "terms" then
+    if id == "free" then return tostring(W.terms_free) end
+    return chat_fill(W.terms_price, {price = id:match("^price:(.*)$")})
+  elseif kind == "names" then
+    local parts = {}
+    for part in (id .. "\t"):gmatch("([^\t]*)\t") do parts[#parts + 1] = part end
+    local word = table.remove(parts, 1)
+    if #parts <= 1 then return parts[1] or "" end
+    local text = parts[1]
+    for i = 2, #parts - 1 do text = tostring(W.list_comma):format(text, parts[i]) end
+    return tostring(word == "or" and W.list_or or W.list_and):format(text, parts[#parts])
+  elseif kind == "line" then
+    return render(id, {})
+  elseif kind == "count" then
+    local n, cat = id:match("^(%d+):(%a+)$")
+    return chat_fill(W.staff_count, {n = n, staff = staff(cat)})
+  elseif kind == "everybody" then
+    return tostring(W.everybody)
+  elseif kind == "goal" then
+    local ok, goal = pcall(function() return W["goal_" .. id] end)
+    return tostring(ok and goal or W.goal_other)
+  elseif kind == "purpose" or kind == "spent" then
+    local key, cost = id, nil
+    if kind == "spent" then key, cost = id:match("^(.*):([^:]*)$") end
+    local what_kind, what = key:match("^(%a+):([^:@]+)")
+    local name = kind .. "_"
+    if key == "buy:land" then return chat_fill(W[name .. "land"], {cost = cost}) end
+    if key == "loan" or key == "trick" then return chat_fill(W[name .. key], {cost = cost}) end
+    if what_kind == "room" or what_kind == "hire" or what_kind == "add" then
+      return chat_fill(W[name .. what_kind], {what = wish(key), cost = cost})
+    end
+    if what_kind == "repair" or what_kind == "replace" or what_kind == "bigger" then
+      return chat_fill(W[name .. what_kind], {what = wish("room:" .. what), cost = cost})
+    end
+    if what_kind == "buy" then return chat_fill(W[name .. "buy"], {object = object(what), cost = cost}) end
+    if what_kind == "gift" then return chat_fill(W[name .. "gift"], {name = what, cost = cost}) end
+  end
+  return nil
+end
+
+--! A bot's chat line in this game's language. The bot sends with its English
+--! text the line's place in bot_chat (f.line, "lines.tricked.rats.2") and
+--! its values (f.v_<name>; a game word as "@kind:id|English words"), and for
+--! a second line said with it f.line2 and f.w_<name>. Nil when this game has
+--! no such line or something does not fit: then the English text is shown.
+--!param f (table) the CHAT message
+--!param root (table) optional: the raw string table (default: this game's)
+function MultiplayerLobby.botChatText(f, root)
+  if not f.line then return nil end
+  local ok, text = pcall(function()
+    root = root or require("TH").stringProxy._unwrap(_S)
+    local function render(path, values)
+      local t = root.bot_chat
+      for part in path:gmatch("[^.]+") do t = t[tonumber(part) or part] end
+      if type(t) ~= "string" then error("no line " .. path) end
+      local filled = {}
+      for k, v in pairs(values) do
+        local kind, id, english = v:match("^@(%a+):([^|]*)|(.*)$")
+        if kind then
+          local okw, word = pcall(chat_word, root, kind, id, render)
+          filled[k] = okw and word or english
+        else
+          filled[k] = v
+        end
+      end
+      return chat_fill(t, filled)
+    end
+    local function values_of(prefix)
+      local out = {}
+      for k, v in pairs(f) do
+        if k:sub(1, 2) == prefix then out[k:sub(3)] = v end
+      end
+      return out
+    end
+    local first = render(f.line, values_of("v_"))
+    if f.line2 then first = first .. " " .. render(f.line2, values_of("w_")) end
+    return first
+  end)
+  if ok and type(text) == "string" and not text:find("{%w+}") then return text end
+  return nil
+end
+
 function MultiplayerLobby:_onCHAT(f)
+  -- A bot's line in this game's language (an English game shows the text as
+  -- it came: it is English).
   local config = TheApp and TheApp.config
+  if f.line and config and tostring(config.language):lower() ~= "english" then
+    local text = MultiplayerLobby.botChatText(f)
+    if text then f.text = text end
+  end
   if not MultiplayerLobby.chatShown(config and config.multiplayer_bot_chat, f, self.players[tonumber(f.peer)],
       self:botCount()) then
     return
@@ -1239,10 +1481,10 @@ MultiplayerLobby.SAVE_CHUNK = 48000
 --! shared one.
 function MultiplayerLobby:serviceSaves(session)
   if session.local_save and session.step >= session.local_save.at then
-    local kind = session.local_save.kind
+    local kind, info = session.local_save.kind, session.local_save.info
     session.local_save = nil
     local ok, err = pcall(session.withoutBlueprints, session, function()
-      self:_writeLocalSave(session, kind)
+      self:_writeLocalSave(session, kind, info)
     end)
     if not ok then self.log("multiplayer: could not save: " .. tostring(err)) end
   end

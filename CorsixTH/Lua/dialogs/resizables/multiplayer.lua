@@ -112,7 +112,17 @@ local function chatRows(lobby)
   return math.max(CHAT_MIN_ROWS, rows)
 end
 
+--! Height the server buttons add to the connect view: one row of two is in
+--! heights.connect, each more row adds SERVER_ROW_H.
+local SERVER_ROW_H = 36
+local function serverRowsExtra()
+  return (math.ceil(#UIMultiplayer.SERVERS / 2) - 1) * SERVER_ROW_H
+end
+
 local function viewHeight(view, lobby)
+  if view == "connect" then
+    return heights.connect + serverRowsExtra()
+  end
   if view == "seats" then
     return heights.seats + #lobby.seat_choice.seats * PLACE_H
   end
@@ -217,8 +227,8 @@ local function label(window, x, y, w, text)
   return panel
 end
 
-local function button(window, x, y, w, text, callback, tooltip)
-  local b = window:addBevelPanel(x, y, w, 30, col.button):setLabel(text)
+local function button(window, x, y, w, text, callback, tooltip, colour)
+  local b = window:addBevelPanel(x, y, w, 30, colour or col.button):setLabel(text)
       :makeButton(0, 0, w, 30, nil, callback)
   if tooltip then b:setTooltip(tooltip) end
   return b
@@ -226,43 +236,62 @@ end
 
 -- Connect view ----------------------------------------------------------------
 
---! The public servers offered on the connect view (eu2 is the default the
---! first time: test builds are played there).
+--! The public servers offered on the connect view, two buttons to a row (at
+--! most four fit above Connect). eu2 runs test builds, every other one the
+--! stable release; eu2 is the default the first time.
 UIMultiplayer.SERVERS = {
   {label = "server_eu1", address = "eu1.openth.org:47800"},
-  {label = "server_eu2", address = "eu2.openth.org:47800"},
+  {label = "server_us1", address = "us1.openth.org:47800"},
+  {label = "server_eu2", address = "eu2.openth.org:47800", default = true},
 }
+
+--! The address offered when the player has not chosen one yet.
+function UIMultiplayer.defaultServer()
+  for _, server in ipairs(UIMultiplayer.SERVERS) do
+    if server.default then return server.address end
+  end
+  return UIMultiplayer.SERVERS[1].address
+end
 
 function UIMultiplayer:_buildConnect()
   local S, T = _S.multiplayer_window, _S.tooltip.multiplayer_window
   local config = TheApp.config
   local address = (config.multiplayer_server ~= "" and config.multiplayer_server) or
-      UIMultiplayer.SERVERS[2].address
+      UIMultiplayer.defaultServer()
   local name = (config.player_name ~= "" and config.player_name) or os.getenv("USER")
       or os.getenv("USERNAME") or "Player"
   label(self, 20, 45, 130, S.server)
   self.address_box = textbox(self, 155, 45, WIDTH - 175, address, 60, {"all"}, T.server)
   label(self, 20, 75, 130, S.name)
   self.name_box = textbox(self, 155, 75, WIDTH - 175, name, 15, {"alpha", "numbers", "misc"}, T.name)
-  -- The public servers, one click each (the address can still be typed).
+  -- The public servers, one click each (the address can still be typed),
+  -- two to a row; one alone on the last row gets the whole row.
   local half = math.floor((WIDTH - 185) / 2)
-  for i, server in ipairs(UIMultiplayer.SERVERS) do
-    button(self, 155 + (i - 1) * (half + 10), 108, half, S[server.label], function(window)
+  local servers = UIMultiplayer.SERVERS
+  for i, server in ipairs(servers) do
+    local column, row = (i - 1) % 2, math.floor((i - 1) / 2)
+    local w = (column == 0 and i == #servers) and (2 * half + 10) or half
+    button(self, 155 + column * (half + 10), 108 + row * SERVER_ROW_H, w, S[server.label],
+        function(window)
       window.address_box:setText(server.address)
     end, T[server.label])
   end
-  button(self, 20, 185, 180, S.connect, self.buttonConnect, T.connect)
-  button(self, WIDTH - 200, 185, 180, S.back, self.close)
+  -- OpenTH's Discord (where players find each other), under the labels.
+  button(self, 20, 108, 130, S.discord, function() openURL(UIMainMenu.DISCORD_URL) end,
+      T.discord, UIMainMenu.DISCORD_COLOUR)
+  local extra = serverRowsExtra()
+  button(self, 20, 185 + extra, 180, S.connect, self.buttonConnect, T.connect)
+  button(self, WIDTH - 200, 185 + extra, 180, S.back, self.close)
   local offer = self.pack_offer
   if offer and offer.how ~= "newer_game" then
     -- (The server's build, downloaded by the game, or one it has already.)
     local text = offer.how == "download" and
         S.get_version:format(UIMultiplayerDownload.megabytes(offer.size)) or S.switch_version
-    button(self, 20, 220, WIDTH - 40, text, self.buttonGetVersion,
+    button(self, 20, 220 + extra, WIDTH - 40, text, self.buttonGetVersion,
         offer.how == "download" and T.get_version or T.switch_version)
   elseif self.download then
     local release = self.download.release ~= "" and self.download.release or S.server_version
-    button(self, 20, 220, WIDTH - 40, S.download:format(release), self.buttonDownload, T.download)
+    button(self, 20, 220 + extra, WIDTH - 40, S.download:format(release), self.buttonDownload, T.download)
   end
 end
 

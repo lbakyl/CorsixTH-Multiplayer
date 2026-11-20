@@ -18,13 +18,19 @@ on:
 jobs:
   package:
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
       - name: Install build packages
         run: |
+          # The next mirror when one stalls (scripts/multiplayer/apt_mirrors.sh).
+          bash scripts/multiplayer/apt_mirrors.sh
           sudo apt-get update
           # (fluidsynth: the CMake files of libfluidsynth-dev on Ubuntu 24.04 name the program.)
-          sudo apt-get install -y build-essential cmake ninja-build pkg-config git curl patchelf \
+          # No recommended extras: they doubled the download (Ubuntu's 124 MB General
+          # MIDI soundfont among them; the game brings its own soundfont). ca-certificates
+          # by name: git and curl only recommend it, and they fetch over https.
+          sudo apt-get install -y --no-install-recommends ca-certificates build-essential cmake ninja-build pkg-config git curl patchelf \
             libfreetype-dev libpng-dev zlib1g-dev libzstd-dev libfluidsynth-dev fluidsynth \
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev \
             libxtst-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libegl1-mesa-dev \

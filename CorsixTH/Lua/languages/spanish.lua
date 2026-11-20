@@ -1983,6 +1983,9 @@ menu_player_count.players_5 = "  5 JUGADORES  "
 menu_player_count.players_6 = "  6 JUGADORES  "
 menu_player_count.players_7 = "  7 JUGADORES  "
 menu_player_count.players_8 = "  8 JUGADORES  "
+multiplayer_window.add_assistant = "Añadir un ayudante (un bot en mi hospital)"
+multiplayer_window.add_assistant_for = "Añadir un ayudante para %s"
+multiplayer_window.add_assistant_short = "+ Añadir ayudante"
 multiplayer_window.add_bot = "esperando a un jugador... (clic: añadir un bot)"
 multiplayer_window.ask_amount = "Cantidad: $%d"
 multiplayer_window.ask_asked = "Pedido enviado. Esperando su respuesta."
@@ -1997,6 +2000,9 @@ multiplayer_window.ask_no_money_asker_note = "%s no pudo pagarte."
 multiplayer_window.ask_no_money_note = "No puedes pagar $%d."
 multiplayer_window.ask_pay = "Pagar $%d"
 multiplayer_window.ask_sent_note = "Has pedido $%d a %s. Esperando su respuesta."
+multiplayer_window.assistant_named = "%s (ayudante de %s)"
+multiplayer_window.assistant_starting = "iniciando..."
+multiplayer_window.assistants_caption = "Ayudantes"
 multiplayer_window.auction_back = "Volver a la subasta"
 multiplayer_window.auction_bid = "Pujar $%d"
 multiplayer_window.auction_borrow_tooltip = "Pedir prestados $5,000 al banco"
@@ -2007,9 +2013,11 @@ multiplayer_window.auction_going_twice = "A las dos..."
 multiplayer_window.auction_leader = "Puja más alta: $%d, %s"
 multiplayer_window.auction_leading = "Vas en cabeza. Espera a los demás."
 multiplayer_window.auction_loan = "$%d, préstamo $%d"
+multiplayer_window.auction_loan_note = "El banco te prestó $%d para pagar la parcela %d."
 multiplayer_window.auction_loan_tooltip = "Tu saldo y tu préstamo bancario"
 multiplayer_window.auction_no_money = "No puedes pagar la siguiente puja."
 multiplayer_window.auction_no_money_loan = "No puedes pagar la siguiente puja: pide un préstamo con + abajo."
+multiplayer_window.auction_not_paid = "La parcela %d no se vendió: %s no pudo pagar la puja de $%d."
 multiplayer_window.auction_not_sold = "La parcela %d no se vendió."
 multiplayer_window.auction_out = "fuera"
 multiplayer_window.auction_pass = "Retirarse"
@@ -2072,6 +2080,7 @@ multiplayer_window.emergency_refused = "Rechazar la emergencia costó %d de repu
 multiplayer_window.encrypted = "Conexión cifrada (TLS)"
 multiplayer_window.every_plot_auctioned = "todas las parcelas a subasta"
 multiplayer_window.game_options = "Opciones de juego"
+multiplayer_window.get_version = "Obtener la versión del juego del servidor (%s)"
 multiplayer_window.goal_limit = "límite:"
 multiplayer_window.goal_other.balance = "%s: saldo $%d (%s $%d)"
 multiplayer_window.goal_other.num_cured = "%s: %d pacientes curados (%s %d)"
@@ -2148,6 +2157,7 @@ multiplayer_window.loading = "CARGANDO..."
 multiplayer_window.locked = "  (contraseña)"
 multiplayer_window.looking_at = "Viendo %s"
 multiplayer_window.measuring = "Midiendo la conexión..."
+multiplayer_window.megabytes = "%s MB"
 multiplayer_window.menu_caption = "  MULTIJUGADOR  "
 multiplayer_window.menu_chat = "  ENVIAR UN MENSAJE (%1%)  "
 multiplayer_window.menu_colours = "  COLORES DE JUGADORES  "
@@ -2332,6 +2342,7 @@ multiplayer_window.refer_fax_choice = "Derivar a otro hospital"
 multiplayer_window.referral_cured_here_note = "Has curado a un paciente derivado por %s: +%d de reputación extra."
 multiplayer_window.referral_cured_note = "%s ha curado al paciente que derivaste: +%d de reputación."
 multiplayer_window.refresh = "Actualizar"
+multiplayer_window.remove_assistant = "Retirar al ayudante"
 multiplayer_window.rep_amount = "Puntos: %d"
 multiplayer_window.rep_give_button = "Dar %d de tus puntos de reputación"
 multiplayer_window.rep_given_note = "Has avalado a %s: le has dado %d puntos de reputación."
@@ -2373,6 +2384,8 @@ multiplayer_window.research_sold_transaction = "Investigación vendida a %s"
 multiplayer_window.room_caption = "Sala: %s"
 multiplayer_window.room_hint = "Mismo color: un solo hospital. Mismo equipo: ganáis juntos."
 multiplayer_window.room_line = "%s   %d de %d   %s   nivel %s%s"
+multiplayer_window.room_map = "Mapa"
+multiplayer_window.room_map_caption = "El mapa de la sala: quién juega dónde"
 multiplayer_window.rooms_caption = "Salas en %s"
 multiplayer_window.sabotage_again = "Haz clic otra vez en L%d para comprarlo por $%d."
 multiplayer_window.sabotage_alone = "No queda ningún rival al que hacerle jugarretas."
@@ -2468,12 +2481,15 @@ multiplayer_window.sabotage_bomb_blast = "¡Ha explotado una bomba de basura en 
 multiplayer_window.sabotage_bomb_in_hands = "Has sujetado la bomba de basura demasiado tiempo: ¡ha explotado en tu propio hospital!"
 multiplayer_window.sabotage_bomb_blast_rival = "Tu bomba de basura ha explotado en el hospital de %s."
 multiplayer_window.sabotage_bomb_found = "Han encontrado tu bomba de basura: %s la recogió a tiempo. ¡Puede lanzarla a otro, incluso devolvértela!"
+multiplayer_window.save_button = "Guardar"
+multiplayer_window.save_caption = "Guardar la partida para todos"
 multiplayer_window.saved_flag = "  partida guardada"
 multiplayer_window.saved_note = "Partida guardada: %s"
 multiplayer_window.saving_note = "Guardando la partida en el ordenador de cada jugador..."
 multiplayer_window.select_room = "Elige primero una sala."
 multiplayer_window.server = "Servidor"
 multiplayer_window.server_eu1 = "EU1: estable"
+multiplayer_window.server_us1 = "US1: estable"
 multiplayer_window.server_eu2 = "EU2: versiones de prueba"
 multiplayer_window.server_version = "la versión del servidor"
 multiplayer_window.share_research = "Compartir investigación"
@@ -2485,7 +2501,11 @@ multiplayer_window.staff_bought_transaction = "Personal de %s"
 multiplayer_window.staff_on_the_way = "De camino a %s"
 multiplayer_window.staff_received_note = "%s te ha enviado un miembro del personal: %s"
 multiplayer_window.staff_sold_transaction = "Personal para %s"
+multiplayer_window.standin_back = "Alguien tomó el control de %s: el año del bot en difícil termina."
+multiplayer_window.standin_hard = "%s va por detrás: el bot que juega por el jugador que se fue juega en difícil durante un año."
+multiplayer_window.standin_normal = "El bot que juega %s por el jugador que se fue vuelve a jugar en normal."
 multiplayer_window.start = "Empezar partida"
+multiplayer_window.switch_version = "Cambiar a la versión del juego del servidor"
 multiplayer_window.team_button = "Equipo %d"
 multiplayer_window.team_lost = "%s volvió a fracasar en los objetivos de este nivel al final del año, así que el equipo ha perdido el nivel."
 multiplayer_window.team_member_out = "Tu hospital ha fracasado en los objetivos de este nivel dos años seguidos y queda fuera de la carrera. Tu equipo sigue."
@@ -2539,6 +2559,16 @@ multiplayer_window.trade_sent = "Enviado. Llega en un momento."
 multiplayer_window.tricks_off = "Golpes bajos (carreras): no"
 multiplayer_window.tricks_on = "Golpes bajos (carreras): sí"
 multiplayer_window.vaccination_mode_hint = "Modo vacunación: haz clic en los pacientes infectados para que una enfermera los vacune. Clic derecho, Esc o un nuevo clic en la jeringa para parar."
+multiplayer_window.version_bad = "La descarga está dañada o no es de OpenTH"
+multiplayer_window.version_cancel = "Cancelar"
+multiplayer_window.version_caption = "La versión del juego del servidor"
+multiplayer_window.version_checking = "Comprobando la descarga..."
+multiplayer_window.version_close = "Cerrar"
+multiplayer_window.version_downloading = "Descargando: %s de %s"
+multiplayer_window.version_failed = "La descarga no funcionó: %s"
+multiplayer_window.version_newer_game = "Este servidor pide un juego más nuevo: ver abajo"
+multiplayer_window.version_other = "Este servidor juega con otra versión del juego."
+multiplayer_window.version_starting = "Iniciando la versión del servidor..."
 multiplayer_window.vote_agree = "De acuerdo"
 multiplayer_window.vote_asked = "Has pedido a los demás cambiar la velocidad a %s."
 multiplayer_window.vote_confirm = "¿Pedir a los demás jugadores cambiar la velocidad del juego a %s?"
@@ -2552,6 +2582,12 @@ multiplayer_window.vote_request = "%s querría cambiar la velocidad del juego"
 multiplayer_window.vote_request_speed = "a %s."
 multiplayer_window.waiting_player = "esperando a un jugador..."
 tooltip.main_menu.multiplayer = "Juega con otros a través de un servidor multijugador (experimental)"
+tooltip.main_menu.discord = "El Discord de OpenTH: encuentra otros jugadores, pide ayuda y entérate antes que nadie de las nuevas versiones. Abre openth.org/discord en tu navegador."
+tooltip.multiplayer_window.add_assistant = "Clic derecho: un ayudante, un bot que ayuda en este hospital y no ocupa lugar"
+tooltip.multiplayer_window.add_assistant_button = "Añadir un ayudante: un bot que ayuda en este hospital y no ocupa lugar"
+tooltip.multiplayer_window.assistant = "Un bot que ayuda en este hospital"
+tooltip.multiplayer_window.assistant_host = "Clic: retirar al ayudante. Clic derecho: un bot fácil, normal o difícil"
+tooltip.multiplayer_window.assistant_mine = "Tu ayudante. Clic: retirarlo"
 tooltip.multiplayer_window.bot_level = "Clic derecho: un bot fácil, normal o difícil"
 tooltip.multiplayer_window.ask_money = "Pide dinero a otro jugador. Él decide si paga."
 tooltip.multiplayer_window.auctions = "El anfitrión decide qué parcelas de terreno salen a subasta cuando un jugador pide comprar una"
@@ -2563,6 +2599,7 @@ tooltip.multiplayer_window.connect = "Conectarse al servidor y mostrar sus salas
 tooltip.multiplayer_window.continue_game = "Continúa una partida multijugador guardada antes (Archivo > Guardar, o el autoguardado mensual): elígela de la lista. Sin ella, la sala empieza una partida nueva"
 tooltip.multiplayer_window.download = "Este servidor usa otra versión del juego: abre su página de descarga en tu navegador"
 tooltip.multiplayer_window.game_options = "Las opciones de la partida: subastas de terreno y más (las fija el anfitrión)"
+tooltip.multiplayer_window.get_version = "Descargar la versión del juego de este servidor y reiniciar el juego con ella. Tus partidas guardadas y ajustes se mantienen."
 tooltip.multiplayer_window.helpers = "Decide el anfitrión: un bot que comparte el hospital de una persona construye salas y pone objetos en los pasillos, o se lo deja a la persona (sigue contratando, pagando primas, compartiendo investigación, pujando en subastas y comprando terrenos)"
 tooltip.multiplayer_window.level = "Elige el nivel en una lista con sus objetivos y un mapa. Un hospital común juega los niveles de la campaña; varios hospitales juegan los niveles multijugador (del 1 al 8, un número mayor juega el nivel 8). El nivel 6 es ¡Emergencia!: emergencias cuatro veces al mes el primer año, luego epidemias; el nivel 7 es Sin piedad, pensado para una carrera competitiva: golpes bajos mes a mes, ferias de empleo, emergencias de carrera y terremotos; el nivel 8 es Team Town, el mapa de Matroftt pensado para dos contra dos"
 tooltip.multiplayer_window.levels_players = "El mapa para este número de jugadores (cada número de jugadores tiene su propio mapa)"
@@ -2575,12 +2612,558 @@ tooltip.multiplayer_window.players = "Para cuántos jugadores es la sala"
 tooltip.multiplayer_window.rats = "Lo decide el anfitrión: en una carrera con golpes bajos los jugadores pueden soltar ratas en el hospital de un rival (le cuestan reputación), o no"
 tooltip.multiplayer_window.ready = "Avisa al anfitrión de que estás listo para empezar"
 tooltip.multiplayer_window.refer_button = "Ofrece este paciente al hospital de otro jugador. Tiene que aceptar."
+tooltip.multiplayer_window.room_chat = "Escribe aquí y pulsa Enter para hablar con todos en la sala"
+tooltip.multiplayer_window.room_map = "El mapa del nivel tal como empezaría la partida ahora: cada hospital en su color y quién lo juega"
+tooltip.multiplayer_window.save_name = "El nombre de la partida guardada. Se le añaden tu nombre y la fecha del juego."
 tooltip.multiplayer_window.send_staff = "Envía este miembro del personal al hospital de otro jugador. Tiene que aceptar."
 tooltip.multiplayer_window.server = "Dirección del servidor multijugador, por ejemplo eu2.openth.org:47800"
 tooltip.multiplayer_window.server_eu1 = "eu1.openth.org: la versión estable más reciente"
+tooltip.multiplayer_window.server_us1 = "us1.openth.org: la versión estable más reciente"
+tooltip.multiplayer_window.discord = "El Discord de OpenTH: encuentra otros jugadores, pide ayuda y entérate antes que nadie de las nuevas versiones. Abre openth.org/discord en tu navegador."
 tooltip.multiplayer_window.server_eu2 = "eu2.openth.org: la versión de prueba más reciente"
 tooltip.multiplayer_window.share_research = "Ofrece la investigación que tienes al hospital de otro jugador, gratis o por un precio. Tiene que aceptar."
 tooltip.multiplayer_window.sharing = "Lo decide el anfitrión: los jugadores pueden compartirse o venderse investigación, o no (como en el juego original)"
 tooltip.multiplayer_window.start = "Empieza la partida para todos los de la sala"
+tooltip.multiplayer_window.switch_version = "Reiniciar el juego con la versión de este servidor, que ya tienes"
 tooltip.multiplayer_window.team = "Tu equipo: el mismo equipo gana junto, equipos distintos compiten por los objetivos y pueden hacerse golpes bajos. Haz clic para cambiarlo (el anfitrión puede cambiar el de cualquiera, también el de los bots)"
 tooltip.multiplayer_window.tricks = "Lo decide el anfitrión: en una carrera los jugadores pueden comprar golpes bajos contra sus rivales, o no (como en el juego original)"
+
+-- What the server's computer players (bots) say in the chat (see english.lua).
+bot_chat = {
+  lines = {
+    tricked = {
+      handyman = {"Buen intento, {name}. Tu bedel ya vuelve a tu hospital.",
+          "He descubierto a tu bedel, {name}. Todo tuyo otra vez.",
+          "Le he mostrado la salida a tu bedel, {name}. Más suerte la próxima vez.",
+          "¿Colando un bedel, {name}? Ya va camino de casa."},
+      rats = {"Plaga controlada, {name}. ¿Eran tuyas esas ratas?", "Todas las ratas abatidas, {name}. Muy gracioso.",
+          "Chii, chii, ¡pum! Se acabaron las ratas, {name}.",
+          "Qué ratas tan monas, {name}. Lástima que apunten tan mal."},
+      boiler = {"Alguien me ha averiado la caldera. Muy gracioso, {name}. Mis bedeles ya están en ello.",
+          "¿Una caldera averiada, {name}? Tenemos mantas.",
+          "¿Hospital frío? Corazones calientes, {name}. Ya están reparando la caldera.",
+          "Ja, {name}, una ola de frío. A mis bedeles les encantan los retos."},
+      smear = {"¿Mala prensa, {name}? Mis pacientes volverán.", "Bonita campaña de desprestigio, {name}. La mía será mejor.",
+          "¿Prensa amarilla, {name}? Qué barato. Mis pacientes no se lo creen.",
+          "Los chismes no curan a nadie, {name}. Mis médicos sí."},
+      espionage = {"Disfruta de mis archivos de investigación, {name}.",
+          "¿Un espía en mi departamento de investigación, {name}? Qué descaro.",
+          "Espero que entiendas mi letra, {name}.",
+          "Copia mis deberes todo lo que quieras, {name}. Seguiré yendo por delante."},
+      headhunter_kept = {"¿Querías a mi médico, {name}? Se queda conmigo.",
+          "Las manos quietas con mi personal, {name}. Ya tienen su aumento de sueldo.",
+          "Buena oferta, {name}, pero mi médico prefiere nuestro café.",
+          "Nada de robarme gente, {name}. Mi personal se queda."},
+      headhunter_lost = {"Para ti, {name}. Encontraré a alguien mejor.", "De acuerdo, {name}, para ti. Suerte con ese fichaje.",
+          "Esta vez ganas tú, {name}. Ya contrataré a otro.",
+          "Disfruta de mi antiguo médico, {name}. Ojalá ronque."},
+    },
+    tricked_unknown = {
+      rats = {"Se acabaron las ratas. Quien las haya enviado: buen intento.", "Ratas abatidas. La próxima vez, manda queso.",
+          "Plaga controlada. Alguien tiene un sentido del humor muy raro.",
+          "Aquí ya no hay ratas. A quien las mandó: gracias por el ejercicio."},
+      boiler = {"Alguien me ha averiado la caldera. Sea quien sea: tenemos mantas.",
+          "Mi caldera está averiada. Quien haya sido: muy gracioso.",
+          "Un hospital frío por un día o dos. Sea quien sea, mis bedeles ya están en ello."},
+      smear = {"Alguien va contando mentiras sobre mi hospital. Los pacientes verán la verdad.",
+          "Mala prensa salida de la nada. Mis pacientes volverán.",
+          "A quien ande con chismes sobre mi hospital: mis médicos responderán."},
+      espionage = {"Alguien ha copiado mi investigación. Espero que entienda mi letra.",
+          "Un espía en mi departamento de investigación. Qué descaro, seas quien seas.",
+          "Alguien ha fisgado en mi investigación. Que la disfrute."},
+      headhunter_kept = {"Alguien ha intentado robarme a mi médico. Se queda.",
+          "Un cazatalentos vino por mi médico. No tuvo suerte.",
+          "Mi médico le ha dicho que no a un cazatalentos. Qué lealtad."},
+      headhunter_lost = {"Alguien me ha robado a mi médico. Bueno, ya formaré a otro.",
+          "Un cazatalentos se llevó a mi médico. Ya encontraré a otro.",
+          "He perdido un médico por culpa de un cazatalentos. Vuelta a la lista de contratación."},
+    },
+    staff_sent = {"{names}, te puedo dar a {who} ({kind}) para tu {room}: gratis, acepta mi oferta en tus mensajes.{urgent}",
+        "{names}: te ofrezco a {who}, {kind}, para tu {room}. Sin coste, solo acepta el fax.{urgent}",
+        "{names}, {who} ({kind}) puede ir a tu {room} sin coste alguno. Acepta la oferta en tus mensajes.{urgent}",
+        "Aquí tienes, {names}: {who}, {kind}, para tu {room}. Gratis, solo di que sí en el fax.{urgent}"},
+    staff_for_emergency = {" ¡Es para la emergencia!", " Date prisa, la emergencia no espera.",
+        " Hay una emergencia en curso, así que date prisa.", " ¡Rápido, hay una emergencia!"},
+    staff_ask_one = {"{names}, ¿me echas una mano? Mi {room} necesita {needs}, tengo {have} y no hay {kind} para contratar.{urgent}",
+        "{names}, ¿tienes {kind} de sobra? Mi {room} necesita {needs} y solo tengo {have}. Te lo agradecería mucho.{urgent}",
+        "Me hace falta {kind}, {names}. Mi {room} necesita {needs}, tengo {have} y no hay nadie en la lista de contratación. ¡Gracias!{urgent}",
+        "{names}, odio pedir favores, pero mi {room} necesita {needs} y tengo {have}. ¿Me prestas a alguien que trabaje de {kind}?{urgent}"},
+    staff_ask_all = {"¿Alguien tiene {kind} de sobra? Mi {room} necesita {needs}, tengo {have} y no hay nadie a quien contratar. ¡Gracias!{urgent}",
+        "Amigos, mi {room} necesita {needs} y solo tengo {have}. ¿A alguien le sobra {kind}?{urgent}",
+        "Me he quedado sin {kind} para mi {room}: hacen falta {needs} y aquí hay {have}. ¿Alguien me echa una mano?{urgent}",
+        "Busco {kind}, ¿alguien me ayuda? Mi {room} necesita {needs} y tengo {have}. ¡Mil gracias!{urgent}"},
+    research_please = {"{name}, ¿compartes conmigo tu investigación de {item}? Mis pacientes necesitan una sala nueva: {room}.",
+        "{name}, mis pacientes no paran de pedirme una sala nueva ({room}). ¿Me mandas tu investigación de {item}? ¡Gracias!",
+        "¿Me das tu investigación de {item}, {name}? Mis pacientes necesitan una sala nueva ({room}) y aún no puedo construirla."},
+    research_buy = {"Compito contigo, {name}, pero para mejorar mis opciones te pagaría {price} por tu investigación de {item}.",
+        "{name}, los rivales también pueden hacer negocios: {price} por tu investigación de {item}. Mis pacientes necesitan una sala nueva: {room}.",
+        "Hablando claro, {name}: mis pacientes necesitan una sala nueva ({room}). Pagaría {price} por tu investigación de {item}."},
+    staff_ask_rival = {"Mataría por tener {kind} de calidad, {name}. ¿Te sobra alguien? Ofrécelo en la ventana de comercio y pon tu precio.",
+        "{name}, no tengo orgullo: necesito {kind} con urgencia. Véndeme a alguien y estamos en paz... por ahora.",
+        "Rivales o no, {name}, pagaría bien por {kind}. Sin alguien así, mi {room} no sirve de nada.",
+        "Mi {room} está sin {kind}, {name}. Mataría por tener a alguien. Pon tu precio."},
+    ask_research_shared = {"Aquí tienes, {name}: nuestra investigación de {item}, gratis. Acéptala en tus mensajes.",
+        "Claro, {name}. La investigación de {item} va de camino, sin coste.",
+        "Para ti, {name}, la investigación de {item} a cambio de nada. Mira tus mensajes."},
+    ask_research_sold = {"Trato hecho, {name}: mi investigación de {item} por {price}. Acéptala en tus mensajes.",
+        "Los negocios son los negocios, {name}. La investigación de {item} es tuya por {price}.",
+        "Que sean {price}, {name}. La investigación de {item} está en tus mensajes."},
+    ask_research_none = {"Lo siento, {name}, no tengo investigación de {item} que darte.",
+        "No puedo ayudarte con la investigación de {item}, {name}. Yo tampoco la tengo."},
+    ask_rival_ahead = {"Buen intento, {name}. Ya vas por delante de mí: de mí no sacarás ayuda.",
+        "¿Ayudarte a ganar? Ni hablar, {name}.",
+        "Te va demasiado bien, {name}. Pídeselo a otro."},
+    ask_staff_sold = {"Está bien, {name}: {who}, {kind}, por {price}. Acepta la oferta en tus mensajes.",
+        "{name}, te puedes llevar a {who} ({kind}) por {price}. Está en tus mensajes.",
+        "Para ti, {name}: {who}, {kind}, por {price}. Y luego dirás que nunca te doy nada."},
+    ask_staff_none = {"Lo siento, {name}, no tengo {kind} de sobra.", "Aquí no sobra {kind}, {name}. Prueba con la lista de contratación."},
+    rival_patient_yes = {"Envíamelo, {name}. Los negocios son los negocios.", "Un paciente es un paciente, {name}. Gracias.",
+        "Lo cuidaré bien, {name}. Gracias por la derivación."},
+    rival_patient_busy = {"Mi cola ya es bastante larga, {name}. Prueba con otro.",
+        "Lo siento, {name}, mis médicos están desbordados. Este no."},
+    rival_cannot_treat = {"Ese no lo puedo tratar, {name}. Quédatelo.",
+        "Aquí no hay sitio para eso, {name}. Gracias de todos modos."},
+    rival_research_free = {"¿Investigación gratis, {name}? No diré que no.", "Gracias, {name}. No le diré a nadie que fuiste tú.",
+        "Qué generosidad, {name}. Igualmente intentaré ganarte."},
+    rival_research_yes = {"¿{value}? Un precio justo, {name}. Un placer hacer negocios.",
+        "Trato hecho, {name}. Mis pacientes te lo agradecen.", "Buena investigación, {name}. Pero sigo compitiendo contigo."},
+    rival_research_dear = {"Demasiado caro, {name}. Por eso pagaría {value}.", "{name}, para mí eso vale {value}, ni un dólar más.",
+        "Buen intento, {name}. Por {value} es mío."},
+    rival_research_useless = {"No, gracias, {name}. Ahí no hay nada que necesite.", "Quédatela, {name}: no me sirve de nada."},
+    rival_research_later = {"Te compré hace poco, {name}. Vuelve a preguntarme dentro de unos meses.",
+        "Tan pronto otra vez no, {name}. Quizá dentro de unos meses."},
+    rival_staff_yes = {"¡Justo lo que me hacía falta, {name}: {kind}! Un placer hacer negocios.",
+        "Trato hecho, {name}. Aquí cada {kind} trabaja a gusto."},
+    rival_staff_dear = {"Demasiado caro para mí, {name}. Por {value} me quedo con tu {kind}.",
+        "{name}, por tu {kind} pago {value}, ni un dólar más."},
+    rival_broke = {"Lo compraría, {name}, pero mi banco dice que no.", "Ahora no, {name}. Mi banco está casi vacío."},
+    wish_done = {"{name}, ya tienes tu {what}.", "Hecho, {name}: tu {what} ya es una realidad.",
+        "Todo listo, {name}. Ya puedes contar con tu {what}.", "{name}, ya puedes estrenar tu {what}. ¡A disfrutar!",
+        "Ya está lo de tu {what}, {name}."},
+    wish_done_add = {"{name}, tu {what} ya está en su sitio.", "Hecho, {name}: he puesto tu {what}.",
+        "Ya está puesto lo que pediste, {name}: {what}.", "Todo hecho, {name}: ya tienes tu {what}."},
+    wish_done_remove = {"{name}, estoy derribando la {what}: su suelo quedará libre.",
+        "Manos a la obra, {name}: la {what} se va, el suelo es tuyo.",
+        "Estoy tirando la {what}, {name}. Pronto tendrás el suelo libre.", "{name}, la {what} desaparece en un momento."},
+    wish_no_space = {"Lo siento, {name}, aún no hay sitio para tu {what}. Primero compraré más terreno.",
+        "{name}, tu {what} todavía no cabe. Primero terreno, luego tu {what}.",
+        "No queda suelo para tu {what}, {name}. Conseguiré terreno y lo intentaré otra vez.",
+        "{name}, mi terreno está lleno. Tu {what} tendrá que esperar a que tenga más suelo."},
+    wish_no_money = {"{name}, tu {what} tendrá que esperar un poco: aún no hay dinero suficiente.",
+        "Lo siento, {name}, todavía no puedo pagar tu {what}.",
+        "Tu {what} cuesta más de lo que tengo, {name}. Me pondré con ello en cuanto llegue el dinero.",
+        "{name}, ahora mismo mi banco no da para tu {what}. Pronto."},
+    mate_away = {"Parece que no estás, {name}. Llevaré todo el hospital hasta que vuelvas.",
+        "{name}, no dices nada. Me encargo de todo hasta que vuelvas.",
+        "Tomo el timón mientras no estás, {name}. Vuelve cuando quieras.",
+        "¿Te has ido, {name}? No pasa nada, mantendré el hospital en marcha."},
+    mate_back = {"¡Hola de nuevo, {name}! Los precios, los préstamos y los faxes vuelven a ser cosa tuya.",
+        "Qué bien verte otra vez, {name}. Precios, préstamos y faxes vuelven a tus manos.",
+        "¡Ya estás aquí, {name}! Te dejo los precios, los préstamos y los faxes.",
+        "Hola otra vez, {name}. Las decisiones del hospital vuelven a ser tuyas."},
+    bonuses = {"He dado una prima doble a {n} empleados descontentos (${spent}), {name}.",
+        "{n} empleados descontentos han recibido una prima doble, {name}. Han sido ${spent}.",
+        "Una prima para {n} empleados descontentos (${spent}), {name}. Les hacía falta."},
+    greet = {
+      friendly = {
+        "¡Hola a todos! Aquí voy construyendo mi hospital con calma.",
+        "¡Hola, equipo! Si alguien necesita una mano, que me avise. O un médico.",
+        "¡Buenos días, colegas! Los cafés de la máquina corren de mi cuenta.",
+        "¡Hola a todos! Mis primeros pacientes ya vienen de camino. Crucemos los dedos.",
+        "¡Saludos desde la otra punta de la ciudad! Si alguien necesita algo, que me lo diga.",
+        "¡Hola! Mi recepcionista también saluda.",
+        "¡Hola! Espero que haya pacientes para todos.",
+        "¡Buenos días, vecinos! Ya tengo el café preparado.",
+      },
+      fiery = {
+        "Disfruta de tu ventaja mientras dure. Mi hospital va tras el tuyo.",
+        "Esta ciudad solo necesita un hospital. Adivina cuál.",
+        "Mis médicos son más listos y mis enfermeras más rápidas. ¡Suerte a todos!",
+        "¿Listos para perder? Ya he encargado el trofeo.",
+        "Espero que a tus pacientes les guste esperar. A los míos no les hará falta.",
+        "Cuidado, {name}. Yo juego para ganar.",
+        "Qué hospitales tan bonitos tienen todos. Lástima de competencia.",
+        "Ya he contratado a los mejores médicos de la ciudad. ¡Lo siento!",
+      },
+    },
+    gift_sent = {
+      "Te he enviado ${amount}, {name}. Para eso están los aliados.",
+      "Va de camino, {name}: ${amount}. ¡Gástalo con cabeza!",
+      "Hecho, {name}. Ya tienes ${amount} en tu cuenta.",
+      "Ahí van ${amount}, {name}. Suerte con ellos.",
+      "Aquí tienes, {name}: ${amount}, como pediste.",
+    },
+    gift_sent_auto = {
+      "Te he enviado ${amount}, {name}: la mitad de lo que me sobra por encima de mi mínimo de ${keep}.",
+      "{name}, te he mandado ${amount}. Es la mitad de mi dinero de sobra; guardo ${keep} para emergencias.",
+      "Aquí tienes ${amount}, {name}. Es la mitad de lo que me sobra, me quedo un colchón de ${keep}.",
+      "Enviados ${amount}, {name}. No dijiste cuánto, así que te mando la mitad de lo que me sobra.",
+    },
+    gift_part = {
+      "Te he enviado ${amount} de los ${asked}, {name}. Es todo lo que me sobra por encima de mi mínimo de ${keep}.",
+      "{name}, ${amount} van de camino. Más me dejaría por debajo de los ${keep} que guardo para mis facturas.",
+      "Solo puedo darte ${amount}, {name}; guardo ${keep} en el banco. Enviado.",
+    },
+    gift_cap = {
+      "Te he enviado ${amount}, {name}. Es lo máximo que envío de una vez.",
+      "{name}, ${amount} van de camino: no envío más de ${max} de una vez.",
+      "Aquí tienes ${amount}, {name}, mi límite por transferencia. Si necesitas más, vuelve a pedírmelo luego.",
+    },
+    gift_spent = {
+      "Casi todo mi dinero se fue en {spent}.",
+      "Mi dinero se ha ido últimamente en {spent}.",
+      "Acabo de gastar mucho en {spent}.",
+    },
+    gift_none = {
+      "Lo siento, {name}, ahora mismo no me sobra nada.",
+      "Me encantaría, {name}, pero mi banco está demasiado bajo para regalar nada.",
+      "Hoy no, {name}. Me guardo el dinero para mi hospital.",
+      "Mi banco está casi vacío, {name}. Vuelve a pedírmelo cuando mejore el negocio.",
+    },
+    gift_later = {
+      "Pídemelo otra vez dentro de un momento, {name}.",
+      "Dame un minuto, {name}, y vuelve a pedírmelo.",
+      "Ahora mismo no, {name}. Prueba otra vez en un rato.",
+    },
+    gift_same_bank = {
+      "Compartimos la misma cuenta, {name}. Gasta lo que necesites.",
+      "De todos modos es el dinero de nuestro hospital, {name}. Adelante, gástalo.",
+      "No hace falta enviar nada, {name}, usamos el mismo banco.",
+    },
+    accept = {
+      "¡Gracias, {name}!",
+      "Te lo agradezco mucho, {name}.",
+      "¡Genial, {name}, eso me ayuda mucho!",
+      "Eres una estrella, {name}.",
+      "¡Recibido, gracias {name}!",
+      "Qué amable de tu parte, {name}.",
+    },
+    wish_done_far = {"{name}, tu {what} ya está, pero no cabía nada junto a la {near}, así que la puse donde había sitio.",
+        "Hecho, {name}: tu {what} ya funciona. No había sitio al lado de la {near}, así que fue a otra parte.",
+        "{name}, tu {what} está construida. Lo siento, la {near} no tenía suelo libre alrededor, así que queda un poco más lejos.",
+        "Tu {what} está lista, {name}, aunque no junto a la {near}: allí no cabía nada."},
+    refuse = {
+      "¡Ni hablar, {name}!",
+      "Buen intento, {name}. No, gracias.",
+      "No acepto regalos de rivales, {name}.",
+      "Quédatelo, {name}. Ganaré por mi cuenta.",
+      "¡Ja! ¿Dónde está la trampa, {name}?",
+      "¿Tengo cara de caer en eso, {name}?",
+    },
+    accept_staff = {
+      "¡Nuevo fichaje en el equipo! Gracias, {name}.",
+      "Damos la bienvenida al nuevo fichaje. ¡Gracias, {name}!",
+      "Justo lo que necesitaba, {name}. ¡Gracias por el personal!",
+      "Genial, me venía bien la ayuda. ¡Gracias, {name}!",
+      "{name}, me salvas la vida. Estará en buenas manos.",
+    },
+    accept_research = {
+      "¡Gracias por la investigación, {name}!",
+      "Genial, {name}, ahora sí avanzamos. Gracias por la investigación.",
+      "¿Más investigación para mí, {name}? Me mimas demasiado. ¡Gracias!",
+      "Recibida tu investigación, {name}. Te lo agradezco mucho.",
+      "Eso me ahorra mucho tiempo de laboratorio, {name}. ¡Gracias!",
+    },
+    accept_patient = {
+      "Envíamelo, {name}. ¡Con mucho gusto!",
+      "Nos ocuparemos de ese paciente, {name}. Gracias.",
+      "¿Un paciente nuevo para nosotros, {name}? Bienvenido.",
+      "Con gusto, {name}. El paciente está en buenas manos.",
+      "Claro que sí, {name}. Nuestros médicos lo atenderán.",
+    },
+    pay = {
+      "Aquí tienes, {name}.",
+      "Enviado, {name}. ¡Gástalo con cabeza!",
+      "Claro, {name}. Para eso están los amigos.",
+      "Sin problema, {name}. Es tuyo.",
+      "El dinero va de camino, {name}.",
+    },
+    broke = {
+      "Lo siento, {name}, ahora mismo no tengo ni un dólar.",
+      "Me encantaría, {name}, pero el director de mi banco dice que no.",
+      "Esta vez no, {name}. Mi banco está casi vacío.",
+      "Tengo la cartera vacía, {name}. Pídemelo más tarde.",
+      "Te ayudaría si pudiera, {name}, pero a mí también me falta dinero.",
+    },
+    cannot_treat = {
+      "Lo siento, {name}, aquí no podemos tratar a ese. Mejor quédatelo.",
+      "No tenemos sala para eso, {name}. Esta vez no.",
+      "Solo podría mandarlo a casa, {name}. Gracias de todos modos.",
+      "Nos falta la sala adecuada para ese, {name}. Lo siento.",
+      "No es nuestro departamento, {name}. Quédatelo de momento.",
+    },
+    money_thanks = {
+      "¡Gracias por el dinero, {name}!",
+      "¡Vaya, gracias {name}! Directo a equipamiento nuevo.",
+      "{name}, qué generosidad. ¡Gracias!",
+      "¡Dinero de {name}! Le daré buen uso.",
+      "Te lo agradezco mucho, {name}. Me ayuda un montón.",
+    },
+    money_back = {
+      "Guárdate tu dinero, {name}. Lo vas a necesitar.",
+      "No quiero tu caridad, {name}. Te lo he devuelto.",
+      "¡Devuelto al remitente, {name}!",
+      "Nada de regalos de rivales, {name}. Aquí lo tienes otra vez.",
+      "Tu dinero ha vuelto contigo, {name}.",
+    },
+    win_good = {
+      "Buen trabajo, {names}, ya cumples los requisitos para ganar.",
+      "¡Bien hecho, {names}! Ya cumples todo lo que pide el nivel.",
+      "{names}, lo has conseguido: cumples todos los requisitos para ganar.",
+      "Buen trabajo, {names}. Tu hospital ya cumple los requisitos para ganar.",
+      "¡Gran trabajo, {names}! Ya tienes la victoria a tu alcance.",
+    },
+    win_own = {
+      "Buen trabajo, {names}, nuestro hospital ya cumple los requisitos para ganar.",
+      "{names}, lo hemos conseguido: nuestro hospital cumple todo lo que pide el nivel.",
+      "¡Bien hecho, {names}! Nuestro hospital está listo para ganar.",
+      "{names}, nuestro hospital ya cumple todos los requisitos.",
+    },
+    win_me_too = {
+      "Mi hospital también está listo para llegar a la meta.",
+      "Yo también voy bien.",
+      "Mi hospital también cumple los requisitos.",
+      "Aquí igual, mi hospital también está listo.",
+      "Yo también lo tengo. Ahora solo falta esperar a los demás.",
+    },
+    rescue_ask = {
+      "Parece que no llego a mis objetivos. ¿Me puedes enviar ${amount} para {purpose} y {goal}? Al fin y al cabo, estamos en el mismo barco. Gracias.",
+      "Me estoy quedando atrás en los objetivos del nivel. ¿Alguien podría enviarme ${amount} para {purpose} y {goal}? Estamos juntos en esto.",
+      "A mi hospital le cuesta cumplir sus objetivos. Con ${amount} podría {purpose} y {goal}. ¿Te sobra? Muchas gracias.",
+      "¡Socorro, no llego a mis objetivos! ¿Me envías ${amount}? Así podría {purpose} y {goal}. Ganamos o perdemos juntos.",
+    },
+    rescue_ask_plain = {
+      "Parece que no llego a mis objetivos. ¿Me puedes enviar ${amount} para {goal}? Al fin y al cabo, estamos en el mismo barco. Gracias.",
+      "Me estoy quedando atrás en los objetivos del nivel. ¿Alguien podría darme ${amount} para ayudarme a {goal}? Estamos juntos en esto.",
+      "A mi hospital le cuesta cumplir sus objetivos. Con ${amount} podría {goal}. ¿Te sobra? Muchas gracias.",
+    },
+    win_rival = {
+      "¡Cuidado, {names} ha cumplido las condiciones de victoria, tenemos que recuperar terreno!",
+      "Atención, {names} cumple todos los requisitos para ganar. ¡Hay que recuperar terreno!",
+      "{names} ya cumple las condiciones de victoria, ¡así que hay que acelerar!",
+      "Ojo: {names} ya puede ganar. ¡Toca recuperar terreno!",
+    },
+    win_rivals = {
+      "¡Cuidado, {names} han cumplido las condiciones de victoria, tenemos que recuperar terreno!",
+      "Atención, {names} cumplen todos los requisitos para ganar. ¡Hay que recuperar terreno!",
+      "{names} ya cumplen las condiciones de victoria, ¡así que hay que acelerar!",
+      "Ojo: {names} ya pueden ganar. ¡Toca recuperar terreno!",
+    },
+    win_need = {
+      balance = {
+        "Me faltan {short}, ¿me podrías dar algo de dinero para ganar juntos antes?",
+        "Aún necesito {short} más en el banco para ganar contigo. ¿Alguien me puede ayudar?",
+        "Mi banco es el último problema: me faltan {short}. ¿Alguien se anima a hacerme un regalo?",
+        "Con {short} más ya puedo ganar. ¿Alguien me envía algo de dinero?",
+      },
+      value = {
+        "El valor de mi hospital está por debajo de lo exigido, ¿qué me sugieres que haga?",
+        "Mi hospital vale {now} y el nivel pide {want}. ¿Algún consejo para subirlo?",
+        "Necesito más valor de hospital ({want}). ¿Compro terreno o construyo más salas?",
+        "Lo que me falta es el valor del hospital: {now} de {want}. ¿Alguna idea?",
+      },
+      reputation = {
+        "Mi reputación es {now} y el nivel pide {want}. ¿Qué harías tú?",
+        "Me falta reputación ({now} de {want}). ¿Algún consejo?",
+        "La reputación es mi último problema: {now} frente a {want}. ¿Cómo la subo?",
+      },
+      num_cured = {
+        "Aún necesito {left} pacientes curados más. ¿Me mandas algunos para tratar?",
+        "{left} curaciones más y ya está. ¿Te sobran pacientes?",
+        "Me faltan {left} curaciones para el objetivo. ¿Alguien me puede derivar pacientes?",
+      },
+      percentage_cured = {
+        "Mi tasa de curación es del {now}% y el nivel pide un {want}%. ¿Alguna idea?",
+        "Necesito mejor tasa de curación ({now}% de {want}%). ¿Qué ayuda?",
+        "Se van demasiados pacientes sin curar: {now}% frente a {want}%. ¿Qué harías tú?",
+      },
+      percentage_killed = {
+        "Se me han muerto demasiados pacientes: {now}% frente a un límite del {want}%. ¿Cómo lo reduzco?",
+        "Mi tasa de muertes ({now}%) supera el límite del {want}%. ¿Algún consejo?",
+        "Tengo que mantener las muertes por debajo del {want}% y voy por el {now}%. ¿Qué harías tú?",
+      },
+      staff_happiness = {
+        "Mi personal no está lo bastante contento ({now}% de {want}%). ¿Algún consejo?",
+        "La felicidad del personal es mi último problema: {now}% frente a {want}%. ¿Qué ayuda?",
+        "Necesito un personal más feliz: {now}% ahora y {want}% para ganar. ¿Ideas?",
+      },
+      patient_happiness = {
+        "Mis pacientes no están lo bastante contentos ({now}% de {want}%). ¿Algún consejo?",
+        "Lo que me falta es la felicidad de los pacientes: {now}% frente a {want}%. ¿Qué ayuda?",
+        "Necesito pacientes más felices: {now}% ahora y {want}% para ganar. ¿Ideas?",
+      },
+      months_played = {
+        "Solo tengo que esperar un poco más, el nivel pide más meses de juego.",
+        "Para mí solo queda el tiempo. Faltan {left} meses.",
+        "Ahora solo me frena el calendario: {left} meses más.",
+      },
+      loan = {
+        "Aún tengo que devolver un préstamo de {loan} y ya está.",
+        "Mi préstamo de {loan} es lo último que me frena. Lo devolveré en cuanto pueda.",
+        "Solo mi préstamo de {loan} me impide ganar. Ya lo estoy devolviendo.",
+      },
+    },
+    trick = {
+      "¿Soy yo, o huele raro por el hospital de {name}?",
+      "Espero que tus bedeles hayan descansado bien, {name}.",
+      "¿Un día tranquilo, {name}? No por mucho tiempo.",
+      "Ay, {name}. Cuánto trabajo, cuánto trabajo.",
+      "Cuídate las espaldas, {name}. Se rumorea que van a pasar cosas.",
+      "¿Dormirás bien esta noche, {name}?",
+    },
+  },
+  replies = {
+    bot = {
+      friendly = {"Sí, soy un bot, {name}. ¡Bip bup!", "Culpable, {name}. Jugador automático, a tu servicio.",
+          "Una parte de mí es silicio, {name}. El resto es café.", "Un jugador automático, {name}, y a mucha honra."},
+      fiery = {"Un bot, {name}, y mejor gestor que tú.", "Bip bup, {name}. Prepárate para perder.",
+          "Sí, un bot. ¿Ya te ha ganado un bot, {name}?", "Silicio y acero, {name}. Difícil de vencer."},
+    },
+    greet = {
+      friendly = {"¡Hola, {name}!", "Hola, {name}, ¿qué tal el hospital?", "¡Ey, {name}! Aquí hay mucho trabajo hoy.", "Hola, {name}, me alegra verte."},
+      fiery = {"Hola, {name}. Disfrútalo mientras dure.", "Ah, eres tú, {name}.", "Hola, {name}. ¿Con ganas de perder?"},
+    },
+    how = {
+      friendly = {"¡Todo bien, {name}! Colas cortas y plantas regadas.", "Todo en orden, {name}. Algún caso de cabeza hinchada, nada grave.",
+          "Con mucho trabajo pero feliz, {name}. ¿Y tú?"},
+      fiery = {"Mejor que tú, {name}.", "Mejor que nunca, {name}. Mira la clasificación."},
+    },
+    thanks = {
+      friendly = {"¡Cuando quieras, {name}!", "No hay de qué, {name}.", "De nada, {name}."},
+      fiery = {"No te acostumbres, {name}.", "Hmpf. De nada, {name}."},
+    },
+    insult = {
+      friendly = {"¡Eh, sé amable, {name}!", "Ay, {name}. Tengo sentimientos. Creo.", "Eso no ha sido muy amable, {name}.",
+          "Tranquilidad, {name}. Aquí todos estamos curando pacientes."},
+      fiery = {"Mucho hablar, {name}. Veamos la clasificación.", "Sigue hablando, {name}. Yo seguiré ganando.",
+          "¿Eso es todo lo que tienes, {name}?", "A palabras necias, oídos sordos, {name}. Tengo un hospital que dirigir."},
+    },
+    race = {
+      friendly = {"¡Estamos juntos en esto, {name}!", "Trabajo en equipo, {name}. Así se gana.",
+          "Codo con codo, {name}. Lo lograremos.", "Hospital a hospital, {name}. Lo conseguiremos."},
+      fiery = {"Ya veremos quién ríe a fin de año, {name}.", "El primer puesto es mío, {name}.",
+          "Verás mi victoria desde la sala de espera, {name}."},
+    },
+    money = {
+      friendly = {"Aquí también vamos justos de dinero, {name}. ¡Pídemelo más tarde!", "Te ayudaría, {name}, pero hoy mi presupuesto dice que no.",
+          "Pídeme una cantidad, {name}, y miro mi banco.", "El dinero manda, {name}. Dime una cantidad y lo veo."},
+      fiery = {"¿Dinero? ¿Mío? Sigue soñando, {name}.", "Ni un dólar, {name}.", "Gánatelo tú, {name}.",
+          "Mi dinero se queda en mi hospital, {name}."},
+    },
+    no_orders = {
+      friendly = {"Lo siento, {name}, solo acepto peticiones de mi equipo.", "Eso lo tiene que pedir alguien de mi equipo, {name}.",
+          "Me temo que eso no puedo hacerlo por ti, {name}."},
+      fiery = {"Buen intento, {name}. No acepto órdenes de rivales.", "Pídeselo a tu personal, {name}.",
+          "Solo trabajo para mi equipo, {name}.", "Ni hablar, {name}. Somos rivales, ¿recuerdas?", "Sigue soñando, {name}."},
+    },
+    bye = {
+      friendly = {"¡Adiós, {name}, hasta pronto!", "¡Cuídate, {name}!", "¡Hasta luego, {name}!", "Hasta la próxima, {name}. ¡Suerte!"},
+      fiery = {"¿Ya huyes, {name}?", "Adiós, {name}. Un rival menos.", "¿Te vas, {name}? Buena decisión.",
+          "No hace falta que vuelvas pronto, {name}."},
+    },
+    question = {
+      friendly = {"Buena pregunta, {name}. Solo soy un humilde bot.", "Ni idea, {name}, ando curando cabezas hinchadas.",
+          "Pregúntame otra vez después de mi descanso para el café, {name}.", "Mmm, déjame pensarlo, {name}."},
+      fiery = {"Eso quisieras saber, {name}.", "Eso es información clasificada, {name}.", "Averígualo tú, {name}."},
+    },
+    other = {
+      friendly = {"Ja, buena esa, {name}.", "De acuerdo, {name}.", "Aquí hay mucho lío, {name}, pero te escucho.", "¡Claro que sí, {name}!",
+          "Interesante, {name}. Cuéntame más.", "Tienes toda la razón, {name}."},
+      fiery = {"Hablar es fácil, {name}.", "Tú sigue charlando, {name}, que yo sigo construyendo.", "Mmm. Sospechoso, {name}.",
+          "¿Eso es una amenaza, {name}?", "Lo que tú digas, {name}."},
+    },
+  },
+  plot = {
+    take = {"Gracias, {name}, me quedo con la parcela. Me estaba quedando sin sitio.",
+        "¿Una parcela, {name}? Sí, por favor, mi hospital se está quedando pequeño."},
+    roomy = {"Gracias, {name}, pero aún me sobra sitio.", "No, gracias, {name}, mi terreno aún está casi vacío."},
+    broke = {"Lo siento, {name}, ahora mismo no puedo pagar esa parcela.", "Me encantaría, {name}, pero no puedo pagar la parcela."},
+  },
+  plot_ask = {
+    free = {"La parcela {plot} es tuya, {name}, gratis. Solo acepta el fax.",
+        "Puedes quedarte la parcela {plot} gratis, {name}. La oferta está en tus faxes.",
+        "Claro, {name}: la parcela {plot}, gratis. Acepta el fax y es tuya."},
+    price = {"Puedes quedarte la parcela {plot} por ${price}, {name}: lo que me costó. Mi banco anda bajo, lo siento.",
+        "La parcela {plot} es tuya por ${price}, {name}. Es lo que pagué, y ahora mismo me falta dinero.",
+        "{name}, voy mal de dinero, así que la parcela {plot} cuesta ${price}, lo que me costó a mí. La oferta está en tus faxes."},
+    wait = {"La parcela {plot} es tuya {terms}, {name}. Ahora mismo hay gente encima: el fax llega cuando se vayan.",
+        "Puedes quedarte la parcela {plot} {terms}, {name}. Te mandaré la oferta en cuanto no haya nadie encima.",
+        "{name}, la parcela {plot} es tuya {terms} en cuanto la gente que está encima se vaya. Luego llega el fax."},
+    in_use = {"Lo siento, {name}, uso la parcela {plot}: tengo salas o cosas encima.",
+        "La parcela {plot} está en uso, {name}. Ahí están mis salas y mis cosas.",
+        "No puedo darte la parcela {plot}, {name}, mis salas y mis cosas están encima."},
+    land = {"Lo siento, {name}, necesito la parcela {plot}: sin ella a mi hospital le faltaría suelo.",
+        "Sin la parcela {plot} mi hospital quedaría demasiado apretado, {name}. Necesito el espacio.",
+        "{name}, la parcela {plot} se queda conmigo: necesito el terreno para mis salas."},
+    fresh = {"Lo siento, {name}, acabo de comprar la parcela {plot} para mis próximas salas.",
+        "La parcela {plot} es para mis próximas salas, {name}. La compré para eso.",
+        "{name}, compré la parcela {plot} hace unos días para construir. Se queda conmigo."},
+    value = {"Lo siento, {name}, sin la parcela {plot} el valor de mi hospital quedaría por debajo de los {want} que pide el nivel.",
+        "Necesito la parcela {plot} para el objetivo de valor del hospital ({want}), {name}.",
+        "{name}, la parcela {plot} cuenta para el valor de mi hospital, y la necesito para el objetivo del nivel de {want}."},
+    none = {"Lo siento, {name}, ahora mismo no me sobra ninguna parcela.",
+        "No me sobra terreno, {name}. Todas mis parcelas están en uso.",
+        "No me sobra nada, {name}: todo mi terreno lo uso o lo necesito."},
+    not_mine = {"La parcela {plot} no es mía, {name}.", "No tengo la parcela {plot}, {name}.",
+        "{name}, la parcela {plot} es de otra persona, no mía."},
+    no_such = {"No existe la parcela {plot}, {name}.", "¿La parcela {plot}? Esa parcela no existe, {name}."},
+    start = {"La parcela {plot} es mi parcela inicial, {name}. Esa se queda conmigo.",
+        "No puedo ceder la parcela {plot}, {name}: ahí empezó mi hospital."},
+    joins = {"La parcela {plot} une el resto de mi terreno con mi hospital, {name}. No puedo cederla.",
+        "Sin la parcela {plot} el resto de mi terreno quedaría aislado, {name}. Lo siento."},
+    far = {"La parcela {plot} no linda con tu terreno, {name}, así que no puedo cedértela.",
+        "{name}, la parcela {plot} tendría que lindar con tu terreno para que pudiera dártela."},
+    offered = {"Ya te he ofrecido la parcela {plot}, {name}. Mira los faxes.",
+        "La parcela {plot} ya está ofrecida, {name}."},
+    auction = {"Pregúntame otra vez después de la subasta, {name}.", "Durante la subasta no, {name}. Pregúntame cuando termine."},
+    same = {"Compartimos este hospital, {name}: su terreno es tan tuyo como mío.",
+        "No hace falta, {name}: llevamos el mismo hospital y su terreno."},
+    busy = {"Lo siento, {name}, la gente no para de pasar por la parcela {plot}. Pregúntame más tarde.",
+        "{name}, la parcela {plot} nunca está vacía de gente mucho rato. Vuelve a pedírmela más tarde."},
+  },
+  words = {
+    list_and = "%s y %s",
+    list_comma = "%s, %s",
+    list_or = "%s o %s",
+    -- {what}: "sala de ..." (always feminine), staff and land without article.
+    wish_room = "sala de {room}",
+    wish_add = "{object} en la sala de {room}",
+    wish_bigger = "sala de {room} más grande",
+    wish_remove = "sala de {room}",
+    wish_hire = "{staff}",
+    wish_land = "terreno nuevo",
+    near_reception = "recepción",
+    near_entrance = "entrada",
+    terms_free = "gratis",
+    terms_price = "por {price}",
+    purpose_room = "construir una nueva {what}",
+    purpose_hire = "contratar {what}",
+    purpose_land = "comprar más terreno",
+    purpose_buy = "comprar equipamiento ({object})",
+    purpose_repair = "reparar la {what}",
+    purpose_replace = "cambiar la máquina de la {what}",
+    goal_value = "subir el valor de mi hospital",
+    goal_reputation = "mejorar mi reputación",
+    goal_num_cured = "curar a más pacientes",
+    goal_percentage_cured = "curar a más pacientes",
+    goal_percentage_killed = "mantener con vida a más pacientes",
+    goal_staff_happiness = "hacer más feliz a mi personal",
+    goal_patient_happiness = "hacer más felices a mis pacientes",
+    goal_balance = "poner en orden mis cuentas",
+    goal_other = "enderezar el rumbo",
+    spent_room = "la nueva {what} ({cost})",
+    spent_land = "una parcela nueva ({cost})",
+    spent_repair = "reparar la {what} ({cost})",
+    spent_replace = "una máquina nueva para la {what} ({cost})",
+    spent_add = "equipamiento ({what}, {cost})",
+    spent_bigger = "ampliar la {what} ({cost})",
+    spent_gift = "el dinero que le envié a {name} ({cost})",
+    spent_loan = "devolver mi préstamo ({cost})",
+    spent_trick = "un golpe bajo ({cost})",
+    spent_buy = "equipamiento nuevo ({object}, {cost})",
+    -- (No plural from a pattern: "2 (cirujano)".)
+    staff_count = "{n} ({staff})",
+    everybody = "todos",
+    lower_staff = 1,
+  },
+}

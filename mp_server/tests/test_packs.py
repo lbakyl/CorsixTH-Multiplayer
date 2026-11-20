@@ -112,7 +112,12 @@ def test_server_sends_its_pack_and_offers_it_to_other_builds(tmp_path):
                         break
                     assert verb == "PACKDATA"
                     data += base64.b64decode(f["d"])
-                assert await r.read() == b""  # (closed)
+                # The server leaves the connection open until the game, which
+                # may still be reading, closes it (then the server does too).
+                with pytest.raises(asyncio.TimeoutError):
+                    await asyncio.wait_for(r.read(1), 0.3)
+                w.close()
+                assert await asyncio.wait_for(r.read(), 5) == b""
                 return int(info["from"]), data
 
             assert await download() == (0, blob)

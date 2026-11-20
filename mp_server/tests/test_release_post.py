@@ -87,5 +87,30 @@ def test_with_webhook_posts_once(monkeypatch):
     monkeypatch.setattr(release_post, "fetch_release", lambda repo, tag, token: release())
     posted = []
     monkeypatch.setattr(release_post, "post", lambda url, payload: posted.append((url, payload)))
+    monkeypatch.setattr(release_post, "webhook_guild", lambda url: "1")
     assert release_post.main(["--tag", "mp-test-03fbbe02"]) == 0
     assert len(posted) == 1 and json.dumps(posted[0][1])
+
+
+def test_post_line_in_the_notes_replaces_an_older_one():
+    link = "https://discord.com/channels/1/2/3"
+    assert release_post.message_link("1", {"channel_id": "2", "id": "3"}) == link
+    assert release_post.message_link("", {"channel_id": "2", "id": "3"}) == ""
+    once = release_post.with_post_line(BODY, link)
+    assert once.endswith("\n\n<!-- discord-post: https://discord.com/channels/1/2/3 -->\n")
+    assert once.startswith(BODY.rstrip())
+    again = release_post.with_post_line(once, "https://discord.com/channels/1/2/4")
+    assert again.count("discord-post") == 1 and again.endswith("/4 -->\n")
+
+
+def test_posted_address_goes_into_the_release_notes(monkeypatch):
+    monkeypatch.setenv("DISCORD_RELEASES_WEBHOOK", "https://discord.example/api/webhooks/1/x")
+    monkeypatch.setenv("GITHUB_TOKEN", "t")
+    monkeypatch.setattr(release_post, "fetch_release", lambda repo, tag, token: release(id=42))
+    monkeypatch.setattr(release_post, "post", lambda url, payload: {"channel_id": "20", "id": "30"})
+    monkeypatch.setattr(release_post, "webhook_guild", lambda url: "10")
+    kept = []
+    monkeypatch.setattr(release_post, "record_link",
+                        lambda repo, rel, link, token: kept.append((rel["id"], link)))
+    assert release_post.main(["--tag", "mp-test-03fbbe02"]) == 0
+    assert kept == [(42, "https://discord.com/channels/10/20/30")]

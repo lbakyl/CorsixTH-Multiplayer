@@ -1,7 +1,7 @@
 # Headless referee, desync repair and rejoin (S3/S4)
 
 The relay server can run one extra copy of every game: the **referee**. It is
-CorsixTH itself without a screen (`scripts/multiplayer/referee.lua`), started
+the game itself without a screen (`scripts/multiplayer/referee.lua`), started
 by the server when a room's game starts. It plays the same game as the
 players from the same commands, never issues a command, and the players never
 wait for it.
@@ -22,14 +22,14 @@ player who left cannot come back.
 ## Turning it on
 
 The referee is off unless `CORSIXTH_MP_REFEREE_BINARY` is set. It needs a
-CorsixTH build of the same version as the players (the build id must match;
+game build of the same version as the players (the build id must match;
 it includes the Lua code checksum and the language), its source tree, Theme
 Hospital data and LuaSocket.
 
 | Variable | Meaning |
 |---|---|
 | `CORSIXTH_MP_REFEREE_BINARY` | the `corsix-th` executable |
-| `CORSIXTH_MP_REFEREE_SOURCE` | CorsixTH checkout (for `CorsixTH/` and `scripts/multiplayer/referee.lua`) |
+| `CORSIXTH_MP_REFEREE_SOURCE` | OpenTH checkout (for `CorsixTH/` and `scripts/multiplayer/referee.lua`) |
 | `CORSIXTH_MP_REFEREE_DATA` | Theme Hospital data folder (read only is enough) |
 | `CORSIXTH_MP_REFEREE_LUA_CPATH`, `..._LUA_PATH` | where LuaSocket is, if not in the standard paths |
 | `CORSIXTH_MP_REFEREE_WORKDIR` | configs and logs, one folder per game (default `/tmp/corsixth-referee`) |

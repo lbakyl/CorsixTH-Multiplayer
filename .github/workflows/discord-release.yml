@@ -14,8 +14,10 @@ on:
         description: Release tag to post again (e.g. mp-test-03fbbe02)
         required: true
 
+# (write: the post's Discord address goes into the release notes as a hidden
+# line, which the servers' deploy script links to in #development.)
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   post:

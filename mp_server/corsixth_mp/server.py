@@ -48,6 +48,8 @@ SERVER_VERSION = "0.1"
 PACK_CHUNK = 36000
 MAX_PACK_SENDS = 8
 PACK_SEND_TIMEOUT = 600.0
+# After sending a pack: how long the game may take to read it and close.
+PACK_LINGER = 60.0
 MAX_NAME = 32
 MAX_ROOMS = 64
 # A new room is "free": every player picks a colour (the hospital they play
@@ -161,6 +163,32 @@ ASK_INTERVAL = {"plan": 20.0, "chat": 3.0, "rescue": 30.0}
 DEFAULT_SETTINGS = {"grant_wage_increase": 1, "free_build_mode": 0}
 
 
+_LANG_RE = re.compile(r"^[a-z]{2}(_[a-z]{2})?$")
+# The game languages a bot's note can be written in (the model is told the
+# name): those whose multiplayer screens are complete.
+NOTE_LANGUAGES = {"cs": "Czech", "da": "Danish", "de": "German", "es": "Spanish", "fr": "French",
+                  "hu": "Hungarian", "it": "Italian", "ru": "Russian", "uk": "Ukrainian"}
+_CHAT_LINE_RE = re.compile(r"^[a-z_]+(\.[a-z0-9_]+){1,4}$")
+_CHAT_VALUE_RE = re.compile(r"^[vw]_[a-z]{1,16}$")
+
+
+def _chat_line_fields(f: dict[str, str]) -> dict[str, str]:
+    """The fields of a bot's chat line that name it in bot_chat (line,
+    line2: "lines.tricked.rats.2") and its values (v_<name>, w_<name>): at
+    most 12 values of 300 characters; anything else is left out."""
+    out: dict[str, str] = {}
+    for key in ("line", "line2"):
+        value = f.get(key, "")
+        if value and len(value) <= 80 and _CHAT_LINE_RE.match(value):
+            out[key] = value
+    if "line" not in out:
+        return {}
+    values = sorted(k for k in f if _CHAT_VALUE_RE.match(k))[:12]
+    for k in values:
+        out[k] = f[k][:300]
+    return out
+
+
 def _team_players(seat_names: list[str]) -> list[str]:
     """The players' names in saved hospital names ("ANN + BEN": both)."""
     return [n.strip() for seat in seat_names for n in seat.split(TEAM_NAME_JOIN) if n.strip()]
@@ -232,6 +260,7 @@ class Player:
     # Theme Hospital data of another edition (its identity; "" = the server's):
     # this player's game never loads a level, it gets the referee's game.
     other_data: str = ""
+    lang: str = ""  # the game's language code (HELLO lang=, "cs"); bots' notes in it
     diag_bytes: int = 0
     diag_total: int = 0
     diag_step: str = ""
@@ -563,6 +592,12 @@ class Server:
             try:
                 await asyncio.wait_for(self._send_pack(first.decode("utf-8", "replace"), writer),
                                        PACK_SEND_TIMEOUT)
+                # The game closes the connection itself after PACKEND. Closed
+                # here first, a game that still had lines to read gave up as
+                # "connection lost" (it reads ten a frame and then looks
+                # whether the connection is closed: a 3.5 MB pack stopped at
+                # 2.1 MB, eu2, 2026-11-19).
+                await asyncio.wait_for(reader.read(), PACK_LINGER)
             except (asyncio.TimeoutError, ConnectionError) as exc:
                 log.info("pack download from %s stopped: %s", peername, exc.__class__.__name__)
             await self._close_writer(writer)
@@ -691,6 +726,8 @@ class Server:
         name = f.get("name", "").strip()[:MAX_NAME] or f"Player {player.pid}"
         player.name = name
         player.build = f.get("build", "")
+        lang = f.get("lang", "")
+        player.lang = lang if _LANG_RE.match(lang) else ""
         if self.build_check is not None and not self.build_check.accepts(player.build):
             log.info("player %d (%r) refused: build %s, this server needs %s", player.pid, name,
                      player.build, self.build_check.checksum)
@@ -1334,6 +1371,10 @@ class Server:
         # A bot's small talk (greetings, taunts) is marked, so that each
         # player's game can hide it (MULTIPLAYER > BOT CHAT).
         extra = {"banter": 1} if f.get("banter") == "1" else {}
+        # A bot's line goes with its place in bot_chat (line, line2) and its
+        # values (v_*, w_*), so that each game shows it in its own language;
+        # the text stays English for older games and for other bots.
+        extra.update(_chat_line_fields(f))
         if f.get("team") == "1":
             # A team line (a race of teams; in co-op the allies): the sender's
             # team mates, as the sender's game knows them (to=<peer>,<peer>...),
@@ -1590,6 +1631,19 @@ class Server:
         player.last_ask[kind] = now
         asyncio.get_running_loop().create_task(self._answer(player, qid, kind, f))
 
+    def _note_language(self, bot: Player) -> str | None:
+        """The language a bot's note to its team is written in: that of the
+        people on its team (in its hospital, or its allies), when they all
+        play in one language the notes can be written in; else English."""
+        room = bot.room
+        if not room:
+            return None
+        langs = {p.lang for p in room.players.values()
+                 if not p.is_bot and not p.is_referee and p.team == bot.team and p.team}
+        if len(langs) != 1:
+            return None
+        return NOTE_LANGUAGES.get(langs.pop())
+
     async def _answer(self, player: Player, qid: str, kind: str, f: dict[str, str]) -> None:
         advisor = self.advisor
         assert advisor is not None
@@ -1597,7 +1651,7 @@ class Server:
             if kind in ("plan", "rescue"):
                 menu = [m for m in f.get("menu", "").split(",") if m]
                 ask = advisor.rescue if kind == "rescue" else advisor.plan
-                plan = await ask(f.get("text", ""), menu)
+                plan = await ask(f.get("text", ""), menu, language=self._note_language(player))
                 if plan is None:
                     player.send(encode("ANSWER", id=qid, error="none"))
                     return

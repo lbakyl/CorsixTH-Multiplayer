@@ -420,9 +420,15 @@ function MultiplayerPack:poll(app)
   end
   if self.state == "receiving" then
     -- (A tick's worth, 10 lines of 36000 bytes: the window stays smooth.)
+    -- The connection counts as lost only once every line that came is read:
+    -- a fast server is done and gone while lines still wait here.
+    local drained = false
     for _ = 1, 10 do
       local line = self.transport:receive()
-      if not line then break end
+      if not line then
+        drained = true
+        break
+      end
       local verb, f = MultiplayerLobby.decode(line)
       if verb == "PACKINFO" then
         self.size = tonumber(f.size) or 0
@@ -448,7 +454,7 @@ function MultiplayerPack:poll(app)
         return
       end
     end
-    if self.transport and self.transport.closed and self.state == "receiving" then
+    if drained and self.transport and self.transport.closed and self.state == "receiving" then
       self:_fail("Connection to the server lost")
     end
     return

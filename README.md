@@ -10,7 +10,7 @@
 
 **Network multiplayer for [CorsixTH](https://github.com/CorsixTH/CorsixTH)**, the open-source reimplementation of Bullfrog's 1997 business sim Theme Hospital. Play with friends over the internet, **up to 8 players**: in **one shared hospital**, **each in your own hospital as a team**, or **in a race against each other** with dirty tricks, land auctions and computer players (bots) for the empty places. Windows, Linux and macOS players play together, each in their own game language.
 
-This is a fork of CorsixTH, not an official CorsixTH release. Single player works exactly as in CorsixTH.
+OpenTH is not an official CorsixTH release. Single player works exactly as in CorsixTH.
 
 <picture>![Eight hospitals in one town: every hospital's patients wear its own colour, with a bar of that colour at their feet](docs/multiplayer/images/hospitals-colours.png)</picture>
 
@@ -21,11 +21,11 @@ This is a fork of CorsixTH, not an official CorsixTH release. Single player work
    - **Linux** (x86_64, Ubuntu 24.04, Linux Mint 22 or newer): unpack `...-linux-x86_64.tar.gz` and start `CorsixTH-Multiplayer/CorsixTH-Multiplayer.sh`.
    - **macOS** (Apple Silicon, the macOS version the release names, usually 27 or newer): unzip `...-macos-arm64.zip` and move `CorsixTH.app` to Applications. The app is not notarized by Apple: the first time, open **System Settings > Privacy & Security** and click **Open Anyway**.
 2. **Theme Hospital's game data** is needed, as for CorsixTH: the original CD, or a download from [GOG.com](https://www.gog.com/game/theme_hospital) or [EA](https://www.ea.com/games/theme/theme-hospital). The first start asks for its folder.
-3. **Main menu > Multiplayer**: click **EU1: stable** (`eu1.openth.org:47800`, the newest stable release) or **EU2: test builds** (`eu2.openth.org:47800`, the newest test build), enter your name, then **Connect**.
+3. **Main menu > Multiplayer**: click a server's button (EU2 runs test builds, the others the stable release; [openth.org/play](https://openth.org/play) lists them), enter your name, then **Connect**.
 4. **Create a room** (the level, how many places, a password if you like) or **join** one. Everybody picks a colour and a team: the same colour shares a hospital, the same team wins together. Click an empty place to add a bot. When everybody is ready, the room's owner starts the game. The lobby measures everybody's connection and sets the top speed that stays smooth.
 5. Everybody in a game must run the **same release**. A server only lets in the release it runs, and tells you which one to download.
 
-The full guide, with co-op, races, trading, saving and what to do if something goes wrong: [docs/multiplayer/PLAYING.md](docs/multiplayer/PLAYING.md). To run your own server with the referee, like eu1 and eu2: [docs/multiplayer/SERVER-SETUP.md](docs/multiplayer/SERVER-SETUP.md). To play on your LAN without the internet: [mp_server/README.md](mp_server/README.md#playing-on-a-lan-no-internet-needed).
+The full guide, with co-op, races, trading, saving and what to do if something goes wrong: [docs/multiplayer/PLAYING.md](docs/multiplayer/PLAYING.md). To run your own server with the referee, like OpenTH's servers: [docs/multiplayer/SERVER-SETUP.md](docs/multiplayer/SERVER-SETUP.md). To play on your LAN without the internet: [mp_server/README.md](mp_server/README.md#playing-on-a-lan-no-internet-needed).
 
 ### What's Working? ###
 The whole single player game of CorsixTH (you can complete the full campaign), and multiplayer for two to eight players.
@@ -72,7 +72,7 @@ The whole single player game of CorsixTH (you can complete the full campaign), a
 - Cheats (naughty!), in single player
 
 ### New Features ###
-##### In this fork #####
+##### In OpenTH #####
 - Network multiplayer for up to 8 players, shared, co-op and races, through a small relay server ([run your own](docs/multiplayer/vps-guide.md))
 - Builds for Windows, Linux and macOS (Apple Silicon) that play together
 - Bots, dirty tricks, land auctions, teams, trades with prices, chat, a players window, votes on the game speed
@@ -113,7 +113,7 @@ The whole single player game of CorsixTH (you can complete the full campaign), a
 
 ## Multiplayer development
 
-How it works, in a short tour with diagrams (what runs where, what travels over the network, how the games stay in step): [docs/multiplayer/HOW-IT-WORKS.md](docs/multiplayer/HOW-IT-WORKS.md). The details (deterministic lockstep, the relay server, the referee), the tests and the lessons learned: [docs/multiplayer/README.md](docs/multiplayer/README.md), with [protocol.md](docs/multiplayer/protocol.md), [referee.md](docs/multiplayer/referee.md) and [coop-architecture.md](docs/multiplayer/coop-architecture.md). Work in progress lives on `mp/*` branches until it is tested and moved to `master`. Problems with multiplayer: please [open an issue on this fork](https://github.com/openth-org/openth/issues/new) (server, room name, time, what you were doing).
+How it works, in a short tour with diagrams (what runs where, what travels over the network, how the games stay in step): [docs/multiplayer/HOW-IT-WORKS.md](docs/multiplayer/HOW-IT-WORKS.md). The details (deterministic lockstep, the relay server, the referee), the tests and the lessons learned: [docs/multiplayer/README.md](docs/multiplayer/README.md), with [protocol.md](docs/multiplayer/protocol.md), [referee.md](docs/multiplayer/referee.md) and [coop-architecture.md](docs/multiplayer/coop-architecture.md). Work in progress lives on `mp/*` branches until it is tested and moved to `master`. Problems with multiplayer: please [open an issue](https://github.com/openth-org/openth/issues/new) or ask on [Discord](https://openth.org/discord) (server, room name, time, what you were doing).
 
 ## Contact
 

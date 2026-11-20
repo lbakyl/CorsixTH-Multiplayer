@@ -86,6 +86,30 @@ describe("Game packs", function()
         saved[1], saved[2], saved[3], saved[4]
   end)
 
+  it("reads every line that came before it calls the connection lost", function()
+    -- A fast server sends it all and closes while 40 lines still wait here
+    -- (eu2: a 3.5 MB pack stopped at 2.1 MB, ten lines a frame).
+    local lines = {MultiplayerLobby.encode("PACKINFO", {build = "0123abcd", size = 50, sig = "good"})}
+    for _ = 1, 25 do lines[#lines + 1] = MultiplayerLobby.encode("PACKDATA", {d = MultiplayerLobby.toBase64("xx")}) end
+    lines[#lines + 1] = MultiplayerLobby.encode("PACKEND", {size = 50})
+    local transport = {closed = true, conn = {close = function() end}}
+    function transport.receive() return table.remove(lines, 1) end
+    local pack = setmetatable({build = "0123abcd", size = 50, received = 0, parts = {}, state = "receiving",
+        transport = transport}, {__index = MultiplayerPack})
+    for _ = 1, 5 do
+      if pack.state ~= "receiving" then break end
+      pack:poll(app)
+    end
+    assert.equal("checking", pack.state, tostring(pack.error))
+    assert.equal(50, pack.received)
+    -- Closed with nothing left to read: lost.
+    local lost = setmetatable({build = "0123abcd", size = 50, received = 0, parts = {}, state = "receiving",
+        transport = {closed = true, receive = function() return nil end, conn = {close = function() end}}},
+        {__index = MultiplayerPack})
+    lost:poll(app)
+    assert.equal("failed", lost.state)
+  end)
+
   it("carries only the game's own files", function()
     for _, path in ipairs{"CorsixTH.lua", "Lua/app.lua", "Lua/dialogs/x.lua", "Campaigns/Four Corners.map",
         "Levels/st.peter's.level", "Bitmap/mp_icons.dat", "Sounds/a.wav"} do

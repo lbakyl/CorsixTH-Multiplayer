@@ -79,6 +79,7 @@
 --   MP_FURNISH_PACE   game hours between furnishing steps (default 0)
 --   MP_CONTINUE       host: create the room continuing a saved multiplayer
 --                     game (its label, or "latest"); UI action mpsave saves one
+--                     (mpsavebox:<name>: through File > Save's name box)
 --   MP_SHOW_LOAD      host: before creating the room, Load MP game with two made-up
 --                     saves: pick one, then x (a new game again)
 --   MP_SHOW_LEVELS    host: before creating the room, the level browser: level 7 on the
@@ -234,8 +235,9 @@ end
 local function shot(what, keep_info)
   if not shot_dir or shots_taken[what] then return end
   shots_taken[what] = true
-  -- In the game, close information popups so the map is visible.
-  if TheApp.world and not keep_info then
+  -- Close information popups so the map (or the main menu, under a test
+  -- machine's warning about missing movies) is visible.
+  if not keep_info then
     for i = #TheApp.ui.windows, 1, -1 do
       local win = TheApp.ui.windows[i]
       if class.is(win, UIInformation) then win:close() end
@@ -3112,6 +3114,18 @@ local function run()
           -- File > Save: every player's game saves at the same hour.
           log("UI: File > Save at step " .. session.step)
           MultiplayerSession.saveTogether()
+        elseif a == "mpsavebox" then
+          -- File > Save as a player does it: the box for the save's name (the
+          -- level's name to start with), the name typed over it
+          -- (mpsavebox:<name>), then Save.
+          MultiplayerSession.openSave(world.ui)
+          local box = world.ui:getWindow(UIMultiplayerSave)
+          log("UI: save box at step " .. session.step .. " with '" .. tostring(box and box.name_box.text) .. "'")
+          shot("savebox", true)
+          if box then
+            if entry.arg and entry.arg ~= "" then box.name_box:setText(entry.arg) end
+            box:buttonSave()
+          end
         elseif a == "transfers" then
           -- Where the staff on their way to another hospital are.
           for _, st in ipairs(world.mp_transfers or {}) do

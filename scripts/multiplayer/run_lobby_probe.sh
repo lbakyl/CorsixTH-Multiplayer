@@ -334,7 +334,7 @@ run_probe otto MP_ROLE=join MP_ROOM=wreck MP_STEPS=900 MP_SCENARIO=none & pids+=
 # hosting this time (each gets their own hospital back by name).
 (
   run_probe sara MP_ROLE=host MP_ROOM=savegame MP_COOP=1 MP_STEPS=400 \
-    MP_UI_SCRIPT="20:openhospital;60:buy:bench;80:hire:Doctor;120:uierror;300:mpsave" & a=$!
+    MP_UI_SCRIPT="20:openhospital;60:buy:bench;80:hire:Doctor;120:uierror;300:mpsavebox:Final round" & a=$!
   sleep 1
   run_probe tom MP_ROLE=join MP_ROOM=savegame MP_STEPS=400 \
     MP_UI_SCRIPT="30:openhospital;90:hire:Nurse;290:staleui" & b=$!
@@ -1013,11 +1013,14 @@ fail |= not ok12
 if not ok12: bad.append("ok12")
 
 sa, to, t2, s2 = log('sara'), log('tom'), log('tom-2'), log('sara-2')
-saved_s = re.search(r"SAVED savegame (\S+) at step (\d+): (.*)", sa)
-saved_t = re.search(r"SAVED savegame (\S+) at step (\d+): (.*)", to)
+# Sara saved through the name box (the level's name in it to start with) as
+# "Final round": both games name the file after it, her and the game date.
+saved_s = re.search(r"SAVED (Final round sara y\d+-m\d\d-d\d\d) at step (\d+): (.*)", sa)
+saved_t = re.search(r"SAVED (Final round sara y\d+-m\d\d-d\d\d) at step (\d+): (.*)", to)
+save_box = re.search(r"UI: save box at step \d+ with '(.+)'", sa)
 loaded_t = re.search(r"LOADED: loaded the shared save at step (\d+); playing (\S+) \(hospital (\d)\): (.*)", t2)
 loaded_s = re.search(r"LOADED: loaded the shared save at step (\d+); playing (\S+) \(hospital (\d)\): (.*)", s2)
-same_save = bool(saved_s and saved_t and saved_s.group(2, 3) == saved_t.group(2, 3))
+same_save = bool(saved_s and saved_t and saved_s.group(1, 2, 3) == saved_t.group(1, 2, 3) and save_box)
 # The state right after loading (money reads 39654.0 once loaded: same value).
 def at_load(text):
     m = re.search(r"multiplayer: loaded the shared save at step (\d+) \(\d+ bytes\): (.*)", text)
@@ -1038,7 +1041,8 @@ ok11 = (same_save and same_load and seats and clicks_ok and chat_ok and result('
 # server log has the error.
 ui_error = bool(re.search(r"room 'savegame': state of 'sara' .*ERROR at step 1[2-3]\d in the screen tick: .*probe: an error in the screen tick", server))
 ok11 = ok11 and ui_error
-print(f"11. Save and continue:      saved at step {saved_t.group(2) if saved_t else '-'} on both: {same_save}; error reported: {ui_error}; "
+print(f"11. Save and continue:      saved at step {saved_t.group(2) if saved_t else '-'} on both as '{saved_t.group(1) if saved_t else '-'}' "
+      f"(box had '{save_box.group(1) if save_box else '-'}'): {same_save}; error reported: {ui_error}; "
       f"continued from it: {same_load}; own hospitals: {seats}; clicks after load: {clicks_ok}; chat key after load: {chat_ok}; {result('tom-2')} / {result('sara-2')}; "
       f"commands after it: {' '.join(kinds11)}")
 fail |= not ok11

@@ -412,7 +412,18 @@ environment):
   pause: when written to privately or by name (at most every 10 seconds),
   otherwise seldom (one line in seven, at most every 3 minutes, less often
   with more bots), so the people's own chat stays readable. Its lines are
-  grey in the players' chat. The answer depends on a few words (hello,
+  grey in the players' chat, **in each player's own language**: what it says
+  is `bot_chat` in the language files (`english.lua` is the source; the bot
+  loads it with `scripts/multiplayer/bot_chat.lua`). A line goes out in
+  English (older games and other bots read that) with its place in
+  `bot_chat` (`line=lines.tricked.rats.2`) and its values (`v_name=Ann`;
+  game words as references, `v_room=@room:gp|GP`), and each game shows it
+  from its own language file, rooms, staff and objects from its own strings
+  (`MultiplayerLobby.botChatText`). A translation keeps the same number of
+  lines in every list and the same `{placeholders}`:
+  `lua scripts/multiplayer/bot_chat.lua --check <file> english.lua`. The
+  model's notes to the team are written in the team mates' language when
+  they all play in one (the game sends `lang` in `HELLO`). The answer depends on a few words (hello,
   thanks, how are you, a question, insults, winning, money, bot; a few Czech
   ones too). Bots do not answer each other. Small talk (greetings, taunts
   about dirty tricks and rats, remarks nobody asked for) goes out marked

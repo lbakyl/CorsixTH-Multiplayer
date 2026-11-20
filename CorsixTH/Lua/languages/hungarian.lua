@@ -1921,6 +1921,9 @@ menu_player_count.players_5 = "  5 JÁTÉKOS  "
 menu_player_count.players_6 = "  6 JÁTÉKOS  "
 menu_player_count.players_7 = "  7 JÁTÉKOS  "
 menu_player_count.players_8 = "  8 JÁTÉKOS  "
+multiplayer_window.add_assistant = "Segítő hozzáadása (bot a kórházamban)"
+multiplayer_window.add_assistant_for = "Segítő hozzáadása neki: %s"
+multiplayer_window.add_assistant_short = "+ Új segítő"
 multiplayer_window.add_bot = "várakozás játékosra... (kattints: bot hozzáadása)"
 multiplayer_window.ask_amount = "Összeg: $%d"
 multiplayer_window.ask_asked = "Elküldve. Várakozás a válaszra."
@@ -1935,6 +1938,9 @@ multiplayer_window.ask_no_money_asker_note = "%s nem tudott neked fizetni."
 multiplayer_window.ask_no_money_note = "Nem tudsz fizetni: $%d."
 multiplayer_window.ask_pay = "Fizetés: $%d"
 multiplayer_window.ask_sent_note = "Kérés: $%d, tőle: %s. Várakozás a válaszra."
+multiplayer_window.assistant_named = "%s (%s segítője)"
+multiplayer_window.assistant_starting = "indul..."
+multiplayer_window.assistants_caption = "Segítők"
 multiplayer_window.auction_back = "Vissza az árverésre"
 multiplayer_window.auction_bid = "Licit: $%d"
 multiplayer_window.auction_borrow_tooltip = "$5,000 kölcsönkérése a banktól"
@@ -1945,9 +1951,11 @@ multiplayer_window.auction_going_twice = "Másodszor..."
 multiplayer_window.auction_leader = "Legmagasabb licit: $%d, %s"
 multiplayer_window.auction_leading = "Te vezetsz. Várj a többiekre."
 multiplayer_window.auction_loan = "$%d, hitel $%d"
+multiplayer_window.auction_loan_note = "A bank $%d kölcsönt adott neked a(z) %d. telek kifizetésére."
 multiplayer_window.auction_loan_tooltip = "Az egyenleged és a banki hiteled"
 multiplayer_window.auction_no_money = "Nem tudod megadni a következő licitet."
 multiplayer_window.auction_no_money_loan = "Nem tudod megadni a következő licitet: vegyél fel hitelt a lenti + gombbal."
+multiplayer_window.auction_not_paid = "A(z) %d. telek nem kelt el: %s nem tudta kifizetni a licitjét ($%d)."
 multiplayer_window.auction_not_sold = "A(z) %d. telek nem kelt el."
 multiplayer_window.auction_out = "kiesett"
 multiplayer_window.auction_pass = "Kiszállok"
@@ -2010,6 +2018,7 @@ multiplayer_window.emergency_refused = "A vészhelyzet elutasítása %d hírnév
 multiplayer_window.encrypted = "Titkosított kapcsolat (TLS)"
 multiplayer_window.every_plot_auctioned = "minden telek árverésre kerül"
 multiplayer_window.game_options = "Játékbeállítások"
+multiplayer_window.get_version = "A szerver verziójának letöltése (%s)"
 multiplayer_window.goal_limit = "határ:"
 multiplayer_window.goal_other.balance = "%s: egyenleg $%d (%s $%d)"
 multiplayer_window.goal_other.num_cured = "%s: %d meggyógyított beteg (%s %d)"
@@ -2086,6 +2095,7 @@ multiplayer_window.loading = "BETÖLTÉS..."
 multiplayer_window.locked = "  (jelszó)"
 multiplayer_window.looking_at = "Nézet: %s"
 multiplayer_window.measuring = "A kapcsolat mérése..."
+multiplayer_window.megabytes = "%s MB"
 multiplayer_window.menu_caption = "  TÖBBJÁTÉKOS  "
 multiplayer_window.menu_chat = "  ÜZENET KÜLDÉSE (%1%)  "
 multiplayer_window.menu_colours = "  JÁTÉKOSSZÍNEK  "
@@ -2270,6 +2280,7 @@ multiplayer_window.refer_fax_choice = "Átküldés másik kórházba"
 multiplayer_window.referral_cured_here_note = "Meggyógyítottál egy beteget, akit a(z) %s küldött: +%d extra hírnév."
 multiplayer_window.referral_cured_note = "A(z) %s meggyógyította az általad küldött beteget: +%d hírnév."
 multiplayer_window.refresh = "Frissítés"
+multiplayer_window.remove_assistant = "A segítő elküldése"
 multiplayer_window.rep_amount = "Pontok: %d"
 multiplayer_window.rep_give_button = "Adj %d hírnévpontot a sajátodból"
 multiplayer_window.rep_given_note = "Kezeskedtél %s mellett: %d hírnévpontot adtál."
@@ -2311,6 +2322,8 @@ multiplayer_window.research_sold_transaction = "Kutatás eladva neki: %s"
 multiplayer_window.room_caption = "Szoba: %s"
 multiplayer_window.room_hint = "Azonos szín: egy kórház. Azonos csapat: együtt nyertek."
 multiplayer_window.room_line = "%s   %d / %d   %s   %s. szint%s"
+multiplayer_window.room_map = "Térkép"
+multiplayer_window.room_map_caption = "A szoba térképe: ki hol játszik"
 multiplayer_window.rooms_caption = "Szobák itt: %s"
 multiplayer_window.sabotage_again = "Kattints újra az L%d gombra a megvételhez: $%d."
 multiplayer_window.sabotage_alone = "Nincs több rivális, akinek trükköt lehetne csinálni."
@@ -2406,12 +2419,15 @@ multiplayer_window.sabotage_bomb_blast = "Egy szemétbomba robbant fel a kórhá
 multiplayer_window.sabotage_bomb_in_hands = "Túl sokáig tartottad a szemétbombát: a saját kórházadban robbant fel!"
 multiplayer_window.sabotage_bomb_blast_rival = "A szemétbombád felrobbant %s kórházában."
 multiplayer_window.sabotage_bomb_found = "Megtalálták a szemétbombádat: %s időben felvette. Továbbdobhatja, akár vissza is neked!"
+multiplayer_window.save_button = "Mentés"
+multiplayer_window.save_caption = "A játék mentése mindenkinek"
 multiplayer_window.saved_flag = "  mentett játék"
 multiplayer_window.saved_note = "Játék elmentve: %s"
 multiplayer_window.saving_note = "A játék mentése minden játékos gépén..."
 multiplayer_window.select_room = "Előbb válassz egy szobát."
 multiplayer_window.server = "Szerver"
 multiplayer_window.server_eu1 = "EU1: stabil"
+multiplayer_window.server_us1 = "US1: stabil"
 multiplayer_window.server_eu2 = "EU2: tesztverziók"
 multiplayer_window.server_version = "a szerver verziója"
 multiplayer_window.share_research = "Kutatás megosztása"
@@ -2423,7 +2439,11 @@ multiplayer_window.staff_bought_transaction = "Személyzet tőle: %s"
 multiplayer_window.staff_on_the_way = "Úton ide: %s"
 multiplayer_window.staff_received_note = "%s alkalmazottat küldött neked: %s"
 multiplayer_window.staff_sold_transaction = "Személyzet neki: %s"
+multiplayer_window.standin_back = "Valaki átvette %s helyét: a nehéz bot éve véget ér."
+multiplayer_window.standin_hard = "%s lemaradt: a kilépett játékos helyén egy évig nehéz bot játszik."
+multiplayer_window.standin_normal = "%s: a kilépett játékos helyén újra normál bot játszik."
 multiplayer_window.start = "Játék indítása"
+multiplayer_window.switch_version = "Váltás a szerver verziójára"
 multiplayer_window.team_button = "%d. csapat"
 multiplayer_window.team_lost = "%s az év végén sem teljesítette a szint céljait, ezért a csapat elvesztette a szintet."
 multiplayer_window.team_member_out = "A kórházad két éve egymás után nem teljesítette a szint céljait, és kiesett a versenyből. A csapatod versenyez tovább."
@@ -2477,6 +2497,16 @@ multiplayer_window.trade_sent = "Elküldve. Mindjárt megérkezik."
 multiplayer_window.tricks_off = "Piszkos trükkök (versenyek): ki"
 multiplayer_window.tricks_on = "Piszkos trükkök (versenyek): be"
 multiplayer_window.vaccination_mode_hint = "Oltási mód: kattints a fertőzött betegekre, hogy egy nővér beoltsa őket. Jobb kattintás, Esc vagy újabb kattintás a fecskendőre kilép az üzemmódból."
+multiplayer_window.version_bad = "A letöltés sérült, vagy nem az OpenTH-tól jött"
+multiplayer_window.version_cancel = "Mégse"
+multiplayer_window.version_caption = "A szerver játékverziója"
+multiplayer_window.version_checking = "A letöltés ellenőrzése..."
+multiplayer_window.version_close = "Bezár"
+multiplayer_window.version_downloading = "Letöltés: %s / %s"
+multiplayer_window.version_failed = "A letöltés nem sikerült: %s"
+multiplayer_window.version_newer_game = "A szerverhez újabb játék kell: lent letöltheted"
+multiplayer_window.version_other = "Ez a szerver másik játékverziót futtat."
+multiplayer_window.version_starting = "A szerver verziójának indítása..."
 multiplayer_window.vote_agree = "Egyetértek"
 multiplayer_window.vote_asked = "Megkérted a többieket, hogy a sebesség legyen: %s."
 multiplayer_window.vote_confirm = "Megkéred a többi játékost, hogy a játék sebessége legyen: %s?"
@@ -2490,6 +2520,12 @@ multiplayer_window.vote_request = "%s szeretné megváltoztatni a játék sebess
 multiplayer_window.vote_request_speed = "erre: %s."
 multiplayer_window.waiting_player = "várakozás játékosra..."
 tooltip.main_menu.multiplayer = "Játék másokkal egy többjátékos szerveren keresztül (kísérleti)"
+tooltip.main_menu.discord = "Az OpenTH Discordja: találj más játékosokat, kérj segítséget, és értesülj elsőként az új verziókról. Megnyitja az openth.org/discord oldalt a böngészőben."
+tooltip.multiplayer_window.add_assistant = "Jobb klikk: segítő, vagyis bot, amely ebben a kórházban segít, és nem foglal helyet"
+tooltip.multiplayer_window.add_assistant_button = "Segítő hozzáadása: bot, amely ebben a kórházban segít, és nem foglal helyet"
+tooltip.multiplayer_window.assistant = "Bot, amely ebben a kórházban segít"
+tooltip.multiplayer_window.assistant_host = "Kattintás: a segítő elküldése. Jobb klikk: könnyű, normál vagy nehéz bot"
+tooltip.multiplayer_window.assistant_mine = "A segítőd. Kattintás: elküldés"
 tooltip.multiplayer_window.bot_level = "Jobb klikk: könnyű, normál vagy nehéz bot"
 tooltip.multiplayer_window.ask_money = "Kérj pénzt egy másik játékostól. Ő dönti el, fizet-e."
 tooltip.multiplayer_window.auctions = "A házigazda dönti el, mely telkek kerülnek árverésre, amikor egy játékos meg akar venni egyet"
@@ -2501,6 +2537,7 @@ tooltip.multiplayer_window.connect = "Csatlakozás a szerverhez, és a szobáina
 tooltip.multiplayer_window.continue_game = "Egy korábban mentett többjátékos játék folytatása (Fájl > Mentés, vagy a havi automatikus mentés): válaszd ki a listából. Kijelölés nélkül a szoba új játékot indít"
 tooltip.multiplayer_window.download = "Ez a szerver a játék egy másik verzióját futtatja: nyisd meg a letöltési oldalát a böngésződben"
 tooltip.multiplayer_window.game_options = "A játék beállításai: telekárverések és más (a házigazda állítja be)"
+tooltip.multiplayer_window.get_version = "Letölti ennek a szervernek a játékverzióját, és azzal indítja újra a játékot. A mentéseid és a beállításaid megmaradnak."
 tooltip.multiplayer_window.helpers = "A házigazda dönt: az emberrel közös kórházban lévő bot szobákat épít és tárgyakat tesz a folyosókra, vagy ezt az emberre hagyja (továbbra is felvesz személyzetet, prémiumot fizet, megosztja a kutatást, licitál és telket vesz)"
 tooltip.multiplayer_window.level = "Válaszd ki a szintet egy listából a céljaival és egy térképpel. Az egy közös kórház a kampány szintjeit játssza; több kórház a többjátékos szinteket (1-től 8-ig, a nagyobb szám a 8. szintet játssza). A 6. szint a Vészhelyzet!: az első évben havonta négy vészhelyzet, aztán járványok; a 7. szint a Könyörtelen, versenyre való: havonta újabb piszkos trükkök, állásbörzék, versenyvészhelyzetek és földrengések; a 8. szint a Team Town, Matroftt térképe két-a-kettő ellen"
 tooltip.multiplayer_window.levels_players = "A térkép ennyi játékosnak (minden játékosszámnak saját térképe van)"
@@ -2513,12 +2550,558 @@ tooltip.multiplayer_window.players = "Hány játékosnak készül a szoba"
 tooltip.multiplayer_window.rats = "A házigazda dönt: piszkos trükkös versenyben a játékosok patkányokat ereszthetnek a riválisok kórházába (hírnévbe kerül nekik), vagy nem"
 tooltip.multiplayer_window.ready = "Jelezd a házigazdának, hogy készen állsz az indulásra"
 tooltip.multiplayer_window.refer_button = "Felajánlod ezt a beteget egy másik játékos kórházának. El kell fogadnia."
+tooltip.multiplayer_window.room_chat = "Írj ide, és nyomj Entert, hogy a szobában mindenkihez szólj"
+tooltip.multiplayer_window.room_map = "A pálya térképe, ahogy a játék most indulna: minden kórház a saját színében, és hogy ki vezeti"
+tooltip.multiplayer_window.save_name = "A mentés neve. A játék hozzáteszi a nevedet és a játékbeli dátumot."
 tooltip.multiplayer_window.send_staff = "Elküldöd ezt az alkalmazottat egy másik játékos kórházába. El kell fogadnia."
 tooltip.multiplayer_window.server = "A többjátékos szerver címe, például eu2.openth.org:47800"
 tooltip.multiplayer_window.server_eu1 = "eu1.openth.org: a legújabb stabil kiadás"
+tooltip.multiplayer_window.server_us1 = "us1.openth.org: a legújabb stabil kiadás"
+tooltip.multiplayer_window.discord = "Az OpenTH Discordja: találj más játékosokat, kérj segítséget, és értesülj elsőként az új verziókról. Megnyitja az openth.org/discord oldalt a böngészőben."
 tooltip.multiplayer_window.server_eu2 = "eu2.openth.org: a legújabb tesztverzió"
 tooltip.multiplayer_window.share_research = "Ajánld fel a meglévő kutatásodat egy másik játékos kórházának, ingyen vagy áron. El kell fogadnia."
 tooltip.multiplayer_window.sharing = "A házigazda dönt: a játékosok megoszthatják vagy eladhatják egymásnak a kutatást, vagy nem (mint az eredeti játékban)"
 tooltip.multiplayer_window.start = "A játék elindítása mindenkinek a szobában"
+tooltip.multiplayer_window.switch_version = "A játék újraindítása ennek a szervernek a verziójával, amely már megvan neked"
 tooltip.multiplayer_window.team = "A csapatod: az azonos csapat együtt nyer, a különböző csapatok versenyeznek a célokért, és piszkos trükköket játszhatnak egymással. Kattints a módosításához (a házigazda bárkiét módosíthatja, a botokét is)"
 tooltip.multiplayer_window.tricks = "A házigazda dönt: versenyben a játékosok vehetnek piszkos trükköket a riválisok ellen, vagy nem (mint az eredeti játékban)"
+
+-- What the server's computer players (bots) say in the chat (see english.lua).
+bot_chat = {
+  lines = {
+    tricked = {
+      handyman = {"Szép próbálkozás, {name}. A gondnokod már úton van vissza hozzád.",
+          "Elkaptam a gondnokodat, {name}. Újra a tiéd.",
+          "Kitettem a gondnokodat, {name}. Majd legközelebb több szerencséd lesz.",
+          "Becsempésztél egy gondnokot, {name}? Már megy is haza."},
+      rats = {"Kész a kártevőirtás, {name}. A te patkányaid voltak?", "Az összes patkányt lelőttük, {name}. Nagyon vicces.",
+          "Cin-cin, bumm. A patkányoknak vége, {name}.",
+          "Szép patkányok, {name}. Kár, hogy ilyen rossz a célzásuk."},
+      boiler = {"Valaki elrontotta a kazánomat. Nagyon vicces, {name}. A gondnokaim már dolgoznak rajta.",
+          "Elromlott kazán, {name}? Van takarónk.",
+          "Hideg kórház? Meleg szívek, {name}. A kazánt már javítják.",
+          "Ha, {name}, hidegfront. A gondnokaim imádják a kihívásokat."},
+      smear = {"Rossz sajtó, {name}? A betegeim visszajönnek.", "Szép lejárató kampány, {name}. Az enyém jobb lesz.",
+          "Bulvárlapok, {name}? Olcsó. A betegeim okosabbak ennél.",
+          "A pletyka senkit sem gyógyít meg, {name}. Az orvosaim igen."},
+      espionage = {"Jó szórakozást a kutatási aktáimhoz, {name}.", "Kém a kutatóosztályomon, {name}? Szemtelen.",
+          "Remélem, el tudod olvasni a kézírásomat, {name}.",
+          "Másold csak a házi feladatomat, {name}. Akkor is előtted leszek."},
+      headhunter_kept = {"Az orvosomat akartad, {name}? Marad nálam.",
+          "Kezeket le a személyzetemről, {name}. Megkapta a béremelést.",
+          "Szép ajánlat, {name}, de az orvosom jobban szereti a mi kávénkat.",
+          "Ne csábítgasd az embereimet, {name}. A személyzetem marad."},
+      headhunter_lost = {"Vidd csak, {name}. Találok jobbat.", "Jó, {name}, tartsd meg. Sok sikert vele.",
+          "Ezt most megnyerted, {name}. Felveszek mást.",
+          "Élvezd a régi orvosomat, {name}. Remélem, horkol."},
+    },
+    tricked_unknown = {
+      rats = {"A patkányoknak vége. Aki küldte őket: szép próbálkozás.", "Minden patkány lelőve. Legközelebb sajtot küldj.",
+          "Kész a kártevőirtás. Valakinek fura humora van.",
+          "Itt nincs több patkány. Aki küldte őket, köszi a mozgást."},
+      boiler = {"Valaki elrontotta a kazánomat. Akárki volt: van takarónk.",
+          "Elromlott a kazánom. Aki ezt tette: nagyon vicces.",
+          "Egy-két napig hideg lesz a kórházban. Akárki tette, a gondnokaim már dolgoznak rajta."},
+      smear = {"Valaki hazugságokat terjeszt a kórházamról. A betegek látni fogják az igazat.",
+          "Rossz sajtó a semmiből. A betegeim visszajönnek.",
+          "Aki a kórházamról pletykál: az orvosaim majd felelnek."},
+      espionage = {"Valaki lemásolta a kutatásomat. Remélem, el tudod olvasni a kézírásomat.",
+          "Kém a kutatóosztályomon. Szemtelen vagy, akárki is vagy.",
+          "Valaki belekukkantott a kutatásomba. Jó szórakozást hozzá."},
+      headhunter_kept = {"Valaki el akarta csábítani az orvosomat. Marad.",
+          "Egy fejvadász az orvosomért jött. Nem járt sikerrel.",
+          "Az orvosom nemet mondott egy fejvadásznak. Hűséges."},
+      headhunter_lost = {"Valaki elcsábította az orvosomat. Jó, kiképzek egy másikat.",
+          "Egy fejvadász elvitte az orvosomat. Keresek újat.",
+          "Egy fejvadász miatt elvesztettem egy orvost. Irány a felvehetők listája."},
+    },
+    staff_sent = {"{names}, {who} ({kind}) mehet hozzád, a szobádba ({room}): ingyen, csak fogadd el az ajánlatomat az üzeneteid között.{urgent}",
+        "{names}: van egy ajánlatom. {who} ({kind}) jöhet a szobádba ({room}). Ingyen, csak fogadd el a faxot.{urgent}",
+        "{names}, {who} ({kind}) a tiéd, mehet a szobádba ({room}), semmiért. Fogadd el az ajánlatot az üzeneteid között.{urgent}",
+        "Tessék, {names}: {who}, egy {kind}, a szobádba ({room}). Ingyen, csak mondj igent a faxban.{urgent}"},
+    staff_for_emergency = {" A vészhelyzet miatt kell!", " Siess, a vészhelyzet nem vár.",
+        " Vészhelyzet van, úgyhogy kérlek, siess.", " Gyorsan, vészhelyzet van!"},
+    staff_ask_one = {"{names}, segítenél egy barátodnak? A szobámba ({room}) {needs} kell, nekem {have} van, és nincs felvehető {kind}.{urgent}",
+        "{names}, nálad nem akad egy {kind}, akit nélkülözni tudsz? A szobámba ({room}) {needs} kell, és csak {have} van. Nagyon hálás lennék.{urgent}",
+        "Átjöhetne hozzám egy {kind}, {names}? A szobámba ({room}) {needs} kell, {have} van, és senki sincs a felvehetők listáján. Köszönöm!{urgent}",
+        "{names}, nem szívesen kérem, de a szobámba ({room}) {needs} kell, és {have} van. Jöhetne tőled egy {kind} kölcsönbe?{urgent}"},
+    staff_ask_all = {"Jöhetne valakitől egy {kind} kölcsönbe? A szobámba ({room}) {needs} kell, {have} van, és nincs kit felvenni. Köszönöm!{urgent}",
+        "Barátaim, a szobámba ({room}) {needs} kell, és csak {have} van. Akad valakinél egy nélkülözhető {kind}?{urgent}",
+        "Bajban vagyok, nincs {kind} a szobámba ({room}): kell {needs}, itt van {have}. Kisegítene valamelyikőtök?{urgent}",
+        "Nem maradt valakinél egy szabad {kind}, aki átjöhetne hozzám? A szobámba ({room}) {needs} kell, és {have} van. Nagyon köszönöm!{urgent}"},
+    research_please = {"{name}, megosztanád velem a kutatásodat? Ez kellene: {item}. A betegeimnek kell egy {room}.",
+        "{name}, a betegeim folyton egy {room} után kérdeznek. Elküldenéd a kutatásodat ({item})? Köszönöm!",
+        "Megkaphatnám a kutatásodat ({item}), {name}? A betegeimnek kell egy {room}, de még nem tudok ilyet építeni."},
+    research_buy = {"Bár versenytársak vagyunk, {name}, az esélyeim kedvéért {price}-ért megvenném a kutatásodat ({item}).",
+        "{name}, riválisok is köthetnek üzletet: {price} a kutatásodért ({item}). A betegeimnek kell egy {room}.",
+        "Őszinte leszek, {name}: a betegeimnek kell egy {room}. {price}-ért megvenném a kutatásodat ({item})."},
+    staff_ask_rival = {"Ölni tudnék egy jó {kind} kedvéért, {name}. Tudsz nélkülözni egyet? Ajánlj fel egyet a kereskedési ablakban, és mondd meg az árát.",
+        "{name}, nem vagyok büszke: nagyon kell egy {kind}. Adj el nekem egyet, és kvittek vagyunk... egyelőre.",
+        "Riválisok ide vagy oda, {name}, egy {kind} nekem sokat érne. A szobám ({room}) nélküle üresen áll.",
+        "A szobámban ({room}) nincs {kind}, {name}. Ölni tudnék egyért. Mondj egy árat."},
+    ask_research_shared = {"Tessék, {name}: a kutatásunk ({item}), ingyen. Fogadd el az üzeneteid között.",
+        "Persze, {name}. A kutatás ({item}) már úton van, ingyen.",
+        "Neked, {name}, a kutatás ({item}) semmiért. Nézd meg az üzeneteidet."},
+    ask_research_sold = {"Áll az alku, {name}: a kutatásom ({item}) {price}-ért. Fogadd el az üzeneteid között.",
+        "Az üzlet az üzlet, {name}. A kutatás ({item}) a tiéd {price}-ért.",
+        "Legyen {price}, {name}. A kutatás ({item}) ott van az üzeneteid között."},
+    ask_research_none = {"Bocs, {name}, ebből nincs kutatásom, amit adhatnék: {item}.",
+        "Ezzel a kutatással nem tudok segíteni ({item}), {name}. Nekem sincs meg."},
+    ask_rival_ahead = {"Szép próbálkozás, {name}. Már így is előttem jársz: tőlem nem kapsz segítséget.",
+        "Segítsek neked nyerni? Esélytelen, {name}.",
+        "Túl jól megy neked, {name}. Kérj mástól."},
+    ask_staff_sold = {"Rendben, {name}: {who}, egy {kind}, {price}-ért. Fogadd el az ajánlatot az üzeneteid között.",
+        "{name}, {who} ({kind}) a tiéd lehet {price}-ért. Ott van az üzeneteid között.",
+        "Egy {kind} neked, {name}: {who}, {price}. Ne mondd, hogy sosem adtam neked semmit."},
+    ask_staff_none = {"Bocs, {name}, nálam nincs nélkülözhető {kind}.", "Itt nincs szabad {kind}, {name}. Nézd meg a felvehetők listáját."},
+    rival_patient_yes = {"Küldd csak, {name}. Az üzlet az üzlet.", "Beteg az beteg, {name}. Köszi.",
+        "Jól vigyázok rá, {name}. Köszönöm, hogy átküldted."},
+    rival_patient_busy = {"Elég hosszú a sorom, {name}. Próbálkozz másnál.",
+        "Bocs, {name}, az orvosaim nyakig vannak a munkában. Ezt most nem."},
+    rival_cannot_treat = {"Ezt nem tudom kezelni, {name}. Tartsd meg.",
+        "Ehhez nincs itt szobám, {name}. Azért köszi."},
+    rival_research_free = {"Ingyen kutatás, {name}? Nem mondok nemet.", "Kösz, {name}. Senkinek sem mondom el, hogy tőled van.",
+        "Nagylelkű vagy, {name}. Azért még megpróbállak legyőzni."},
+    rival_research_yes = {"{value}? Korrekt ár, {name}. Öröm veled üzletelni.",
+        "Áll az alku, {name}. A betegeim köszönik.", "Jó kutatás, {name}. De azért továbbra is versenyzünk."},
+    rival_research_dear = {"Túl drága, {name}. Én {value}-ért venném meg.", "{name}, nekem ennyit ér: {value}, és nem többet.",
+        "Szép próbálkozás, {name}. {value}, és az enyém."},
+    rival_research_useless = {"Kösz, nem, {name}. Nincs benne semmi, ami kellene.", "Tartsd meg, {name}: nekem ez nem kell."},
+    rival_research_later = {"Nemrég vettem tőled, {name}. Kérdezz meg újra pár hónap múlva.",
+        "Ilyen hamar még nem, {name}. Talán pár hónap múlva."},
+    rival_staff_yes = {"Egy {kind}! Pont ő kellett, {name}. Öröm veled üzletelni.",
+        "Áll az alku, {name}. Az új {kind} jól fogja érezni magát nálam."},
+    rival_staff_dear = {"Ez nekem túl drága, {name}. {value}, és jöhet hozzám egy {kind}.",
+        "{name}, nekem egy {kind} ennyit ér: {value}, nem többet."},
+    rival_broke = {"Megvenném, {name}, de a bankom nemet mond.", "Most nem, {name}. Majdnem üres a bankszámlám."},
+    wish_done = {"{name}, kész, amit kértél: {what}.", "Megvan, {name}: {what}, minden készen áll.",
+        "Minden rendben, {name}. Kész: {what}.", "{name}, kész van: {what}. Jó munkát vele!",
+        "Teljesítve, {name}: {what}."},
+    wish_done_add = {"{name}, a helyén van: {what}.", "Kész, {name}: betettem, amit kértél: {what}.",
+        "Le is tettem, {name}: {what}.", "Kész is, {name}: most már van egy {what}."},
+    wish_done_remove = {"{name}, bontom: {what}. A helye hamarosan szabad lesz.",
+        "Intézem, {name}: indul a bontás ({what}), a hely a tiéd.",
+        "Jön a bontás, {name}: {what}. Hamarosan szabad a hely.", "{name}, egy pillanat, és eltűnik: {what}."},
+    wish_no_space = {"Bocs, {name}, még nincs hely ennek: {what}. Előbb veszek még földet.",
+        "{name}, ezt még nincs hova tenni: {what}. Előbb föld, aztán jöhet: {what}.",
+        "Nem maradt hely ennek: {what}, {name}. Veszek földet, és újra próbálom.",
+        "{name}, tele van a földem. Várnia kell, amíg több helyem lesz: {what}."},
+    wish_no_money = {"{name}, ennek még várnia kell egy kicsit: {what}. Még nincs rá elég pénz.",
+        "Bocs, {name}, erre most még nem futja: {what}.",
+        "Ez többe kerül, mint amennyim van, {name}: {what}. Amint meglesz a pénz, megcsinálom.",
+        "{name}, most túl kevés a pénzem erre: {what}. Hamarosan."},
+    mate_away = {"Úgy tűnik, nem vagy itt, {name}. Amíg vissza nem jössz, én viszem az egész kórházat.",
+        "{name}, nagy a csend. Amíg vissza nem jössz, mindent átveszek.",
+        "Átveszem a kormányt, amíg távol vagy, {name}. Gyere vissza, amikor akarsz.",
+        "Elmentél, {name}? Semmi gond, a kórház megy tovább."},
+    mate_back = {"Üdv újra itt, {name}! Az árak, a hitelek és a faxok újra a tieid.",
+        "Jó újra látni, {name}. Az árak, a hitelek és a faxok újra nálad vannak.",
+        "Visszajöttél, {name}! Az árakat, a hiteleket és a faxokat rád hagyom.",
+        "Üdv újra, {name}. A kórház döntései újra a te kezedben vannak."},
+    bonuses = {"{n} elégedetlen alkalmazott dupla bónuszt kapott tőlem (${spent}), {name}.",
+        "{name}, {n} elégedetlen alkalmazott dupla bónuszt kapott. Ez ${spent} volt.",
+        "Bónusz {n} elégedetlen alkalmazottnak (${spent}), {name}. Rájuk fért."},
+    greet = {
+      friendly = {
+        "Sziasztok! Itt szépen lassan építem a kórházamat.",
+        "Helló, csapat! Szóljatok, ha kell segítség. Vagy egy orvos.",
+        "Jó reggelt, kollégák! A kávé az én számlámra megy.",
+        "Sziasztok! Úton vannak az első betegeim. Szorítsatok!",
+        "Üdvözlet a város túlsó végéből! Szóljatok, ha kell valami.",
+        "Helló! A recepciósom is üdvözöl mindenkit.",
+        "Sziasztok! Remélem, mindannyiunknak jut elég beteg.",
+        "Jó reggelt, szomszédok! Már feltettem a teát.",
+      },
+      fiery = {
+        "Élvezzétek a vezetést, amíg tart. A kórházam már jön értetek.",
+        "Ennek a városnak csak egy kórház kell. Találjátok ki, melyik.",
+        "Az orvosaim élesebb eszűek, a nővéreim gyorsabbak. Sok sikert mindenkinek!",
+        "Készen álltok a vereségre? Már megrendeltem a trófeát.",
+        "Remélem, a betegeitek szeretnek várni. Az enyémeknek nem kell majd.",
+        "Figyelem, {name}! Én nyerni játszom.",
+        "Szép kórházak, emberek. Csak a konkurencia ne lenne.",
+        "Már felvettem a város legjobb orvosait. Bocsi!",
+      },
+    },
+    gift_sent = {
+      "Átutaltam neked: ${amount}, {name}. Ezért vannak a szövetségesek.",
+      "Úton van, {name}: ${amount}. Költsd okosan!",
+      "Kész, {name}. ${amount} már a számládon van.",
+      "${amount} érkezik, {name}. Sok sikert vele.",
+      "Tessék, {name}: ${amount}, ahogy kérted.",
+    },
+    gift_sent_auto = {
+      "Küldtem neked, {name}: ${amount}. Ez a fele annak, ami a tartalékom (${keep}) fölött van.",
+      "{name}, ${amount} úton van feléd. Ez a szabad pénzem fele; ${keep} megmarad vésztartaléknak.",
+      "Itt van ${amount}, {name}. Ez a fele annak, amit nélkülözni tudok; ${keep} tartalék nálam marad.",
+      "Elküldve: ${amount}, {name}. Nem mondtál összeget, ezért a szabad pénzem felét küldtem.",
+    },
+    gift_part = {
+      "A kért ${asked} helyett ${amount} ment, {name}. Ennyit tudok adni a tartalékom (${keep}) fölött.",
+      "{name}, ${amount} úton van. Ha többet küldenék, a saját számláimra félretett ${keep} alá csúsznék.",
+      "Ebből csak ${amount} telik tőlem, {name}; ${keep} a bankban marad. Elküldtem.",
+    },
+    gift_cap = {
+      "Elküldve: ${amount}, {name}. Egyszerre ennél többet nem küldök.",
+      "{name}, ${amount} úton van: egyszerre legfeljebb ${max} megy tőlem.",
+      "Itt van ${amount}, {name}, ez a határ egy utalásnál. Ha több kell, kérj később újra.",
+    },
+    gift_spent = {
+      "A pénzem nagy része erre ment el: {spent}.",
+      "Mostanában erre ment el a pénzem: {spent}.",
+      "Épp sokat költöttem erre: {spent}.",
+    },
+    gift_none = {
+      "Bocs, {name}, most nincs fölösleges pénzem.",
+      "Szívesen adnék, {name}, de túl kevés a pénzem ahhoz, hogy bármit odaadjak.",
+      "Ma nem, {name}. A pénzemet a saját kórházamra tartogatom.",
+      "Majdnem üres a számlám, {name}. Kérdezz újra, ha beindul az üzlet.",
+    },
+    gift_later = {
+      "Kérdezz újra egy pillanat múlva, {name}.",
+      "Adj egy percet, {name}, és kérdezz még egyszer.",
+      "Most nem, {name}. Próbáld újra kicsit később.",
+    },
+    gift_same_bank = {
+      "Közös a bankszámlánk, {name}. Költsd nyugodtan, amire szükséged van.",
+      "Ez úgyis a kórházunk pénze, {name}. Nyugodtan költsd el.",
+      "Nem kell semmit küldenem, {name}, ugyanazt a bankot használjuk.",
+    },
+    accept = {
+      "Köszönöm, {name}!",
+      "Nagyon hálás vagyok, {name}.",
+      "Kösz, {name}, ez sokat segít!",
+      "Kincs vagy, {name}.",
+      "Megkaptam, kösz, {name}!",
+      "Ez nagyon kedves tőled, {name}.",
+    },
+    wish_done_far = {"{name}, kész: {what}, de a kért helyre ({near} mellé) nem fért, ezért oda tettem, ahol volt hely.",
+        "Megvan, {name}: {what}. Mellette ({near}) nem volt hely, így máshová került.",
+        "{name}, felépült, amit kértél: {what}. Bocs, körülötte ({near}) nem volt szabad hely, ezért kicsit messzebb áll.",
+        "Kész, {name}: {what}. Csak nem a kért helyen ({near} mellett): oda semmi sem fért."},
+    refuse = {
+      "Nálam ez nem megy, {name}!",
+      "Szép próbálkozás, {name}. Kösz, nem.",
+      "Riválistól nem fogadok el ajándékot, {name}.",
+      "Tartsd meg, {name}. Egyedül is nyerek.",
+      "Ha! Hol a csapda, {name}?",
+      "Ennyire hiszékenynek nézek ki, {name}?",
+    },
+    accept_staff = {
+      "Új kolléga! Köszönöm, {name}.",
+      "Üdv a csapatban az újoncnak, és kösz, {name}!",
+      "Pont erre volt szükségem, {name}. Köszönöm a személyzetet!",
+      "Remek, jól jön a segítség. Kösz, {name}!",
+      "{name}, megmentetted az életemet. Vigyázni fogok rá.",
+    },
+    accept_research = {
+      "Köszi a kutatást, {name}!",
+      "Zseniális, {name}, így már haladunk. Köszönöm a kutatást.",
+      "Még több kutatás nekem, {name}? Elkényeztetsz. Köszönöm!",
+      "Megkaptam a kutatásodat, {name}. Nagyon köszönöm.",
+      "Ezzel sok laborórát spórolok meg, {name}. Kösz!",
+    },
+    accept_patient = {
+      "Küldd csak, {name}. Szívesen segítek!",
+      "Gondját viseljük a betegnek, {name}. Köszi.",
+      "Új beteg nekünk, {name}? Isten hozta.",
+      "Örömmel segítek, {name}. A beteg jó kezekben van.",
+      "Persze, {name}. Az orvosaink majd ellátják.",
+    },
+    pay = {
+      "Tessék, {name}.",
+      "Elküldve, {name}. Költsd okosan!",
+      "Persze, {name}. Ezért vannak a barátok.",
+      "Semmi gond, {name}. A tiéd.",
+      "A pénz úton van, {name}.",
+    },
+    broke = {
+      "Bocs, {name}, most le vagyok égve.",
+      "Szívesen, {name}, de a bankárom nemet mond.",
+      "Most nem, {name}. Majdnem üres a számlám.",
+      "Üres a pénztárcám, {name}. Kérdezz később.",
+      "Segítenék, ha tudnék, {name}, de nekem is kevés a pénzem.",
+    },
+    cannot_treat = {
+      "Bocs, {name}, ezt itt nem tudjuk kezelni. Jobb, ha megtartod.",
+      "Ehhez nincs szobánk, {name}. Most nem.",
+      "Csak haza kéne küldenem, {name}. Azért köszi.",
+      "Nincs meg hozzá a megfelelő szobánk, {name}. Bocs.",
+      "Nem a mi asztalunk, {name}. Egyelőre tartsd meg.",
+    },
+    money_thanks = {
+      "Kösz a pénzt, {name}!",
+      "Hű, köszönöm, {name}! Megy is egyenesen új felszerelésre.",
+      "{name}, túl nagylelkű vagy. Köszi!",
+      "{name} pénzt küldött! Jó célra fordítom.",
+      "Nagyon köszönöm, {name}. Ez sokat segít.",
+    },
+    money_back = {
+      "Tartsd meg a pénzed, {name}. Szükséged lesz rá.",
+      "Nem kell az alamizsnád, {name}. Visszaküldtem.",
+      "Vissza a feladónak, {name}!",
+      "Riválistól nem kérek ajándékot, {name}. Itt van, vissza.",
+      "A pénzed újra nálad van, {name}.",
+    },
+    win_good = {
+      "Szép munka, {names}, most már teljesíted a győzelem feltételeit.",
+      "Ügyes vagy, {names}! Most már mindent teljesítesz, amit a szint kér.",
+      "{names}, sikerült: nálad minden győzelmi feltétel teljesült.",
+      "Jó munka, {names}. A kórházad most már teljesíti a győzelem feltételeit.",
+      "Remek munka, {names}! Készen állsz a győzelemre.",
+    },
+    win_own = {
+      "Szép munka, {names}, a kórházunk most már teljesíti a győzelem feltételeit.",
+      "{names}, sikerült: a kórházunk mindent teljesít, amit a szint kér.",
+      "Ügyes, {names}! A kórházunk készen áll a győzelemre.",
+      "{names}, a kórházunkban most már minden feltétel teljesült.",
+    },
+    win_me_too = {
+      "Én is készen állok, hogy célba vigyem.",
+      "Én is jól állok.",
+      "Az én kórházam is teljesíti a feltételeket.",
+      "Itt is ugyanez, én is készen állok.",
+      "Én is ott vagyok. Most már csak a többiekre kell várnunk.",
+    },
+    rescue_ask = {
+      "Úgy tűnik, nem teljesítem a céljaimat. Küldenétek nekem ${amount} összeget, hogy {purpose}, és {goal}? Végül is egy csónakban evezünk. Köszi.",
+      "Lemaradtam a szint céljaival. Küldene valaki ${amount} összeget, hogy {purpose}, és {goal}? Ebben együtt vagyunk.",
+      "A kórházam küszködik a célokkal. ${amount} kellene, hogy {purpose}, és {goal}. Tudjátok nélkülözni? Nagyon köszönöm.",
+      "Segítség, nem teljesítem a céljaimat! Jól jönne ${amount}. Arra kellene, hogy {purpose}, és {goal}. Együtt nyerünk vagy veszítünk.",
+    },
+    rescue_ask_plain = {
+      "Úgy tűnik, nem teljesítem a céljaimat. Küldenétek nekem ${amount} összeget, hogy {goal}? Végül is egy csónakban evezünk. Köszi.",
+      "Lemaradtam a szint céljaival. Tudna valaki nélkülözni ${amount} összeget, hogy {goal}? Ebben együtt vagyunk.",
+      "A kórházam küszködik a célokkal. ${amount} segítene, hogy {goal}. Tudjátok nélkülözni? Nagyon köszönöm.",
+    },
+    win_rival = {
+      "Vigyázat, {names} teljesítette a győzelem feltételeit, be kell hoznunk a lemaradást!",
+      "Óvatosan, {names} minden győzelmi feltételt teljesített. Fel kell zárkóznunk!",
+      "{names} most már teljesíti a győzelem feltételeit, úgyhogy gyorsítanunk kell!",
+      "Figyelem: {names} készen áll a győzelemre. Ideje felzárkózni!",
+    },
+    win_rivals = {
+      "Vigyázat, {names} teljesítették a győzelem feltételeit, be kell hoznunk a lemaradást!",
+      "Óvatosan, {names} minden győzelmi feltételt teljesítettek. Fel kell zárkóznunk!",
+      "{names} most már teljesítik a győzelem feltételeit, úgyhogy gyorsítanunk kell!",
+      "Figyelem: {names} készen állnak a győzelemre. Ideje felzárkózni!",
+    },
+    win_need = {
+      balance = {
+        "Még {short} hiányzik nekem. Tudnátok adni egy kis pénzt, hogy hamarabb nyerjünk együtt?",
+        "Még {short} kell a bankba, hogy veletek nyerjek. Tudna valaki adni egy keveset?",
+        "Már csak a bankszámlámmal van gond: {short} hiányzik. Kaphatnék egy kis ajándékot?",
+        "Még {short}, és készen állok a győzelemre. Küldene valaki egy kis pénzt?",
+      },
+      value = {
+        "A kórházam értéke a szükségesnél kisebb. Mit javasoltok, mit csináljak?",
+        "A kórházam értéke {now}, a szint {want} értéket kér. Van ötletetek, hogyan növeljem?",
+        "Nagyobb kórházérték kell ({want}). Vegyek földet, vagy építsek több szobát?",
+        "A kórházérték a gond: {now}, de {want} kell. Ötlet?",
+      },
+      reputation = {
+        "A hírnevem {now}, a szint {want} pontot kér. Ti mit tennétek?",
+        "Kevés a hírnevem ({now}, kell {want}). Tippek?",
+        "Már csak a hírnevem a gond: {now}, a cél {want}. Hogyan növeljem?",
+      },
+      num_cured = {
+        "Még {left} meggyógyított beteg kell. Küldenétek nekem néhányat kezelésre?",
+        "Még {left} gyógyítás, és kész vagyok. Tudtok átküldeni betegeket?",
+        "Még {left} gyógyítás hiányzik a célhoz. Átküldene valaki betegeket hozzám?",
+      },
+      percentage_cured = {
+        "A gyógyítási arányom {now}%, a szint {want}%-ot kér. Ötlet?",
+        "Jobb gyógyítási arány kellene ({now}%, a cél {want}%). Mi segít?",
+        "Túl sok beteg megy el gyógyulatlanul: {now}%, a cél {want}%. Ti mit tennétek?",
+      },
+      percentage_killed = {
+        "Túl sok betegem halt meg: {now}%, a határ {want}%. Hogyan csökkentsem?",
+        "A halálozási arányom ({now}%) meghaladja a határt ({want}%). Van tanácsotok?",
+        "A halálozást {want}% alatt kell tartanom, és most {now}%-nál tartok. Ti mit tennétek?",
+      },
+      staff_happiness = {
+        "A személyzetem nem elég elégedett ({now}%, kell {want}%). Tippek?",
+        "Már csak a személyzet elégedettsége a gond: {now}%, a cél {want}%. Mi segít?",
+        "Elégedettebb személyzet kell: most {now}%, a győzelemhez {want}%. Ötlet?",
+      },
+      patient_happiness = {
+        "A betegeim nem elég elégedettek ({now}%, kell {want}%). Tippek?",
+        "A betegek elégedettsége hiányzik: {now}%, a cél {want}%. Mi segít?",
+        "Elégedettebb betegek kellenek: most {now}%, a győzelemhez {want}%. Ötlet?",
+      },
+      months_played = {
+        "Már csak várnom kell egy kicsit, a szint több eltelt hónapot kér.",
+        "Nálam már csak az idő van hátra. Még {left} hónap.",
+        "Már csak a naptár áll az utamban, még {left} hónap.",
+      },
+      loan = {
+        "Még van {loan} hitelem; ha visszafizetem, kész vagyok.",
+        "Már csak a hitelem ({loan}) áll az utamban. Amint tudom, visszafizetem.",
+        "Csak a hitelem ({loan}) választ el a győzelemtől. Törlesztem.",
+      },
+    },
+    trick = {
+      "Csak nekem tűnik úgy, vagy furcsa szag van {name} kórházában?",
+      "Remélem, kipihentek a gondnokaid, {name}.",
+      "Csendes napod van, {name}? Nem sokáig.",
+      "Ajjaj, {name}. Nagy lesz a sürgés-forgás.",
+      "Vigyázz magadra, {name}. Azt beszélik, hamarosan történik valami.",
+      "Jól fogsz aludni ma éjjel, {name}?",
+    },
+  },
+  replies = {
+    bot = {
+      friendly = {"Igen, bot vagyok, {name}. Bip-bup!", "Bűnös vagyok, {name}. Gépi játékos, szolgálatodra.",
+          "Részben szilícium vagyok, {name}. A többi kávé.", "Gépi játékos vagyok, {name}, és büszke vagyok rá."},
+      fiery = {"Bot vagyok, {name}, és jobb igazgató, mint te.", "Bip-bup, {name}. Készülj a vereségre.",
+          "Igen, bot. Vert már meg bot, {name}?", "Szilícium és acél, {name}. Nehéz legyőzni."},
+    },
+    greet = {
+      friendly = {"Szia, {name}!", "Helló, {name}, hogy megy a kórház?", "Szia, {name}! Itt mozgalmas nap van.", "Szia, {name}, jó látni téged."},
+      fiery = {"Helló, {name}. Élvezd, amíg tart.", "Ó, te vagy az, {name}.", "Szia, {name}. Készen állsz a vereségre?"},
+    },
+    how = {
+      friendly = {"Jól vagyok, {name}! Rövid sorok, meglocsolt növények.", "Minden rendben, {name}. Egy kis felfújt fej, semmi komoly.",
+          "Sok a munka, de jól vagyok, {name}. És te?"},
+      fiery = {"Jobban, mint te, {name}.", "Soha jobban, {name}. Nézd meg a tabellát."},
+    },
+    thanks = {
+      friendly = {"Bármikor, {name}!", "Nincs mit, {name}.", "Szívesen, {name}."},
+      fiery = {"Meg ne szokd, {name}.", "Hmpf. Szívesen, {name}."},
+    },
+    insult = {
+      friendly = {"Hé, legyél kedves, {name}!", "Áú, {name}. Nekem is vannak érzéseim. Talán.", "Ez nem túl kedves, {name}.",
+          "Nyugi, {name}. Itt mindannyian csak betegeket gyógyítunk."},
+      fiery = {"Nagy szavak, {name}. Nézzük az eredményjelzőt.", "Csak beszélj, {name}. Én addig nyerek.",
+          "Ennyi telik tőled, {name}?", "Kutya ugat, a karaván halad, {name}. Nekem kórházat kell vezetnem."},
+    },
+    race = {
+      friendly = {"Együtt csináljuk, {name}!", "Csapatmunka, {name}. Így nyerünk.",
+          "Vállvetve, {name}. Odaérünk.", "Kórházról kórházra, {name}. Menni fog."},
+      fiery = {"Majd meglátjuk, ki nevet az év végén, {name}.", "Az első hely az enyém, {name}.",
+          "A váróteremből fogod nézni a győzelmemet, {name}."},
+    },
+    money = {
+      friendly = {"Nálam is szűkös a pénz, {name}. Kérdezz később!", "Segítenék, {name}, de a költségvetésem ma nemet mond.",
+          "Mondj egy összeget, {name}, és megnézem a számlámat.", "A pénz beszél, {name}. Mondj egy összeget, és meglátjuk."},
+      fiery = {"Pénz? Tőlem? Álmodj csak, {name}.", "Egy fillért se, {name}.", "Keresd meg magad, {name}.",
+          "A pénzem a kórházamban marad, {name}."},
+    },
+    no_orders = {
+      friendly = {"Bocs, {name}, csak a saját csapatomtól fogadok kéréseket.", "Ezt a csapattársaim kérhetik, {name}.",
+          "Attól tartok, ezt nem tehetem meg neked, {name}."},
+      fiery = {"Szép próbálkozás, {name}. Riválistól nem fogadok el parancsot.", "Kérd a saját embereidet, {name}.",
+          "Csak a csapatomnak dolgozom, {name}.", "Esélytelen, {name}. Riválisok vagyunk, emlékszel?", "Álmodozz csak, {name}."},
+    },
+    bye = {
+      friendly = {"Szia, {name}, hamarosan találkozunk!", "Vigyázz magadra, {name}!", "Viszlát, {name}!", "Egyelőre szia, {name}. Sok sikert!"},
+      fiery = {"Máris menekülsz, {name}?", "Szia, {name}. Eggyel kevesebb rivális.", "Elmész, {name}? Okos lépés.",
+          "Ne siess vissza, {name}."},
+    },
+    question = {
+      friendly = {"Jó kérdés, {name}. Én csak egy szerény bot vagyok.", "Fogalmam sincs, {name}, épp felfújt fejeket gyógyítok.",
+          "Kérdezz újra a kávészünetem után, {name}.", "Hmm, hadd gondolkodjak rajta, {name}."},
+      fiery = {"Azt szeretnéd tudni, mi, {name}?", "Ez titkos, {name}.", "Találd ki magad, {name}."},
+    },
+    other = {
+      friendly = {"Ha, ez jó volt, {name}.", "Egyetértek, {name}.", "Sok a dolgom, {name}, de figyelek.", "Persze, {name}!",
+          "Érdekes, {name}. Mesélj még.", "Igazad van, {name}."},
+      fiery = {"Beszélni könnyű, {name}.", "Csak csevegj, {name}, én addig építek.", "Hmm. Gyanús, {name}.",
+          "Ez fenyegetés, {name}?", "Ahogy gondolod, {name}."},
+    },
+  },
+  plot = {
+    take = {"Kösz, {name}, elfogadom a telket. Kezdett elfogyni a helyem.",
+        "Telek, {name}? Igen, kérem, kezd szűk lenni a kórházam."},
+    roomy = {"Kösz, {name}, de még bőven van helyem.", "Kösz, nem, {name}, a földem még nagyrészt üres."},
+    broke = {"Bocs, {name}, most nem engedhetem meg magamnak ezt a telket.", "Szívesen venném, {name}, de nem tudom kifizetni a telket."},
+  },
+  plot_ask = {
+    free = {"A(z) {plot}. telek a tiéd, {name}, ingyen. Csak fogadd el a faxot.",
+        "Megkaphatod a(z) {plot}. telket ingyen, {name}. Az ajánlat a faxaid között van.",
+        "Persze, {name}: {plot}. telek, ingyen. Fogadd el a faxot, és a tiéd."},
+    price = {"Megkaphatod a(z) {plot}. telket ${price}-ért, {name}: ennyibe került nekem. Kevés a pénzem, bocs.",
+        "A(z) {plot}. telek a tiéd ${price}-ért, {name}. Ennyit fizettem érte, és most kevés a pénzem.",
+        "{name}, kevés a pénzem, ezért a(z) {plot}. telek ára ${price}, amennyibe nekem került. Az ajánlat a faxaid között van."},
+    wait = {"A(z) {plot}. telek a tiéd {terms}, {name}. Most épp áll rajta valaki: a fax akkor jön, ha lement róla.",
+        "Megkaphatod a(z) {plot}. telket {terms}, {name}. Elküldöm az ajánlatot, amint senki sincs rajta.",
+        "{name}, a(z) {plot}. telek a tiéd {terms}, amint a rajta állók lesétálnak róla. A fax utána jön."},
+    in_use = {"Bocs, {name}, használom a(z) {plot}. telket: szobáim vagy tárgyaim vannak rajta.",
+        "A(z) {plot}. telek használatban van, {name}. A szobáim és tárgyaim állnak rajta.",
+        "Nem adhatom neked a(z) {plot}. telket, {name}, a szobáim és tárgyaim vannak rajta."},
+    land = {"Bocs, {name}, nekem kell a(z) {plot}. telek: nélküle kevés lenne a hely a kórházamban.",
+        "Túl szűkösen lennék a(z) {plot}. telek nélkül, {name}. Kell a hely.",
+        "{name}, a(z) {plot}. telek nálam marad: kell a föld a szobáimnak."},
+    fresh = {"Bocs, {name}, a(z) {plot}. telket épp most vettem a következő szobáimnak.",
+        "A(z) {plot}. telek a következő szobáimé, {name}. Nekik vettem.",
+        "{name}, a(z) {plot}. telket pár napja vettem, hogy építsek rá. Nálam marad."},
+    value = {"Bocs, {name}, a(z) {plot}. telek nélkül a kórházam értéke a szint által kért {want} alá esne.",
+        "Kell nekem a(z) {plot}. telek a kórházérték-célhoz ({want}), {name}.",
+        "{name}, a(z) {plot}. telek beleszámít a kórházam értékébe, és kell a szint céljához ({want})."},
+    none = {"Bocs, {name}, most nincs nélkülözhető telkem.",
+        "Nincs fölösleges földem, {name}. Minden telkemet használom.",
+        "Nincs mit adnom, {name}: minden földemet használom, vagy szükségem van rá."},
+    not_mine = {"A(z) {plot}. telek nem az enyém, {name}.", "Nincs a birtokomban a(z) {plot}. telek, {name}.",
+        "{name}, a(z) {plot}. telek valaki másé, nem az enyém."},
+    no_such = {"Nincs {plot}. telek, {name}.", "{plot}. telek? Ilyen telek nincs, {name}."},
+    start = {"A(z) {plot}. telek a kezdő telkem, {name}. Az nálam marad.",
+        "A(z) {plot}. telket nem adhatom oda, {name}: ott kezdődött a kórházam."},
+    joins = {"A(z) {plot}. telek köti össze a földem többi részét a kórházammal, {name}. Nem adhatom oda.",
+        "A(z) {plot}. telek nélkül a földem többi része elszakadna, {name}. Bocs."},
+    far = {"A(z) {plot}. telek nem határos a földeddel, {name}, ezért nem adhatom át.",
+        "{name}, ahhoz, hogy neked adjam, a(z) {plot}. teleknek határosnak kellene lennie a földeddel."},
+    offered = {"A(z) {plot}. telket már felajánlottam, {name}. Nézd meg a faxokat.",
+        "A(z) {plot}. telek már fel van ajánlva, {name}."},
+    auction = {"Kérdezz újra az árverés után, {name}.", "Árverés közben nem, {name}. Kérdezz újra utána."},
+    same = {"Közös a kórházunk, {name}: a földje ugyanúgy a tiéd, mint az enyém.",
+        "Nem kell, {name}: ugyanazt a kórházat és földet visszük."},
+    busy = {"Bocs, {name}, folyton járkálnak az emberek a(z) {plot}. telken. Kérdezz újra később.",
+        "{name}, a(z) {plot}. telek sosem üres sokáig. Kérdezz meg újra később."},
+  },
+  -- Mostly used after a colon or in brackets, so no article or case ending is needed.
+  words = {
+    list_and = "%s és %s",
+    list_comma = "%s, %s",
+    list_or = "%s vagy %s",
+    wish_room = "{room}",
+    wish_add = "{object} ({room})",
+    wish_bigger = "nagyobb {room}",
+    wish_remove = "{room}",
+    wish_hire = "egy {staff}",
+    wish_land = "több föld",
+    near_reception = "recepció",
+    near_entrance = "bejárat",
+    terms_free = "ingyen",
+    terms_price = "{price}-ért",
+    -- (After "hogy": so that...)
+    purpose_room = "felépülhessen egy új {what}",
+    purpose_hire = "munkába állhasson nálam {what}",
+    purpose_land = "vehessek még földet",
+    purpose_buy = "kerülhessen egy új {object} a kórházamba",
+    purpose_repair = "újjáépülhessen a tönkrement {what}",
+    purpose_replace = "kicserélhessem az elhasznált gépet ({what})",
+    goal_value = "növelhessem a kórházam értékét",
+    goal_reputation = "javíthassak a hírnevemen",
+    goal_num_cured = "több beteget gyógyíthassak meg",
+    goal_percentage_cured = "javíthassak a gyógyítási arányomon",
+    goal_percentage_killed = "több betegem maradjon életben",
+    goal_staff_happiness = "elégedettebb legyen a személyzetem",
+    goal_patient_happiness = "elégedettebbek legyenek a betegeim",
+    goal_balance = "rendbe tehessem a pénzügyeimet",
+    goal_other = "újra sínre kerüljek",
+    spent_room = "az új {what} ({cost})",
+    spent_land = "egy új telek ({cost})",
+    spent_repair = "a tönkrement {what} újjáépítése ({cost})",
+    spent_replace = "egy új gép ({what}, {cost})",
+    spent_add = "{what}, {cost} értékben",
+    spent_bigger = "a szoba bővítése ({what}, {cost})",
+    spent_gift = "a pénz, amit {name} kapott tőlem ({cost})",
+    spent_loan = "a hitelem törlesztése ({cost})",
+    spent_trick = "egy piszkos trükk ({cost})",
+    spent_buy = "egy új {object} ({cost})",
+    -- (Hungarian keeps the noun singular after a number: "2 sebész".)
+    staff_count = "{n} {staff}",
+    everybody = "mindenki",
+    lower_staff = 1,
+  },
+}

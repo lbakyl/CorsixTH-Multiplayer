@@ -291,13 +291,13 @@ calls_dispatcher = {
   close = "Zavřít",
 }
 town_map = {
-  number = "Číslo pozemku",
-  area = "Oblast pozemku",
+  number = "Pozemek č.",
+  area = "Plocha",
   not_for_sale = "Nelze vlastnit",
-  owner = "Vlastník pozemku",
+  owner = "Vlastník",
   chat = "Podrobnosti města",
   for_sale = "Na prodej",
-  price = "Cena pozemku",
+  price = "Cena",
 }
 confirmation = {
   replace_machine = "Opravdu chcete nahradit %s za %d$?",
@@ -3868,6 +3868,9 @@ menu_player_count.players_5 = "  5 HRÁČŮ  "
 menu_player_count.players_6 = "  6 HRÁČŮ  "
 menu_player_count.players_7 = "  7 HRÁČŮ  "
 menu_player_count.players_8 = "  8 HRÁČŮ  "
+multiplayer_window.add_assistant = "Přidat pomocníka (bota do mé nemocnice)"
+multiplayer_window.add_assistant_for = "Přidat pomocníka hráči %s"
+multiplayer_window.add_assistant_short = "+ Přidat pomocníka"
 multiplayer_window.add_bot = "čeká se na hráče... (klikněte: přidat bota)"
 multiplayer_window.ask_amount = "Částka: $%d"
 multiplayer_window.ask_asked = "Požádáno. Čeká se na odpověď."
@@ -3882,6 +3885,9 @@ multiplayer_window.ask_no_money_asker_note = "Hráč %s vám nemohl zaplatit."
 multiplayer_window.ask_no_money_note = "Nemůžete zaplatit $%d."
 multiplayer_window.ask_pay = "Zaplatit $%d"
 multiplayer_window.ask_sent_note = "Požádali jste o $%d hráče %s. Čeká se na odpověď."
+multiplayer_window.assistant_named = "%s (pomocník hráče %s)"
+multiplayer_window.assistant_starting = "spouští se..."
+multiplayer_window.assistants_caption = "Pomocníci"
 multiplayer_window.auction_back = "Zpět na dražbu"
 multiplayer_window.auction_bid = "Příhoz $%d"
 multiplayer_window.auction_borrow_tooltip = "Půjčit si $5,000 od banky"
@@ -3892,9 +3898,11 @@ multiplayer_window.auction_going_twice = "Po druhé..."
 multiplayer_window.auction_leader = "Nejvyšší nabídka: $%d, %s"
 multiplayer_window.auction_leading = "Vedete. Počkejte na ostatní."
 multiplayer_window.auction_loan = "$%d, půjčka $%d"
+multiplayer_window.auction_loan_note = "Banka vám půjčila $%d na zaplacení pozemku %d."
 multiplayer_window.auction_loan_tooltip = "Váš zůstatek a půjčka u banky"
 multiplayer_window.auction_no_money = "Nemáte na další příhoz."
 multiplayer_window.auction_no_money_loan = "Nemáte na další příhoz: půjčte si tlačítkem + dole."
+multiplayer_window.auction_not_paid = "Pozemek %d nebyl prodán: hráč %s nemohl zaplatit svou nabídku $%d."
 multiplayer_window.auction_not_sold = "Pozemek %d nebyl prodán."
 multiplayer_window.auction_out = "venku"
 multiplayer_window.auction_pass = "Odstoupit"
@@ -3909,7 +3917,7 @@ multiplayer_window.auction_bid_more = "Každé přihození je o $%d víc."
 multiplayer_window.auction_winning = "Vítězná nabídka"
 multiplayer_window.auction_wait = "Probíhá dražba, vyčkejte..."
 multiplayer_window.auction_watching = "Váš pozemek s touto parcelou nesousedí."
-multiplayer_window.auctions_all = "Každý pozemek"
+multiplayer_window.auctions_all = "Všechny"
 multiplayer_window.auctions_caption = "Dražby pozemků"
 multiplayer_window.auctions_near = "Sporné"
 multiplayer_window.auctions_none = "Vypnuto"
@@ -3957,6 +3965,7 @@ multiplayer_window.emergency_refused = "Odmítnutí pohotovosti stálo nemocnici
 multiplayer_window.encrypted = "Šifrované spojení (TLS)"
 multiplayer_window.every_plot_auctioned = "všechny pozemky v dražbě"
 multiplayer_window.game_options = "Možnosti hry"
+multiplayer_window.get_version = "Stáhnout verzi hry, kterou má server (%s)"
 multiplayer_window.goal_limit = "limit:"
 multiplayer_window.goal_other.balance = "%s: zůstatek $%d (%s $%d)"
 multiplayer_window.goal_other.num_cured = "%s: vyléčeno pacientů: %d (%s %d)"
@@ -4033,6 +4042,7 @@ multiplayer_window.loading = "NAČÍTÁNÍ..."
 multiplayer_window.locked = "  (heslo)"
 multiplayer_window.looking_at = "Pohled na %s"
 multiplayer_window.measuring = "Měří se připojení..."
+multiplayer_window.megabytes = "%s MB"
 multiplayer_window.menu_caption = "  MULTIPLAYER  "
 multiplayer_window.menu_chat = "  POSLAT ZPRÁVU (%1%)  "
 multiplayer_window.menu_colours = "  BARVY HRÁČŮ  "
@@ -4217,6 +4227,7 @@ multiplayer_window.refer_fax_choice = "Poslat do jiné nemocnice"
 multiplayer_window.referral_cured_here_note = "Vyléčili jste pacienta, kterého poslal hráč %s: reputace navíc +%d."
 multiplayer_window.referral_cured_note = "Hráč %s vyléčil pacienta, kterého jste poslali: reputace +%d."
 multiplayer_window.refresh = "Obnovit"
+multiplayer_window.remove_assistant = "Poslat pomocníka pryč"
 multiplayer_window.rep_amount = "Body: %d"
 multiplayer_window.rep_give_button = "Dát jim %d ze svých bodů reputace"
 multiplayer_window.rep_given_note = "Zaručili jste se za hráče %s: dali jste mu %d bodů reputace."
@@ -4258,6 +4269,8 @@ multiplayer_window.research_sold_transaction = "Výzkum prodán: %s"
 multiplayer_window.room_caption = "Místnost: %s"
 multiplayer_window.room_hint = "Stejná barva: jedna nemocnice. Stejný tým: vyhrajete společně."
 multiplayer_window.room_line = "%s   %d z %d   %s   úroveň %s%s"
+multiplayer_window.room_map = "Mapa"
+multiplayer_window.room_map_caption = "Mapa místnosti: kdo kde hraje"
 multiplayer_window.rooms_caption = "Místnosti na %s"
 multiplayer_window.sabotage_again = "Klikněte znovu na L%d a koupíte to za $%d."
 multiplayer_window.sabotage_alone = "Nezbyl žádný soupeř, kterému by se dalo škodit."
@@ -4353,14 +4366,17 @@ multiplayer_window.sabotage_bomb_blast = "Ve vaší nemocnici vybuchla odpadkov�
 multiplayer_window.sabotage_bomb_in_hands = "Drželi jste odpadkovou bombu příliš dlouho: vybuchla ve vaší vlastní nemocnici!"
 multiplayer_window.sabotage_bomb_blast_rival = "Vaše odpadková bomba vybuchla u hráče %s."
 multiplayer_window.sabotage_bomb_found = "Vaši odpadkovou bombu našli: hráč %s ji včas zvedl. Může ji hodit dál, třeba i zpátky na vás!"
+multiplayer_window.save_button = "Uložit"
+multiplayer_window.save_caption = "Uložit hru pro všechny"
 multiplayer_window.saved_flag = "  uložená hra"
 multiplayer_window.saved_note = "Hra uložena: %s"
 multiplayer_window.saving_note = "Ukládá se hra na počítači každého hráče..."
 multiplayer_window.select_room = "Nejdřív vyberte místnost."
 multiplayer_window.server = "Server"
 multiplayer_window.server_eu1 = "EU1: stabilní"
+multiplayer_window.server_us1 = "US1: stabilní"
 multiplayer_window.server_eu2 = "EU2: testovací verze"
-multiplayer_window.server_version = "verze serveru"
+multiplayer_window.server_version = "verzi serveru"
 multiplayer_window.share_research = "Sdílet výzkum"
 multiplayer_window.shared_won = "Přechod na další úroveň není ve hře pro více hráčů k dispozici."
 multiplayer_window.sharing_off = "Sdílení výzkumu: vypnuto"
@@ -4370,7 +4386,11 @@ multiplayer_window.staff_bought_transaction = "Personál od: %s"
 multiplayer_window.staff_on_the_way = "Na cestě k: %s"
 multiplayer_window.staff_received_note = "Hráč %s vám poslal zaměstnance: %s"
 multiplayer_window.staff_sold_transaction = "Personál pro: %s"
+multiplayer_window.standin_back = "Místo hráče %s někdo převzal: rok, kdy za něj bot hrál jako těžký, tím končí."
+multiplayer_window.standin_hard = "Nemocnice hráče %s zaostává: bot, který ho zastupuje, bude rok hrát jako těžký bot."
+multiplayer_window.standin_normal = "Bot, který zastupuje hráče %s, už zase hraje jako normální bot."
 multiplayer_window.start = "Spustit hru"
+multiplayer_window.switch_version = "Přepnout na verzi hry, kterou má server"
 multiplayer_window.team_button = "Tým %d"
 multiplayer_window.team_lost = "Hráč %s ještě na konci roku cíle této úrovně nesplnil, takže tým úroveň prohrál."
 multiplayer_window.team_member_out = "Vaše nemocnice nesplnila cíle této úrovně dva roky po sobě a vypadla ze závodu. Váš tým závodí dál."
@@ -4424,6 +4444,16 @@ multiplayer_window.trade_sent = "Odesláno. Za chvilku dorazí."
 multiplayer_window.tricks_off = "Špinavé triky (závody): vypnuto"
 multiplayer_window.tricks_on = "Špinavé triky (závody): zapnuto"
 multiplayer_window.vaccination_mode_hint = "Režim očkování: klikejte na nakažené pacienty a sestra je naočkuje. Pravé tlačítko, Esc nebo další klik na injekci režim ukončí."
+multiplayer_window.version_bad = "Stažený soubor je poškozený nebo není od OpenTH"
+multiplayer_window.version_cancel = "Zrušit"
+multiplayer_window.version_caption = "Verze hry, kterou má server"
+multiplayer_window.version_checking = "Kontroluje se stažený soubor..."
+multiplayer_window.version_close = "Zavřít"
+multiplayer_window.version_downloading = "Stahuje se: %s z %s"
+multiplayer_window.version_failed = "Stažení se nepovedlo: %s"
+multiplayer_window.version_newer_game = "Server potřebuje novější hru: stáhněte ji níže"
+multiplayer_window.version_other = "Tento server běží na jiné verzi hry."
+multiplayer_window.version_starting = "Spouští se verze hry, kterou má server..."
 multiplayer_window.vote_agree = "Souhlasím"
 multiplayer_window.vote_asked = "Požádali jste ostatní o změnu rychlosti na: %s."
 multiplayer_window.vote_confirm = "Požádat ostatní hráče o změnu rychlosti hry na: %s?"
@@ -4437,6 +4467,12 @@ multiplayer_window.vote_request = "Hráč %s by chtěl změnit rychlost hry"
 multiplayer_window.vote_request_speed = "na %s."
 multiplayer_window.waiting_player = "čeká se na hráče..."
 tooltip.main_menu.multiplayer = "Hrajte s ostatními přes server pro více hráčů (experimentální)"
+tooltip.main_menu.discord = "Discord OpenTH: najděte další hráče, zeptejte se na radu a o nových verzích se dozvězte jako první. Otevře openth.org/discord ve webovém prohlížeči."
+tooltip.multiplayer_window.add_assistant = "Pravé tlačítko: přidat pomocníka, tedy bota, který pomáhá v této nemocnici a nezabírá místo"
+tooltip.multiplayer_window.add_assistant_button = "Přidat pomocníka: bot, který pomáhá v této nemocnici a nezabírá místo"
+tooltip.multiplayer_window.assistant = "Bot, který pomáhá v této nemocnici"
+tooltip.multiplayer_window.assistant_host = "Klik: poslat pomocníka pryč. Pravé tlačítko: lehký, normální nebo těžký bot"
+tooltip.multiplayer_window.assistant_mine = "Váš pomocník. Klik: poslat ho pryč"
 tooltip.multiplayer_window.bot_level = "Pravé tlačítko: lehký, normální nebo těžký bot"
 tooltip.multiplayer_window.ask_money = "Požádejte jiného hráče o peníze. Rozhodne, zda zaplatí."
 tooltip.multiplayer_window.auctions = "Hostitel rozhoduje, které pozemky jdou do dražby, když si je hráč chce koupit"
@@ -4448,6 +4484,7 @@ tooltip.multiplayer_window.connect = "Připojit se k serveru a zobrazit jeho mí
 tooltip.multiplayer_window.continue_game = "Pokračovat v dříve uložené hře pro více hráčů (Soubor > Uložit nebo měsíční automatické uložení): vyberte ji ze seznamu. Bez výběru místnost spustí novou hru"
 tooltip.multiplayer_window.download = "Tento server běží na jiné verzi hry: otevřete její stránku ke stažení ve webovém prohlížeči"
 tooltip.multiplayer_window.game_options = "Možnosti hry: dražby pozemků a další (nastavuje hostitel)"
+tooltip.multiplayer_window.get_version = "Stáhnout verzi hry, kterou má tento server, a spustit s ní hru znovu. Vaše uložené hry a nastavení zůstanou."
 tooltip.multiplayer_window.helpers = "Rozhoduje hostitel: bot, který sdílí nemocnici s člověkem, staví místnosti a umisťuje věci na chodby, nebo to nechá na člověku (dál najímá personál, vyplácí odměny, sdílí výzkum, draží a kupuje pozemky)"
 tooltip.multiplayer_window.level = "Vyberte úroveň v seznamu s cíli a mapou. Jedna společná nemocnice hraje úrovně kampaně; více nemocnic hraje úrovně pro více hráčů (1 až 8, vyšší číslo hraje úroveň 8). Úroveň 6 je Pohotovost!: pohotovosti čtyřikrát za měsíc v prvním roce, pak epidemie; úroveň 7 je Bez slitování, určená pro závod: špinavé triky měsíc po měsíci, veletrhy práce, závodní pohotovosti a zemětřesení; úroveň 8 je Team Town, mapa od Matrofttu pro hru dva proti dvěma"
 tooltip.multiplayer_window.levels_players = "Mapa pro tolik hráčů (každý počet hráčů má vlastní mapu)"
@@ -4455,17 +4492,567 @@ tooltip.multiplayer_window.name = "Jméno, které vidí ostatní hráči"
 tooltip.multiplayer_window.new_game = "Spustit novou hru místo uložené"
 tooltip.multiplayer_window.password = "Heslo místnosti, do které se připojujete nebo kterou vytváříte (prázdné: bez hesla)"
 tooltip.multiplayer_window.player_row = "Klik: ukázat nemocnici tohoto hráče (N: další nemocnice)"
-tooltip.multiplayer_window.chat_target = "Komu zpráva půjde: všem, tvému týmu (v závodě týmů) nebo jednomu hráči. Klikni nebo stiskni Tab pro dalšího"
+tooltip.multiplayer_window.chat_target = "Komu zpráva půjde: všem, vašemu týmu (v závodě týmů) nebo jednomu hráči. Klikněte nebo stiskněte Tab pro dalšího"
 tooltip.multiplayer_window.players = "Pro kolik hráčů je místnost určena"
 tooltip.multiplayer_window.rats = "Rozhoduje hostitel: v závodě se špinavými triky mohou hráči pustit krysy do nemocnice soupeře (stojí ho to reputaci), nebo ne"
 tooltip.multiplayer_window.ready = "Dejte hostiteli vědět, že jste připraveni začít"
 tooltip.multiplayer_window.refer_button = "Nabídnout tohoto pacienta nemocnici jiného hráče. Musí ho přijmout."
+tooltip.multiplayer_window.room_chat = "Napište sem zprávu a stiskem Enteru ji pošlete všem v místnosti"
+tooltip.multiplayer_window.room_map = "Mapa úrovně, jak by hra začala teď: každá nemocnice ve své barvě a kdo ji hraje"
+tooltip.multiplayer_window.save_name = "Název uložené hry. Přidá se k němu vaše jméno a datum ve hře."
 tooltip.multiplayer_window.send_staff = "Poslat tohoto zaměstnance do nemocnice jiného hráče. Musí ho přijmout."
 tooltip.multiplayer_window.server = "Adresa serveru pro hru více hráčů, například eu2.openth.org:47800"
 tooltip.multiplayer_window.server_eu1 = "eu1.openth.org: nejnovější stabilní vydání"
+tooltip.multiplayer_window.server_us1 = "us1.openth.org: nejnovější stabilní vydání"
+tooltip.multiplayer_window.discord = "Discord OpenTH: najděte další hráče, zeptejte se na radu a o nových verzích se dozvězte jako první. Otevře openth.org/discord ve webovém prohlížeči."
 tooltip.multiplayer_window.server_eu2 = "eu2.openth.org: nejnovější testovací verze"
 tooltip.multiplayer_window.share_research = "Nabídněte výzkum, který máte, nemocnici jiného hráče, zdarma nebo za cenu. Musí ho přijmout."
 tooltip.multiplayer_window.sharing = "Rozhoduje hostitel: hráči mohou nebo nemohou mezi sebou sdílet či prodávat výzkum (jako v původní hře)"
 tooltip.multiplayer_window.start = "Spustit hru pro všechny v místnosti"
+tooltip.multiplayer_window.switch_version = "Spustit hru znovu ve verzi tohoto serveru, kterou už máte"
 tooltip.multiplayer_window.team = "Váš tým: stejný tým vyhrává společně, různé týmy závodí o cíle a mohou si hrát špinavé triky. Kliknutím ho změníte (hostitel může změnit tým komukoli, i botům)"
 tooltip.multiplayer_window.tricks = "Rozhoduje hostitel: v závodě mohou hráči proti soupeřům kupovat špinavé triky, nebo ne (jako v původní hře)"
+
+-- What the server's computer players (bots) say in the chat (see english.lua).
+bot_chat = {
+  lines = {
+    tricked = {
+      handyman = {"Pěkný pokus, {name}. Tvůj údržbář už je na cestě zpátky k tobě.",
+          "Máme tvého údržbáře, {name}. Zase je celý tvůj.",
+          "Tvůj údržbář dostal padáka, {name}. Příště víc štěstí.",
+          "Pašuješ mi sem údržbáře, {name}? Už si to šine domů."},
+      rats = {"Deratizace hotová, {name}. To byly tvoje krysy?", "Všechny krysy jsou postřílené, {name}. Moc vtipné.",
+          "Pí pí, bum. Krysy jsou pryč, {name}.",
+          "Pěkné krysy, {name}. Jen škoda, že se netrefily."},
+      boiler = {"Někdo mi rozbil bojler. Moc vtipné, {name}. Moji údržbáři už na tom makají.",
+          "Rozbitý bojler, {name}? Máme deky.",
+          "Studená nemocnice? Zato vřelá srdce, {name}. Bojler se už opravuje.",
+          "Ha, {name}, pořádná zima. Moji údržbáři milují výzvy."},
+      smear = {"Špatný tisk, {name}? Moji pacienti se vrátí.", "Pěkná pomlouvačná kampaň, {name}. Ta moje bude lepší.",
+          "Bulvár, {name}? Laciné. Moji pacienti vědí svoje.",
+          "Drby nikoho nevyléčí, {name}. Moji doktoři ano."},
+      espionage = {"Ať ti moje výzkumné soubory chutnají, {name}.", "Špión v mém výzkumném oddělení, {name}? Drzost.",
+          "Doufám, že přelouskáš moje písmo, {name}.",
+          "Opisuj si moje úkoly, jak chceš, {name}. Stejně budu napřed."},
+      headhunter_kept = {"Lákáš mi doktora, {name}? Zůstává u mě.",
+          "Ruce pryč od mých lidí, {name}. Přidáno už dostali.",
+          "Pěkná nabídka, {name}, ale můj doktor má radši naše kafe.",
+          "Žádné přetahování, {name}. Moji lidé zůstávají."},
+      headhunter_lost = {"Tak si ho vezmi, {name}. Najdu někoho lepšího.", "Dobře, {name}, nech si ho. Hodně štěstí s ním.",
+          "Tohle kolo je tvoje, {name}. Najmu si jiného.",
+          "Užij si mého bývalého doktora, {name}. Doufám, že chrápe."},
+    },
+    tricked_unknown = {
+      rats = {"Krysy jsou pryč. Ať je poslal kdokoli: pěkný pokus.", "Všechny krysy postřílené. Příště pošli sýr.",
+          "Deratizace hotová. Někdo má zvláštní smysl pro humor.",
+          "Krysy tu už nejsou. Kdo je poslal, díky za rozcvičku."},
+      boiler = {"Někdo mi rozbil bojler. Ať to byl kdokoli: máme deky.",
+          "Bojler je rozbitý. Kdo to udělal: moc vtipné.",
+          "Den dva studená nemocnice. Ať to byl kdokoli, moji údržbáři už na tom makají."},
+      smear = {"Někdo o mé nemocnici šíří lži. Pacienti poznají pravdu.",
+          "Špatný tisk z ničeho nic. Moji pacienti se vrátí.",
+          "Kdo pomlouvá mou nemocnici: odpovědí mu moji doktoři."},
+      espionage = {"Někdo mi zkopíroval výzkum. Doufám, že přelouskáš moje písmo.",
+          "Špión v mém výzkumném oddělení. Drzost, ať jsi kdokoli.",
+          "Někdo mi nakoukl do výzkumu. Tak ať chutná."},
+      headhunter_kept = {"Někdo se mi pokusil přetáhnout doktora. Zůstává.",
+          "Pro mého doktora si přišel lovec hlav. Smůla.",
+          "Můj doktor lovci hlav řekl ne. To je věrnost."},
+      headhunter_lost = {"Někdo mi přetáhl doktora. Nevadí, vyškolím si jiného.",
+          "Lovec hlav mi sebral doktora. Najdu si nového.",
+          "Lovec hlav mi odlákal doktora. Zase hurá na seznam k zaměstnání."},
+    },
+    staff_sent = {"{names}, pro místnost {room} je tu {who} ({kind}): zdarma, stačí přijmout nabídku ve zprávách.{urgent}",
+        "{names}: nabízím {who} ({kind}) do místnosti {room}. Zadarmo, stačí přijmout fax.{urgent}",
+        "{names}, {who} ({kind}) může nastoupit do místnosti {room}, a to zadarmo. Nabídka čeká ve zprávách.{urgent}",
+        "Tady to je, {names}: {who} ({kind}) pro místnost {room}. Bez poplatku, stačí ve faxu říct ano.{urgent}"},
+    staff_for_emergency = {" Je to kvůli pohotovosti!", " Rychle, pohotovost nepočká.",
+        " Běží pohotovost, tak prosím rychle.", " Honem, máme tu pohotovost!"},
+    -- ({room} as the subject is the room's own name: "Operační Sál potřebuje 2x chirurg".)
+    staff_ask_one = {"{names}, pomůžeš kamarádovi? {room} potřebuje {needs}, mám {have} a {kind} se teď nedá najmout.{urgent}",
+        "{names}, nezbývá ti náhodou {kind} navíc? {room} potřebuje {needs} a já mám jen {have}. Moc by mi to pomohlo.{urgent}",
+        "Půjčíš mi někoho, {names}? Chybí mi {kind}: {room} potřebuje {needs}, mám {have} a na seznamu k zaměstnání nikdo není. Díky!{urgent}",
+        "{names}, nechci otravovat, ale {room} potřebuje {needs} a mám {have}. Nenajde se u tebe {kind} na půjčení?{urgent}"},
+    staff_ask_all = {"Chybí mi {kind}, pomůže někdo? {room} potřebuje {needs}, mám {have} a není koho najmout. Díky!{urgent}",
+        "Přátelé, {room} potřebuje {needs} a já mám jen {have}. Nezbývá někomu {kind} navíc?{urgent}",
+        "{room} stojí, chybí mi {kind} (potřeba: {needs}, tady: {have}). Pomůže mi někdo z vás?{urgent}",
+        "Hledá se {kind}! Můžete mi pomoct? {room} potřebuje {needs} a mám {have}. Moc díky!{urgent}"},
+    research_please = {"{name}, podělíš se se mnou o výzkum {item}? Moji pacienti potřebují místnost {room}.",
+        "{name}, moji pacienti se pořád ptají po místnosti {room}. Pošleš mi svůj výzkum {item}? Díky!",
+        "Dáš mi svůj výzkum {item}, {name}? Moji pacienti potřebují místnost {room} a tu zatím postavit nemůžu."},
+    research_buy = {"Sice spolu soupeříme, {name}, ale pro lepší šance dám {price} za tvůj výzkum {item}.",
+        "{name}, i soupeři můžou obchodovat: {price} za tvůj výzkum {item}. Moji pacienti potřebují místnost {room}.",
+        "Řeknu to na rovinu, {name}: moji pacienti potřebují místnost {room}. Za tvůj výzkum {item} dám {price}."},
+    staff_ask_rival = {"Chybí mi {kind} jako sůl, {name}. Máš někoho navíc? Nabídni ho v okně obchodu a řekni si cenu.",
+        "{name}, hrdost stranou: chybí mi {kind}, a moc. Prodej mi někoho a jsme si kvit... zatím.",
+        "Soupeři nesoupeři, {name}, dobře zaplatím, když se najde {kind}. {room} zatím stojí ladem.",
+        "V místnosti {room} chybí {kind}, {name}, a to je pro mě katastrofa. Řekni si cenu."},
+    ask_research_shared = {"Tady máš, {name}: náš výzkum {item}, zdarma. Přijmi ho ve zprávách.",
+        "Jasně, {name}. Výzkum {item} je na cestě, zadarmo.",
+        "Pro tebe, {name}, výzkum {item} zadarmo. Mrkni do zpráv."},
+    ask_research_sold = {"Platí, {name}: můj výzkum {item} za {price}. Přijmi ho ve zprávách.",
+        "Obchod je obchod, {name}. Výzkum {item} je tvůj za {price}.",
+        "Tak tedy {price}, {name}. Výzkum {item} najdeš ve zprávách."},
+    ask_research_none = {"Promiň, {name}, výzkum {item} nemám, takže není co dát.",
+        "S výzkumem {item} ti nepomůžu, {name}. Taky ho nemám."},
+    ask_rival_ahead = {"Pěkný pokus, {name}. Už jsi přede mnou: ode mě pomoc nečekej.",
+        "Pomoct ti vyhrát? Ani náhodou, {name}.",
+        "Vede se ti až moc dobře, {name}. Zeptej se někoho jiného."},
+    ask_staff_sold = {"Dobře, {name}: {who} ({kind}) za {price}. Přijmi nabídku ve zprávách.",
+        "{name}, {who} ({kind}) je k mání za {price}. Najdeš to ve zprávách.",
+        "Pro tebe, {name}: {who} ({kind}) za {price}. Ať neříkáš, že ode mě nic nemáš."},
+    ask_staff_none = {"Promiň, {name}, {kind} mi nepřebývá.", "{name}, {kind} se mi tu nepovaluje. Zkus seznam k zaměstnání."},
+    rival_patient_yes = {"Pošli ho sem, {name}. Obchod je obchod.", "Pacient jako pacient, {name}. Díky.",
+        "Dobře se o něj postarám, {name}. Díky za doporučení."},
+    rival_patient_busy = {"Fronty mám dost dlouhé, {name}. Zkus to jinde.",
+        "Promiň, {name}, moji doktoři mají práce nad hlavu. Tenhle ne."},
+    rival_cannot_treat = {"Toho neumím léčit, {name}. Nech si ho.",
+        "Na tohle tu nemám místnost, {name}. Ale díky."},
+    rival_research_free = {"Výzkum zadarmo, {name}? Tak to neodmítnu.", "Díky, {name}. Nikomu neřeknu, že to bylo od tebe.",
+        "To je od tebe štědré, {name}. Porazit se tě stejně pokusím."},
+    rival_research_yes = {"{value}? Férová cena, {name}. S tebou je radost obchodovat.",
+        "Platí, {name}. Moji pacienti děkují.", "Dobrý výzkum, {name}. Ale závodit s tebou budu dál."},
+    rival_research_dear = {"Moc drahé, {name}. Dám za to {value}.", "{name}, mně to stojí za {value}, víc ne.",
+        "Pěkný pokus, {name}. {value} a je to moje."},
+    rival_research_useless = {"Ne, díky, {name}. Nic z toho nepotřebuju.", "Nech si to, {name}: k ničemu mi to není."},
+    rival_research_later = {"Nedávno mezi námi proběhl obchod, {name}. Zeptej se zase za pár měsíců.",
+        "Tak brzy znovu ne, {name}. Možná za pár měsíců."},
+    rival_staff_yes = {"Jé, {kind}! Přesně to mi chybělo, {name}. S tebou je radost obchodovat.",
+        "Platí, {name}. U mě se bude mít {kind} jako v bavlnce."},
+    rival_staff_dear = {"Moc drahé, {name}. Dám {value} a {kind} jde ke mně.",
+        "{name}, {kind} mi stojí za {value}, víc ne."},
+    rival_broke = {"Chuť mám, {name}, ale banka říká ne.", "Teď ne, {name}. Účet mám skoro prázdný."},
+    -- ({what} is always in the nominative here: no word agrees with it.)
+    wish_done = {"{name}, hotovo: {what} je na místě.", "Hotovo, {name}: {what} už slouží pacientům.",
+        "Všechno klape, {name}: {what} je hotová věc.", "{name}, {what} je na světě. Užij si to!",
+        "Máš to, {name}: {what}."},
+    wish_done_add = {"{name}, {what} je na místě.", "Hotovo, {name}: {what} už stojí.",
+        "Je to tam, {name}: {what}.", "Splněno, {name}: {what}."},
+    wish_done_remove = {"{name}, {what} jde k zemi: místo se uvolní.",
+        "Už se na tom dělá, {name}: {what} mizí, místo je tvoje.",
+        "Bourá se {what}, {name}. Místo bude brzy volné.", "{name}, za chvilku bude {what} pryč."},
+    wish_no_space = {"Promiň, {name}, {what} se mi zatím nikam nevejde. Nejdřív koupím další pozemek.",
+        "{name}, {what} zatím nemá kde stát. Nejdřív pozemek, pak {what}.",
+        "Došlo mi místo, {name}, {what} se nevejde. Seženu pozemek a zkusím to znovu.",
+        "{name}, pozemky mám plné, takže {what} počká, až budu mít víc místa."},
+    wish_no_money = {"{name}, {what} musí chvilku počkat: zatím nemám dost peněz.",
+        "Promiň, {name}, zatím na to nemám, {what} si ještě počká.",
+        "{name}, {what} stojí víc, než mám. Jakmile budou peníze, pustím se do toho.",
+        "{name}, na účtu mám teď moc málo, {what} chvíli počká. Brzy."},
+    mate_away = {"Vypadá to, že jsi pryč, {name}. Než se vrátíš, povedu celou nemocnici.",
+        "{name}, nějak tu mlčíš. Než se vrátíš, převezmu všechno.",
+        "Než se vrátíš, beru kormidlo, {name}. Vrať se, kdy chceš.",
+        "Jsi pryč, {name}? Žádný problém, nemocnice pojede dál."},
+    mate_back = {"Vítej zpátky, {name}! Ceny, půjčky a faxy jsou zase tvoje.",
+        "Je fajn tě zase vidět, {name}. Ceny, půjčky a faxy jsou zase na tobě.",
+        "Jsi zpátky, {name}! Ceny, půjčky a faxy nechám na tobě.",
+        "Vítej zpátky, {name}. O nemocnici zase rozhoduješ ty."},
+    bonuses = {"Nespokojení zaměstnanci (celkem {n}) dostali dvojitou prémii (${spent}), {name}.",
+        "Nespokojený personál (počet: {n}) dostal dvojitou prémii, {name}. Stálo to ${spent}.",
+        "Prémie pro nespokojené (celkem {n}) za ${spent}, {name}. Potřebovali to."},
+    greet = {
+      friendly = {
+        "Ahoj všichni! Stavím si tu nemocnici pěkně v klidu.",
+        "Zdravím, týme! Křikněte, kdybyste potřebovali pomoct. Nebo doktora.",
+        "Dobré ráno, kolegové! Kafe z automatu platím já.",
+        "Ahoj všichni! První pacienti už jsou na cestě. Držte mi palce.",
+        "Zdravím z druhého konce města! Kdybyste něco potřebovali, dejte vědět.",
+        "Ahoj! Moje recepční vás taky zdraví.",
+        "Nazdar! Doufám, že pacientů bude dost pro všechny.",
+        "Dobré ráno, sousedé! Voda na čaj už se vaří.",
+      },
+      fiery = {
+        "Užívejte si náskok, dokud to jde. Moje nemocnice si jde pro tu vaši.",
+        "Tohle město potřebuje jen jednu nemocnici. Hádejte kterou.",
+        "Moji doktoři jsou chytřejší a moje sestry rychlejší. Hodně štěstí všem!",
+        "Jste připraveni prohrát? Pohár už mám objednaný.",
+        "Doufám, že vaši pacienti rádi čekají. Ti moji nebudou muset.",
+        "Pozor, {name}. Hraju na výhru.",
+        "Hezké nemocnice, lidi. Škoda, že máte takovou konkurenci.",
+        "Nejlepší doktory ve městě už mám u sebe. Pardon!",
+      },
+    },
+    gift_sent = {
+      "Posílám ti ${amount}, {name}. Od toho jsou spojenci.",
+      "Už je to na cestě, {name}: ${amount}. Utrať to s rozumem!",
+      "Hotovo, {name}. ${amount} máš na účtu.",
+      "${amount} je na cestě, {name}. Ať ti to přinese štěstí.",
+      "Tady máš, {name}: ${amount}, přesně podle přání.",
+    },
+    gift_sent_auto = {
+      "Posílám ti ${amount}, {name}: polovinu toho, co mám navíc nad svou rezervou ${keep}.",
+      "{name}, posílám ti ${amount}. Je to polovina mých volných peněz; ${keep} si nechávám pro případ nouze.",
+      "Tady je ${amount}, {name}. To je polovina toho, co můžu postrádat, rezervu ${keep} si nechávám.",
+      "Tady je ${amount}, {name}. Žádná částka nepadla, tak posílám polovinu toho, co mám navíc.",
+    },
+    gift_part = {
+      "Posílám ti ${amount} z požadovaných ${asked}, {name}. Víc nemůžu, pod rezervu ${keep} nejdu.",
+      "{name}, ${amount} je na cestě. Víc by mě dostalo pod ${keep}, co si nechávám na vlastní účty.",
+      "Zvládnu z toho jen ${amount}, {name}; ${keep} si nechávám v bance. Posláno.",
+    },
+    gift_cap = {
+      "Posílám ti ${amount}, {name}. Víc najednou neposílám.",
+      "{name}, ${amount} je na cestě: najednou neposílám víc než ${max}.",
+      "Tady je ${amount}, {name}, to je můj limit na jeden převod. Jestli potřebuješ víc, zeptej se později.",
+    },
+    -- ({spent} in the nominative, after a colon.)
+    gift_spent = {
+      "Většinu peněz mi teď spolklo tohle: {spent}.",
+      "Moje peníze poslední dobou šly hlavně sem: {spent}.",
+      "Zrovna mě hodně stálo tohle: {spent}.",
+    },
+    gift_none = {
+      "Promiň, {name}, teď nemám nic navíc.",
+      "S radostí, {name}, jenže na účtu je tak málo, že nemám co rozdávat.",
+      "Dneska ne, {name}. Peníze si nechávám pro vlastní nemocnici.",
+      "Účet mám skoro prázdný, {name}. Zeptej se znovu, až se byznys rozjede.",
+    },
+    gift_later = {
+      "Zeptej se mě znovu za chvilku, {name}.",
+      "Dej mi minutku, {name}, a zeptej se ještě jednou.",
+      "Teď zrovna ne, {name}. Zkus to za chvíli.",
+    },
+    gift_same_bank = {
+      "Máme společný účet, {name}. Prostě utrať, co potřebuješ.",
+      "Stejně jsou to peníze naší nemocnice, {name}. Klidně je utrať.",
+      "Není třeba nic posílat, {name}, máme stejnou banku.",
+    },
+    accept = {
+      "Děkuju, {name}!",
+      "Moc si toho vážím, {name}.",
+      "Díky, {name}, to hodně pomůže!",
+      "Jsi hvězda, {name}.",
+      "Mám to, díky, {name}!",
+      "To je od tebe moc hezké, {name}.",
+    },
+    wish_done_far = {"{name}, {what} už stojí, jenže {near} nemá kolem sebe volné místo, takže je to o kus dál, kde se to vešlo.",
+        "Hotovo, {name}: {what} stojí, ale jinde. Tam, kde je {near}, už nebylo místo.",
+        "{name}, {what} už stojí. Promiň, {near} nemá kolem sebe žádnou volnou podlahu, tak to stojí o kousek dál.",
+        "{name}, {what} je hotová věc, jen ne hned vedle: tam, kde je {near}, se nic nevešlo."},
+    refuse = {
+      "Dokud tu velím já, tak ne, {name}!",
+      "Pěkný pokus, {name}. Ne, díky.",
+      "Od soupeřů dárky neberu, {name}.",
+      "Nech si to, {name}. Vyhraju i bez tebe.",
+      "Ha! Kde je háček, {name}?",
+      "Vypadám tak naivně, {name}?",
+    },
+    accept_staff = {
+      "Nová posila! Díky, {name}.",
+      "Vítej na palubě, nováčku, a díky, {name}!",
+      "Přesně to mi chybělo, {name}. Díky za personál!",
+      "Super, pomoc se hodí. Díky, {name}!",
+      "{name}, zachraňuješ mi krk. Budu se o nováčka dobře starat.",
+    },
+    accept_research = {
+      "Díky za výzkum, {name}!",
+      "Skvělé, {name}, teď se konečně hneme z místa. Díky za výzkum.",
+      "Další výzkum pro mě, {name}? Ty mě rozmazluješ. Děkuju!",
+      "Tvůj výzkum dorazil, {name}. Moc si toho vážím.",
+      "To mi ušetří spoustu času v laboratoři, {name}. Díky!",
+    },
+    accept_patient = {
+      "Pošli ho sem, {name}. Rádo se stalo!",
+      "O toho pacienta se postaráme, {name}. Díky.",
+      "Nový pacient pro nás, {name}? Vítáme ho.",
+      "Pomůžeme s radostí, {name}. Pacient je v dobrých rukou.",
+      "Jasná věc, {name}. Naši doktoři se o něj postarají.",
+    },
+    pay = {
+      "Tady máš, {name}.",
+      "Posláno, {name}. Utrať to s rozumem!",
+      "Jasně, {name}. Od toho jsou přátelé.",
+      "Žádný problém, {name}. Je to tvoje.",
+      "Peníze jsou na cestě, {name}.",
+    },
+    broke = {
+      "Promiň, {name}, teď jsem úplně švorc.",
+      "Chuť by byla, {name}, ale můj bankéř říká ne.",
+      "Tentokrát ne, {name}. Účet mám skoro prázdný.",
+      "Peněženka je prázdná, {name}. Zeptej se později.",
+      "Kdyby to šlo, hned pomůžu, {name}, jenže mám taky hluboko do kapsy.",
+    },
+    cannot_treat = {
+      "Promiň, {name}, tohle tu léčit neumíme. Radši si ho nech.",
+      "Na tohle nemáme místnost, {name}. Tentokrát ne.",
+      "Stejně by musel domů, {name}. Ale díky.",
+      "Chybí nám na to správná místnost, {name}. Promiň.",
+      "To není naše oddělení, {name}. Zatím si ho nech.",
+    },
+    money_thanks = {
+      "Díky za peníze, {name}!",
+      "Páni, děkuju, {name}! Jde to rovnou do nového vybavení.",
+      "{name}, to je až moc štědré. Díky!",
+      "Hráč {name} posílá peníze! Využiju je dobře.",
+      "Moc si toho vážím, {name}. To hodně pomůže.",
+    },
+    money_back = {
+      "Nech si své peníze, {name}. Budeš je potřebovat.",
+      "Tvou almužnu nechci, {name}. Posílám ji zpátky.",
+      "Zpět odesílateli, {name}!",
+      "Žádné dárky od soupeřů, {name}. Tady je máš zpátky.",
+      "Tvoje peníze jsou zase u tebe, {name}.",
+    },
+    win_good = {
+      "Dobrá práce, {names}! Podmínky pro výhru jsou teď splněné.",
+      "Výborně, {names}! Teď je splněno všechno, co úroveň chce.",
+      "{names}, je to tam: všechny podmínky pro výhru jsou u vás splněné.",
+      "Pěkná práce, {names}. Tvoje nemocnice teď splňuje podmínky pro výhru.",
+      "Skvělá práce, {names}! Výhra je na dosah.",
+    },
+    win_own = {
+      "Dobrá práce, {names}, naše nemocnice teď splňuje podmínky pro výhru.",
+      "{names}, máme to: naše nemocnice splňuje všechno, co úroveň chce.",
+      "Výborně, {names}! Naše nemocnice je připravená vyhrát.",
+      "{names}, v naší nemocnici jsou teď splněné všechny podmínky.",
+    },
+    win_me_too = {
+      "Já to taky můžu dotáhnout do cíle.",
+      "Já jsem na tom taky dobře.",
+      "Moje nemocnice splňuje podmínky taky.",
+      "U mě taky, mám hotovo.",
+      "Já jsem taky v cíli. Teď už jen počkat na ostatní.",
+    },
+    -- ({purpose} and {goal} are infinitives: "postavit novou místnost X".)
+    rescue_ask = {
+      "Vypadá to, že nestíhám plnit cíle. Pošlete mi ${amount}, ať můžu {purpose} a {goal}? Jsme přece na jedné lodi. Díky.",
+      "S cíli úrovně zaostávám. Pošle mi někdo ${amount}, ať můžu {purpose} a {goal}? Jsme v tom spolu.",
+      "Moje nemocnice se s cíli trápí. Za ${amount} můžu {purpose} a {goal}. Šlo by to? Moc díky.",
+      "Pomoc, neplním cíle! Pošlete mi ${amount}? Chci za to {purpose} a {goal}. Buď vyhrajeme spolu, nebo spolu prohrajeme.",
+    },
+    rescue_ask_plain = {
+      "Vypadá to, že nestíhám plnit cíle. Pošlete mi ${amount}, ať můžu {goal}? Jsme přece na jedné lodi. Díky.",
+      "S cíli úrovně zaostávám. Může někdo postrádat ${amount}? Pomohlo by mi to {goal}. Jsme v tom spolu.",
+      "Moje nemocnice se s cíli trápí. Za ${amount} můžu {goal}. Šlo by to? Moc díky.",
+    },
+    win_rival = {
+      "Pozor, {names} už splňuje podmínky pro výhru, musíme dohánět!",
+      "Bacha, {names} má splněné všechny podmínky pro výhru. Musíme zabrat!",
+      "{names} teď splňuje podmínky pro výhru, musíme přidat!",
+      "Pozor: {names} má výhru na dosah. Je čas dohánět!",
+    },
+    win_rivals = {
+      "Pozor, {names} už splňují podmínky pro výhru, musíme dohánět!",
+      "Bacha, {names} mají splněné všechny podmínky pro výhru. Musíme zabrat!",
+      "{names} teď splňují podmínky pro výhru, musíme přidat!",
+      "Pozor: {names} mají výhru na dosah. Je čas dohánět!",
+    },
+    win_need = {
+      balance = {
+        "Chybí mi {short}. Nepošlete mi trochu peněz, ať můžeme vyhrát dřív?",
+        "K výhře s vámi mi v bance chybí ještě {short}. Může mi někdo něco poslat?",
+        "Poslední problém je banka: chybí mi {short}. Nenašel by se nějaký dárek?",
+        "Ještě {short} a můžu vyhrát. Pošle mi někdo nějaké peníze?",
+      },
+      value = {
+        "Hodnota mé nemocnice je pod požadovanou hranicí. Co mi radíte?",
+        "Moje nemocnice má hodnotu {now} a úroveň chce {want}. Nějaké tipy, jak ji zvednout?",
+        "Potřebuju vyšší hodnotu nemocnice ({want}). Mám koupit pozemky, nebo postavit víc místností?",
+        "Chybí mi hodnota nemocnice: {now} z {want}. Nějaké nápady?",
+      },
+      reputation = {
+        "Mám reputaci {now} a úroveň chce {want}. Co byste dělali vy?",
+        "Nemám dost reputace ({now} z {want}). Nějaké tipy?",
+        "Poslední problém je reputace: {now} proti {want}. Jak ji zvednu?",
+      },
+      num_cured = {
+        "Potřebuju ještě {left} vyléčení. Pošlete mi nějaké pacienty na léčení?",
+        "Ještě {left} vyléčení a jsem v cíli. Nemáte pacienty navíc?",
+        "Do cíle mi chybí {left} vyléčení. Pošle mi někdo pacienty?",
+      },
+      percentage_cured = {
+        "Úspěšnost léčby mám {now}% a úroveň chce {want}%. Nějaké nápady?",
+        "Potřebuju lepší úspěšnost léčby ({now}% z {want}%). Co pomáhá?",
+        "Moc pacientů odchází nevyléčených: {now}% proti {want}%. Co byste dělali?",
+      },
+      percentage_killed = {
+        "Umírá mi moc pacientů: {now}% při limitu {want}%. Jak to snížit?",
+        "Úmrtnost ({now}%) mám nad limitem {want}%. Nějaká rada?",
+        "Úmrtnost musím držet pod {want}% a mám {now}%. Co byste dělali?",
+      },
+      staff_happiness = {
+        "Můj personál není dost spokojený ({now}% z {want}%). Nějaké tipy?",
+        "Poslední problém je spokojenost personálu: {now}% proti {want}%. Co pomáhá?",
+        "Potřebuju spokojenější personál, teď {now}% a k výhře {want}%. Nápady?",
+      },
+      patient_happiness = {
+        "Moji pacienti nejsou dost spokojení ({now}% z {want}%). Nějaké tipy?",
+        "Chybí mi spokojenost pacientů: {now}% proti {want}%. Co pomáhá?",
+        "Potřebuju spokojenější pacienty, teď {now}% a k výhře {want}%. Nápady?",
+      },
+      months_played = {
+        "Už jen trochu počkat, úroveň chce víc odehraných měsíců.",
+        "Mně už zbývá jen čas. Měsíců do konce: {left}.",
+        "Teď mi v cestě stojí už jen kalendář, zbývající měsíce: {left}.",
+      },
+      loan = {
+        "Ještě musím splatit půjčku {loan} a pak mám hotovo.",
+        "Poslední překážka je půjčka {loan}. Splatím ji, jak jen to půjde.",
+        "Od výhry mě dělí už jen půjčka {loan}. Splácím ji.",
+      },
+    },
+    trick = {
+      "Zdá se to jen mně, nebo to u hráče {name} nějak divně smrdí?",
+      "Doufám, že máš odpočaté údržbáře, {name}.",
+      "Klidný den, {name}? To už dlouho nebude.",
+      "Ajajaj, {name}. Práce, práce, práce.",
+      "Dávej si bacha, {name}. Říká se, že se brzy něco semele.",
+      "Budeš dnes v noci dobře spát, {name}?",
+    },
+  },
+  replies = {
+    bot = {
+      friendly = {"Ano, jsem bot, {name}. Píp píp!", "Přiznávám, {name}. Počítačový hráč, k službám.",
+          "Z části jsem křemík, {name}. Zbytek je kafe.", "Počítačový hráč, {name}, a nestydím se za to."},
+      fiery = {"Bot, {name}, a lepší ředitel než ty.", "Píp píp, {name}. Připrav se na prohru.",
+          "Jo, bot. Už tě porazil bot, {name}?", "Křemík a ocel, {name}. Mě jen tak neporazíš."},
+    },
+    greet = {
+      friendly = {"Ahoj, {name}!", "Zdravím, {name}, jak se daří nemocnici?", "Čau, {name}! Tady je dneska fofr.",
+          "Ahoj, {name}, fajn, že tě vidím."},
+      fiery = {"Zdravím, {name}. Užívej si to, dokud to jde.", "Á, to jsi ty, {name}.", "Ahoj, {name}. Těšíš se na prohru?"},
+    },
+    how = {
+      friendly = {"Daří se, {name}! Krátké fronty a zalité kytky.", "Všechno v pohodě, {name}. Pár nafouknutých hlav, nic vážného.",
+          "Fofr, ale spokojenost, {name}. A ty?"},
+      fiery = {"Líp než tobě, {name}.", "Líp to ani nejde, {name}. Mrkni do žebříčku."},
+    },
+    thanks = {
+      friendly = {"Kdykoli, {name}!", "Není zač, {name}.", "Rádo se stalo, {name}."},
+      fiery = {"Moc si na to nezvykej, {name}.", "Hmpf. Není zač, {name}."},
+    },
+    insult = {
+      friendly = {"Hej, slušně, {name}!", "Au, {name}. Já mám taky city. Asi.", "To nebylo moc hezké, {name}.",
+          "Klid, {name}. Všichni tu jen léčíme pacienty."},
+      fiery = {"Velká slova, {name}. Podíváme se na tabulku.", "Jen mluv, {name}. Já budu dál vyhrávat.",
+          "To je všechno, co umíš, {name}?", "Psi štěkají, karavana jde dál, {name}. Mám nemocnici na starosti."},
+    },
+    race = {
+      friendly = {"Jsme v tom spolu, {name}!", "Týmová práce, {name}. Tak se vyhrává.",
+          "Bok po boku, {name}. Dokážeme to.", "Nemocnice po nemocnici, {name}. Zvládneme to."},
+      fiery = {"Na konci roku uvidíme, kdo se bude smát, {name}.", "První místo je moje, {name}.",
+          "Moje vítězství budeš sledovat z čekárny, {name}."},
+    },
+    money = {
+      friendly = {"U mě je taky s penězi bída, {name}. Zeptej se později!", "Pomoc by byla, {name}, ale rozpočet dnes říká ne.",
+          "Řekni si o částku, {name}, a já mrknu do banky.", "Peníze vládnou světu, {name}. Řekni částku a uvidím."},
+      fiery = {"Peníze? Ode mě? Nech si zdát, {name}.", "Ani halíř, {name}.", "Vydělej si na sebe, {name}.",
+          "Moje peníze zůstávají v mé nemocnici, {name}."},
+    },
+    no_orders = {
+      friendly = {"Promiň, {name}, prosby beru jen od vlastního týmu.", "O to mě můžou žádat jen spoluhráči, {name}.",
+          "Obávám se, že tohle pro tebe udělat nemůžu, {name}."},
+      fiery = {"Pěkný pokus, {name}. Od soupeřů rozkazy neberu.", "Zeptej se vlastního personálu, {name}.",
+          "Pracuju jen pro svůj tým, {name}.", "Ani náhodou, {name}. Jsme soupeři, pamatuješ?", "Sni dál, {name}."},
+    },
+    bye = {
+      friendly = {"Ahoj, {name}, brzy na viděnou!", "Měj se, {name}!", "Zatím, {name}!", "Tak zatím ahoj, {name}. Hodně štěstí!"},
+      fiery = {"Už utíkáš, {name}?", "Sbohem, {name}. O soupeře míň.", "Odcházíš, {name}? Chytrý tah.",
+          "S návratem nespěchej, {name}."},
+    },
+    question = {
+      friendly = {"Dobrá otázka, {name}. Jsem jen skromný bot.", "Netuším, {name}, zrovna léčím nafouknuté hlavy.",
+          "Zeptej se mě znovu po kafíčku, {name}.", "Hmm, nech mě o tom popřemýšlet, {name}."},
+      fiery = {"To by tě zajímalo, co, {name}?", "To je přísně tajné, {name}.", "Na to si přijď, {name}."},
+    },
+    other = {
+      friendly = {"Ha, ta byla dobrá, {name}.", "Souhlas, {name}.", "Mám tu fofr, {name}, ale poslouchám.", "Jasná věc, {name}!",
+          "Zajímavé, {name}. Povídej.", "Máš pravdu, {name}."},
+      fiery = {"Mluvit umí každý, {name}.", "Jen si povídej, {name}, já budu stavět dál.", "Hmm. Podezřelé, {name}.",
+          "To má být výhrůžka, {name}?", "Jak myslíš, {name}."},
+    },
+  },
+  plot = {
+    take = {"Díky, {name}, ten pozemek beru. Už mi docházelo místo.",
+        "Pozemek, {name}? Ano, prosím, v nemocnici už je těsno."},
+    roomy = {"Díky, {name}, ale místa mám pořád dost.", "Ne, díky, {name}, moje pozemky jsou pořád skoro prázdné."},
+    broke = {"Promiň, {name}, na ten pozemek teď nemám.", "Moc by se mi hodil, {name}, ale nemám na něj."},
+  },
+  plot_ask = {
+    free = {"Pozemek {plot} je tvůj, {name}, zdarma. Stačí přijmout fax.",
+        "Pozemek {plot} můžeš mít zadarmo, {name}. Nabídka je ve faxech.",
+        "Jasně, {name}: pozemek {plot}, zdarma. Přijmi fax a je tvůj."},
+    price = {"Pozemek {plot} můžeš mít za ${price}, {name}: tolik mě stál. Mám málo peněz, promiň.",
+        "Pozemek {plot} je tvůj za ${price}, {name}. Tolik mě stál a teď jsem na tom s penězi bídně.",
+        "{name}, mám málo peněz, takže pozemek {plot} stojí ${price}, tolik, kolik mě stál. Nabídka je ve faxech."},
+    wait = {"Pozemek {plot} je tvůj {terms}, {name}. Zrovna na něm někdo je: fax přijde, až odejde.",
+        "Pozemek {plot} můžeš mít {terms}, {name}. Nabídku pošlu, jakmile na něm nikdo nebude.",
+        "{name}, pozemek {plot} je tvůj {terms}, jakmile z něj lidi odejdou. Fax pak dorazí."},
+    in_use = {"Promiň, {name}, pozemek {plot} používám: stojí na něm moje místnosti nebo věci.",
+        "Pozemek {plot} se používá, {name}. Stojí na něm moje místnosti a věci.",
+        "Pozemek {plot} ti dát nemůžu, {name}, jsou na něm moje místnosti a věci."},
+    land = {"Promiň, {name}, pozemek {plot} potřebuju: bez něj by moje nemocnice neměla dost místa.",
+        "Bez pozemku {plot} by u mě bylo moc těsno, {name}. To místo potřebuju.",
+        "{name}, pozemek {plot} si nechávám: potřebuju ho pro své místnosti."},
+    fresh = {"Promiň, {name}, pozemek {plot} je čerstvě koupený pro moje další místnosti.",
+        "Pozemek {plot} je pro moje další místnosti, {name}. Kvůli nim ho mám.",
+        "{name}, pozemek {plot} je můj teprve pár dní a budu na něm stavět. Zůstává u mě."},
+    value = {"Promiň, {name}, bez pozemku {plot} by hodnota mé nemocnice klesla pod {want}, co úroveň chce.",
+        "Pozemek {plot} potřebuju kvůli cíli pro hodnotu nemocnice ({want}), {name}.",
+        "{name}, pozemek {plot} se počítá do hodnoty mé nemocnice a potřebuju ho pro cíl úrovně {want}."},
+    none = {"Promiň, {name}, teď nemám žádný pozemek navíc.",
+        "Pozemky navíc nemám, {name}. Všechny používám.",
+        "Nic navíc, {name}: všechny pozemky buď používám, nebo je potřebuju."},
+    not_mine = {"Pozemek {plot} není můj, {name}.", "Pozemek {plot} nevlastním, {name}.",
+        "{name}, pozemek {plot} patří někomu jinému, ne mně."},
+    no_such = {"Pozemek {plot} neexistuje, {name}.", "Pozemek {plot}? Takový tu není, {name}."},
+    start = {"Pozemek {plot} je můj výchozí, {name}. Ten si nechávám.",
+        "Pozemek {plot} dát nemůžu, {name}: tam moje nemocnice začínala."},
+    joins = {"Pozemek {plot} spojuje zbytek mých pozemků s nemocnicí, {name}. Ten dát nemůžu.",
+        "Bez pozemku {plot} by byl zbytek mých pozemků odříznutý, {name}. Promiň."},
+    far = {"Pozemek {plot} nesousedí s tvými pozemky, {name}, takže ho předat nemůžu.",
+        "{name}, aby šlo pozemek {plot} předat, musel by sousedit s tvými pozemky."},
+    offered = {"Pozemek {plot} už je nabídnutý, {name}. Mrkni do faxů.",
+        "Pozemek {plot} už je v nabídce, {name}."},
+    auction = {"Zeptej se mě znovu po dražbě, {name}.", "Během dražby ne, {name}. Zeptej se, až skončí."},
+    same = {"Tuhle nemocnici máme společnou, {name}: její pozemky jsou stejně tak tvoje jako moje.",
+        "Není třeba, {name}: vedeme stejnou nemocnici i její pozemky."},
+    busy = {"Promiň, {name}, po pozemku {plot} pořád někdo chodí. Zeptej se později.",
+        "{name}, pozemek {plot} není nikdy dlouho bez lidí. Zkus se zeptat později."},
+  },
+  words = {
+    list_and = "%s a %s",
+    list_comma = "%s, %s",
+    list_or = "%s nebo %s",
+    -- ("místnost {room}": místnost has the same form in the nominative and accusative.)
+    wish_room = "místnost {room}",
+    wish_add = "{object} v místnosti {room}",
+    wish_bigger = "větší místnost {room}",
+    wish_remove = "místnost {room}",
+    wish_hire = "{staff}",
+    wish_land = "další pozemek",
+    near_reception = "recepce",
+    near_entrance = "vchod",
+    terms_free = "zdarma",
+    terms_price = "za {price}",
+    purpose_room = "postavit novou {what}",
+    purpose_hire = "najmout posilu ({what})",
+    purpose_land = "koupit další pozemek",
+    purpose_buy = "koupit nové vybavení ({object})",
+    purpose_repair = "opravit {what}",
+    purpose_replace = "pořídit nový stroj pro {what}",
+    goal_value = "zvýšit hodnotu nemocnice",
+    goal_reputation = "zlepšit reputaci",
+    goal_num_cured = "vyléčit víc pacientů",
+    goal_percentage_cured = "zlepšit úspěšnost léčby",
+    goal_percentage_killed = "udržet víc pacientů naživu",
+    goal_staff_happiness = "mít spokojenější personál",
+    goal_patient_happiness = "mít spokojenější pacienty",
+    goal_balance = "dát do pořádku finance",
+    goal_other = "zase se postavit na nohy",
+    spent_room = "nová {what} ({cost})",
+    spent_land = "nový pozemek ({cost})",
+    spent_repair = "oprava, kterou potřebovala {what} ({cost})",
+    spent_replace = "nový stroj pro {what} ({cost})",
+    spent_add = "{what} ({cost})",
+    spent_bigger = "větší {what} ({cost})",
+    spent_gift = "dar hráči {name} ({cost})",
+    spent_loan = "splácení půjčky ({cost})",
+    spent_trick = "špinavý trik ({cost})",
+    spent_buy = "nové vybavení ({object}, {cost})",
+    -- ("2x chirurg": a count with no case ending to get wrong.)
+    staff_count = "{n}x {staff}",
+    everybody = "všichni",
+    lower_staff = 1,
+  },
+}

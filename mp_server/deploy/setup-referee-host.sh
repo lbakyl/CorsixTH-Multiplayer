@@ -32,6 +32,13 @@
 # Without it nothing is posted. --name names this server in the report
 # (default: the host's name; kept from the last run).
 #
+# A line in the team's #development channel when a new release lands here
+# ("A new release, mp-test-..., is now on server eu2 ... Details: <link>",
+# the link to the release's post in the releases channel, else to GitHub):
+# put that channel's webhook into the secrets file as
+#   DISCORD_DEV_WEBHOOK_URL=https://discord.com/api/webhooks/...
+# Posted only when the release differs from the one this server ran before.
+#
 # Bots that learn from expert players (corsixth_mp/learn.py): --experts lists
 # their player names (kept from the last run; --experts none: nobody). While
 # one of them plays, the referee saves the game at every year's end and at
@@ -125,8 +132,9 @@ mv "$R/CorsixTH-Multiplayer" "$R/game"
 ln -s game "$R/CorsixTH" # referee.lua loads <source>/CorsixTH/CorsixTH.lua
 # The referee, and the bots (computer players) a room owner adds, if this
 # release has them, and what the bots learn with (bot_learned.lua; the
-# nightly learning reads saves with layout_dump.lua and layout_learn.py).
-for f in referee.lua probe_builder.lua bot.lua bot_manager.lua bot_learned.lua layout_dump.lua layout_learn.py; do
+# nightly learning reads saves with layout_dump.lua and layout_learn.py; what
+# they say comes through bot_chat.lua).
+for f in referee.lua probe_builder.lua bot.lua bot_manager.lua bot_learned.lua bot_chat.lua layout_dump.lua layout_learn.py; do
   if [[ -f "$BASE/src/scripts/multiplayer/$f" ]]; then cp "$BASE/src/scripts/multiplayer/$f" "$R/scripts/multiplayer/"; fi
 done
 chown -R root:corsixth "$BASE/referee" "$BASE/src" && chmod -R g+rX,o= "$BASE/referee"
@@ -159,6 +167,8 @@ fi
 chown -R root:corsixth "$P" && chmod -R g+rX,o= "$P"
 
 say "Settings (/etc/corsixth-mp.env) and the service"
+# (The release this server ran until now: a new one is announced at the end.)
+OLD_RELEASE=$( (sed -n 's/^CORSIXTH_MP_RELEASE=//p' /etc/corsixth-mp.env 2>/dev/null || true) | head -1)
 if [[ -z "$NAME" && -f /etc/corsixth-mp.env ]]; then
   NAME=$(sed -n 's/^CORSIXTH_MP_SERVER_NAME=//p' /etc/corsixth-mp.env)
 fi
@@ -309,6 +319,41 @@ PY
 # Old referee builds are not needed any more.
 find "$BASE/referee" -mindepth 1 -maxdepth 1 -type d ! -name "$SHA" -exec rm -rf {} +
 say "Done: the server runs $RELEASE with the referee on port $PORT"
+# One line in #development when the release changed (DISCORD_DEV_WEBHOOK_URL
+# in the secrets; the address is never printed).
+DEV_HOOK=$( (sed -n 's/^DISCORD_DEV_WEBHOOK_URL=//p' /etc/corsixth-mp-secrets.env 2>/dev/null || true) | head -1)
+if [[ -n "$DEV_HOOK" && "$RELEASE" != "$OLD_RELEASE" ]]; then
+  where=${NAME:-$(hostname)}
+  [[ "$where" =~ ^[a-z]{2,4}[0-9]+$ ]] && where="$where ($where.openth.org)"
+  DEV_HOOK=$DEV_HOOK python3 - "$RELEASE" "$where" <<'PY' || echo "   (the #development line could not be posted)"
+import calendar, json, os, re, sys, time, urllib.request
+release, where = sys.argv[1], sys.argv[2]
+# The release's own post in the releases channel, if its poster
+# (corsixth_mp/release_post.py) left its address in the notes; a release
+# published a moment ago may not have it yet. Else the release's page.
+link = f"https://github.com/openth-org/openth/releases/tag/{release}"
+for attempt in range(8):
+    try:
+        req = urllib.request.Request(f"https://api.github.com/repos/openth-org/openth/releases/tags/{release}",
+                                     headers={"User-Agent": "openth-deploy"})
+        rel = json.load(urllib.request.urlopen(req, timeout=15))
+    except OSError:
+        break
+    m = re.search(r"<!-- discord-post: (https://discord\.com/channels/\d+/\d+/\d+) -->", rel.get("body") or "")
+    if m:
+        link = m.group(1)
+        break
+    published = calendar.timegm(time.strptime(rel.get("published_at") or "1970-01-01T00:00:00Z", "%Y-%m-%dT%H:%M:%SZ"))
+    if time.time() - published > 900 or attempt == 7:
+        break
+    time.sleep(15)
+text = f"A new release, **{release}**, is now on server {where}. Details: <{link}>"
+req = urllib.request.Request(os.environ["DEV_HOOK"], data=json.dumps({"content": text}).encode(),
+                             headers={"Content-Type": "application/json", "User-Agent": "openth-deploy"})
+urllib.request.urlopen(req, timeout=15).read()
+print("   Posted in #development: " + text)
+PY
+fi
 echo "   Logs: journalctl -u corsixth-mp -f; referee logs in /var/lib/corsixth/referee-work"
 if [[ -n "$EXPERTS" ]]; then
   echo "   Bots learn from: $EXPERTS (saves in /var/lib/corsixth/learn; journalctl -u corsixth-mp-learn)"
