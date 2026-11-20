@@ -235,8 +235,9 @@ end
 local function shot(what, keep_info)
   if not shot_dir or shots_taken[what] then return end
   shots_taken[what] = true
-  -- In the game, close information popups so the map is visible.
-  if TheApp.world and not keep_info then
+  -- Close information popups so the map (or the main menu, under a test
+  -- machine's warning about missing movies) is visible.
+  if not keep_info then
     for i = #TheApp.ui.windows, 1, -1 do
       local win = TheApp.ui.windows[i]
       if class.is(win, UIInformation) then win:close() end

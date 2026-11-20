@@ -61,6 +61,15 @@ local list = {
   {"add_assistant", S.add_assistant, 374},
   {"add_assistant_for", S.add_assistant_for:format("MATROFTT"), 374},
   {"remove_assistant", S.remove_assistant, 374},
+  -- The connect view's server buttons (two to a row; EU2 alone on the
+  -- second row has the whole row) and Discord button.
+  {"server_eu1", S.server_eu1, 113},
+  {"server_us1", S.server_us1, 113},
+  {"server_eu2", S.server_eu2, 241},
+  {"discord", S.discord, 126},
+  -- The main menu's last row: Discord (56 wide) and Exit (96).
+  {"main_menu.discord", _S.main_menu.discord, 52},
+  {"main_menu.exit", _S.main_menu.exit, 92},
 }
 
 local font = TheApp.gfx:loadFontAndSpriteTable("QData", "Font01V", nil, nil, {ttf_shadow = true, apply_ui_scale = true})

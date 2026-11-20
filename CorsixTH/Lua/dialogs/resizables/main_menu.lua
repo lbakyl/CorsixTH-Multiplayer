@@ -96,8 +96,16 @@ function UIMainMenu:UIMainMenu(ui)
   self.default_button_sound = "selectx.wav"
 
   local next_y = 20
-  for _, item in ipairs(menu_items) do
-    next_y = self:addMenuItem(item[1], item[2], item[3], next_y)
+  for i, item in ipairs(menu_items) do
+    if i == #menu_items then
+      -- The last row: OpenTH's Discord next to Exit (a tenth row would not
+      -- fit a 640x480 screen).
+      self:addMenuItem(_S.main_menu.discord, self.buttonDiscord, _S.tooltip.main_menu.discord,
+          next_y, 20, 56, UIMainMenu.DISCORD_COLOUR)
+      next_y = self:addMenuItem(item[1], item[2], item[3], next_y, 84, 96)
+    else
+      next_y = self:addMenuItem(item[1], item[2], item[3], next_y)
+    end
   end
 end
 
@@ -106,11 +114,15 @@ end
 --!param callback (function) Function to call when the user clicks the button.
 --!param tooltip (string) Text to show when the player hovers over the button.
 --!param y_pos (integer) Y-position from where to add the menu item.
+--!param x (integer) Optional x-position (default 20, the full row).
+--!param w (integer) Optional width (default 160, the full row).
+--!param colour (table) Optional background colour (default the menu's).
 --!return (integer) Y-position below which more items can be added.
 --        This function has added a menu item between y_pos and the return value.
-function UIMainMenu:addMenuItem(label, callback, tooltip, y_pos)
-  self:addBevelPanel(20, y_pos, 160, menu_item_height, col_bg)
-      :setLabel(label):makeButton(0, 0, 160, menu_item_height, nil, callback)
+function UIMainMenu:addMenuItem(label, callback, tooltip, y_pos, x, w, colour)
+  x, w = x or 20, w or 160
+  self:addBevelPanel(x, y_pos, w, menu_item_height, colour or col_bg)
+      :setLabel(label):makeButton(0, 0, w, menu_item_height, nil, callback)
       :setTooltip(tooltip)
   return y_pos + menu_item_height + menu_item_spacing
 end
@@ -169,6 +181,16 @@ function UIMainMenu:buttonCustomGame()
     local window = UICustomGame(self.ui)
     self.ui:addWindow(window)
   end
+end
+
+--! OpenTH's Discord server, opened in the web browser (from the main menu
+--! and the multiplayer window).
+UIMainMenu.DISCORD_URL = "https://openth.org/discord"
+--! Discord's own blue, so the button is found at a glance.
+UIMainMenu.DISCORD_COLOUR = {red = 88, green = 101, blue = 242}
+
+function UIMainMenu:buttonDiscord()
+  openURL(UIMainMenu.DISCORD_URL)
 end
 
 function UIMainMenu:buttonMultiplayer()
