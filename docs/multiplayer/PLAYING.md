@@ -1,4 +1,4 @@
-# Playing CorsixTH multiplayer (test version)
+# Playing CorsixTH multiplayer
 
 This fork adds network multiplayer to CorsixTH: two to eight players run one
 game together over the internet, either in **one shared hospital**, in
