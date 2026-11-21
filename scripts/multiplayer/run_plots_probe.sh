@@ -23,6 +23,12 @@
 #      third gift in the month is refused ("monthly limit"), and the next
 #      month she may give again; the points moved are the same in both games
 #   6. both games IN SYNC to the end (and the referee agrees with MP_REFEREE=1)
+#   7. a plot with a room on it (Argus, 2026-11-21): ula buys the plot again,
+#      builds a GP's office and a bench on it and hires a doctor (who goes in);
+#      she hands the plot to vic for free; when vic accepts, the room closes
+#      and the plot changes hands once it is empty (at once if nobody is in
+#      it): the room and the bench are sold to ula, the plot is vic's, the
+#      same in both games
 # With MP_SHOT_DIR the games save screenshots of the town map, the questions
 # and the trade window there.
 # Exits 0 only if all checks behave as expected.
@@ -92,10 +98,10 @@ EOF
 
 pids=()
 run_probe ula MP_ROLE=host MP_ROOM=plots MP_COOP=1 MP_LEVEL=2 MP_STEPS=1700 MP_OPTIONS="auctions=0 tricks=2" \
-  MP_UI_SCRIPT="20:openhospital;50:plotbuy:plot:7;90:plotshot;110:plotsell;130:plotstate;150:plotbuy:again;170:plotbench;200:plotsell;205:plotsell:force;230:plotclear;260:plotgive:2:2500;340:plotgive:2:2500;420:plotstate;450:giverep:100;470:giverep:100;490:giverep:50;500:repstate;1580:giverep:30;1590:repstate;1650:plotstate" & pids+=($!)
+  MP_UI_SCRIPT="20:openhospital;50:plotbuy:plot:7;90:plotshot;110:plotsell;130:plotstate;150:plotbuy:again;170:plotbench;200:plotsell;205:plotsell:force;230:plotclear;260:plotgive:2:2500;340:plotgive:2:2500;420:plotstate;450:giverep:100;470:giverep:100;490:giverep:50;500:repstate;700:plotbuy:again;720:plotroom:gp:4:4;780:plotbench;800:hire:Doctor;1000:plotrooms;1010:plotgive:2:0;1070:plotrooms;1200:plotrooms;1580:giverep:30;1590:repstate;1650:plotstate" & pids+=($!)
 sleep 1
 run_probe vic MP_ROLE=join MP_ROOM=plots MP_STEPS=1700 \
-  MP_UI_SCRIPT="30:openhospital;70:plotbuy:plot:8;300:answerplot:decline;380:answerplot:accept;420:plotstate;600:plotsell;640:plotstate" & pids+=($!)
+  MP_UI_SCRIPT="30:openhospital;70:plotbuy:plot:8;300:answerplot:decline;380:answerplot:accept;420:plotstate;600:plotsell;640:plotstate;1060:answerplot:accept;1220:plotstate" & pids+=($!)
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 python3 - "$out" "${MP_REFEREE:-0}" <<'PY'
@@ -166,6 +172,27 @@ ok4 = (len([x for x in offers if x.endswith('-> ok (plot %s for $2500)' % plot)]
 print(f"4. Handed over:             {offers}; declined first: {bool(declined)}; accepted: {bool(handed)}; vic after: {vic_state}; "
       f"vic sold it back: {vic_sells}")
 fail |= not ok4
+
+# 7. A plot with a room and a bench on it, in use, handed over
+rooms7 = {n: re.findall(r'UI: rooms on plot \d+ at step (\d+): (.*)', log(n)) for n in ('ula',)}
+built7 = re.search(r'UI: gp on plot \d+ at (\d+),(\d+)', ula)
+ula_rooms = rooms7['ula']
+before7 = ula_rooms[0][1] if ula_rooms else ''
+after7 = ula_rooms[-1][1] if ula_rooms else ''
+done7 = [re.findall(r'plot %s handed to hospital 2: (\d+) rooms and (\d+) objects sold for \$(\d+)' % plot, log(n))
+         for n in ('ula', 'vic')]
+closing7 = re.search(r'offer of plot %s to hospital 2: accepted; its rooms are closing' % plot, ula) is not None
+vic_after = owners['vic'][-1] if owners['vic'] else None
+last7 = done7[0][-1] if done7[0] else ('0', '0', '0') # (check 4's empty plot came first)
+# (Whether the room is in use when vic accepts depends on where the doctor
+# is: it closes first and is sold once empty, or is sold at once.)
+ok7 = (built7 is not None and before7.startswith('gp#') and after7 == 'none'
+       and done7[0] == done7[1] and last7[0] == '1' and int(last7[1]) >= 1 and int(last7[2]) > 0
+       and vic_after is not None and vic_after[1] == '2' and plot in vic_after[5].split(',')
+       and applied('ula', 'offer_plot') == applied('vic', 'offer_plot'))
+print(f"7. Plot with a room:        built at {built7.groups() if built7 else '-'}; rooms {ula_rooms}; closing first: {closing7}; "
+      f"sold (rooms, objects, $) {done7}; vic after: {vic_after}")
+fail |= not ok7
 
 # 5. Reputation
 gifts = applied('ula', 'give_reputation')

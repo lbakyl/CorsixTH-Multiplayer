@@ -63,9 +63,14 @@ function UIMultiplayerGivePlot:UIMultiplayerGivePlot(ui, plot)
   self.target = self.allies[1]
   self.price = 0
   local rows = math.max(1, #self.allies)
+  -- Rooms and corridor objects on the plot are sold when it changes hands
+  -- (Argus, 2026-11-21): a line says how many.
+  local rooms = #MultiplayerSession.plotRooms(world, plot)
+  local objects = #MultiplayerSession.plotCorridorObjects(world, plot)
+  local sold = rooms + objects > 0
   -- (No row kept for messages: they show in the "To which ally" line. An
   -- empty row sat there before: Jan, 2026-11-08.)
-  local height = 40 + 26 + rows * 25 + 10 + 34 + 10 + 30 + 15
+  local height = 40 + 26 + rows * 25 + 10 + 34 + 10 + 30 + 15 + (sold and 26 or 0)
   self:UIResizable(ui, WIDTH, height, col.bg)
   self.esc_closes = true
   self.resizable = false
@@ -90,6 +95,11 @@ function UIMultiplayerGivePlot:UIMultiplayerGivePlot(ui, plot)
     self.rows[i]:setToggleState(ally == self.target)
   end
   y = y + rows * 25 + 10
+  if sold then
+    self:addBevelPanel(20, y, WIDTH - 40, 20, col.caption)
+        :setLabel(S.plot_give_sold_line:format(rooms, objects)).lowered = true
+    y = y + 26
+  end
   self.price_panel = self:addBevelPanel(20, y, 100, 28, col.caption)
   self.price_panel.lowered = true
   local steps = {-5000, -500, 500, 5000}
@@ -142,7 +152,7 @@ end
 function UIMultiplayerGivePlot:give()
   local session = TheApp.mp_session
   if not session or not self.target then return end
-  local why = MultiplayerSession.plotRefusal(self.world, self.hospital, self.plot, nil, true) or
+  local why = MultiplayerSession.plotGiveRefusal(self.world, self.hospital, self.plot) or
       MultiplayerSession.plotHandoverRefusal(self.world, self.target, self.plot)
   if why then
     local texts = MultiplayerSession.rejection_texts.offer_plot
@@ -161,7 +171,7 @@ end
 --! over now (it is not empty, ...).
 function UIMultiplayerGivePlot.open(ui, plot)
   local world = ui.app.world
-  local why = MultiplayerSession.plotRefusal(world, ui.hospital, plot, nil, true)
+  local why = MultiplayerSession.plotGiveRefusal(world, ui.hospital, plot)
   if why then
     local texts = MultiplayerSession.rejection_texts.offer_plot
     ui:addWindow(UIInformation(ui, {texts[why] or ("That plot cannot be handed over now (" .. why .. ").")}))

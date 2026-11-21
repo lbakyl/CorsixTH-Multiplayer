@@ -1646,6 +1646,8 @@ function World:onEndDay()
   if self.map.level_config.mp_events then corsixth.require("mp_levels").onEndDay(self) end
   -- Competitive: poached doctors kept on the hiring list, smear campaigns.
   if self.mp_coop and self.mp_coop.competitive then MultiplayerSession.sabotage.daily(self) end
+  -- Plots handed to another player once their rooms are empty.
+  if self.mp_plot_handovers then MultiplayerSession.finishPlotHandovers(self) end
 
   -- Maybe it's time for an emergency?
   if self.game_date:monthOfGame() == self.next_emergency_month and

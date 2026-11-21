@@ -67,6 +67,9 @@ local list = {
   {"server_us1", S.server_us1, 113},
   {"server_eu2", S.server_eu2, 241},
   {"discord", S.discord, 126},
+  -- The plot hand-over window (multiplayer_plot.lua, WIDTH 380): what is
+  -- sold with the plot.
+  {"plot_give_sold_line", S.plot_give_sold_line:format(12, 34), 334},
   -- The main menu's last row: Discord (56 wide) and Exit (96).
   {"main_menu.discord", _S.main_menu.discord, 52},
   {"main_menu.exit", _S.main_menu.exit, 92},

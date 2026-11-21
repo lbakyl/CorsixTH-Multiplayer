@@ -338,6 +338,16 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
   Short of money? Under the bars your balance and loan are shown: **+**
   borrows $5,000 from the bank (up to the bank's limit), **-** pays $5,000
   back, without leaving the auction.
+- **Selling or handing over a plot:** on the town map each plot you bought
+  has a red X (sell it back to the bank for 80% of its price; only when it
+  is empty) and a blue arrow (hand it to an ally, as a gift or for up to
+  $50,000). A plot with rooms or corridor objects on it can be handed over:
+  the window says how many, and the ally's fax says they come empty. When
+  the ally accepts, the price is paid, the rooms close (the people in them
+  leave, as for an edit), and once nobody is inside the rooms and objects
+  are sold to you (half a room's price back, as when you delete it; objects
+  at their price) and the plot is the ally's. A plot with a room still
+  being built or changed, or a destroyed room, cannot be handed over yet.
 - **Sharing research:** **Share research** on the research
   blackboard (left of the total), or **MULTIPLAYER**, **SHARE RESEARCH**
   (no research room needed). Pick what to share (equipment you have found,

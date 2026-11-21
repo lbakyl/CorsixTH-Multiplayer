@@ -30,7 +30,7 @@ local handlers = MultiplayerSession.default_handlers
 local function with_texts(fn)
   local old_S = rawget(_G, "_S")
   rawset(_G, "_S", {multiplayer_window = setmetatable({}, {__index = function() return "%s" end}),
-      transactions = {bank_loan = "loan"}})
+      transactions = {bank_loan = "loan", sell_object = "sold"}})
   local ok, err = pcall(fn)
   rawset(_G, "_S", old_S)
   if not ok then error(err, 0) end
@@ -372,9 +372,10 @@ describe("Handing a plot to an ally", function()
     end)
   end)
 
-  it("checks price, ally, starting plot and emptiness", function()
+  it("checks price, ally, starting plot and its rooms", function()
     with_texts(function()
-      local world = make({objects = {[5] = {{object_type = {id = "bench"}}}}})
+      -- (A room still being built on plot 4: tiles 5 and 6.)
+      local world = make({rooms = {[7] = {id = 7, x = 5, y = 1, width = 1, height = 1, built = false}}})
       local function why_not(cmd)
         local ok, why = handlers.offer_plot(world, cmd)
         assert.is_false(ok)
@@ -384,7 +385,10 @@ describe("Handing a plot to an ally", function()
       assert.equal("invalid price", why_not({hospital = 1, to = 2, plot = 4, price = -1}))
       assert.equal("no such hospital", why_not({hospital = 1, to = 1, plot = 4, price = 0}))
       assert.equal("starting plot", why_not({hospital = 1, to = 2, plot = 1, price = 0}))
-      assert.equal("plot not empty", why_not({hospital = 1, to = 2, plot = 4, price = 0}))
+      assert.equal("a room being built", why_not({hospital = 1, to = 2, plot = 4, price = 0}))
+      world.rooms[7].built, world.rooms[7].crashed = true, true
+      assert.equal("a destroyed room", why_not({hospital = 1, to = 2, plot = 4, price = 0}))
+      world.rooms[7].crashed = false
       world.mpRivals = function() return true end
       assert.equal("not on your team", why_not({hospital = 1, to = 2, plot = 4, price = 0}))
     end)
@@ -430,13 +434,49 @@ describe("Handing a plot to an ally", function()
     end)
   end)
 
-  it("is void when the plot is no longer empty", function()
+  it("sells the corridor objects on it to the giver (Argus, 2026-11-21)", function()
     with_texts(function()
-      local extra = {}
-      local world, _, owner, queued = make(extra)
+      local bench = {object_type = {id = "bench", name = "Bench", corridor_object = true, class = "Object"},
+          tile_x = 5, tile_y = 1, mp_id = 9}
+      function bench.getRoom() return nil end
+      function bench.onPickUp() end
+      local world, hospitals, owner, queued = make({objects = {[5] = {bench}}})
+      hospitals[1].ownedPlots = {1, 3, 4}
+      hospitals[1].getObjectBuildCost = function() return 40 end
+      local destroyed = {}
+      function world.destroyEntity(_, e) destroyed[#destroyed + 1] = e end
+      function world.resetSideObjects() end
       assert.is_true(handlers.offer_plot(world, {hospital = 1, to = 2, plot = 4}))
-      extra.objects = {[5] = {{object_type = {id = "bench"}}}}
       MultiplayerSession.resolveOffer(world, queued[1].message.mp_offer, true)
+      assert.equal(2, owner[4])
+      assert.same({bench}, destroyed)
+      assert.equal(40, hospitals[1].balance)
+    end)
+  end)
+
+  it("waits until nobody is in its rooms, and the plot is not for sale meanwhile", function()
+    with_texts(function()
+      local edits = 0
+      local room = {id = 7, x = 5, y = 1, width = 1, height = 1, built = true, is_active = true,
+          humanoids = {[{}] = true}, door = {}, room_info = {id = "gp"}}
+      function room.tryToEdit(r) edits = edits + 1; r.is_active = false end
+      local world, hospitals, owner, queued = make({rooms = {[7] = room}})
+      hospitals[1].ownedPlots = {1, 3, 4}
+      hospitals[2].balance = 4000
+      assert.is_true(handlers.offer_plot(world, {hospital = 1, to = 2, plot = 4, price = 1000}))
+      MultiplayerSession.resolveOffer(world, queued[1].message.mp_offer, true)
+      -- The price is paid, the room closes, the plot is still the giver's.
+      assert.equal(1, edits)
+      assert.equal(3000, hospitals[2].balance)
+      assert.equal(1, owner[4])
+      assert.equal(4, room.mp_handover)
+      assert.is_not_nil(world.mp_plot_handovers[4])
+      assert.equal("being handed over", MultiplayerSession.plotRefusal(world, hospitals[1], 4))
+      local ok, why = handlers.offer_plot(world, {hospital = 1, to = 2, plot = 4})
+      assert.is_false(ok)
+      assert.equal("being handed over", why)
+      -- Nobody left yet: the day's check changes nothing.
+      MultiplayerSession.finishPlotHandovers(world)
       assert.equal(1, owner[4])
     end)
   end)
