@@ -1032,7 +1032,8 @@ function UIMultiplayer:sideMenu(i)
 end
 
 --! A place in the room's player list was clicked: the host adds a bot to an
---! empty place or takes a bot away.
+--! empty place or takes a bot away. (The server knows players by their peer
+--! number, not by their line: assistants have one but no line of their own.)
 function UIMultiplayer:clickPlace(i)
   local lobby = self.lobby
   local p = self:rowPlayer(i)
@@ -1049,7 +1050,7 @@ function UIMultiplayer:clickPlace(i)
   end
   if not lobby:canAddBots() then return end
   if p and p.bot == "1" then
-    lobby:removeBot(i)
+    lobby:removeBot(p.peer)
   elseif not p and self.add_lines and self.add_lines[i] then
     lobby:addBot()
   end
@@ -1153,7 +1154,7 @@ function UIMultiplayer:clickColour(i)
   if p.peer == lobby.room.peer then
     lobby:setSeat(colour, nil)
   elseif lobby:isOwner() then
-    lobby:setSeat(colour, nil, i)
+    lobby:setSeat(colour, nil, p.peer)
   end
 end
 
@@ -1167,7 +1168,7 @@ function UIMultiplayer:clickTeam(i)
   if p.peer == lobby.room.peer then
     lobby:setSeat(nil, team)
   elseif lobby:isOwner() then
-    lobby:setSeat(nil, team, i)
+    lobby:setSeat(nil, team, p.peer)
   end
 end
 
