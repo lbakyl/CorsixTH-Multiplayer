@@ -3281,6 +3281,11 @@ function Bot:playTrick()
   local world = self.world
   if world.mp_coop and world.mp_coop.tricks_off then return false end -- (switched off in this game)
   if self.standin then return false end -- (not in a person's name)
+  -- (Nor in a hospital it shares with a person still in the game, also while
+  -- they give no orders for a while: the person plays the tricks. Jan,
+  -- 2026-11-21: his assistant bought a litter bomb on a rival while he only
+  -- watched.)
+  if #self:hospitalMates() > 0 then return false end
   local mine = world.ui.hospital
   -- (Not while it owes the bank: Jan, 2026-11-14.)
   if (mine.loan or 0) > 0 then
