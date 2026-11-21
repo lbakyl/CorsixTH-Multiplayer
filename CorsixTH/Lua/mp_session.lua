@@ -502,14 +502,26 @@ function MultiplayerSession.saveTogether(name)
 end
 
 --! File > Save (or its key) in a multiplayer game: a box for the save's name,
---! the level's name to start with, then MultiplayerSession.saveTogether.
---! False outside multiplayer.
+--! the level's name and the game date to start with ("MOUNT EVEREST
+--! y1-m07-d16", Jan), then MultiplayerSession.saveTogether. False outside
+--! multiplayer.
 function MultiplayerSession.openSave(ui)
   if not (TheApp and TheApp.mp_session) then return false end
   local world = TheApp.world
   local level = world and world.map and world.map.level_name
-  ui:addWindow(UIMultiplayerSave(ui, level and tostring(level) or ""))
+  ui:addWindow(UIMultiplayerSave(ui, MultiplayerSession.saveStartName(level and tostring(level) or "",
+      world and world.game_date)))
   return true
+end
+
+--! The name the save box starts with: the level's name and the game date,
+--! the name shortened so that both fit the box (30 characters).
+function MultiplayerSession.saveStartName(level, date)
+  if not date then return level end
+  local when = MultiplayerLobby.saveDate(date:year(), date:monthOfYear(), date:dayOfMonth())
+  level = level:sub(1, 30 - #when - 1):gsub("%s+$", "")
+  if level == "" then return when end
+  return level .. " " .. when
 end
 
 --! Is a player action now to be sent as a command (rather than done here)?

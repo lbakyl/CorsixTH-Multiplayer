@@ -579,15 +579,24 @@ function MultiplayerLobby.fileSafe(text, limit)
   return s
 end
 
+--! The game date as save names write it: "y3-m12-d21".
+function MultiplayerLobby.saveDate(year, month, day)
+  return string.format("y%d-m%02d-d%02d", year, month, day)
+end
+
 --! A multiplayer save's file name (without .sav): the name the saving
---! player gave it (the level's name unless changed), the player and the
---! game date, e.g. "TEAM TOWN Jan y3-m12-d21".
+--! player gave it (the level's name and the date unless changed), the
+--! player and the game date, e.g. "TEAM TOWN Jan y3-m12-d21". The date the
+--! save box starts with is not written twice.
 function MultiplayerLobby.saveLabel(name, by, year, month, day)
+  local date = MultiplayerLobby.saveDate(year, month, day)
+  local own = tostring(name or ""):match("^%s*(.-)%s*$")
+  if own:sub(-#date) == date then own = own:sub(1, -#date - 1) end
   local parts = {}
-  for _, part in ipairs({MultiplayerLobby.fileSafe(name, 40), MultiplayerLobby.fileSafe(by, 20)}) do
+  for _, part in ipairs({MultiplayerLobby.fileSafe(own, 40), MultiplayerLobby.fileSafe(by, 20)}) do
     if part ~= "" then parts[#parts + 1] = part end
   end
-  parts[#parts + 1] = string.format("y%d-m%02d-d%02d", year, month, day)
+  parts[#parts + 1] = date
   return table.concat(parts, " ")
 end
 

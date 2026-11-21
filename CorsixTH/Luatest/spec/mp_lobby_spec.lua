@@ -92,6 +92,12 @@ describe("MultiplayerLobby", function()
     assert.equal("ab-b_c", MultiplayerLobby.fileSafe('a/b\\-b_c<>|*"'))
     assert.equal("y4-m06-d01", MultiplayerLobby.saveLabel("医院", nil, 4, 6, 1))
     assert.equal("CROSSROADS y4-m06-d01", MultiplayerLobby.saveLabel("CROSSROADS", "", 4, 6, 1))
+    -- The date the save box starts with is not written twice (Jan, 2026-11-21);
+    -- another date typed into the name stays.
+    assert.equal("MOUNT EVEREST Jan y1-m07-d16",
+        MultiplayerLobby.saveLabel("MOUNT EVEREST y1-m07-d16", "Jan", 1, 7, 16))
+    assert.equal("MOUNT EVEREST y1-m07-d15 Jan y1-m07-d16",
+        MultiplayerLobby.saveLabel("MOUNT EVEREST y1-m07-d15", "Jan", 1, 7, 16))
     -- At most 40 letters of the name, 20 of the player.
     local long = MultiplayerLobby.saveLabel(string.rep("x", 60), string.rep("p", 30), 1, 1, 1)
     assert.equal(string.rep("x", 40) .. " " .. string.rep("p", 20) .. " y1-m01-d01", long)
