@@ -853,3 +853,31 @@ do
   eq(M.nurseSlack(8), 2, "8 nurse places, 2 spare")
 end
 print("spare doctors ok")
+
+-- An assistant's loan (Argus and Jan, 2026-11-21): in a month's last days,
+-- once a month, with more than $10,000 in the bank it repays what leaves at
+-- least $5,000.
+do
+  local today, month = {day = 25, last = 30}, 7
+  local date = {dayOfMonth = function() return today.day end, lastDayOfMonth = function() return today.last end,
+      monthOfGame = function() return month end}
+  local issued = {}
+  local m = setmetatable({bot = {world = {date = function() return date end}}, log = function() end, history = {},
+      note = function() end, noteSpent = function() end,
+      issue = function(_, cmd) issued[#issued + 1] = cmd return true end}, M)
+  m:assistantLoan({loan = 20000, balance = 30000, day = 200})
+  eq(#issued, 0, "not before the month's last days")
+  today.day = 28
+  m:assistantLoan({loan = 20000, balance = 30000, day = 203})
+  eq(issued[1] and issued[1].amount, -20000, "the whole loan, $10,000 left")
+  today.day = 29
+  m:assistantLoan({loan = 5000, balance = 30000, day = 204})
+  eq(#issued, 1, "once a month")
+  month, today.day = 8, 31
+  today.last = 31
+  m:assistantLoan({loan = 8000, balance = 10000, day = 235})
+  eq(#issued, 1, "not with $10,000 or less")
+  m:assistantLoan({loan = 8000, balance = 12345, day = 235})
+  eq(issued[2] and issued[2].amount, -7000, "what leaves at least $5,000")
+end
+print("assistant loan ok")

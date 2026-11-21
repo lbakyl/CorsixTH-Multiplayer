@@ -311,6 +311,15 @@ function UIBottomPanel:draw(canvas, x, y)
   end
 
   self:drawReputationMeter(canvas, x + 55 * s, y + 35 * s)
+
+  -- The kinds of room left to build, on the build button's top left corner,
+  -- away from the other buttons (Argus, 2026-11-21; UIBuildRoom.missingRoomKinds).
+  local build = rawget(_G, "UIBuildRoom")
+  local hospital = self.ui.hospital
+  local missing = build and hospital and build.missingRoomKinds(self.ui.app.world, hospital) or 0
+  if missing > 0 then
+    build.drawCount(canvas, self.white_font, x + 213 * s, y + 9 * s, missing, build.COUNT_MISSING)
+  end
 end
 
 function UIBottomPanel:setPosition(x, y)

@@ -3462,6 +3462,63 @@ function handlers.loan(world, cmd)
   return true
 end
 
+--------------------------------------------------------------------------------
+-- What the bots in a person's hospital do (Argus and Jan, 2026-11-21): an
+-- assistant, or a bot of a team's shared hospital. The hospital's people
+-- switch each job on or off during the game (MULTIPLAYER menu, ASSISTANT);
+-- it is a shared command, so every game knows what each hospital's bots may
+-- do (the same switches for everybody), and the save keeps it in
+-- hospital.mp_assistant (job -> true or false; a job not in it has its
+-- default). The room's game option "Allied bots build" off is the limit for
+-- everybody: building cannot be switched on then. The switches hold while a
+-- person of the hospital is in the game; a hospital nobody plays any more
+-- is the bots' own.
+--------------------------------------------------------------------------------
+
+--! The jobs, in the menu's order, and whether each is on in a new game.
+MultiplayerSession.ASSISTANT_JOBS = {
+  {name = "build", default = true}, -- builds departments, furnishes the corridors
+  {name = "hire", default = true}, -- hires doctors, nurses and handymen above 75% skill
+  {name = "replace", default = false}, -- replaces staff with better ones from the list
+  {name = "faxes", default = false}, -- answers faxes (emergencies, questions, offers)
+  {name = "loan", default = true}, -- repays the loan at the end of a month
+  {name = "auctions", default = false}, -- bids at land auctions
+}
+
+--! Did the room's game options say that bots in a person's hospital do not
+--! build ("Allied bots build" off)?
+function MultiplayerSession.assistantsBuildOff(world)
+  return world ~= nil and world.mp_coop ~= nil and world.mp_coop.helpers_off == true
+end
+
+--! May the bots in `hospital` do `job` (a name in ASSISTANT_JOBS)?
+function MultiplayerSession.assistantMay(world, hospital, job)
+  if job == "build" and MultiplayerSession.assistantsBuildOff(world) then return false end
+  local set = hospital and hospital.mp_assistant
+  if set and set[job] ~= nil then return set[job] end
+  for _, j in ipairs(MultiplayerSession.ASSISTANT_JOBS) do
+    if j.name == job then return j.default end
+  end
+  return false
+end
+
+--! Switch a job of the bots in the sender's hospital on or off: {job, on (1 or 0)}.
+function handlers.assistant_job(world, cmd)
+  local hospital = hospital_of(world, cmd)
+  if not hospital then return false, "no such hospital" end
+  local known = false
+  for _, j in ipairs(MultiplayerSession.ASSISTANT_JOBS) do known = known or j.name == cmd.job end
+  if not known then return false, "no such job" end
+  local on = tonumber(cmd.on) == 1
+  if on and cmd.job == "build" and MultiplayerSession.assistantsBuildOff(world) then
+    return false, "bots do not build in this game"
+  end
+  hospital.mp_assistant = hospital.mp_assistant or {}
+  hospital.mp_assistant[cmd.job] = on
+  cmd.resolved = cmd.job .. (on and " on" or " off")
+  return true
+end
+
 --! Treatment price for a disease: {disease, percent} (50..200).
 function handlers.set_price(world, cmd)
   local hospital = hospital_of(world, cmd)

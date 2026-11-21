@@ -775,9 +775,12 @@ function M:projects(s)
   end
   -- (From the 3rd year a doctor hired for a need is a junior hired into a
   -- free chair of the training room, trained before he works: M:training.)
-  local trainee_chair = self:traineeChair(s)
+  -- (An assistant hires only when its people let it, and only staff above
+  -- its floor: Bot:mayDo, Bot:hireFloor. No juniors to train for it.)
+  local may_hire = bot:mayDo("hire")
+  local trainee_chair = not bot:hireFloor("Doctor") and self:traineeChair(s)
   local function hire(cat, score)
-    if not bot:canHire(cat) then return end
+    if not may_hire or not bot:canHire(cat, nil, bot:hireFloor(cat)) then return end
     add("hire:" .. cat, score, function()
       if cat == "Doctor" and trainee_chair and bot:hireStudent(true) then
         self:note(string.format("day %d: a junior for a need, trained first", s.day))
@@ -1962,11 +1965,13 @@ end
 
 --! Small things a player does every day: handymen to worn machines, the
 --! heating, a loan when money runs out, faxes, rats and evil handymen. A
---! helper (a person runs the hospital too) only sends the handymen.
+--! helper (a person runs the hospital too) sends the handymen, and does
+--! what its people let it (Bot:mayDo): better staff, faxes, the loan.
 function M:daily(s)
   local bot = self.bot
   local hosp = s.hosp
   local helper = bot:sharesWithPerson()
+  local mates = #bot:hospitalMates() > 0
   self:noteRoomUse(s)
   if not helper then self:researchPolicy(s) end
   -- Machines half worn: a handyman to each (once in a while per machine).
@@ -2004,11 +2009,20 @@ function M:daily(s)
   -- Dirty tricks (in a race), also when a person shares the hospital: they
   -- have had the time to deal with them first.
   self:defend(s)
-  if helper then return end
-  self:juniors(s)
-  self:skilledStaff(s)
+  -- Better staff and the loan, as its people let it, also while they are
+  -- here (a bot alone in its hospital does it all).
+  if bot:mayDo("replace") then
+    self:juniors(s)
+    self:skilledStaff(s)
+  end
+  if mates and bot:mayDo("loan") then self:assistantLoan(s) end
+  if helper then
+    if bot:mayDo("faxes") then self:answerFaxes(s) end
+    return
+  end
   self:surplusDoctors(s)
-  self:training(s)
+  -- (The training room's students are juniors: none for an assistant.)
+  if not mates then self:training(s) end
   -- Its floor in pieces (Bot:repairFloor): looked at once a game week, every
   -- 2 days while it is being mended. (Not when it leaves the building to the
   -- person it shares with: those are their things.)
@@ -2031,7 +2045,29 @@ function M:daily(s)
   if s.balance < 1500 and s.loan + 5000 <= s.max_loan and hosp.opened then
     if self:issue({kind = "loan", amount = 5000}) then self:note(string.format("day %d: loan of $5,000", s.day)) end
   end
-  self:answerFaxes(s)
+  if bot:mayDo("faxes") then self:answerFaxes(s) end
+end
+
+-- The loan in a hospital a person plays too (Argus and Jan, 2026-11-21): in
+-- a month's last days, once, with more than ASSIST_LOAN_ABOVE in the bank,
+-- what leaves at least ASSIST_LOAN_KEEP is paid back.
+local ASSIST_LOAN_ABOVE, ASSIST_LOAN_KEEP, ASSIST_LOAN_DAYS = 10000, 5000, 3
+
+--! An assistant repays the loan at the end of a month (M:daily, when its
+--! people let it: Bot:mayDo "loan").
+function M:assistantLoan(s)
+  if s.loan <= 0 or s.balance <= ASSIST_LOAN_ABOVE then return end
+  local date = self.bot.world:date()
+  if date:dayOfMonth() <= date:lastDayOfMonth() - ASSIST_LOAN_DAYS then return end
+  local month = date:monthOfGame()
+  if self.loan_repaid_month == month then return end
+  local amount = math.min(s.loan, math.floor((s.balance - ASSIST_LOAN_KEEP) / 1000) * 1000)
+  if amount > 0 and self:issue({kind = "loan", amount = -amount}) then
+    self.loan_repaid_month = month
+    self:noteSpent("loan", amount)
+    self:note(string.format("day %d: repaid $%d of the loan ($%d left), the month's end", s.day, amount,
+        s.loan - amount))
+  end
 end
 
 --! The month in one line for the log: why patients left, which diseases
@@ -2098,7 +2134,8 @@ function M:monthly(s)
   -- month ago), keeping $12,000; or what it can spare above $25,000.
   local flowing = self.last_balance and s.balance > self.last_balance
   self.last_balance = s.balance
-  if s.loan > 0 and (s.balance > 25000 or (flowing and s.balance > 17000)) then
+  -- (Not in a hospital a person plays too: M:assistantLoan.)
+  if s.loan > 0 and (s.balance > 25000 or (flowing and s.balance > 17000)) and #self.bot:hospitalMates() == 0 then
     local keep = s.balance > 25000 and 20000 or 12000
     local amount = math.min(s.loan, math.floor((s.balance - keep) / 1000) * 1000)
     if amount > 0 and self:issue({kind = "loan", amount = -amount}) then

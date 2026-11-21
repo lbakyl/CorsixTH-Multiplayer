@@ -1797,6 +1797,41 @@ function MultiplayerLobby.useCanonicalOrder(app)
   end
 end
 
+--! The ASSISTANT menu: what the bots in this player's hospital do, a tick for
+--! each job (MultiplayerSession.ASSISTANT_JOBS). A click sends the switch to
+--! everybody; the tick shows the game's state, so it changes once the command
+--! has run. Building stays off when the room's game options say so.
+function MultiplayerLobby:_assistantMenu()
+  local lobby = self
+  local function build_off()
+    -- (One shared hospital has no world.mp_coop: the room's option then.)
+    return MultiplayerSession.assistantsBuildOff(TheApp.world) or lobby:optionValue("helpers") == "0"
+  end
+  local jobs = UIMenu()
+  for _, job in ipairs(MultiplayerSession.ASSISTANT_JOBS) do
+    local name = job.name
+    local function now()
+      local world, ui = TheApp.world, TheApp.ui
+      if not (world and ui and ui.hospital) then return job.default end
+      if name == "build" and build_off() then return false end
+      return MultiplayerSession.assistantMay(world, ui.hospital, name)
+    end
+    jobs:appendCheckItem(_S.multiplayer_window["menu_assistant_" .. name], now(), function(item)
+      local ui, session = TheApp.ui, TheApp.mp_session
+      if name == "build" and build_off() then
+        item.checked = false
+        ui:playSound("wrong2.wav")
+        if ui.adviser then
+          ui.adviser:say({text = _S.multiplayer_window.assistant_no_building, priority = 10})
+        end
+        return
+      end
+      if session then session:issue({kind = "assistant_job", job = name, on = item.checked and 1 or 0}) end
+    end, nil, now)
+  end
+  return jobs
+end
+
 --! The MULTIPLAYER menu, once per menu bar: the player list; with a hospital
 --! each also trades and research, and in a competitive game dirty tricks.
 --!param mode (string) the room mode (MultiplayerLobby.MODES)
@@ -1846,6 +1881,7 @@ function MultiplayerLobby:_addMultiplayerMenu(ui, mode)
     end
     menu:appendMenu(_S.multiplayer_window.menu_colours, colours)
   end
+  menu:appendMenu(_S.multiplayer_window.menu_assistant, self:_assistantMenu())
   -- What the bots say, on this computer only (saved in the config).
   local bot_chat = UIMenu()
   local labels = {auto = "menu_bot_chat_auto", every = "menu_bot_chat_all", useful = "menu_bot_chat_useful",

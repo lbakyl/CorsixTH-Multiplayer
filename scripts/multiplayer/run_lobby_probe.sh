@@ -413,9 +413,10 @@ if [[ "${MP_REFEREE:-0}" == 1 ]]; then
    sleep 1
    run_probe vera-back MP_NAME=vera MP_ROLE=join MP_ROOM=back MP_STEPS=1500 MP_REJOIN=1) & pids+=($!)
   # Assistants (check 37): each adds one to their own hospital.
-  run_probe yuri MP_ROLE=host MP_ROOM=assist MP_COOP=1 MP_LEVEL=2 MP_PLAYERS=2 MP_WAIT_PLAYERS=4 MP_ASSISTANT=1     MP_SCENARIO=none MP_STEPS=600 MP_UI_SCRIPT="40:openhospital;550:hospitals" & pids+=($!)
+  # yuri switches building off for his (ASSISTANT menu), zoe lets hers answer faxes.
+  run_probe yuri MP_ROLE=host MP_ROOM=assist MP_COOP=1 MP_LEVEL=2 MP_PLAYERS=2 MP_WAIT_PLAYERS=4 MP_ASSISTANT=1     MP_SCENARIO=none MP_STEPS=600 MP_UI_SCRIPT="40:openhospital;100:assistant:build=0;550:hospitals" & pids+=($!)
   sleep 1
-  run_probe zoe MP_ROLE=join MP_ROOM=assist MP_ASSISTANT=1 MP_SCENARIO=none MP_STEPS=600     MP_UI_SCRIPT="50:openhospital;560:hospitals" & pids+=($!)
+  run_probe zoe MP_ROLE=join MP_ROOM=assist MP_ASSISTANT=1 MP_SCENARIO=none MP_STEPS=600     MP_UI_SCRIPT="50:openhospital;120:assistant:faxes=1;560:hospitals" & pids+=($!)
 fi
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
@@ -1165,15 +1166,25 @@ if with_referee:
     hosp37 = re.search(r'UI: hospitals at step \d+ .*', log('yuri'))
     names37 = re.findall(r'\[\d+ ([A-Z +]+?) opened=', hosp37.group(0)) if hosp37 else []
     added37 = re.findall(r"room 'assist': '(\w+)' adds '([\w ]+)' to help '(\w+)'", server)
+    # The switches (Argus and Jan, 2026-11-21): the same in both games, and
+    # yuri's assistant draws no room after building went off.
+    jobs37 = [re.findall(r'\[\d+ [A-Z +]+? opened=.*? assistant=([\w:,]+)\]', log(n)) for n in ('yuri', 'zoe')]
+    switched37 = jobs37[0] == jobs37[1] and len(jobs37[0]) == 2 and 'build:0' in jobs37[0][0] and         'faxes:0' in jobs37[0][0] and 'build:1' in jobs37[0][1] and 'faxes:1' in jobs37[0][1]
+    stopped37 = []
+    for bl in sorted((out / 'referee').glob('assist-bot*/bot.log')):
+        text = bl.read_text(errors='replace')
+        if 'building: off' in text:
+            stopped37.append('drawing a' not in text.split('building: off', 1)[1])
     ok37 = (all(lines37) and lines37[1].group(1) == '4' and lines37[1].group(2) == '0'
             and zoe37.startswith('yuri (host)') and ' | zoe ' in zoe37 and 'Bot' not in zoe37
             and len(side37) >= 2 and side37[0].startswith('Bot ') and side37[1].startswith('Bot ')
             and len(names37) == 2 and names37[0].startswith('YURI + BOT') and names37[1].startswith('ZOE + BOT')
             and sorted((a, c) for a, _, c in added37) == [('yuri', 'yuri'), ('zoe', 'zoe')]
             and all(result(n).startswith('IN SYNC through step 600') for n in ('yuri', 'zoe'))
-            and int(confirmed_after('assist')) >= 500)
+            and int(confirmed_after('assist')) >= 500
+            and switched37 and stopped37 == [True])
     print(f"37. Assistants:             zoe's lines {lines37[1].groups()[:2] if lines37[1] else '-'}: {zoe37[:120]}; "
-          f"column {side37}; "
+          f"column {side37}; switches {jobs37[0]} / {jobs37[1]}; building stopped {stopped37}; "
           f"hospitals {names37}; added {added37}; {result('yuri')} / {result('zoe')}; "
           f"referee confirmed {confirmed_after('assist')}")
     fail |= not ok37

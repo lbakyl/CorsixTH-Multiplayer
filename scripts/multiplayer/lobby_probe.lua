@@ -2335,6 +2335,54 @@ local function run()
             end
             log("MAP |" .. table.concat(row) .. "|")
           end
+        elseif a == "assistant" then
+          -- A job of the bots in this hospital switched as a click in the
+          -- MULTIPLAYER menu's ASSISTANT list would: "<job>=<0 or 1>".
+          local job, value = entry.arg:match("^(%w+)=(%d)$")
+          local item
+          for _, it in ipairs(lobby:_assistantMenu().items) do
+            if it.title == _S.multiplayer_window["menu_assistant_" .. tostring(job)] then item = it end
+          end
+          if item then
+            item.checked = value == "1"
+            item.handler(item)
+            log(string.format("UI: assistant job %s switched to %s at step %d", job, value, session.step))
+          else
+            log("UI: no assistant job " .. tostring(entry.arg))
+          end
+        elseif a == "buildwindow" then
+          -- The build window on page <arg> (1 diagnosis .. 4 facilities), a
+          -- picture, closed again.
+          local page = tonumber(entry.arg) or 4
+          local win = UIBuildRoom(world.ui)
+          world.ui:addWindow(win)
+          win:setCategory(page)
+          shot("build-window-" .. page)
+          win:close()
+        elseif a == "assistantmenu" then
+          -- A picture of the MULTIPLAYER menu with its ASSISTANT list open,
+          -- as the mouse opens them (and of the build button's count).
+          local bar = world.ui.menu_bar
+          local s = TheApp.gfx:getUIScale()
+          local top
+          for _, m in ipairs(bar.menus) do
+            if m.title == _S.multiplayer_window.menu_caption then top = m end
+          end
+          if top then
+            bar:appear()
+            bar:onMouseDown("left", (top.x + 10) * s, 8 * s)
+            local menu = bar.active_menu
+            local index
+            for n, it in ipairs(menu and menu.items or {}) do
+              if it.title == _S.multiplayer_window.menu_assistant then index = n end
+            end
+            if index then bar:onMouseMove((menu.x + 20) * s, (menu.y + index * 14 - 4) * s) end
+            shot("assistant-menu", true)
+            bar.open_menus, bar.active_menu = {}, false
+            log(string.format("UI: assistant menu shown (item %s)", tostring(index)))
+          else
+            log("UI: no MULTIPLAYER menu")
+          end
         elseif a == "hospitals" then
           -- Every hospital: open or not, balance, its rooms and staff (to
           -- see what a bot built), with the game date.
@@ -2366,12 +2414,17 @@ local function run()
                 objects = objects + 1
               end
             end
+            -- (What its bots may do: MultiplayerSession.ASSISTANT_JOBS.)
+            local jobs = {}
+            for _, job in ipairs(MultiplayerSession.ASSISTANT_JOBS or {}) do
+              jobs[#jobs + 1] = job.name .. ":" .. (MultiplayerSession.assistantMay(world, hosp, job.name) and 1 or 0)
+            end
             parts[#parts + 1] = string.format("[%d %s opened=%s balance=%d reputation=%d rooms=%s staff=%s corridor_objects=%d"
-                .. " value=%d cured=%d deaths=%d visitors=%d loan=%d goals=%s]", h,
+                .. " value=%d cured=%d deaths=%d visitors=%d loan=%d goals=%s assistant=%s]", h,
                 tostring(hosp.name), tostring(hosp.opened or false), math.floor(hosp.balance), math.floor(hosp.reputation),
                 table.concat(rooms, ","), table.concat(st, ","), objects, math.floor(hosp.value or 0),
                 hosp.num_cured or 0, hosp.num_deaths or 0, hosp.num_visitors or 0, hosp.loan or 0,
-                tostring(world.endconditions and world.endconditions:goalsMet(hosp) or false))
+                tostring(world.endconditions and world.endconditions:goalsMet(hosp) or false), table.concat(jobs, ","))
           end
           log(string.format("UI: hospitals at step %d (%s, month %d): %s", session.step, d:tostring(),
               d:monthOfGame(), table.concat(parts, " ")))

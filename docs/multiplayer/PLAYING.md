@@ -165,7 +165,26 @@ with you; in a game it plays on in your hospital if you leave, and no other
 bot comes for your place. One each; the host may add one for anybody. A
 click on it (yours, or the host's on any) sends it away again; the host's
 right click picks how good it is. The game's 8 players count assistants
-too: with 8 people there is no room for one. A bot builds its
+too: with 8 people there is no room for one.
+
+**What your assistant does.** In the game, **Multiplayer > Assistant** has a
+tick for each of its jobs, for the bots in your hospital: **Builds
+departments** (and furnishes the corridors), **Hires staff** (doctors, nurses
+and handymen above 75% skill only; hire weaker ones yourself if you want
+them), **Replaces staff with better ones** (from the 4th month, when someone
+better is on the list), **Answers faxes** (emergencies, questions, offers
+from other players), **Repays the loan** (in the last days of each month, with
+more than $10,000 in the bank, as much as leaves at least $5,000) and **Bids
+at auctions** (up to what the plot is worth to your hospital; it never drops
+out for you). A new game starts
+with building, hiring and the loan on, the others off. A click switches a job
+for everybody's game at once; the tick changes a moment later. The ticks
+hold while you are in the game, also while you are not clicking; if you leave
+the game, the assistant runs your hospital fully. With **Allied bots build**
+off in the room's game options, no player's bots build and the tick cannot
+be switched on: everybody plays under the same rules.
+
+A bot builds its
 hospital slowly, as a beginner would (a desk, a GP's office, then one room
 after the other), hires staff, opens, and chats a little. In co-op it accepts
 whatever you offer it and thanks you; in a competitive race it plays a dirty
@@ -188,6 +207,13 @@ stays smooth, and how long a click takes to happen ("actions take 108 ms").
 
 ## In the game
 
+- **Rooms to build:** a red number on the build button's top left corner
+  counts the kinds of room your hospital may build and has none of yet (not
+  the training room or the research department); when research finds a new
+  kind it goes up, and with one of each it is gone. The build window shows
+  beside each kind how many of it you have (rooms being built count too):
+  green for what you have, a red 0 for a kind you still lack. Long names
+  are shortened there to leave room for the number ("General Diag.").
 - **Everything is shared:** every action happens on every player's game a
   moment after the click. If one player is slower or pauses, the others wait
   ("Waiting for the other player...").

@@ -650,12 +650,45 @@ function Bot:hospitalMates()
 end
 
 --! Does it leave building to the person it shares the hospital with (the
---! room's "helpers" game option off: no rooms, nothing for the corridors)?
---! (From the room's options: one shared hospital has no world.mp_coop.)
+--! room's "helpers" game option off, or the hospital's people switched it
+--! off in the game: no rooms, nothing for the corridors)? (From the room's
+--! options: one shared hospital has no world.mp_coop.)
 function Bot:leavesBuilding()
+  if #self:hospitalMates() == 0 then return false end
   local off = (self.lobby and self.lobby.optionValue and self.lobby:optionValue("helpers") == "0") or
       (self.world and self.world.mp_coop and self.world.mp_coop.helpers_off)
-  return off and #self:hospitalMates() > 0 or false
+  if off then return true end
+  local may = MultiplayerSession.assistantMay
+  return may ~= nil and not may(self.world, self.world.ui.hospital, "build")
+end
+
+--! May it do `job` (MultiplayerSession.ASSISTANT_JOBS: build, hire,
+--! replace, faxes, loan, auctions) in its hospital? The hospital's people
+--! decide while one of them is in the game, also while they are away (Jan,
+--! 2026-11-21: "Hires staff" off must stay off); a hospital nobody plays any
+--! more is the bot's own. (A game from before the switches: building and
+--! hiring as before, the rest while the person is away.)
+function Bot:mayDo(job)
+  if job == "build" then return not self:leavesBuilding() end
+  if #self:hospitalMates() == 0 then return true end
+  local may = MultiplayerSession.assistantMay
+  if may then return may(self.world, self.world.ui.hospital, job) end
+  return job == "hire" or not self:sharesWithPerson()
+end
+
+-- What an assistant hires (Argus, 2026-11-21: staff below 75% are not worth
+-- it; the person hires them if they want): doctors (specialists too),
+-- nurses and handymen above this skill, else nobody.
+local ASSISTANT_MIN_SKILL = 0.75
+local ASSISTANT_SKILLED = {Doctor = true, Nurse = true, Handyman = true}
+
+--! The least skill (0 to 1, above it) for a hire of `category` (Doctor, a
+--! specialist, Nurse, Handyman, Receptionist), or nil for anybody: an
+--! assistant, that is a bot sharing the hospital with a person in the game.
+function Bot:hireFloor(category)
+  if #self:hospitalMates() == 0 then return nil end
+  local class = SPECIALISTS[category] and "Doctor" or category
+  return ASSISTANT_SKILLED[class] and ASSISTANT_MIN_SKILL or nil
 end
 
 --! Note who gives commands (every command, just before it runs): a person
@@ -1010,6 +1043,9 @@ end
 function Bot:answerOffers()
   local panel = self.world.ui and self.world.ui.bottom_panel
   if not panel then return end
+  -- (In a person's hospital the offers are theirs, unless they let the bot
+  -- answer faxes: Bot:mayDo.)
+  if not self:mayDo("faxes") then return end
   local mine = self.world.ui.hospital
   for _, icon in ipairs(panel:allMessageIcons()) do
     local offer = type(icon.message) == "table" and icon.message.mp_offer
@@ -2552,10 +2588,12 @@ function Bot:cheapestPlot()
   return best, best_price
 end
 
---! An auction this hospital bids in, while a person sharing it is away (or
---! nobody does: then the game bids, MultiplayerSession's bots_bid): bid
---! once a step up to what the plot is worth to it, then drop out. True
---! while there is an auction (the bot does nothing else meanwhile).
+--! An auction this hospital bids in, when the person sharing it lets the
+--! bot bid (Bot:mayDo "auctions"; a hospital nobody shares: the game bids,
+--! MultiplayerSession's bots_bid): bid once a step up to what the plot is
+--! worth to it, then drop out; while the person is here it only stops
+--! bidding, so they may still go on. True while there is an auction (the
+--! bot does nothing else meanwhile).
 function Bot:bidAtAuction()
   local world = self.world
   local auction = world.mp_auction
@@ -2564,7 +2602,7 @@ function Bot:bidAtAuction()
   local bidder = false
   for _, i in ipairs(auction.bidders) do bidder = bidder or i == me end
   if not bidder or auction.out[me] or auction.leader == me then return true end
-  if (world.mp_coop.bot_hospitals or {})[me] or #self:hospitalMates() == 0 or self:sharesWithPerson() then
+  if (world.mp_coop.bot_hospitals or {})[me] or #self:hospitalMates() == 0 or not self:mayDo("auctions") then
     return true
   end
   local key = auction.id .. ":" .. auction.bid
@@ -2572,7 +2610,7 @@ function Bot:bidAtAuction()
   if not (self.auction_worth and self.auction_worth.id == auction.id) then
     local worth, need, fill = MultiplayerSession.botPlotWorth(world, me, auction)
     self.auction_worth = {id = auction.id, worth = worth, fill = fill}
-    log(string.format("auction %d for plot %d: worth $%d to us (land %d%% full, need %d%%), the person is away",
+    log(string.format("auction %d for plot %d: worth $%d to us (land %d%% full, need %d%%), bidding for the person",
         auction.id, auction.plot, worth, math.floor(fill * 100 + 0.5), math.floor(need * 100 + 0.5)))
   end
   local amount = auction.bid + auction.step
@@ -2597,6 +2635,8 @@ function Bot:bidAtAuction()
   if bids then
     log(string.format("auction %d: bidding $%d", auction.id, amount))
     session:issue({kind = "auction_bid", auction = auction.id, amount = amount})
+  elseif self:sharesWithPerson() then
+    log(string.format("auction %d: no more bids from us at $%d; the person may go on", auction.id, auction.bid))
   else
     log(string.format("auction %d: dropping out at $%d", auction.id, auction.bid))
     session:issue({kind = "auction_pass", auction = auction.id})
@@ -3016,7 +3056,8 @@ end
 
 --! Can it hire somebody of this category (Doctor, Nurse, Handyman,
 --! Receptionist, or a specialist: Psychiatrist, Surgeon, Researcher) now?
-function Bot:canHire(category, hospital)
+--!param min (number) optional; only somebody with a skill above it (0 to 1)
+function Bot:canHire(category, hospital, min)
   local class, skill = category, SPECIALISTS[category]
   if skill then class = "Doctor" end
   -- (Its hospital's own list; a game without World:staffPool has one list.
@@ -3032,16 +3073,18 @@ function Bot:canHire(category, hospital)
   end
   local pool = pools[class]
   if not pool or #pool == 0 then return false end
-  if not skill then return true end
+  if not skill and not min then return true end
   for _, profile in ipairs(pool) do
-    if flag(profile, "is_" .. skill) then return true end
+    if (not skill or flag(profile, "is_" .. skill)) and (not min or (profile.skill or 0) > min) then return true end
   end
   return false
 end
 
---! Hire one member of staff of this category (see Bot:canHire).
+--! Hire one member of staff of this category (see Bot:canHire). An
+--! assistant hires only above its floor (Bot:hireFloor), else nobody.
 function Bot:hireCategory(category)
-  if self.world.ui.hospital.balance < RESERVE or not self:canHire(category) then return false end
+  local floor = self:hireFloor(category)
+  if self.world.ui.hospital.balance < RESERVE or not self:canHire(category, nil, floor) then return false end
   local class, skill = category, SPECIALISTS[category]
   if skill then class = "Doctor" end
   local dx, dy = self:anchor()
@@ -3053,7 +3096,9 @@ function Bot:hireCategory(category)
   -- before a junior (Argus, 2026-11-14: juniors are catastrophically slow;
   -- one only when nobody else is on the list).
   local ok, err = pcall(builder.ui_hire, self.world, dx, dy, what, log, function(p)
-    return (p.skill or 0) - (flag(p, "is_junior") and 2 or 0)
+    local v = (p.skill or 0) - (flag(p, "is_junior") and 2 or 0)
+    if floor and (p.skill or 0) <= floor then v = v - 10 end
+    return v
   end)
   if not ok then log("could not hire a " .. category .. ": " .. tostring(err)) end
   return ok
@@ -3498,8 +3543,9 @@ function Bot:think()
     self.learned = TheApp.mp_session:issue({kind = "probe_learn"}) ~= false
     log(string.format("test: learning something on day %d", day))
   end
-  -- (A person sharing the hospital answers its emergencies.)
-  if not (self.manager and self:sharesWithPerson()) then self:answerEmergencies() end
+  -- (A person sharing the hospital answers its emergencies, unless they let
+  -- the bot answer faxes: Bot:mayDo.)
+  if not self.manager or self:mayDo("faxes") then self:answerEmergencies() end
 
   if day >= plan.greet and not plan.greeted then
     plan.greeted = true
@@ -3520,6 +3566,10 @@ function Bot:think()
     -- (Not when bots leave the building to the person sharing the hospital:
     -- the "helpers" game option.)
     local leaves_building = self:leavesBuilding()
+    if leaves_building ~= self.left_building then
+      self.left_building = leaves_building
+      log(leaves_building and "building: off, left to the people of the hospital" or "building: on")
+    end
     if not hospital.mp_place and #hospital:getReceptionDesks() == 0 and not leaves_building then
       if day >= plan.desk then
         plan.desk = self:later(3)

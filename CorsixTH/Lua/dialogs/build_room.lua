@@ -129,6 +129,92 @@ end
 
 local cat_label_y = {21, 53, 84, 116}
 
+--! How many rooms of each kind `hospital` has (room id -> number): built or
+--! being built, not crashed. The list shows it beside each kind (Argus and
+--! Jan, 2026-11-21: to see at a glance what is built, and how often).
+function UIBuildRoom.roomCounts(world, hospital)
+  local counts = {}
+  for _, room in pairs(world and world.rooms or {}) do
+    if room.hospital == hospital and not room.crashed and room.room_info then
+      local id = room.room_info.id
+      counts[id] = (counts[id] or 0) + 1
+    end
+  end
+  return counts
+end
+
+-- Kinds of room never counted as missing (Argus: not worth a reminder).
+local NOT_MISSED = {training = true, research = true}
+
+--! How many kinds of room `hospital` may build and has none of yet: the
+--! number on the build button (Argus, 2026-11-21: what is left to build,
+--! and when research has found a new kind). The kinds the build window
+--! lists, but the training room and the research department.
+function UIBuildRoom.missingRoomKinds(world, hospital)
+  local counts = UIBuildRoom.roomCounts(world, hospital)
+  local n = 0
+  for _, disc in pairs(hospital.room_discoveries or {}) do
+    local room = disc.room
+    if disc.is_discovered and room and room.class and not NOT_MISSED[room.id] and not counts[room.id] then
+      n = n + 1
+    end
+  end
+  return n
+end
+
+-- The circles: missing kinds in the pale red of the Facilities button (the
+-- build button's number, a 0 in the list), what the hospital has in the
+-- green of the Treatment button; each with a darker rim.
+UIBuildRoom.COUNT_MISSING = {fill = {202, 142, 138}, rim = {120, 64, 62}}
+UIBuildRoom.COUNT_HAVE = {fill = {73, 194, 93}, rim = {30, 96, 40}}
+
+--! A filled circle of radius `r` around (`cx`, `cy`), one line at a time.
+local function fill_circle(canvas, colour, cx, cy, r)
+  for dy = -r, r - 1 do
+    local yy = dy + 0.5
+    local half = math.floor(math.sqrt(r * r - yy * yy) + 0.5)
+    canvas:drawRect(colour, cx - half, cy + dy, half * 2, 1)
+  end
+end
+
+--! The number `n` in a small circle of `style` (COUNT_MISSING, COUNT_HAVE)
+--! around (`cx`, `cy`), in `font`.
+function UIBuildRoom.drawCount(canvas, font, cx, cy, n, style)
+  local s = TheApp.gfx:getUIScale()
+  local r = 6 * s
+  fill_circle(canvas, canvas:mapRGB(style.rim[1], style.rim[2], style.rim[3]), cx, cy, r)
+  fill_circle(canvas, canvas:mapRGB(style.fill[1], style.fill[2], style.fill[3]), cx, cy, r - s)
+  font:draw(canvas, tostring(n), cx - r, cy - r + s, 2 * r, 2 * r)
+end
+
+-- One character of UTF-8 text.
+local CHAR = "[\1-\127\194-\244][\128-\191]*"
+
+--! `name` made to fit `width` (screen pixels) in `font`, so the count beside
+--! it stays clear (Jan, 2026-11-21): its last word cut to four letters and a
+--! full stop ("General Diag."), or if that is still too long, as many
+--! letters as fit and a full stop. Any language.
+function UIBuildRoom.fitName(font, name, width)
+  if font:sizeOf(name) <= width then return name end
+  local head, last = name:match("^(.*%s)(%S+)$")
+  if last then
+    local short, n = "", 0
+    for ch in last:gmatch(CHAR) do
+      if n == 4 then break end
+      short, n = short .. ch, n + 1
+    end
+    local try = head .. short .. "."
+    if #short < #last and font:sizeOf(try) <= width then return try end
+  end
+  local cut = name
+  while #cut > 1 do
+    cut = cut:gsub(CHAR .. "$", "")
+    local try = cut:gsub("[%s%.,]+$", "") .. "."
+    if font:sizeOf(try) <= width then return try end
+  end
+  return name
+end
+
 function UIBuildRoom:draw(canvas, x, y)
   Window.draw(self, canvas, x, y)
 
@@ -140,9 +226,21 @@ function UIBuildRoom:draw(canvas, x, y)
       :draw(canvas, self.category_titles[i], x + 19 * s, y + cat_label_y[i] * s)
   end
 
+  -- Each kind with how many of it the hospital has, at the line's end (a
+  -- long name is shortened to leave the room for it).
+  local counts = #self.list > 0 and UIBuildRoom.roomCounts(self.ui.app.world, self.ui.hospital) or {}
+  self.fitted = self.fitted or {}
+  local width = 103 * s
   for i, room in ipairs(self.list) do
-    (i == self.list_hover_index and self.blue_font or self.white_font)
-      :draw(canvas, room.name, x + 163 * s, y + 21 * s + i * 19 * s)
+    local font = i == self.list_hover_index and self.blue_font or self.white_font
+    -- (A translated name is a string proxy: its text, as mp_sabotage does.)
+    local name = tostring(room.name):gsub("^<LocalisedString> Current value:", "")
+    local key = name .. "|" .. width .. (font == self.blue_font and "|b" or "|w")
+    if not self.fitted[key] then self.fitted[key] = UIBuildRoom.fitName(font, name, width) end
+    font:draw(canvas, self.fitted[key], x + 163 * s, y + 21 * s + i * 19 * s)
+    local n = counts[room.id] or 0
+    UIBuildRoom.drawCount(canvas, self.white_font, x + 275 * s, y + 24 * s + i * 19 * s, n,
+        (n == 0 and not NOT_MISSED[room.id]) and UIBuildRoom.COUNT_MISSING or UIBuildRoom.COUNT_HAVE)
   end
 
   self.white_font:draw(canvas, self.cost_box, x + 163 * s, y + 232 * s)
