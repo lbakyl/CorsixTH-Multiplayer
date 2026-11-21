@@ -70,6 +70,9 @@ local COPIES = {gp = 6, pharmacy = 2, general_diag = 3, psych = 2, ward = 2, toi
     jelly_vat = 1, decontamination = 1, operating_theatre = 2, research = 1}
 -- Queue per room above which another room of the type helps.
 local BUSY_QUEUE = 5
+-- What each patient waiting above that line is worth to another room (a
+-- queue of 10 for one room: 18, above a bench's 15).
+local BUSY_ROOM_SCORE = 3
 -- The model's plan names a room the hospital has: another one only while at
 -- least this many patients per room wait for those (M.planRoomWanted).
 local PLAN_COPY_QUEUE = 2
@@ -903,11 +906,14 @@ function M:projects(s)
   end
   -- Busy rooms: another one of the type. (A room without its doctor at
   -- this moment is no reason not to: the doctor may be on a break.)
+  -- (Worth BUSY_ROOM_SCORE a waiting patient above the line: Jan,
+  -- 2026-11-21, his assistant bought benches (score 15-16) for weeks while
+  -- a dozen waited for its one cardiogram, which scored 7 at 1.2 a patient.)
   for id, n in pairs(s.rooms) do
     local per = s.queue[id] / n
     -- (GP's offices: at most COPIES.gp (6), rich or not, and only for a queue.)
     if per > busy_q and n < (COPIES[id] or 1) + (COPIES[id] and id ~= "gp" and more or 0) then
-      room(id, (per - busy_q + 1) * 1.2)
+      room(id, (per - busy_q + 1) * BUSY_ROOM_SCORE)
     end
   end
   -- A second operating theatre once the first works and somebody waits for
