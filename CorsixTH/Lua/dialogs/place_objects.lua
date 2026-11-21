@@ -87,9 +87,25 @@ function UIPlaceObjects:UIPlaceObjects(ui, object_list, pay_for)
   self.object_footprint = {}
   self.num_slots = 0
 
+  -- Multiplayer: a window opened on this machine only (the player's own
+  -- objects to place, the room being drawn) never moves money; the
+  -- commands do. Room editors made inside a command (mp_room_builder) are
+  -- the same on every peer and pay as in single player. Without this, a
+  -- player's own window closed while a command ran (a room built opens
+  -- its editor, which closes the object window) refunded its unplaced
+  -- objects in that player's game only (eu2 desyncs, 2026-11-21: +$40 for
+  -- a bench).
+  self.mp_local = MultiplayerSession.actionsAreCommands() or nil
+
   self:addObjects(object_list, pay_for)
   self.ui:setWorldHitTest(false)
   UIPlaceObjects.registerKeyHandlers(self)
+end
+
+--! Does this window pay for objects and refund unplaced ones itself (single
+--! player, or an editor run inside a multiplayer command)?
+function UIPlaceObjects:paysItself()
+  return not self.mp_local and not MultiplayerSession.actionsAreCommands()
 end
 
 function UIPlaceObjects:registerKeyHandlers()
@@ -186,7 +202,7 @@ function UIPlaceObjects:addObjects(object_list, pay_for)
       if new_object.qty > 0 and new_object.object.thob == object.object.thob then
         object.qty = object.qty + new_object.qty
         -- In multiplayer, payment happens when the place_object command runs.
-        if pay_for and not MultiplayerSession.actionsAreCommands() then
+        if pay_for and self:paysItself() then
           local build_cost = self.ui.hospital:getObjectBuildCost(new_object.object.id)
           local msg = _S.transactions.buy_object .. ": " .. object.object.name
           self.ui.hospital:spendMoney(new_object.qty * build_cost, msg, new_object.qty * build_cost)
@@ -222,7 +238,7 @@ function UIPlaceObjects:addObjects(object_list, pay_for)
     end
     self.objects[#self.objects + 1] = object
 
-    if pay_for and not MultiplayerSession.actionsAreCommands() then
+    if pay_for and self:paysItself() then
       local build_cost = self.ui.hospital:getObjectBuildCost(object.object.id)
       local msg = _S.transactions.buy_object .. ": " .. object.object.name
       self.ui.hospital:spendMoney(object.qty * build_cost, msg, object.qty * build_cost)
@@ -255,7 +271,7 @@ function UIPlaceObjects:removeObject(object, dont_close_if_empty, placed, move_c
 
   -- In multiplayer nothing was paid for a not-yet-placed purchase.
   if (sale_previously_placed and not self.mp_moving) or
-      (purchase_cancellation and not MultiplayerSession.actionsAreCommands()) then
+      (purchase_cancellation and self:paysItself()) then
     -- Object sell.
     -- The player should be reimbursed for the cost of the item, i.e.
     -- whether they were previously purchased. So do refund.
