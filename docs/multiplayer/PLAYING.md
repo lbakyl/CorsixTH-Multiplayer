@@ -107,7 +107,7 @@ Linux package or the macOS app workflow on `master`, Artifacts; this needs a Git
    of it, all laid out alike, each a start hospital with five buildings for
    sale round it (and four big ones beside the square), with climbing
    seasons that bring about a hundred patients to every hospital each April
-   and October, an earthquake every three months for four years, and only
+   and October, an earthquake every four months for four years, and only
    junior doctors to hire in years 2 and 3.
 5. **Sharing a hospital:** team mates build, hire and answer faxes in the
    same hospital. A bot can share yours too: it builds in your hospital along

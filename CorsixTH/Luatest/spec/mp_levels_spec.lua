@@ -629,7 +629,7 @@ describe("Multiplayer levels", function()
     assert.equal(15, world.hospitals[2].rep)
   end)
 
-  it("gives level 8 its doctors and an earthquake every three months", function()
+  it("gives level 8 its doctors and an earthquake every four months", function()
     local config = {}
     levels.apply(config, {objects = {}}, 8, 6)
     assert.equal(8, config.mp_level)
@@ -663,15 +663,19 @@ describe("Multiplayer levels", function()
       assert.truthy(staff[i].Doctors >= 5 and staff[i].Nurses >= 3)
       assert.truthy(staff[i].Receptionists >= 1 and staff[i].Handymen >= 1)
     end
-    -- Sixteen earthquakes, one in each quarter of the first four years, in
-    -- its first two months, a little stronger each year.
+    -- Twelve earthquakes, one in each four months of the first four years
+    -- (Jan, 2026-11-21: every three months were too many), in March, July
+    -- and November, never in a climbing season (April, October), a little
+    -- stronger each year.
     local quakes = config.quake_control
-    assert.equal(15, #quakes)
-    for n = 0, 15 do
-      assert.equal(3 * n + 2, quakes[n].StartMonth)
-      assert.equal(3 * n + 3, quakes[n].EndMonth)
+    assert.equal(11, #quakes)
+    for n = 0, 11 do
+      assert.equal(4 * n + 3, quakes[n].StartMonth)
+      assert.equal(quakes[n].StartMonth, quakes[n].EndMonth)
+      local calendar = (quakes[n].StartMonth - 1) % 12 + 1
+      assert.truthy(calendar ~= 4 and calendar ~= 10)
       assert.truthy(quakes[n].Severity >= 2 and quakes[n].Severity <= 6)
-      if n >= 4 then assert.truthy(quakes[n].Severity >= quakes[n - 4].Severity) end
+      if n >= 3 then assert.truthy(quakes[n].Severity >= quakes[n - 3].Severity) end
     end
   end)
 
